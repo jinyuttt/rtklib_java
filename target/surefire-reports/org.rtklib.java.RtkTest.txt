@@ -1,4 +1,14 @@
 -------------------------------------------------------------------------------
 Test set: org.rtklib.java.RtkTest
 -------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.991 s -- in org.rtklib.java.RtkTest
+Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.079 s <<< FAILURE! -- in org.rtklib.java.RtkTest
+org.rtklib.java.RtkTest -- Time elapsed: 0.079 s <<< ERROR!
+java.io.FileNotFoundException: C:\Users\jinyu\Desktop\540423494727\2026-06-08\1.rtcm3 (系统找不到指定的路径。)
+	at java.base/java.io.FileInputStream.open0(Native Method)
+	at java.base/java.io.FileInputStream.open(FileInputStream.java:213)
+	at java.base/java.io.FileInputStream.<init>(FileInputStream.java:152)
+	at java.base/java.io.FileInputStream.<init>(FileInputStream.java:106)
+	at org.rtklib.java.RtkTest.loadData(RtkTest.java:67)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
