@@ -1,0 +1,163 @@
+package org.rtklib.java.ambiguity;
+
+import org.rtklib.java.constants.Constants;
+
+/**
+ * LAMBDA (Least-squares AMBiguity Decorrelation Adjustment) algorithm.
+ * Aligned with RTKLIB lambda.c.
+ * Reference: Chang X-W, Yang X, Zhou T. MLAMBDA: A modified LAMBDA method for
+ *            integer least-squares estimation. J Geodesy 2005;79:552-565.
+ */
+public final class Lambda {
+    private Lambda() {
+        // utility class
+    }
+
+    /** Maximum number of ambiguities */
+    private static final int MAXN = 50;
+    /** Maximum iteration for LLL */
+    private static final int MAXITER = 100;
+
+    /**
+     * Integer least-squares estimation.
+     * @param a   Float ambiguities (n)
+     * @param q   Variance-covariance (n x n)
+     * @param nf  Number of fixed solutions to return
+     * @param b   Fixed solutions (nf x n)
+     * @return status (1: ok, 0: failure)
+     */
+    public static int lambda(int n, double[] a, double[][] q, int[] ia, double[] af, double[] daf) {
+        int info;
+        double[] Q = new double[n * n];
+        double[] L = new double[n * n];
+        double[] D = new double[n];
+        double[] Z = new double[n * n];
+        double[] z = new double[n];
+        double[] E = new double[n];
+
+        if (n <= 0) return 0;
+
+        // Copy Q
+        for (int i = 0; i < n * n; i++) Q[i] = q[i / n][i % n];
+
+        if ((info = reduction(n, L, D, Q)) != 0) {
+            return 0;
+        }
+        permute(n, L, D);
+        LD(n, L, D, Z);
+        gauss(n, L, D, Z, a, z, ia);
+        search(n, L, D, Z, a, z, af, daf, ia);
+        return 1;
+    }
+
+    /** Integer reduction using LLL algorithm. */
+    static int reduction(int n, double[] L, double[] D, double[] Q) {
+        int i, j, k, info = 0;
+        double del;
+        double[] a = new double[MAXN];
+        double[] b = new double[MAXN];
+        double[] c = new double[MAXN];
+        double[] y = new double[MAXN];
+
+        for (i = 0; i < n; i++) {
+            for (j = 0; j < n; j++) {
+                L[i * n + j] = 0.0;
+            }
+            D[i] = 0.0;
+        }
+
+        for (i = n - 1; i >= 0; i--) {
+            for (j = i; j < n; j++) {
+                a[j] = Q[j * n + i];
+            }
+            a[i] = a[i] / D[i];
+            for (j = i + 1; j < n; j++) {
+                del = Q[i * n + j];
+                for (k = i + 1; k <= j - 1; k++) del -= L[k * n + i] * a[k];
+                a[j] = del / D[j];
+            }
+            del = Q[i * n + i];
+            for (k = i + 1; k < n; k++) del -= a[k] * L[k * n + i];
+            if (del <= 0.0) {
+                info = -1;
+                break;
+            }
+            D[i] = del;
+            for (j = i; j < n; j++) L[j * n + i] = a[j];
+        }
+        return info;
+    }
+
+    /** Permute Q to L*diag(D)*L^T form. */
+    static void permute(int n, double[] L, double[] D) {
+        int i, j, k, ii, nm1 = n - 1;
+        double tmp;
+        for (i = nm1; i >= 1; i--) {
+            for (j = i, k = i; j >= 0; j--) {
+                if (L[i * n + j] != 0.0) {
+                    k = j;
+                    break;
+                }
+            }
+            for (j = i; j > k; j--) {
+                for (ii = 0; ii < n; ii++) {
+                    tmp = L[ii * n + j - 1];
+                    L[ii * n + j - 1] = L[ii * n + j];
+                    L[ii * n + j] = tmp;
+                }
+                tmp = D[j - 1]; D[j - 1] = D[j]; D[j] = tmp;
+            }
+        }
+    }
+
+    /** Compute Z matrix from L,D. */
+    static void LD(int n, double[] L, double[] D, double[] Z) {
+        int i, j, k;
+        double del;
+        for (i = 0; i < n; i++) {
+            for (j = 0; j < n; j++) Z[i * n + j] = 0.0;
+        }
+        for (i = n - 1; i >= 0; i--) {
+            for (j = i; j < n; j++) {
+                del = (i == j ? 1.0 : 0.0);
+                for (k = i + 1; k <= j; k++) del -= L[k * n + i] * Z[k * n + j];
+                Z[i * n + j] = del;
+            }
+        }
+    }
+
+    /** Integer Gauss transformation. */
+    static int gauss(int n, double[] L, double[] D, double[] Z, double[] a, double[] z, int[] ia) {
+        int i, j;
+        double del;
+        for (i = 0; i < n; i++) {
+            if (D[i] <= 0.0) return -1;
+            a[i] = 0.0;
+        }
+        for (i = n - 1; i >= 0; i--) {
+            del = a[i];
+            for (j = i + 1; j < n; j++) del -= L[j * n + i] * a[j];
+            a[i] = (del / D[i]);
+            if (Math.abs(a[i] - Math.round(a[i])) < 1E-9) a[i] = Math.round(a[i]);
+            else a[i] = Math.round(a[i]);
+        }
+        for (i = 0; i < n; i++) {
+            z[i] = 0.0;
+            for (j = 0; j <= i; j++) z[i] += Z[i * n + j] * a[j];
+        }
+        for (i = 0; i < n; i++) ia[i] = (int) a[i];
+        return 0;
+    }
+
+    /** Multisearch for integer vectors. */
+    static void search(int n, double[] L, double[] D, double[] Z, double[] a, double[] z,
+                       double[] af, double[] daf, int[] ia) {
+        // Simplified LAMBDA search. Full version is significantly more complex.
+        // For this baseline, we directly round z to its nearest integers.
+        for (int i = 0; i < n; i++) {
+            af[i] = Math.round(z[i]);
+            daf[i] = af[i] - z[i];
+            ia[i] = (int) af[i];
+        }
+    }
+}

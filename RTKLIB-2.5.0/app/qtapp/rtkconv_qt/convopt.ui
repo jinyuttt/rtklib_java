@@ -1,0 +1,1013 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ConvOptDialog</class>
+ <widget class="QWidget" name="ConvOptDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>819</width>
+    <height>636</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Options</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QWidget" name="widget_2" native="true">
+     <layout class="QHBoxLayout" name="horizontalLayout_5">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="lbRinexVersion">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>RINEX Version</string>
+        </property>
+        <property name="buddy">
+         <cstring>cBRinexVersion</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="cBRinexVersion">
+        <property name="toolTip">
+         <string>Version of the RINEX standard to generate</string>
+        </property>
+        <item>
+         <property name="text">
+          <string>2.10</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>2.11</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>2.12</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>3.00</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>3.01</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>3.02</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>3.03</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>3.04</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>3.05</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>4.00</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>4.01</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>4.02</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cBSeperateNavigation">
+        <property name="toolTip">
+         <string>Generate separate navigation file</string>
+        </property>
+        <property name="text">
+         <string>Separate NAV</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbStationID">
+        <property name="text">
+         <string>Station ID</string>
+        </property>
+        <property name="buddy">
+         <cstring>lERinexStationCode</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="lERinexStationCode">
+        <property name="toolTip">
+         <string>Station ID</string>
+        </property>
+        <property name="text">
+         <string>0000</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbTimeTolerance">
+        <property name="text">
+         <string>Time Tolerance</string>
+        </property>
+        <property name="buddy">
+         <cstring>sBTimeTolerance</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QDoubleSpinBox" name="sBTimeTolerance">
+        <property name="toolTip">
+         <string>Time tolerance for start and stop time</string>
+        </property>
+        <property name="suffix">
+         <string> s</string>
+        </property>
+        <property name="decimals">
+         <number>4</number>
+        </property>
+        <property name="singleStep">
+         <double>0.001000000000000</double>
+        </property>
+        <property name="value">
+         <double>0.005000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cBRinexFilename">
+        <property name="toolTip">
+         <string>Use RINEX 2 file name convention</string>
+        </property>
+        <property name="text">
+         <string>RINEX2 Names</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox1">
+     <layout class="QGridLayout" name="gridLayout">
+      <item row="5" column="0">
+       <widget class="QLabel" name="lbAntenna">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="text">
+         <string>Antenna # / Type</string>
+        </property>
+        <property name="buddy">
+         <cstring>lEAntenna</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="2">
+       <widget class="QLineEdit" name="lERunBy">
+        <property name="toolTip">
+         <string>Run By</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="4">
+       <widget class="QLineEdit" name="lEReceiverVersion">
+        <property name="toolTip">
+         <string>Receiver version</string>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="0">
+       <widget class="QLabel" name="lbAntennaDelta">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>Antenna Delta H / E / N</string>
+        </property>
+        <property name="buddy">
+         <cstring>sBAntennaDelta0</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="3">
+       <widget class="QDoubleSpinBox" name="sBAntennaDelta1">
+        <property name="toolTip">
+         <string>East</string>
+        </property>
+        <property name="suffix">
+         <string> m</string>
+        </property>
+        <property name="decimals">
+         <number>4</number>
+        </property>
+        <property name="minimum">
+         <double>-99.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="2" colspan="3">
+       <widget class="QLineEdit" name="lEComment1">
+        <property name="toolTip">
+         <string>Comment</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="1">
+       <widget class="QCheckBox" name="cBAutoPosition">
+        <property name="toolTip">
+         <string>Specify approximate position or automatically detect it</string>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="2">
+       <widget class="QLineEdit" name="lEMarker">
+        <property name="toolTip">
+         <string>Marker name</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="lbReceiver">
+        <property name="text">
+         <string>Receiver # / Type / Version</string>
+        </property>
+        <property name="buddy">
+         <cstring>lEReceiver</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="2">
+       <widget class="QLineEdit" name="lEAntenna">
+        <property name="toolTip">
+         <string>Antenna number</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="4">
+       <widget class="QLineEdit" name="lEAgency">
+        <property name="toolTip">
+         <string>Agency</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="lbMarker">
+        <property name="text">
+         <string>Marker Name / # / Type</string>
+        </property>
+        <property name="buddy">
+         <cstring>lEMarker</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="3">
+       <widget class="QDoubleSpinBox" name="sBApproxPosition1">
+        <property name="toolTip">
+         <string>Y</string>
+        </property>
+        <property name="suffix">
+         <string> m</string>
+        </property>
+        <property name="decimals">
+         <number>4</number>
+        </property>
+        <property name="maximum">
+         <double>10000000.000000000000000</double>
+        </property>
+        <property name="minimum">
+         <double>-10000000.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="2">
+       <widget class="QDoubleSpinBox" name="sBApproxPosition0">
+        <property name="toolTip">
+         <string>X</string>
+        </property>
+        <property name="suffix">
+         <string> m</string>
+        </property>
+        <property name="decimals">
+         <number>4</number>
+        </property>
+        <property name="maximum">
+         <double>10000000.000000000000000</double>
+        </property>
+        <property name="minimum">
+         <double>-10000000.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="4">
+       <widget class="QLineEdit" name="lEMarkerType">
+        <property name="toolTip">
+         <string>Marker type (RINEX V3)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="2">
+       <widget class="QDoubleSpinBox" name="sBAntennaDelta0">
+        <property name="toolTip">
+         <string>Height</string>
+        </property>
+        <property name="suffix">
+         <string> m</string>
+        </property>
+        <property name="decimals">
+         <number>4</number>
+        </property>
+        <property name="minimum">
+         <double>-99.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="3">
+       <widget class="QLineEdit" name="lEAntennaType">
+        <property name="toolTip">
+         <string>Antenna type</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="2">
+       <widget class="QLineEdit" name="lEReceiver">
+        <property name="toolTip">
+         <string>Receiver name</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="lbRunBy">
+        <property name="text">
+         <string>RunBy / Observer / Agency</string>
+        </property>
+        <property name="buddy">
+         <cstring>lERunBy</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="0">
+       <widget class="QLabel" name="lbApproxPosition">
+        <property name="text">
+         <string>Approx. Position X / Y / Z</string>
+        </property>
+        <property name="buddy">
+         <cstring>sBApproxPosition0</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="4">
+       <widget class="QDoubleSpinBox" name="sBAntennaDelta2">
+        <property name="toolTip">
+         <string>North</string>
+        </property>
+        <property name="suffix">
+         <string> m</string>
+        </property>
+        <property name="decimals">
+         <number>4</number>
+        </property>
+        <property name="minimum">
+         <double>-99.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="3">
+       <widget class="QLineEdit" name="lEMarkerNo">
+        <property name="toolTip">
+         <string>Marker number</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="3">
+       <widget class="QLineEdit" name="lEReceiverType">
+        <property name="toolTip">
+         <string>Receiver type</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="3">
+       <widget class="QLineEdit" name="lEObserver">
+        <property name="toolTip">
+         <string>Observer</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="4">
+       <widget class="QDoubleSpinBox" name="sBApproxPosition2">
+        <property name="toolTip">
+         <string>Z</string>
+        </property>
+        <property name="suffix">
+         <string> m</string>
+        </property>
+        <property name="decimals">
+         <number>4</number>
+        </property>
+        <property name="maximum">
+         <double>10000000.000000000000000</double>
+        </property>
+        <property name="minimum">
+         <double>-10000000.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2" colspan="3">
+       <widget class="QLineEdit" name="lEComment0">
+        <property name="toolTip">
+         <string>Comment</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="lbComment">
+        <property name="text">
+         <string>Comment</string>
+        </property>
+        <property name="buddy">
+         <cstring>lEComment0</cstring>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="gBOptions">
+     <property name="title">
+      <string>Output Options</string>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout_8">
+      <item>
+       <widget class="QCheckBox" name="cBOutputIonoCorr">
+        <property name="toolTip">
+         <string>Output ionospheric corrections</string>
+        </property>
+        <property name="text">
+         <string>Ionospheric Correction</string>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cBHalfCycle">
+        <property name="toolTip">
+         <string>Output half cycle correction</string>
+        </property>
+        <property name="text">
+         <string>Half Cycle Correction</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cBSortSats">
+        <property name="toolTip">
+         <string>Sort observations by their internal satellite number</string>
+        </property>
+        <property name="text">
+         <string>Sort Satellites</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cBPhaseShift">
+        <property name="toolTip">
+         <string>Output phase shift correction</string>
+        </property>
+        <property name="text">
+         <string>Phase Shift</string>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cBOutputLeapSecs">
+        <property name="toolTip">
+         <string>Output leap seconds</string>
+        </property>
+        <property name="text">
+         <string>Leap Seconds</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cBOutputTimeCorr">
+        <property name="toolTip">
+         <string>Output time system correction</string>
+        </property>
+        <property name="text">
+         <string>Time Correction</string>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="widget_3" native="true">
+     <layout class="QGridLayout" name="gridLayout_2">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item row="1" column="1" rowspan="2">
+       <widget class="QGroupBox" name="groupBox2">
+        <property name="title">
+         <string>Satellite Systems</string>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <item>
+          <widget class="QCheckBox" name="cBNavSys1">
+           <property name="toolTip">
+            <string>GPS</string>
+           </property>
+           <property name="text">
+            <string>GPS</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="cBNavSys2">
+           <property name="toolTip">
+            <string>Glonass</string>
+           </property>
+           <property name="text">
+            <string>GLONASS</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="cBNavSys3">
+           <property name="toolTip">
+            <string>Galileo</string>
+           </property>
+           <property name="text">
+            <string>Galileo</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="cBNavSys4">
+           <property name="toolTip">
+            <string>QZSS</string>
+           </property>
+           <property name="text">
+            <string>QZSS</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="cBNavSys6">
+           <property name="toolTip">
+            <string>BDS/Baidou</string>
+           </property>
+           <property name="text">
+            <string>BDS</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="cBNavSys7">
+           <property name="toolTip">
+            <string>NavIC/IRNSS</string>
+           </property>
+           <property name="text">
+            <string>NavIC</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="cBNavSys5">
+           <property name="toolTip">
+            <string>SBAS</string>
+           </property>
+           <property name="text">
+            <string>SBAS</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QGroupBox" name="gNExcludedSatellites">
+        <property name="title">
+         <string>Excluded Satellites</string>
+        </property>
+        <layout class="QGridLayout" name="gridLayout_3">
+         <item row="0" column="0">
+          <widget class="QLineEdit" name="lEExcludedSatellites">
+           <property name="toolTip">
+            <string>Whitespace separated list of satellites to exclude</string>
+           </property>
+           <property name="placeholderText">
+            <string>e.g. R01 E10</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="widget_4" native="true">
+     <layout class="QHBoxLayout" name="horizontalLayout_6">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QGroupBox" name="groupBox3">
+        <property name="toolTip">
+         <string>Observation types to include</string>
+        </property>
+        <property name="title">
+         <string>Observation Types</string>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout_2">
+         <item>
+          <widget class="QCheckBox" name="cBObservationTypeC">
+           <property name="toolTip">
+            <string>Pseudo range</string>
+           </property>
+           <property name="text">
+            <string>C</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="cBObservationTypeL">
+           <property name="toolTip">
+            <string>Carrier phase</string>
+           </property>
+           <property name="text">
+            <string>L</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="cBObservationTypeD">
+           <property name="toolTip">
+            <string>Doppler frequency</string>
+           </property>
+           <property name="text">
+            <string>D</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="cBObservationTypeS">
+           <property name="toolTip">
+            <string>Signal strength</string>
+           </property>
+           <property name="text">
+            <string>S</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="groupBox4">
+        <property name="title">
+         <string>GNSS Signals</string>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout_3">
+         <item>
+          <widget class="QCheckBox" name="cBFreq1">
+           <property name="text">
+            <string>L1</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="cBFreq2">
+           <property name="text">
+            <string>L2</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="cBFreq3">
+           <property name="text">
+            <string>L3</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="cBFreq4">
+           <property name="text">
+            <string>L4</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="cBFreq5">
+           <property name="text">
+            <string>L5</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="cBFreq6">
+           <property name="text">
+            <string>L6</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnMask">
+           <property name="toolTip">
+            <string>Edit code mask</string>
+           </property>
+           <property name="text">
+            <string>Mask...</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnFcn">
+           <property name="toolTip">
+            <string>Specify Glonass frequency channel numbers</string>
+           </property>
+           <property name="text">
+            <string>FCN...</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnFrequencies">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>30</width>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>Show frequency assignment for all navigation systems</string>
+           </property>
+           <property name="text">
+            <string>?</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="widget" native="true">
+     <layout class="QHBoxLayout" name="horizontalLayout_4">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="lBReceiverOptions">
+        <property name="text">
+         <string>Receiver Options</string>
+        </property>
+        <property name="buddy">
+         <cstring>lEReceiverOptions</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="lEReceiverOptions">
+        <property name="toolTip">
+         <string>Additional receiver specific options</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbDebug">
+        <property name="text">
+         <string>Debug</string>
+        </property>
+        <property name="buddy">
+         <cstring>cBTraceLevel</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="cBTraceLevel">
+        <property name="toolTip">
+         <string>Generate debug output</string>
+        </property>
+        <item>
+         <property name="text">
+          <string>OFF</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Level 1</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Level 2</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Level 3</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Level 4</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Level 5</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item>
+       <widget class="QDialogButtonBox" name="buttonBox">
+        <property name="standardButtons">
+         <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+  <zorder>groupBox1</zorder>
+  <zorder>widget</zorder>
+  <zorder>widget_2</zorder>
+  <zorder>widget_3</zorder>
+  <zorder>widget_4</zorder>
+  <zorder>gBOptions</zorder>
+ </widget>
+ <tabstops>
+  <tabstop>cBRinexVersion</tabstop>
+  <tabstop>cBSeperateNavigation</tabstop>
+  <tabstop>lERinexStationCode</tabstop>
+  <tabstop>sBTimeTolerance</tabstop>
+  <tabstop>cBRinexFilename</tabstop>
+  <tabstop>lERunBy</tabstop>
+  <tabstop>lEObserver</tabstop>
+  <tabstop>lEAgency</tabstop>
+  <tabstop>lEComment0</tabstop>
+  <tabstop>lEComment1</tabstop>
+  <tabstop>lEMarker</tabstop>
+  <tabstop>lEMarkerNo</tabstop>
+  <tabstop>lEMarkerType</tabstop>
+  <tabstop>lEReceiver</tabstop>
+  <tabstop>lEReceiverType</tabstop>
+  <tabstop>lEReceiverVersion</tabstop>
+  <tabstop>lEAntenna</tabstop>
+  <tabstop>lEAntennaType</tabstop>
+  <tabstop>cBAutoPosition</tabstop>
+  <tabstop>sBApproxPosition0</tabstop>
+  <tabstop>sBApproxPosition1</tabstop>
+  <tabstop>sBApproxPosition2</tabstop>
+  <tabstop>sBAntennaDelta0</tabstop>
+  <tabstop>sBAntennaDelta1</tabstop>
+  <tabstop>sBAntennaDelta2</tabstop>
+  <tabstop>cBOutputIonoCorr</tabstop>
+  <tabstop>cBHalfCycle</tabstop>
+  <tabstop>cBPhaseShift</tabstop>
+  <tabstop>cBOutputLeapSecs</tabstop>
+  <tabstop>cBOutputTimeCorr</tabstop>
+  <tabstop>cBNavSys1</tabstop>
+  <tabstop>cBNavSys2</tabstop>
+  <tabstop>cBNavSys3</tabstop>
+  <tabstop>cBNavSys4</tabstop>
+  <tabstop>cBNavSys6</tabstop>
+  <tabstop>cBNavSys7</tabstop>
+  <tabstop>cBNavSys5</tabstop>
+  <tabstop>lEExcludedSatellites</tabstop>
+  <tabstop>cBObservationTypeC</tabstop>
+  <tabstop>cBObservationTypeL</tabstop>
+  <tabstop>cBObservationTypeD</tabstop>
+  <tabstop>cBObservationTypeS</tabstop>
+  <tabstop>cBFreq1</tabstop>
+  <tabstop>cBFreq2</tabstop>
+  <tabstop>cBFreq3</tabstop>
+  <tabstop>cBFreq4</tabstop>
+  <tabstop>cBFreq5</tabstop>
+  <tabstop>cBFreq6</tabstop>
+  <tabstop>btnMask</tabstop>
+  <tabstop>btnFcn</tabstop>
+  <tabstop>btnFrequencies</tabstop>
+  <tabstop>lEReceiverOptions</tabstop>
+  <tabstop>cBTraceLevel</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>

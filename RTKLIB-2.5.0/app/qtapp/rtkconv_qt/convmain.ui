@@ -1,0 +1,623 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>701</width>
+    <height>565</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>RTK Convert</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <widget class="QWidget" name="panelTime" native="true">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <layout class="QGridLayout" name="gridLayout">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item row="1" column="0" colspan="3">
+        <widget class="QDateTimeEdit" name="dateTimeStart">
+         <property name="toolTip">
+          <string/>
+         </property>
+         <property name="dateTime">
+          <datetime>
+           <hour>0</hour>
+           <minute>0</minute>
+           <second>0</second>
+           <year>2025</year>
+           <month>1</month>
+           <day>1</day>
+          </datetime>
+         </property>
+         <property name="displayFormat">
+          <string>yyyy/MM/dd hh:mm:ss</string>
+         </property>
+         <property name="calendarPopup">
+          <bool>true</bool>
+         </property>
+         <property name="timeSpec">
+          <enum>Qt::UTC</enum>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="7">
+        <widget class="QLabel" name="lbTimeInterval">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="text">
+          <string>s</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="8">
+        <widget class="QCheckBox" name="cBTimeUnit">
+         <property name="text">
+          <string>Unit</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="6">
+        <widget class="QCheckBox" name="cBTimeInterval">
+         <property name="toolTip">
+          <string>Specify a minimum time interval for the output data</string>
+         </property>
+         <property name="text">
+          <string>Interval</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="3" colspan="3">
+        <widget class="QDateTimeEdit" name="dateTimeStop">
+         <property name="dateTime">
+          <datetime>
+           <hour>0</hour>
+           <minute>0</minute>
+           <second>0</second>
+           <year>2025</year>
+           <month>1</month>
+           <day>1</day>
+          </datetime>
+         </property>
+         <property name="displayFormat">
+          <string>yyyy/MM/dd hh:mm:ss</string>
+         </property>
+         <property name="calendarPopup">
+          <bool>true</bool>
+         </property>
+         <property name="timeSpec">
+          <enum>Qt::UTC</enum>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QPushButton" name="btnTimeStart">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>30</width>
+           <height>30</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>?</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0" colspan="2">
+        <widget class="QCheckBox" name="cBTimeStart">
+         <property name="toolTip">
+          <string>Specify the start time for conversion</string>
+         </property>
+         <property name="text">
+          <string>Time Start (GPST)</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="5">
+        <widget class="QPushButton" name="btnTimeStop">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>30</width>
+           <height>30</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>?</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="6">
+        <widget class="QComboBox" name="comboTimeInterval">
+         <property name="editable">
+          <bool>true</bool>
+         </property>
+         <item>
+          <property name="text">
+           <string>0</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>0.05</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>0.1</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>0.2</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>0.25</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>0.5</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>1</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>5</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>10</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>15</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>30</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>60</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item row="0" column="3" colspan="2">
+        <widget class="QCheckBox" name="cBTimeEnd">
+         <property name="toolTip">
+          <string>Specify the stop time for conversion</string>
+         </property>
+         <property name="text">
+          <string>Time End (GPST)</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="8">
+        <widget class="QDoubleSpinBox" name="sBTimeUnit">
+         <property name="suffix">
+          <string> h</string>
+         </property>
+         <property name="maximum">
+          <double>168.000000000000000</double>
+         </property>
+         <property name="singleStep">
+          <double>1.000000000000000</double>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QWidget" name="panelMain" native="true">
+      <layout class="QGridLayout" name="gridLayout_2">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item row="11" column="1" colspan="4">
+        <widget class="QLineEdit" name="lEOutputFile3"/>
+       </item>
+       <item row="10" column="1" colspan="4">
+        <widget class="QLineEdit" name="lEOutputFile2"/>
+       </item>
+       <item row="9" column="1" colspan="4">
+        <widget class="QLineEdit" name="lEOutputFile1"/>
+       </item>
+       <item row="14" column="1" colspan="4">
+        <widget class="QLineEdit" name="lEOutputFile6"/>
+       </item>
+       <item row="15" column="1" colspan="4">
+        <widget class="QLineEdit" name="lEOutputFile7"/>
+       </item>
+       <item row="8" column="0" colspan="2">
+        <widget class="QLabel" name="lbOutputFile">
+         <property name="text">
+          <string>RINEX OBS/NAV/GNAV/HNAV/QNAV/LNAV and SBS</string>
+         </property>
+        </widget>
+       </item>
+       <item row="15" column="0">
+        <widget class="QCheckBox" name="cBOutputFileEnable7">
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+       </item>
+       <item row="7" column="3" colspan="2">
+        <widget class="QComboBox" name="cBFormat">
+         <property name="toolTip">
+          <string>File format</string>
+         </property>
+         <property name="sizeAdjustPolicy">
+          <enum>QComboBox::AdjustToContents</enum>
+         </property>
+        </widget>
+       </item>
+       <item row="13" column="1" colspan="4">
+        <widget class="QLineEdit" name="lEOutputFile5"/>
+       </item>
+       <item row="12" column="1" colspan="4">
+        <widget class="QLineEdit" name="lEOutputFile4"/>
+       </item>
+       <item row="14" column="0">
+        <widget class="QCheckBox" name="cBOutputFileEnable6">
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+       </item>
+       <item row="12" column="0">
+        <widget class="QCheckBox" name="cBOutputFileEnable4">
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+       </item>
+       <item row="10" column="0">
+        <widget class="QCheckBox" name="cBOutputFileEnable2">
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+       </item>
+       <item row="7" column="0" colspan="3">
+        <widget class="QLineEdit" name="lEOutputDirectory"/>
+       </item>
+       <item row="13" column="0">
+        <widget class="QCheckBox" name="cBOutputFileEnable5">
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+       </item>
+       <item row="16" column="1" colspan="4">
+        <widget class="QLineEdit" name="lEOutputFile8"/>
+       </item>
+       <item row="9" column="0">
+        <widget class="QCheckBox" name="cBOutputFileEnable1">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+       </item>
+       <item row="17" column="1" colspan="4">
+        <widget class="QLineEdit" name="lEOutputFile9"/>
+       </item>
+       <item row="16" column="0">
+        <widget class="QCheckBox" name="cBOutputFileEnable8">
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+       </item>
+       <item row="17" column="0">
+        <widget class="QCheckBox" name="cBOutputFileEnable9">
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+       </item>
+       <item row="6" column="3" colspan="2">
+        <widget class="QLabel" name="lbFormat">
+         <property name="text">
+          <string>Format</string>
+         </property>
+        </widget>
+       </item>
+       <item row="18" column="0" colspan="5">
+        <layout class="QHBoxLayout" name="horizontalLayout_3">
+         <item>
+          <widget class="QLabel" name="lblMessage"/>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnAbout">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="toolTip">
+            <string>About RTK Convert</string>
+           </property>
+           <property name="icon">
+            <iconset resource="../icon/resources.qrc">
+             <normaloff>:/icons/rtkconv</normaloff>:/icons/rtkconv</iconset>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item row="11" column="0">
+        <widget class="QCheckBox" name="cBOutputFileEnable3">
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+       </item>
+       <item row="6" column="0" colspan="3">
+        <widget class="QCheckBox" name="cBOutputDirectoryEnable">
+         <property name="text">
+          <string>Output Directory</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="0" colspan="5">
+        <layout class="QGridLayout" name="gridLayout_3">
+         <item row="0" column="0">
+          <widget class="QLabel" name="lbInputFile">
+           <property name="text">
+            <string>Input (RTCM, RCV RAW or RINEX OBS)</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QComboBox" name="cBInputFile">
+           <property name="toolTip">
+            <string>Input file</string>
+           </property>
+           <property name="editable">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QPushButton" name="btnInputFileView">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="toolTip">
+            <string>Show file content</string>
+           </property>
+           <property name="icon">
+            <iconset resource="../icon/resources.qrc">
+             <normaloff>:/buttons/doc</normaloff>:/buttons/doc</iconset>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="2">
+          <widget class="QPushButton" name="btnInputFile">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="toolTip">
+            <string>Choose input file</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../icon/resources.qrc">
+             <normaloff>:/buttons/folder</normaloff>:/buttons/folder</iconset>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="2">
+          <widget class="QPushButton" name="btnKey">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="toolTip">
+            <string>Show available placeholder keys</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../icon/resources.qrc">
+             <normaloff>:/buttons/key</normaloff>:/buttons/key</iconset>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayout_2">
+      <item>
+       <widget class="QPushButton" name="btnPlot">
+        <property name="toolTip">
+         <string>Open RTKPlot for the file</string>
+        </property>
+        <property name="text">
+         <string>&amp;Plot...</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/buttons/chart</normaloff>:/buttons/chart</iconset>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnPost">
+        <property name="toolTip">
+         <string>Call RTKPost on the data</string>
+        </property>
+        <property name="text">
+         <string>&amp;Process...</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnOptions">
+        <property name="toolTip">
+         <string>Show conversion options</string>
+        </property>
+        <property name="text">
+         <string>&amp;Options...</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/buttons/tool</normaloff>:/buttons/tool</iconset>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnConvert">
+        <property name="toolTip">
+         <string>Start conversion</string>
+        </property>
+        <property name="text">
+         <string>&amp;Convert</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/buttons/start</normaloff>:/buttons/start</iconset>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnAbort">
+        <property name="toolTip">
+         <string>Abort RTKConv</string>
+        </property>
+        <property name="text">
+         <string>Abort</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/buttons/stop2</normaloff>:/buttons/stop2</iconset>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnExit">
+        <property name="toolTip">
+         <string>Exit</string>
+        </property>
+        <property name="text">
+         <string>&amp;Exit</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <tabstops>
+  <tabstop>cBTimeStart</tabstop>
+  <tabstop>btnTimeStart</tabstop>
+  <tabstop>cBTimeEnd</tabstop>
+  <tabstop>btnTimeStop</tabstop>
+  <tabstop>cBTimeInterval</tabstop>
+  <tabstop>cBTimeUnit</tabstop>
+  <tabstop>dateTimeStart</tabstop>
+  <tabstop>dateTimeStop</tabstop>
+  <tabstop>comboTimeInterval</tabstop>
+  <tabstop>lEOutputDirectory</tabstop>
+  <tabstop>cBFormat</tabstop>
+  <tabstop>cBOutputFileEnable1</tabstop>
+  <tabstop>lEOutputFile1</tabstop>
+  <tabstop>cBOutputFileEnable2</tabstop>
+  <tabstop>lEOutputFile2</tabstop>
+  <tabstop>cBOutputFileEnable3</tabstop>
+  <tabstop>lEOutputFile3</tabstop>
+  <tabstop>cBOutputFileEnable4</tabstop>
+  <tabstop>lEOutputFile4</tabstop>
+  <tabstop>cBOutputFileEnable5</tabstop>
+  <tabstop>lEOutputFile5</tabstop>
+  <tabstop>cBOutputFileEnable6</tabstop>
+  <tabstop>lEOutputFile6</tabstop>
+  <tabstop>cBOutputFileEnable7</tabstop>
+  <tabstop>lEOutputFile7</tabstop>
+ </tabstops>
+ <resources>
+  <include location="../icon/resources.qrc"/>
+ </resources>
+ <connections/>
+</ui>

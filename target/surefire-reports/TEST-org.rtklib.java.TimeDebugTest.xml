@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="org.rtklib.java.TimeDebugTest" time="0.002" tests="1" errors="0" skipped="0" failures="0">
+  <properties>
+    <property name="java.specification.version" value="21"/>
+    <property name="sun.cpu.isalist" value="amd64"/>
+    <property name="sun.jnu.encoding" value="GBK"/>
+    <property name="java.class.path" value="D:\code\rtklib_java\target\test-classes;D:\code\rtklib_java\target\classes;D:\pro\repo\org\ejml\ejml-all\0.43.1\ejml-all-0.43.1.jar;D:\pro\repo\org\ejml\ejml-core\0.43.1\ejml-core-0.43.1.jar;D:\pro\repo\org\ejml\ejml-fdense\0.43.1\ejml-fdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-ddense\0.43.1\ejml-ddense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-cdense\0.43.1\ejml-cdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-zdense\0.43.1\ejml-zdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-dsparse\0.43.1\ejml-dsparse-0.43.1.jar;D:\pro\repo\org\ejml\ejml-simple\0.43.1\ejml-simple-0.43.1.jar;D:\pro\repo\org\ejml\ejml-fsparse\0.43.1\ejml-fsparse-0.43.1.jar;D:\pro\repo\org\slf4j\slf4j-api\2.0.9\slf4j-api-2.0.9.jar;D:\pro\repo\ch\qos\logback\logback-classic\1.4.8\logback-classic-1.4.8.jar;D:\pro\repo\ch\qos\logback\logback-core\1.4.8\logback-core-1.4.8.jar;D:\pro\repo\org\junit\jupiter\junit-jupiter-api\5.9.2\junit-jupiter-api-5.9.2.jar;D:\pro\repo\org\opentest4j\opentest4j\1.2.0\opentest4j-1.2.0.jar;D:\pro\repo\org\junit\platform\junit-platform-commons\1.9.2\junit-platform-commons-1.9.2.jar;D:\pro\repo\org\apiguardian\apiguardian-api\1.1.2\apiguardian-api-1.1.2.jar;D:\pro\repo\org\junit\jupiter\junit-jupiter-engine\5.9.2\junit-jupiter-engine-5.9.2.jar;D:\pro\repo\org\junit\platform\junit-platform-engine\1.9.2\junit-platform-engine-1.9.2.jar;"/>
+    <property name="java.vm.vendor" value="Eclipse Adoptium"/>
+    <property name="sun.arch.data.model" value="64"/>
+    <property name="user.variant" value=""/>
+    <property name="java.vendor.url" value="https://adoptium.net/"/>
+    <property name="user.timezone" value="Asia/Shanghai"/>
+    <property name="os.name" value="Windows 11"/>
+    <property name="java.vm.specification.version" value="21"/>
+    <property name="sun.java.launcher" value="SUN_STANDARD"/>
+    <property name="user.country" value="CN"/>
+    <property name="sun.boot.library.path" value="C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot\bin"/>
+    <property name="sun.java.command" value="C:\Users\Admin\AppData\Local\Temp\surefire12730905580062829331\surefirebooter-20260627131511082_3.jar C:\Users\Admin\AppData\Local\Temp\surefire12730905580062829331 2026-06-27T13-15-10_967-jvmRun1 surefire-20260627131511082_1tmp surefire_0-20260627131511082_2tmp"/>
+    <property name="jdk.debug" value="release"/>
+    <property name="surefire.test.class.path" value="D:\code\rtklib_java\target\test-classes;D:\code\rtklib_java\target\classes;D:\pro\repo\org\ejml\ejml-all\0.43.1\ejml-all-0.43.1.jar;D:\pro\repo\org\ejml\ejml-core\0.43.1\ejml-core-0.43.1.jar;D:\pro\repo\org\ejml\ejml-fdense\0.43.1\ejml-fdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-ddense\0.43.1\ejml-ddense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-cdense\0.43.1\ejml-cdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-zdense\0.43.1\ejml-zdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-dsparse\0.43.1\ejml-dsparse-0.43.1.jar;D:\pro\repo\org\ejml\ejml-simple\0.43.1\ejml-simple-0.43.1.jar;D:\pro\repo\org\ejml\ejml-fsparse\0.43.1\ejml-fsparse-0.43.1.jar;D:\pro\repo\org\slf4j\slf4j-api\2.0.9\slf4j-api-2.0.9.jar;D:\pro\repo\ch\qos\logback\logback-classic\1.4.8\logback-classic-1.4.8.jar;D:\pro\repo\ch\qos\logback\logback-core\1.4.8\logback-core-1.4.8.jar;D:\pro\repo\org\junit\jupiter\junit-jupiter-api\5.9.2\junit-jupiter-api-5.9.2.jar;D:\pro\repo\org\opentest4j\opentest4j\1.2.0\opentest4j-1.2.0.jar;D:\pro\repo\org\junit\platform\junit-platform-commons\1.9.2\junit-platform-commons-1.9.2.jar;D:\pro\repo\org\apiguardian\apiguardian-api\1.1.2\apiguardian-api-1.1.2.jar;D:\pro\repo\org\junit\jupiter\junit-jupiter-engine\5.9.2\junit-jupiter-engine-5.9.2.jar;D:\pro\repo\org\junit\platform\junit-platform-engine\1.9.2\junit-platform-engine-1.9.2.jar;"/>
+    <property name="sun.cpu.endian" value="little"/>
+    <property name="user.home" value="C:\Users\Admin"/>
+    <property name="user.language" value="zh"/>
+    <property name="java.specification.vendor" value="Oracle Corporation"/>
+    <property name="java.version.date" value="2025-07-15"/>
+    <property name="java.home" value="C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot"/>
+    <property name="file.separator" value="\"/>
+    <property name="basedir" value="D:\code\rtklib_java"/>
+    <property name="java.vm.compressedOopsMode" value="Zero based"/>
+    <property name="line.separator" value="&#10;"/>
+    <property name="java.vm.specification.vendor" value="Oracle Corporation"/>
+    <property name="java.specification.name" value="Java Platform API Specification"/>
+    <property name="surefire.real.class.path" value="C:\Users\Admin\AppData\Local\Temp\surefire12730905580062829331\surefirebooter-20260627131511082_3.jar"/>
+    <property name="user.script" value=""/>
+    <property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
+    <property name="java.runtime.version" value="21.0.8+9-LTS"/>
+    <property name="user.name" value="Admin"/>
+    <property name="stdout.encoding" value="GBK"/>
+    <property name="path.separator" value=";"/>
+    <property name="os.version" value="10.0"/>
+    <property name="java.runtime.name" value="OpenJDK Runtime Environment"/>
+    <property name="file.encoding" value="UTF-8"/>
+    <property name="java.vm.name" value="OpenJDK 64-Bit Server VM"/>
+    <property name="java.vendor.version" value="Temurin-21.0.8+9"/>
+    <property name="localRepository" value="D:\pro\repo"/>
+    <property name="java.vendor.url.bug" value="https://github.com/adoptium/adoptium-support/issues"/>
+    <property name="java.io.tmpdir" value="C:\Users\Admin\AppData\Local\Temp\"/>
+    <property name="java.version" value="21.0.8"/>
+    <property name="user.dir" value="D:\code\rtklib_java"/>
+    <property name="os.arch" value="amd64"/>
+    <property name="java.vm.specification.name" value="Java Virtual Machine Specification"/>
+    <property name="sun.os.patch.level" value=""/>
+    <property name="native.encoding" value="GBK"/>
+    <property name="java.library.path" value="C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot\bin;C:\windows\Sun\Java\bin;C:\windows\system32;C:\windows;C:\Program Files\Common Files\Oracle\Java\javapath;C:\Program Files\Eclipse Adoptium\jdk-17.0.18.8-hotspot\bin;C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot\bin;C:\windows\system32;C:\windows;C:\windows\System32\Wbem;C:\windows\System32\WindowsPowerShell\v1.0\;C:\windows\System32\OpenSSH\;C:\Program Files\Microsoft SQL Server\150\Tools\Binn\;C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot\bin;D:\pro\apache-maven-3.9.11\bin;C:\Program Files\dotnet\;D:\Program Files\PostgreSQL\17\bin;D:\Program Files\PostgreSQL\17\lib;C:\Windows\System32\Wbem;C:\TDengine TSDB Enterprise;C:\Program Files\Microsoft SQL Server\170\Tools\Binn\;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\TDengine;C:\TDengine\driver;C:\Program Files\Git\cmd;D:\Program Files\nodejs\;D:\Program Files (x86)\NetSarang\Xshell 8\;C:\Program Files\Docker\Docker\resources\bin;C:\Users\Admin\AppData\Local\Programs\Python\Python311\Scripts\;C:\Users\Admin\AppData\Local\Programs\Python\Python311\;C:\Users\Admin\AppData\Local\pnpm;C:\Users\Admin\AppData\Local\Microsoft\WindowsApps;C:\vscode\Microsoft VS Code\bin;C:\Program Files\JetBrains\IntelliJ IDEA 2025.2.1\bin;C:\Users\Admin\.dotnet\tools;C:\Users\Admin\AppData\Local\Python\bin;C:\Users\Admin\AppData\Local\Programs\Fiddler;C:\Users\Admin\.dotnet\tools;d:\Program Files\JetBrains\IntelliJ IDEA 2025.3.3\bin;C:\Users\Admin\AppData\Local\Programs\Ollama;C:\Users\Admin\AppData\Roaming\npm;d:\Programs\Qoder\bin;."/>
+    <property name="java.vm.info" value="mixed mode, sharing"/>
+    <property name="stderr.encoding" value="GBK"/>
+    <property name="java.vendor" value="Eclipse Adoptium"/>
+    <property name="java.vm.version" value="21.0.8+9-LTS"/>
+    <property name="sun.io.unicode.encoding" value="UnicodeLittle"/>
+    <property name="java.class.version" value="65.0"/>
+  </properties>
+  <testcase name="testMessageOrder" classname="org.rtklib.java.TimeDebugTest" time="0.001">
+    <system-out><![CDATA[13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1005, length=25
+Msg #1: type=1005, time=1970-01-01 00:00:00.000 (week=-522 tow=-259200.0)
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1033, length=27
+Msg #2: type=1033, time=1970-01-01 00:00:00.000 (week=-522 tow=-259200.0)
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1124, length=248
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM BDS TOW: raw=61204000, tow=61218.0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM BDS after adjweek: time.time=316026018, time.sec=0.0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- decode_msm_head: sys=32 staid=0 nsat=12 nsig=5 sync=1 iod=0 ncell=31
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[0] sigid=2 sigstr=2I code=40 idx=0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[1] sigid=8 sigstr=6I code=42 idx=3
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[2] sigid=14 sigstr=7I code=27 idx=1
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[3] sigid=23 sigstr=5P code=58 idx=2
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[4] sigid=31 sigstr=1P code=2 idx=4
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[0] code=40 idx=0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[1] code=42 idx=3
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[2] code=27 idx=1
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[3] code=58 idx=2
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[4] code=2 idx=4
+Msg #3: type=1124, time=1980-01-05 17:00:18.000 (week=0 tow=61218.0)
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1124, length=54
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM BDS TOW: raw=61204000, tow=61218.0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM BDS after adjweek: time.time=316026018, time.sec=0.0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- decode_msm_head: sys=32 staid=0 nsat=1 nsig=4 sync=0 iod=0 ncell=4
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[0] sigid=2 sigstr=2I code=40 idx=0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[1] sigid=8 sigstr=6I code=42 idx=3
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[2] sigid=23 sigstr=5P code=58 idx=2
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[3] sigid=31 sigstr=1P code=2 idx=4
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[0] code=40 idx=0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[1] code=42 idx=3
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[2] code=58 idx=2
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[3] code=2 idx=4
+Msg #4: type=1124, time=1980-01-05 17:00:18.000 (week=0 tow=61218.0)
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1042, length=70
+13:15:25.627 [main] INFO org.rtklib.java.rtcm.Rtcm -- RTCM 1042 eph stored: sat=137 prn=32 week=1066 toe=54000.0 A=27906219.4
+Msg #5: type=1042, time=2026-06-07 15:00:14.000 (week=2422 tow=54014.0)
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1005, length=25
+Msg #6: type=1005, time=2026-06-07 15:00:14.000 (week=2422 tow=54014.0)
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1033, length=27
+Msg #7: type=1033, time=2026-06-07 15:00:14.000 (week=2422 tow=54014.0)
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1124, length=236
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM BDS TOW: raw=61219000, tow=61233.0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM BDS after adjweek: time.time=1780851633, time.sec=0.0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- decode_msm_head: sys=32 staid=0 nsat=12 nsig=5 sync=1 iod=0 ncell=29
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[0] sigid=2 sigstr=2I code=40 idx=0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[1] sigid=8 sigstr=6I code=42 idx=3
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[2] sigid=14 sigstr=7I code=27 idx=1
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[3] sigid=23 sigstr=5P code=58 idx=2
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[4] sigid=31 sigstr=1P code=2 idx=4
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[0] code=40 idx=0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[1] code=42 idx=3
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[2] code=27 idx=1
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[3] code=58 idx=2
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[4] code=2 idx=4
+Msg #8: type=1124, time=2026-06-07 17:00:33.000 (week=2422 tow=61233.0)
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1124, length=54
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM BDS TOW: raw=61219000, tow=61233.0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM BDS after adjweek: time.time=1780851633, time.sec=0.0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- decode_msm_head: sys=32 staid=0 nsat=1 nsig=4 sync=0 iod=0 ncell=4
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[0] sigid=2 sigstr=2I code=40 idx=0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[1] sigid=8 sigstr=6I code=42 idx=3
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[2] sigid=23 sigstr=5P code=58 idx=2
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[3] sigid=31 sigstr=1P code=2 idx=4
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[0] code=40 idx=0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[1] code=42 idx=3
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[2] code=58 idx=2
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[3] code=2 idx=4
+Msg #9: type=1124, time=2026-06-07 17:00:33.000 (week=2422 tow=61233.0)
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1042, length=70
+13:15:25.627 [main] INFO org.rtklib.java.rtcm.Rtcm -- RTCM 1042 eph stored: sat=112 prn=7 week=1066 toe=61200.0 A=42165725.8
+Msg #10: type=1042, time=2026-06-07 17:00:33.000 (week=2422 tow=61233.0)
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1005, length=25
+Msg #11: type=1005, time=2026-06-07 17:00:33.000 (week=2422 tow=61233.0)
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1033, length=27
+Msg #12: type=1033, time=2026-06-07 17:00:33.000 (week=2422 tow=61233.0)
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1124, length=236
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM BDS TOW: raw=61234000, tow=61248.0
+13:15:25.627 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM BDS after adjweek: time.time=1780851648, time.sec=0.0
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- decode_msm_head: sys=32 staid=0 nsat=12 nsig=5 sync=1 iod=0 ncell=29
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[0] sigid=2 sigstr=2I code=40 idx=0
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[1] sigid=8 sigstr=6I code=42 idx=3
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[2] sigid=14 sigstr=7I code=27 idx=1
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[3] sigid=23 sigstr=5P code=58 idx=2
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[4] sigid=31 sigstr=1P code=2 idx=4
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[0] code=40 idx=0
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[1] code=42 idx=3
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[2] code=27 idx=1
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[3] code=58 idx=2
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[4] code=2 idx=4
+Msg #13: type=1124, time=2026-06-07 17:00:48.000 (week=2422 tow=61248.0)
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1124, length=54
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM BDS TOW: raw=61234000, tow=61248.0
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM BDS after adjweek: time.time=1780851648, time.sec=0.0
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- decode_msm_head: sys=32 staid=0 nsat=1 nsig=4 sync=0 iod=0 ncell=4
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[0] sigid=2 sigstr=2I code=40 idx=0
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[1] sigid=8 sigstr=6I code=42 idx=3
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[2] sigid=23 sigstr=5P code=58 idx=2
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[3] sigid=31 sigstr=1P code=2 idx=4
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[0] code=40 idx=0
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[1] code=42 idx=3
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[2] code=58 idx=2
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[3] code=2 idx=4
+Msg #14: type=1124, time=2026-06-07 17:00:48.000 (week=2422 tow=61248.0)
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1042, length=70
+13:15:25.628 [main] INFO org.rtklib.java.rtcm.Rtcm -- RTCM 1042 eph stored: sat=106 prn=1 week=1066 toe=61200.0 A=42166232.7
+Msg #15: type=1042, time=2026-06-07 17:00:48.000 (week=2422 tow=61248.0)
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1005, length=25
+Msg #16: type=1005, time=2026-06-07 17:00:48.000 (week=2422 tow=61248.0)
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1033, length=27
+Msg #17: type=1033, time=2026-06-07 17:00:48.000 (week=2422 tow=61248.0)
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1124, length=248
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM BDS TOW: raw=61249000, tow=61263.0
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM BDS after adjweek: time.time=1780851663, time.sec=0.0
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- decode_msm_head: sys=32 staid=0 nsat=12 nsig=5 sync=0 iod=0 ncell=31
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[0] sigid=2 sigstr=2I code=40 idx=0
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[1] sigid=8 sigstr=6I code=42 idx=3
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[2] sigid=14 sigstr=7I code=27 idx=1
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[3] sigid=23 sigstr=5P code=58 idx=2
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM sig[4] sigid=31 sigstr=1P code=2 idx=4
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[0] code=40 idx=0
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[1] code=42 idx=3
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[2] code=27 idx=1
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[3] code=58 idx=2
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- MSM after sigindex: sig[4] code=2 idx=4
+Msg #18: type=1124, time=2026-06-07 17:01:03.000 (week=2422 tow=61263.0)
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1042, length=70
+13:15:25.628 [main] INFO org.rtklib.java.rtcm.Rtcm -- RTCM 1042 eph stored: sat=107 prn=2 week=1066 toe=61200.0 A=42163941.3
+Msg #19: type=1042, time=2026-06-07 17:01:03.000 (week=2422 tow=61263.0)
+13:15:25.628 [main] DEBUG org.rtklib.java.rtcm.Rtcm -- RTCM3 decoded message type=1005, length=25
+Msg #20: type=1005, time=2026-06-07 17:01:03.000 (week=2422 tow=61263.0)
+]]></system-out>
+  </testcase>
+</testsuite>

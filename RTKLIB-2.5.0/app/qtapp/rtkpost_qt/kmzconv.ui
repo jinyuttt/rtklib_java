@@ -1,0 +1,664 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ConvDialog</class>
+ <widget class="QWidget" name="ConvDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>657</width>
+    <height>468</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>KML/GPX Converter</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QWidget" name="panelMain" native="true">
+     <property name="text" stdset="0">
+      <string/>
+     </property>
+     <layout class="QGridLayout" name="gridLayout">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item row="6" column="0">
+       <widget class="QLabel" name="lblOutputWaypoint">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>Output &amp;Waypoint</string>
+        </property>
+        <property name="buddy">
+         <cstring>cBPointColor</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QLabel" name="lblStart">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text">
+         <string>&amp;Start</string>
+        </property>
+        <property name="buddy">
+         <cstring>dateTimeStart</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QCheckBox" name="cBTimeSpan">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>Time Sp&amp;an</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="2">
+       <widget class="QDateTimeEdit" name="dateTimeStart">
+        <property name="dateTime">
+         <datetime>
+          <hour>0</hour>
+          <minute>0</minute>
+          <second>0</second>
+          <year>2020</year>
+          <month>1</month>
+          <day>1</day>
+         </datetime>
+        </property>
+        <property name="displayFormat">
+         <string>yyyy/MM/dd hh:mm:ss</string>
+        </property>
+        <property name="calendarPopup">
+         <bool>true</bool>
+        </property>
+        <property name="timeSpec">
+         <enum>Qt::UTC</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="14" column="0" colspan="5">
+       <widget class="QLineEdit" name="lEOutputFile">
+        <property name="toolTip">
+         <string>Output filename</string>
+        </property>
+        <property name="maxLength">
+         <number>1023</number>
+        </property>
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="13" column="4">
+       <widget class="QCheckBox" name="cBCompress">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>.kmz</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="4">
+       <widget class="QDateTimeEdit" name="dateTimeStop">
+        <property name="displayFormat">
+         <string>yyyy/MM/dd hh:mm:ss</string>
+        </property>
+        <property name="calendarPopup">
+         <bool>true</bool>
+        </property>
+        <property name="timeSpec">
+         <enum>Qt::UTC</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="13" column="0" colspan="2">
+       <widget class="QLabel" name="lblOutputFile">
+        <property name="text">
+         <string>&amp;Output File</string>
+        </property>
+        <property name="buddy">
+         <cstring>lEOutputFile</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="2">
+       <widget class="QComboBox" name="cBTrackColor">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <item>
+         <property name="text">
+          <string>OFF</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>White</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Green</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Orange</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Red</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Yellow</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="8" column="0" colspan="2">
+       <widget class="QCheckBox" name="cBAddOffset">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>Add &amp;Offset E/N/U</string>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="2">
+       <widget class="QComboBox" name="cBPointColor">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <item>
+         <property name="text">
+          <string>OFF</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>White</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Green</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Orange</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Red</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>By Q-Flag</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="2" column="3">
+       <widget class="QLabel" name="lblEnd">
+        <property name="text">
+         <string>&amp;End</string>
+        </property>
+        <property name="buddy">
+         <cstring>dateTimeStop</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="0">
+       <widget class="QLabel" name="lblOutputTrack">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>Output &amp;Track</string>
+        </property>
+        <property name="buddy">
+         <cstring>cBTrackColor</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="0">
+       <widget class="QLabel" name="lblInputFile">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>&amp;Input File</string>
+        </property>
+        <property name="buddy">
+         <cstring>lEInputFile</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="3">
+       <widget class="QLabel" name="lblQFlags">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>Q-&amp;Flags</string>
+        </property>
+        <property name="buddy">
+         <cstring>cBQFlags</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="4">
+       <widget class="QComboBox" name="cBQFlags">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <item>
+         <property name="text">
+          <string>ALL</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Q=1</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Q=2</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Q=3</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Q=4</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Q=5</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Q=6</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="5" column="4">
+       <widget class="QComboBox" name="cBOutputAltitude">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="toolTip">
+         <string/>
+        </property>
+        <item>
+         <property name="text">
+          <string>OFF</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Ellipsoidal</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Geodetic</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="6" column="4">
+       <widget class="QComboBox" name="cBOutputTime">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <item>
+         <property name="text">
+          <string>OFF</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>GPST</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>UTC</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>JST</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="6" column="3">
+       <widget class="QLabel" name="lblOutputTime">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>Output Ti&amp;me</string>
+        </property>
+        <property name="buddy">
+         <cstring>cBOutputTime</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="16" column="0" colspan="2">
+       <widget class="QLabel" name="lblGEExecutable">
+        <property name="text">
+         <string>Google Earth Executable</string>
+        </property>
+        <property name="buddy">
+         <cstring>lEGoogleEarthFile</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="2" colspan="3">
+       <widget class="QWidget" name="wgOffset" native="true">
+        <layout class="QHBoxLayout" name="horizontalLayout_2">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QDoubleSpinBox" name="sBOffset1">
+           <property name="suffix">
+            <string> m</string>
+           </property>
+           <property name="decimals">
+            <number>4</number>
+           </property>
+           <property name="maximum">
+            <double>1000.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QDoubleSpinBox" name="sBOffset2">
+           <property name="suffix">
+            <string> m</string>
+           </property>
+           <property name="decimals">
+            <number>4</number>
+           </property>
+           <property name="maximum">
+            <double>10000.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QDoubleSpinBox" name="sBOffset3">
+           <property name="suffix">
+            <string> m</string>
+           </property>
+           <property name="decimals">
+            <number>4</number>
+           </property>
+           <property name="maximum">
+            <double>10000.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="18" column="0" colspan="5">
+       <widget class="QLabel" name="lblMessage">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::Box</enum>
+        </property>
+        <property name="frameShadow">
+         <enum>QFrame::Sunken</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="2">
+       <widget class="QDoubleSpinBox" name="sBTimeInterval">
+        <property name="suffix">
+         <string> s</string>
+        </property>
+        <property name="decimals">
+         <number>1</number>
+        </property>
+        <property name="maximum">
+         <double>100000.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>1.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="3">
+       <widget class="QLabel" name="lblOutputAltitude">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>Output &amp;Altitude</string>
+        </property>
+        <property name="buddy">
+         <cstring>cBOutputAltitude</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0" colspan="2">
+       <widget class="QCheckBox" name="cBTimeInterval">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>I&amp;nterval</string>
+        </property>
+       </widget>
+      </item>
+      <item row="17" column="0" colspan="5">
+       <widget class="QLineEdit" name="lEGoogleEarthFile">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="maxLength">
+         <number>1023</number>
+        </property>
+       </widget>
+      </item>
+      <item row="12" column="0" colspan="5">
+       <widget class="QLineEdit" name="lEInputFile">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="maxLength">
+         <number>1023</number>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0" colspan="5">
+       <widget class="QGroupBox" name="gBFormat">
+        <property name="title">
+         <string>Output Format</string>
+        </property>
+        <layout class="QGridLayout" name="gridLayout_2">
+         <item row="0" column="0">
+          <widget class="QRadioButton" name="rBFormatKML">
+           <property name="text">
+            <string>Google Earth &amp;KML</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QRadioButton" name="rBFormatGPX">
+           <property name="text">
+            <string>GP&amp;X</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="wgButtons" native="true">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QPushButton" name="btnGoogleEarth">
+        <property name="toolTip">
+         <string>Start Google Earth</string>
+        </property>
+        <property name="text">
+         <string>&amp;Google Earth</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/buttons/ge</normaloff>:/buttons/ge</iconset>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnView">
+        <property name="toolTip">
+         <string>View output file</string>
+        </property>
+        <property name="text">
+         <string>&amp;View....</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/buttons/doc</normaloff>:/buttons/doc</iconset>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnConvert">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>Con&amp;vert</string>
+        </property>
+        <property name="autoDefault">
+         <bool>true</bool>
+        </property>
+        <property name="default">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnClose">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>&amp;Close</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>rBFormatKML</tabstop>
+  <tabstop>rBFormatGPX</tabstop>
+  <tabstop>cBTimeSpan</tabstop>
+  <tabstop>dateTimeStart</tabstop>
+  <tabstop>dateTimeStop</tabstop>
+  <tabstop>cBTimeInterval</tabstop>
+  <tabstop>sBTimeInterval</tabstop>
+  <tabstop>cBQFlags</tabstop>
+  <tabstop>cBTrackColor</tabstop>
+  <tabstop>cBOutputAltitude</tabstop>
+  <tabstop>cBPointColor</tabstop>
+  <tabstop>cBOutputTime</tabstop>
+  <tabstop>cBAddOffset</tabstop>
+  <tabstop>sBOffset1</tabstop>
+  <tabstop>sBOffset2</tabstop>
+  <tabstop>sBOffset3</tabstop>
+  <tabstop>lEInputFile</tabstop>
+  <tabstop>lEOutputFile</tabstop>
+  <tabstop>cBCompress</tabstop>
+  <tabstop>lEGoogleEarthFile</tabstop>
+  <tabstop>btnGoogleEarth</tabstop>
+  <tabstop>btnView</tabstop>
+  <tabstop>btnConvert</tabstop>
+  <tabstop>btnClose</tabstop>
+ </tabstops>
+ <resources>
+  <include location="../icon/resources.qrc"/>
+ </resources>
+ <connections/>
+</ui>
