@@ -789,12 +789,20 @@ public final class RtkCore {
                     if (opt.mode > Constants.PMODE_DGPS && !code) {
                         int ii = IB(sat[refIdx], frq, nf, opt);
                         int jj = IB(sat[j], frq, nf, opt);
-                        double lami = Constants.CLIGHT / freqi;
-                        double lamj = Constants.CLIGHT / freqj;
-                        v[nv] -= lami * x[ii] - lamj * x[jj];
-                        if (H != null) {
-                            H[nv * rtk.nx + ii] = lami;
-                            H[nv * rtk.nx + jj] = -lamj;
+                        if (opt.ionoopt != Constants.IONOOPT_IFLC) {
+                            double lami = Constants.CLIGHT / freqi;
+                            double lamj = Constants.CLIGHT / freqj;
+                            v[nv] -= lami * x[ii] - lamj * x[jj];
+                            if (H != null) {
+                                H[nv * rtk.nx + ii] = lami;
+                                H[nv * rtk.nx + jj] = -lamj;
+                            }
+                        } else {
+                            v[nv] -= x[ii] - x[jj];
+                            if (H != null) {
+                                H[nv * rtk.nx + ii] = 1.0;
+                                H[nv * rtk.nx + jj] = -1.0;
+                            }
                         }
                     }
 
