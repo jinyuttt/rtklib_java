@@ -1,6 +1,8 @@
 package org.rtklib.java.data;
 
 public class Erp {
+    public int n;
+    public int nmax;
     public Erpd[] data;
 
     public Erp() {
