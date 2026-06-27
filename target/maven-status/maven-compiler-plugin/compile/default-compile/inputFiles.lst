@@ -13,11 +13,14 @@ D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Alm.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Ambc.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Dgps.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Eph.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Erp.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Erpd.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Geph.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\GTime.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Nav.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Obs.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Obsd.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Pcv.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\PrcOpt.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Rtk.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\SbsIon.java
@@ -51,5 +54,6 @@ D:\code\rtklib_java\src\main\java\org\rtklib\java\rtcm\RtcmCallbackDecoder.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtcm\RtcmDataHandler.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkCore.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkPos.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\Tides.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\time\TimeSystem.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\troposphere\TroposphereModel.java
