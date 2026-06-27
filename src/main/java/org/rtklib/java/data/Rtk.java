@@ -1,4 +1,4 @@
-﻿package org.rtklib.java.data;
+package org.rtklib.java.data;
 
 import org.rtklib.java.constants.Constants;
 
