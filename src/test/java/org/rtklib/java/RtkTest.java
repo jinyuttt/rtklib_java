@@ -207,8 +207,8 @@ public class RtkTest {
         Rtk rtk = new Rtk();
         rtk.opt.mode = Constants.PMODE_KINEMA;
         rtk.opt.nf = 2;
-        rtk.opt.navsys = Constants.SYS_GPS | Constants.SYS_GLO | Constants.SYS_GAL
-                | Constants.SYS_CMP | Constants.SYS_QZS;
+        rtk.opt.navsys = Constants.SYS_CMP;
+
         rtk.opt.elmin = 15.0 * Constants.D2R;
         rtk.opt.ionoopt = Constants.IONOOPT_BRDC;
         rtk.opt.tropopt = Constants.TROPOPT_SAAS;
