@@ -482,6 +482,13 @@ public final class RtkCore {
             rtk.sol.qr[i] = (float) Math.sqrt(Math.abs(rtk.P[i * nx + i]));
         }
 
+        for (i = 0; i < n; i++) {
+            for (j = 0; j < nf; j++) {
+                if (obs[i].L[j] == 0.0) continue;
+                rtk.ssat[obs[i].sat - 1].pt[obs[i].rcv - 1][j] = new GTime(obs[i].time);
+                rtk.ssat[obs[i].sat - 1].ph[obs[i].rcv - 1][j] = obs[i].L[j];
+            }
+        }
         for (i = 0; i < Constants.MAXSAT; i++) {
             for (f = 0; f < nf; f++) {
                 if ((rtk.ssat[i].slip[f] & Constants.LLI_SLIP) != 0) {
@@ -1135,6 +1142,24 @@ public final class RtkCore {
             }
         }
 
+        detslpDop(rtk, obs, iu, ns, 1, nav);
+        detslpDop(rtk, obs, ir, ns, 2, nav);
+
+        for (int i = 0; i < ns; i++) {
+            detslpCode(rtk, obs, iu[i], 1);
+            detslpCode(rtk, obs, ir[i], 2);
+
+            detslpLl(rtk, obs, iu[i], 1);
+            detslpLl(rtk, obs, ir[i], 2);
+
+            detslpGf(rtk, obs, iu[i], ir[i], nav);
+
+            for (int k = 0; k < nf; k++) {
+                rtk.ssat[sat[i] - 1].half[k] =
+                        !((obs[iu[i]].LLI[k] & Constants.LLI_HALFC) != 0 || (obs[ir[i]].LLI[k] & Constants.LLI_HALFC) != 0) ? 1 : 0;
+            }
+        }
+
         for (int k = 0; k < nf; k++) {
             for (int i = 1; i <= Constants.MAXSAT; i++) {
                 boolean reset = ++rtk.ssat[i - 1].outc[k] > opt.maxout;
@@ -1217,6 +1242,109 @@ public final class RtkCore {
                 LOG.debug(String.format("udbias init: sat=%d f=%d idx=%d bias=%.4f var=%.1f", sat[i], k, idx, bias[i], opt.std[0] * opt.std[0]));
                 if (opt.modear != Constants.ARMODE_INST) {
                     rtk.ssat[sat[i] - 1].lock[k] = -opt.minlock;
+                }
+            }
+        }
+    }
+
+    private static double gfobs(Obsd[] obs, int i, int j, int k, Nav nav) {
+        double freq1 = SatUtils.sat2freq(obs[i].sat, obs[i].code[0], nav);
+        double freq2 = SatUtils.sat2freq(obs[i].sat, obs[i].code[k], nav);
+        double L1 = sdobs(obs, i, j, 0);
+        double L2 = sdobs(obs, i, j, k);
+        if (freq1 == 0.0 || freq2 == 0.0 || L1 == 0.0 || L2 == 0.0) return 0.0;
+        return L1 * Constants.CLIGHT / freq1 - L2 * Constants.CLIGHT / freq2;
+    }
+
+    private static void detslpLl(Rtk rtk, Obsd[] obs, int i, int rcv) {
+        int sat = obs[i].sat;
+        for (int f = 0; f < rtk.opt.nf; f++) {
+            if ((obs[i].L[f] == 0.0 && obs[i].LLI[f] == 0) ||
+                    Math.abs(TimeSystem.timediff(obs[i].time, rtk.ssat[sat - 1].pt[rcv - 1][f])) < Constants.DTTOL) {
+                continue;
+            }
+            int LLI;
+            if (rcv == 1) { LLI = rtk.ssat[sat - 1].slip[f] & 0x03; }
+            else { LLI = (rtk.ssat[sat - 1].slip[f] >> 2) & 0x03; }
+            int slip;
+            if (rtk.tt >= 0.0) { slip = obs[i].LLI[f]; }
+            else { slip = LLI; }
+            if (((LLI & Constants.LLI_HALFC) != 0 && (obs[i].LLI[f] & Constants.LLI_HALFC) == 0) ||
+                    ((LLI & Constants.LLI_HALFC) == 0 && (obs[i].LLI[f] & Constants.LLI_HALFC) != 0)) {
+                slip |= Constants.LLI_SLIP;
+            }
+            if (rcv == 1) { rtk.ssat[sat - 1].slip[f] = (rtk.ssat[sat - 1].slip[f] & 0xFC) | (obs[i].LLI[f] & 0x03); }
+            else { rtk.ssat[sat - 1].slip[f] = (rtk.ssat[sat - 1].slip[f] & 0xF3) | ((obs[i].LLI[f] & 0x03) << 2); }
+            rtk.ssat[sat - 1].slip[f] |= slip;
+            rtk.ssat[sat - 1].half[f] = (obs[i].LLI[f] & Constants.LLI_HALFC) != 0 ? 0 : 1;
+        }
+    }
+
+    private static void detslpGf(Rtk rtk, Obsd[] obs, int i, int j, Nav nav) {
+        int sat = obs[i].sat;
+        if (rtk.opt.thresslip == 0) return;
+        for (int k = 0; k < rtk.opt.nf; k++) {
+            if ((rtk.ssat[sat - 1].slip[k] & Constants.LLI_SLIP) != 0) return;
+        }
+        for (int k = 1; k < rtk.opt.nf; k++) {
+            double gf1 = gfobs(obs, i, j, k, nav);
+            if (gf1 == 0.0) continue;
+            double gf0 = rtk.ssat[sat - 1].gf[k - 1];
+            rtk.ssat[sat - 1].gf[k - 1] = gf1;
+            if (gf0 != 0.0 && Math.abs(gf1 - gf0) > rtk.opt.thresslip) {
+                rtk.ssat[sat - 1].slip[0] |= Constants.LLI_SLIP;
+                rtk.ssat[sat - 1].slip[k] |= Constants.LLI_SLIP;
+            }
+        }
+    }
+
+    private static void detslpCode(Rtk rtk, Obsd[] obs, int i, int rcv) {
+        int sat = obs[i].sat;
+        for (int f = 0; f < rtk.opt.nf; f++) {
+            int code = obs[i].code[f];
+            if (code == Constants.CODE_NONE) continue;
+            int ccode = rtk.ssat[sat - 1].code[f][rcv - 1];
+            if (code != ccode) {
+                rtk.ssat[sat - 1].code[f][rcv - 1] = code;
+                if (ccode != Constants.CODE_NONE) {
+                    rtk.ssat[sat - 1].slip[f] |= Constants.LLI_SLIP;
+                }
+            }
+        }
+    }
+
+    private static void detslpDop(Rtk rtk, Obsd[] obs, int[] ix, int ns, int rcv, Nav nav) {
+        if (rtk.opt.thresdop <= 0) return;
+        double[] dopdif = new double[Constants.MAXSAT * Constants.NFREQ];
+        double[] tt = new double[Constants.MAXSAT * Constants.NFREQ];
+        int ndop = 0;
+        double meanDop = 0.0;
+        for (int i = 0; i < ns; i++) {
+            int ii = ix[i];
+            int sat = obs[ii].sat;
+            for (int f = 0; f < rtk.opt.nf; f++) {
+                int idx = i * rtk.opt.nf + f;
+                dopdif[idx] = 0.0;
+                tt[idx] = 0.0;
+                if (obs[ii].L[f] == 0.0 || obs[ii].D[f] == 0.0 || rtk.ssat[sat - 1].ph[rcv - 1][f] == 0.0) continue;
+                double dt = TimeSystem.timediff(obs[ii].time, rtk.ssat[sat - 1].pt[rcv - 1][f]);
+                tt[idx] = dt;
+                if (Math.abs(dt) < Constants.DTTOL) continue;
+                double dph = (obs[ii].L[f] - rtk.ssat[sat - 1].ph[rcv - 1][f]) / dt;
+                double dpt = -obs[ii].D[f];
+                dopdif[idx] = dph - dpt;
+                if (Math.abs(dopdif[idx]) < 3 * rtk.opt.thresdop) { meanDop += dopdif[idx]; ndop++; }
+            }
+        }
+        if (ndop == 0) return;
+        meanDop /= ndop;
+        for (int i = 0; i < ns; i++) {
+            int sat = obs[ix[i]].sat;
+            for (int f = 0; f < rtk.opt.nf; f++) {
+                int idx = i * rtk.opt.nf + f;
+                if (dopdif[idx] == 0.0) continue;
+                if (Math.abs(dopdif[idx] - meanDop) > rtk.opt.thresdop) {
+                    rtk.ssat[sat - 1].slip[f] |= Constants.LLI_SLIP;
                 }
             }
         }
