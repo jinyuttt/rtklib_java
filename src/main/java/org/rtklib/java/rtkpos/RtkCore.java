@@ -245,7 +245,12 @@ public final class RtkCore {
             return 0;
         }
 
-        double dt = TimeSystem.timediff(obs[0].time, obs[nu].time);
+        double dt;
+        if (opt.intpref != 0) {
+            dt = intpres(obs[0].time, obs, nu, nr, nav, rtk, nf, y);
+        } else {
+            dt = TimeSystem.timediff(obs[0].time, obs[nu].time);
+        }
         rtk.sol.age = (float) dt;
         if (Math.abs(rtk.sol.age) > opt.maxtdiff) {
             LOG.warn("age of differential error (age={})", rtk.sol.age);
@@ -595,6 +600,86 @@ public final class RtkCore {
         double t = a - i;
         return var[i] * (1.0 - t) + var[i + 1] * t;
     }
+
+    /**
+     * 基准站观测值时间插值（Interpolation of Base Station Residuals）。
+     *
+     * <p>对应RTKLIB intpres()。当基准站和流动站观测时刻不同步时，
+     * 通过对前后两个基准站历元的零差残差进行线性插值来修正时间差引起的偏差。</p>
+     *
+     * <p>工作原理：</p>
+     * <ol>
+     *   <li>首次调用或时间差极小时，保存当前基准站观测值作为\"前一历元\"</li>
+     *   <li>后续调用时，用前一历元和当前历元的基准站零差残差进行线性插值</li>
+     *   <li>对于有周跳或某历元无效的观测值，将插值结果置零</li>
+     * </ol>
+     *
+     * @param time 流动站观测时间
+     * @param obs  观测数据数组（流动站+基准站连续存储）
+     * @param nu   流动站观测数
+     * @param nr   基准站观测数
+     * @param nav  导航数据
+     * @param rtk  RTK解算状态（含intpres_nb和intpres_obsb）
+     * @param nf   频率数
+     * @param y    零差残差数组（基准站部分将被插值修正）
+     * @return 基准站和流动站之间的有效时间差（秒）
+     */
+    private static double intpres(GTime time, Obsd[] obs, int nu, int nr, Nav nav, Rtk rtk,
+                                  int nf, double[] y) {
+        double tt = TimeSystem.timediff(time, obs[nu].time);
+        LOG.debug(String.format("intpres: n=%d tt=%.3f epoch=%d", nr, tt, rtk.epoch));
+
+        if (rtk.intpres_nb == 0 || rtk.epoch == 0 || Math.abs(tt) < Constants.DTTOL) {
+            rtk.intpres_nb = nr;
+            for (int i = 0; i < nr; i++) {
+                rtk.intpres_obsb[i] = new Obsd(obs[nu + i]);
+            }
+            return tt;
+        }
+
+        double ttb = TimeSystem.timediff(time, rtk.intpres_obsb[0].time);
+        if (Math.abs(ttb) > rtk.opt.maxtdiff * 2.0 || ttb == tt) return tt;
+
+        int nb = rtk.intpres_nb;
+        double[] rs = new double[nb * 6];
+        double[] dts = new double[nb * 2];
+        double[] var = new double[nb];
+        int[] svh = new int[nb];
+        EphModel.satposs(time, rtk.intpres_obsb, nb, nav, rs, dts, var, svh);
+
+        double[] yb = new double[nb * nf * 2];
+        double[] e = new double[3 * nb];
+        double[] azel = new double[nb * 2];
+        double[] freq = new double[nb * nf];
+
+        if (!zdres(1, rtk.intpres_obsb, 0, nb, rs, dts, var, svh, nav, rtk.rb, rtk.opt,
+                yb, e, azel, freq)) {
+            return tt;
+        }
+
+        int off = nu * nf * 2;
+        for (int i = 0; i < nr; i++) {
+            int j = 0;
+            for (; j < nb; j++) {
+                if (rtk.intpres_obsb[j].sat == obs[nu + i].sat) break;
+            }
+            if (j >= nb) continue;
+
+            int pIdx = off + i * nf * 2;
+            int qIdx = j * nf * 2;
+            for (int k = 0; k < nf * 2; k++) {
+                if (y[pIdx + k] == 0.0 || yb[qIdx + k] == 0.0 ||
+                        (obs[nu + i].LLI[k % nf] & Constants.LLI_SLIP) != 0 ||
+                        (rtk.intpres_obsb[j].LLI[k % nf] & Constants.LLI_SLIP) != 0) {
+                    y[pIdx + k] = 0.0;
+                } else {
+                    y[pIdx + k] = (ttb * y[pIdx + k] - tt * yb[qIdx + k]) / (ttb - tt);
+                }
+            }
+        }
+        return Math.abs(ttb) < Math.abs(tt) ? ttb : tt;
+    }
+
     private static boolean zdres(int base, Obsd[] obs, int nu, int nr,
                                  double[] rs, double[] dts, double[] vare, int[] svh,
                                  Nav nav, double[] rr, PrcOpt opt,
@@ -1000,7 +1085,7 @@ public final class RtkCore {
         }
 
         if (opt.ionoopt == Constants.IONOOPT_IFLC) {
-            var *= SQR(Math.pow(Constants.FREQL1 / SatUtils.sat2freq(sat, frq == 0 ? Constants.CODE_L1C : Constants.CODE_L2P, null), 2));
+            var *= SQR(3.0);
         }
 
         return var;
