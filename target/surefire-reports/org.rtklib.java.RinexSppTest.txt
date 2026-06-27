@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: org.rtklib.java.RinexSppTest
+-------------------------------------------------------------------------------
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 1, Time elapsed: 2.090 s -- in org.rtklib.java.RinexSppTest

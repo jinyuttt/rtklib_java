@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="org.rtklib.java.RinexDumpTest" time="0.037" tests="1" errors="0" skipped="0" failures="0">
+  <properties>
+    <property name="java.specification.version" value="21"/>
+    <property name="sun.cpu.isalist" value="amd64"/>
+    <property name="sun.jnu.encoding" value="GBK"/>
+    <property name="java.class.path" value="D:\code\rtklib_java\target\test-classes;D:\code\rtklib_java\target\classes;D:\pro\repo\org\ejml\ejml-all\0.43.1\ejml-all-0.43.1.jar;D:\pro\repo\org\ejml\ejml-core\0.43.1\ejml-core-0.43.1.jar;D:\pro\repo\org\ejml\ejml-fdense\0.43.1\ejml-fdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-ddense\0.43.1\ejml-ddense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-cdense\0.43.1\ejml-cdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-zdense\0.43.1\ejml-zdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-dsparse\0.43.1\ejml-dsparse-0.43.1.jar;D:\pro\repo\org\ejml\ejml-simple\0.43.1\ejml-simple-0.43.1.jar;D:\pro\repo\org\ejml\ejml-fsparse\0.43.1\ejml-fsparse-0.43.1.jar;D:\pro\repo\org\slf4j\slf4j-api\2.0.9\slf4j-api-2.0.9.jar;D:\pro\repo\ch\qos\logback\logback-classic\1.4.8\logback-classic-1.4.8.jar;D:\pro\repo\ch\qos\logback\logback-core\1.4.8\logback-core-1.4.8.jar;D:\pro\repo\org\junit\jupiter\junit-jupiter-api\5.9.2\junit-jupiter-api-5.9.2.jar;D:\pro\repo\org\opentest4j\opentest4j\1.2.0\opentest4j-1.2.0.jar;D:\pro\repo\org\junit\platform\junit-platform-commons\1.9.2\junit-platform-commons-1.9.2.jar;D:\pro\repo\org\apiguardian\apiguardian-api\1.1.2\apiguardian-api-1.1.2.jar;D:\pro\repo\org\junit\jupiter\junit-jupiter-engine\5.9.2\junit-jupiter-engine-5.9.2.jar;D:\pro\repo\org\junit\platform\junit-platform-engine\1.9.2\junit-platform-engine-1.9.2.jar;"/>
+    <property name="java.vm.vendor" value="Eclipse Adoptium"/>
+    <property name="sun.arch.data.model" value="64"/>
+    <property name="user.variant" value=""/>
+    <property name="java.vendor.url" value="https://adoptium.net/"/>
+    <property name="user.timezone" value="Asia/Shanghai"/>
+    <property name="os.name" value="Windows 11"/>
+    <property name="java.vm.specification.version" value="21"/>
+    <property name="sun.java.launcher" value="SUN_STANDARD"/>
+    <property name="user.country" value="CN"/>
+    <property name="sun.boot.library.path" value="C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot\bin"/>
+    <property name="sun.java.command" value="C:\Users\Admin\AppData\Local\Temp\surefire1969605343139339829\surefirebooter-20260627031457778_3.jar C:\Users\Admin\AppData\Local\Temp\surefire1969605343139339829 2026-06-27T03-14-57_572-jvmRun1 surefire-20260627031457778_1tmp surefire_0-20260627031457778_2tmp"/>
+    <property name="jdk.debug" value="release"/>
+    <property name="test" value="RinexDumpTest#testCode2idx"/>
+    <property name="surefire.test.class.path" value="D:\code\rtklib_java\target\test-classes;D:\code\rtklib_java\target\classes;D:\pro\repo\org\ejml\ejml-all\0.43.1\ejml-all-0.43.1.jar;D:\pro\repo\org\ejml\ejml-core\0.43.1\ejml-core-0.43.1.jar;D:\pro\repo\org\ejml\ejml-fdense\0.43.1\ejml-fdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-ddense\0.43.1\ejml-ddense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-cdense\0.43.1\ejml-cdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-zdense\0.43.1\ejml-zdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-dsparse\0.43.1\ejml-dsparse-0.43.1.jar;D:\pro\repo\org\ejml\ejml-simple\0.43.1\ejml-simple-0.43.1.jar;D:\pro\repo\org\ejml\ejml-fsparse\0.43.1\ejml-fsparse-0.43.1.jar;D:\pro\repo\org\slf4j\slf4j-api\2.0.9\slf4j-api-2.0.9.jar;D:\pro\repo\ch\qos\logback\logback-classic\1.4.8\logback-classic-1.4.8.jar;D:\pro\repo\ch\qos\logback\logback-core\1.4.8\logback-core-1.4.8.jar;D:\pro\repo\org\junit\jupiter\junit-jupiter-api\5.9.2\junit-jupiter-api-5.9.2.jar;D:\pro\repo\org\opentest4j\opentest4j\1.2.0\opentest4j-1.2.0.jar;D:\pro\repo\org\junit\platform\junit-platform-commons\1.9.2\junit-platform-commons-1.9.2.jar;D:\pro\repo\org\apiguardian\apiguardian-api\1.1.2\apiguardian-api-1.1.2.jar;D:\pro\repo\org\junit\jupiter\junit-jupiter-engine\5.9.2\junit-jupiter-engine-5.9.2.jar;D:\pro\repo\org\junit\platform\junit-platform-engine\1.9.2\junit-platform-engine-1.9.2.jar;"/>
+    <property name="sun.cpu.endian" value="little"/>
+    <property name="user.home" value="C:\Users\Admin"/>
+    <property name="user.language" value="zh"/>
+    <property name="java.specification.vendor" value="Oracle Corporation"/>
+    <property name="java.version.date" value="2025-07-15"/>
+    <property name="java.home" value="C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot"/>
+    <property name="file.separator" value="\"/>
+    <property name="basedir" value="D:\code\rtklib_java"/>
+    <property name="java.vm.compressedOopsMode" value="Zero based"/>
+    <property name="line.separator" value="&#10;"/>
+    <property name="java.vm.specification.vendor" value="Oracle Corporation"/>
+    <property name="java.specification.name" value="Java Platform API Specification"/>
+    <property name="surefire.real.class.path" value="C:\Users\Admin\AppData\Local\Temp\surefire1969605343139339829\surefirebooter-20260627031457778_3.jar"/>
+    <property name="user.script" value=""/>
+    <property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
+    <property name="java.runtime.version" value="21.0.8+9-LTS"/>
+    <property name="user.name" value="Admin"/>
+    <property name="stdout.encoding" value="GBK"/>
+    <property name="path.separator" value=";"/>
+    <property name="os.version" value="10.0"/>
+    <property name="java.runtime.name" value="OpenJDK Runtime Environment"/>
+    <property name="file.encoding" value="UTF-8"/>
+    <property name="java.vm.name" value="OpenJDK 64-Bit Server VM"/>
+    <property name="java.vendor.version" value="Temurin-21.0.8+9"/>
+    <property name="localRepository" value="D:\pro\repo"/>
+    <property name="java.vendor.url.bug" value="https://github.com/adoptium/adoptium-support/issues"/>
+    <property name="java.io.tmpdir" value="C:\Users\Admin\AppData\Local\Temp\"/>
+    <property name="java.version" value="21.0.8"/>
+    <property name="user.dir" value="D:\code\rtklib_java"/>
+    <property name="os.arch" value="amd64"/>
+    <property name="java.vm.specification.name" value="Java Virtual Machine Specification"/>
+    <property name="sun.os.patch.level" value=""/>
+    <property name="native.encoding" value="GBK"/>
+    <property name="java.library.path" value="C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot\bin;C:\windows\Sun\Java\bin;C:\windows\system32;C:\windows;C:\Program Files\Common Files\Oracle\Java\javapath;C:\Program Files\Eclipse Adoptium\jdk-17.0.18.8-hotspot\bin;C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot\bin;C:\windows\system32;C:\windows;C:\windows\System32\Wbem;C:\windows\System32\WindowsPowerShell\v1.0\;C:\windows\System32\OpenSSH\;C:\Program Files\Microsoft SQL Server\150\Tools\Binn\;C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot\bin;D:\pro\apache-maven-3.9.11\bin;C:\Program Files\dotnet\;D:\Program Files\PostgreSQL\17\bin;D:\Program Files\PostgreSQL\17\lib;C:\Windows\System32\Wbem;C:\TDengine TSDB Enterprise;C:\Program Files\Microsoft SQL Server\170\Tools\Binn\;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\TDengine;C:\TDengine\driver;C:\Program Files\Git\cmd;D:\Program Files\nodejs\;D:\Program Files (x86)\NetSarang\Xshell 8\;C:\Program Files\Docker\Docker\resources\bin;C:\Users\Admin\AppData\Local\Programs\Python\Python311\Scripts\;C:\Users\Admin\AppData\Local\Programs\Python\Python311\;C:\Users\Admin\AppData\Local\pnpm;C:\Users\Admin\AppData\Local\Microsoft\WindowsApps;C:\vscode\Microsoft VS Code\bin;C:\Program Files\JetBrains\IntelliJ IDEA 2025.2.1\bin;C:\Users\Admin\.dotnet\tools;C:\Users\Admin\AppData\Local\Python\bin;C:\Users\Admin\AppData\Local\Programs\Fiddler;C:\Users\Admin\.dotnet\tools;d:\Program Files\JetBrains\IntelliJ IDEA 2025.3.3\bin;C:\Users\Admin\AppData\Local\Programs\Ollama;C:\Users\Admin\AppData\Roaming\npm;d:\Programs\Qoder\bin;."/>
+    <property name="java.vm.info" value="mixed mode, sharing"/>
+    <property name="stderr.encoding" value="GBK"/>
+    <property name="java.vendor" value="Eclipse Adoptium"/>
+    <property name="java.vm.version" value="21.0.8+9-LTS"/>
+    <property name="sun.io.unicode.encoding" value="UnicodeLittle"/>
+    <property name="java.class.version" value="65.0"/>
+  </properties>
+  <testcase name="testCode2idx" classname="org.rtklib.java.RinexDumpTest" time="0.026">
+    <system-out><![CDATA[obs2code(2I)=40 code2idx(CMP,40)=0 (NFREQ+NEXOBS=5)
+obs2code(7I)=27 code2idx(CMP,27)=1 (NFREQ+NEXOBS=5)
+obs2code(5P)=58 code2idx(CMP,58)=2 (NFREQ+NEXOBS=5)
+obs2code(6I)=42 code2idx(CMP,42)=3 (NFREQ+NEXOBS=5)
+obs2code(1P)=2 code2idx(CMP,2)=4 (NFREQ+NEXOBS=5)
+obs2code(8D)=64 code2idx(CMP,64)=5 (NFREQ+NEXOBS=5)
+]]></system-out>
+  </testcase>
+</testsuite>

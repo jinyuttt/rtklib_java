@@ -1,0 +1,537 @@
+3 readobsnav: ts=1970/01/01 00:00:00 n=2
+3 readrnxt: file=rover_0608.obs rcv=1
+3 expath  : path=rover_0608.obs nmax=1024
+3 expath  : file=rover_0608.obs
+3 readrnxfile: file=rover_0608.obs flag=0 index=1
+3 rtk_uncompress: file=rover_0608.obs
+3 rtk_uncompress: stat=0
+3 readrnxfp: flag=0 index=1
+3 readrnxh:
+3 readrnxt: file=base_0608.nav rcv=2
+3 expath  : path=base_0608.nav nmax=1024
+3 expath  : file=base_0608.nav
+3 readrnxfile: file=base_0608.nav flag=0 index=2
+3 rtk_uncompress: file=base_0608.nav
+3 rtk_uncompress: stat=0
+3 readrnxfp: flag=0 index=2
+3 readrnxh:
+3 readrnxnav: ver=3.04 sys=0
+3 sortobs: nobs=3233
+3 uniqnav: neph=19 ngeph=0 nseph=0
+3 uniqeph: n=19
+3 uniqgeph: ng=0
+3 uniqseph: ns=0
+3 readdcb : file=rover_0608.obs
+3 expath  : path=rover_0608.obs nmax=1024
+3 expath  : file=rover_0608.obs
+3 readdcb : file=base_0608.nav
+3 expath  : path=base_0608.nav nmax=1024
+3 expath  : file=base_0608.nav
+2 no receiver antenna pcv: 
+2 no receiver antenna pcv: 
+3 antpos  : rcvno=2
+3 outhead: outfile=rtk_trace.pos n=2
+3     0.012: createdir: path=rtk_trace.pos
+3 outheader: n=2
+3 outrpos :
+3 outsolhead:
+3 outsolheads:
+3 outhead: outfile=rtk_trace_events.pos n=2
+3     0.013: createdir: path=rtk_trace_events.pos
+3 outheader: n=2
+3 outrpos :
+3 outsolhead:
+3 outsolheads:
+3 openfile: outfile=rtk_trace.pos
+3 openfile: outfile=rtk_trace_events.pos
+3 rtkinit :
+3 procpos : mode=0
+3 
+infunc  : dir=0 iobsu=0 iobsr=0 isbs=0
+3 
+infunc  : dir=0 iobsu=13 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=26 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=39 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=51 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=63 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=75 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=87 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=99 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=111 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=123 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=135 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=148 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=161 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=175 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=188 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=201 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=214 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=228 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=242 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=256 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=269 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=282 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=295 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=308 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=321 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=334 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=347 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=360 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=373 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=387 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=400 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=412 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=425 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=438 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=451 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=464 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=477 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=490 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=503 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=516 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=529 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=542 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=556 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=570 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=584 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=599 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=613 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=627 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=641 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=655 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=669 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=683 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=697 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=711 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=725 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=739 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=753 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=767 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=781 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=795 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=809 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=823 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=837 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=851 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=865 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=879 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=893 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=907 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=921 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=935 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=949 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=963 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=977 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=991 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1005 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1019 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1033 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1047 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1061 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1075 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1089 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1103 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1117 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1131 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1145 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1159 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1173 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1187 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1201 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1215 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1229 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1243 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1257 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1271 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1285 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1299 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1313 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1327 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1341 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1355 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1369 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1383 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1397 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1411 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1425 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1439 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1453 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1467 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1481 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1495 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1509 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1523 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1537 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1551 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1565 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1579 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1593 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1607 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1621 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1635 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1649 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1663 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1677 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1691 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1705 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1719 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1733 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1747 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1761 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1775 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1789 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1802 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1815 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1828 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1841 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1853 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1865 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1878 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1891 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1903 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1916 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1929 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1942 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1955 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1968 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1981 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=1994 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2007 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2020 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2033 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2046 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2059 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2072 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2085 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2098 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2111 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2124 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2137 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2150 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2163 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2176 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2189 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2202 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2215 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2228 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2241 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2254 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2267 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2280 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2293 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2306 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2319 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2332 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2345 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2358 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2371 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2384 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2398 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2412 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2426 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2440 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2454 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2468 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2482 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2496 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2510 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2524 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2538 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2552 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2566 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2580 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2594 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2608 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2622 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2636 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2650 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2664 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2678 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2692 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2706 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2720 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2734 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2748 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2762 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2776 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2790 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2804 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2818 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2832 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2846 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2860 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2874 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2888 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2902 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2916 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2930 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2944 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2957 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2971 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2985 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=2999 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3012 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3025 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3038 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3051 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3063 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3076 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3088 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3101 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3113 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3124 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3136 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3149 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3161 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3173 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3185 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3197 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3209 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3221 iobsr=3233 isbs=0
+3 
+infunc  : dir=0 iobsu=3233 iobsr=3233 isbs=0
+3 rtkfree :
+3 freeobsnav:
+3 freepreceph:
+3 free_rtcm:
+3 closeses:
+3 closegoid:
+3 rtkclosestat:
