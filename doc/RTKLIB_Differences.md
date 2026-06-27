@@ -286,24 +286,18 @@ SPP 平均自动获取基准站位置，避免硬编码。
 
 ---
 
-## 10. 周跳检测函数差异
+## 10. 周跳检测函数（已修复）
 
 ### C版行为
-`udbias()` 中调用 4 个周跳检测函数：
+`udbias()` 中调用 4 个周跳检测函数，依赖 `rtkpos()` 末尾保存的 `ph`/`pt` 历史数据：
 - `detslp_ll()`：LLI 标志检测周跳
 - `detslp_gf()`：几何无关组合（GF）检测周跳
 - `detslp_code()`：码类型变化检测周跳
 - `detslp_dop()`：多普勒-相位差检测周跳
 
 ### Java版行为
-`udbias()` 中未调用任何周跳检测函数，仅清除 slip 标志。
-`CycleDetect` 类实现了非差 GF/MW 组合检测，但未被集成到 `udbias()` 中。
-
-### 影响
-周跳漏检 → 模糊度状态偏差累积 → 残差偏大 → outlier 频发 → 模糊度频繁重置。
-
-### 待修复
-需要在 `udbias()` 中实现与 C 版等价的 4 个检测函数（`detslp_dop`, `detslp_code`, `detslp_ll`, `detslp_gf`）并正确调用。
+与 C 版一致，`udbias()` 中调用 4 个检测函数，`rtkpos()` 末尾保存 `ph`/`pt` 历史数据。
+所有检测函数逻辑与 C 版等价（已验证 `gfobs`, `detslpLl`, `detslpGf`, `detslpCode`, `detslpDop`）。
 
 ---
 
