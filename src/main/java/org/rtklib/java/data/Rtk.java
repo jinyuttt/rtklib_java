@@ -27,50 +27,95 @@ import org.rtklib.java.constants.Constants;
  * </ul>
  */
 public class Rtk {
-    /** 定位解结果 */
+    /**
+     * 定位解结果
+     */
     public Sol sol;
 
-    /** 基准站ECEF坐标 [6]：{x,y,z,vx,vy,vz}，前3个为位置，后3个预留速度 */
+    /**
+     * 基准站ECEF坐标 [6]：{x,y,z,vx,vy,vz}，前3个为位置，后3个预留速度
+     */
     public double[] rb;
 
-    /** 状态向量维数（6 + ns*nf） */
+    /**
+     * 状态向量维数（6 + ns*nf）
+     */
     public int nx;
 
-    /** 模糊度参数个数（ns*nf） */
+    /**
+     * 模糊度参数个数（ns*nf）
+     */
     public int na;
 
-    /** 状态向量 [nx]，行优先存储，布局见类注释 */
+    /**
+     * 状态向量 [nx]，行优先存储，布局见类注释
+     */
     public double[] x;
 
-    /** 协方差矩阵 [nx*nx]，行优先存储，P[i*nx+j] = 第i行第j列 */
+    /**
+     * 协方差矩阵 [nx*nx]，行优先存储，P[i*nx+j] = 第i行第j列
+     */
     public double[] P;
 
-    /** 固定解状态向量 [nx]（LAMBDA固定后的状态） */
+    /**
+     * 固定解状态向量 [nx]（LAMBDA固定后的状态）
+     */
     public double[] xa;
 
-    /** 固定解协方差矩阵 [nx*nx]，行优先存储 */
+    /**
+     * 固定解协方差矩阵 [nx*nx]，行优先存储
+     */
     public double[] Pa;
 
-    /** 连续固定解历元计数（用于Fix-and-Hold策略） */
+    /**
+     * 连续固定解历元计数（用于Fix-and-Hold策略）
+     */
     public int nfix;
 
-    /** 时间间隔（当前历元与上一历元的时间差，秒） */
+    /**
+     * 时间间隔（当前历元与上一历元的时间差，秒）
+     */
     public double tt;
 
-    /** 频带数 */
+    /**
+     * 频带数
+     */
     public int nband;
 
-    /** 历元计数 [2]：{流动站, 基准站} */
+    /**
+     * 历元计数 [2]：{流动站, 基准站}
+     */
     public int[] nepoch;
 
-    /** 卫星状态数组 [MAXSAT] */
+    /**
+     * 卫星状态数组 [MAXSAT]
+     */
     public Ssat[] ssat;
 
-    /** 处理选项 */
+    /**
+     * 处理选项
+     */
     public PrcOpt opt;
 
-    /** 模糊度控制信息 */
+    /**
+     * 模糊度控制信息
+     */
     public Ambc ambc;
+
+    /**
+     * 上一历元基准站观测数（intpres 用）
+     */
+    public int intpres_nb;
+
+    /**
+     * 上一历元基准站观测数据 [MAXOBS]（intpres 用）
+     */
+    public Obsd[] intpres_obsb;
+
+    /**
+     * 历元计数（intpres 用）
+     */
+    public int epoch;
 
     /**
      * 默认构造函数，初始化所有字段。
@@ -93,5 +138,8 @@ public class Rtk {
         }
         this.opt = new PrcOpt();
         this.ambc = new Ambc();
+        this.intpres_nb = 0;
+        this.intpres_obsb = new Obsd[Constants.MAXOBS];
+        this.epoch = 0;
     }
 }
