@@ -149,7 +149,7 @@ public class PrcOpt {
         this.armaxiter = 1;
         this.ionoopt = Constants.IONOOPT_BRDC;
         this.tropopt = Constants.TROPOPT_SAAS;
-        this.dynamics = 1;
+        this.dynamics = 0;
         this.tidecorr = 0;
         this.niter = 1;
         this.codesmooth = 0;
