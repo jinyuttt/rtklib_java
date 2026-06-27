@@ -4,6 +4,7 @@ import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.GTime;
 import org.rtklib.java.data.Nav;
 import org.rtklib.java.common.RtklibCommon;
+import org.rtklib.java.time.TimeSystem;
 
 /**
  * Troposphere delay correction models.
@@ -197,5 +198,65 @@ public final class TroposphereModel {
         delay_grad += 0.002277 * m_prime * (1255.0 / temp + 0.05) * e0 * cosel;
         
         return delay_grad;
+    }
+    private static double interpc(double[] coef, double lat) {
+        int i = (int)(lat / 15.0);
+        if (i < 1) return coef[0];
+        if (i > 4) return coef[4];
+        return coef[i - 1] * (1.0 - lat / 15.0 + i) + coef[i] * (lat / 15.0 - i);
+    }
+
+    private static double mapfNmf(double el, double a, double b, double c) {
+        double sinel = Math.sin(el);
+        return (1.0 + a / (1.0 + b / (1.0 + c))) / (sinel + a / (sinel + b / (sinel + c)));
+    }
+
+    public static double nmf(GTime time, double[] pos, double[] azel, double[] mapfw) {
+        double[][] coef = {
+            { 1.2769934E-3, 1.2683230E-3, 1.2465397E-3, 1.2196049E-3, 1.2045996E-3},
+            { 2.9153695E-3, 2.9152299E-3, 2.9288445E-3, 2.9022565E-3, 2.9024912E-3},
+            {62.610505E-3, 62.837393E-3, 63.721774E-3, 63.824265E-3, 64.258455E-3},
+            { 0.0000000E-0, 1.2709626E-5, 2.6523662E-5, 3.4000452E-5, 4.1202191E-5},
+            { 0.0000000E-0, 2.1414979E-5, 3.0160779E-5, 7.2562722E-5, 11.723375E-5},
+            { 0.0000000E-0, 9.0128400E-5, 4.3497037E-5, 84.795348E-5, 170.37206E-5},
+            { 5.8021897E-4, 5.6794847E-4, 5.8118019E-4, 5.9727542E-4, 6.1641693E-4},
+            { 1.4275268E-3, 1.5138625E-3, 1.4572752E-3, 1.5007428E-3, 1.7599082E-3},
+            { 4.3472961E-2, 4.6729510E-2, 4.3908931E-2, 4.4626982E-2, 5.4736038E-2}
+        };
+        double[] aht = {2.53E-5, 5.49E-3, 1.14E-3};
+
+        double el = azel[1];
+        double lat = pos[0] * Constants.R2D;
+        double hgt = pos[2];
+
+        if (el <= 0.0) {
+            if (mapfw != null) mapfw[0] = 0.0;
+            return 0.0;
+        }
+
+        double y = (TimeSystem.time2doy(time) - 28.0) / 365.25 + (lat < 0.0 ? 0.5 : 0.0);
+        double cosy = Math.cos(2.0 * Constants.PI * y);
+        lat = Math.abs(lat);
+
+        double[] ah = new double[3];
+        double[] aw = new double[3];
+        for (int i = 0; i < 3; i++) {
+            ah[i] = interpc(coef[i], lat) - interpc(coef[i + 3], lat) * cosy;
+            aw[i] = interpc(coef[i + 6], lat);
+        }
+
+        double dm = (1.0 / Math.sin(el) - mapfNmf(el, aht[0], aht[1], aht[2])) * hgt / 1E3;
+
+        if (mapfw != null) mapfw[0] = mapfNmf(el, aw[0], aw[1], aw[2]);
+
+        return mapfNmf(el, ah[0], ah[1], ah[2]) + dm;
+    }
+
+    public static double tropmapf(GTime time, double[] pos, double[] azel, double[] mapfw) {
+        if (pos[2] < -1000.0 || pos[2] > 20000.0) {
+            if (mapfw != null) mapfw[0] = 0.0;
+            return 0.0;
+        }
+        return nmf(time, pos, azel, mapfw);
     }
 }

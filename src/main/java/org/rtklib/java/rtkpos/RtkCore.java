@@ -128,6 +128,8 @@ public final class RtkCore {
                     rtk.ssat, rtk.sol, azel, new int[nu], new double[nu], msg) == 0) {
                 return 0;
             }
+        } else {
+            rtk.sol.time = obs[0].time;
         }
 
         if (prevTime.time != 0) {
@@ -578,7 +580,7 @@ public final class RtkCore {
 
             r += -Constants.CLIGHT * dts[idx * 2];
 
-            double mapfh = 1.0 / (Math.sin(el) + 1E-10);
+            double mapfh = TroposphereModel.tropmapf(obs[idx].time, pos, ae, null);
             r += mapfh * zhd;
 
             if (base == 0) {
@@ -817,8 +819,8 @@ public final class RtkCore {
                     double elj = azel[1 + iu[j] * 2];
                     int sysRef = SatUtils.satsys(sat[refIdx], null);
                     int sysJ = SatUtils.satsys(sat[j], null);
-                    Ri[nv] = varerr(sat[refIdx], sysRef, eli, bl, dt, f, opt);
-                    Rj[nv] = varerr(sat[j], sysJ, elj, bl, dt, f, opt);
+                    Ri[nv] = varerr(sat[refIdx], sysRef, eli, rtk.ssat[sat[refIdx]-1].snrRover[frq], rtk.ssat[sat[refIdx]-1].snrBase[frq], bl, dt, f, opt, obs[iu[refIdx]]);
+                    Rj[nv] = varerr(sat[j], sysJ, elj, rtk.ssat[sat[j]-1].snrRover[frq], rtk.ssat[sat[j]-1].snrBase[frq], bl, dt, f, opt, obs[iu[j]]);
 
                     if (opt.mode > Constants.PMODE_DGPS) {
                         if (!code) {
@@ -858,8 +860,8 @@ public final class RtkCore {
      * @param opt 处理选项
      * @return 观测误差方差（平方米）
      */
-    private static double varerr(int sat, int sys, double el, double bl,
-                                 double dt, int f, PrcOpt opt) {
+    private static double varerr(int sat, int sys, double el, double snr_rover, double snr_base,
+                                 double bl, double dt, int f, PrcOpt opt, Obsd obs) {
         double a, b, c, d;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
         int frq = f % nf;
@@ -875,12 +877,14 @@ public final class RtkCore {
         }
 
         switch (sys) {
-            case Constants.SYS_GLO: fact *= 1.5; break;
-            case Constants.SYS_GAL: fact *= 1.0; break;
-            case Constants.SYS_CMP: fact *= 1.0; break;
-            case Constants.SYS_QZS: fact *= 1.0; break;
-            case Constants.SYS_IRN: fact *= 1.0; break;
-            default: fact *= 1.0; break;
+            case Constants.SYS_GPS: fact *= Constants.EFACT_GPS; break;
+            case Constants.SYS_GLO: fact *= Constants.EFACT_GLO; break;
+            case Constants.SYS_GAL: fact *= Constants.EFACT_GAL; break;
+            case Constants.SYS_SBS: fact *= Constants.EFACT_SBS; break;
+            case Constants.SYS_QZS: fact *= Constants.EFACT_QZS; break;
+            case Constants.SYS_CMP: fact *= Constants.EFACT_CMP; break;
+            case Constants.SYS_IRN: fact *= Constants.EFACT_IRN; break;
+            default: fact *= Constants.EFACT_GPS; break;
         }
 
         a = fact * opt.err[1];
@@ -889,6 +893,16 @@ public final class RtkCore {
         d = Constants.CLIGHT * opt.sclkstab * dt;
 
         double var = 2.0 * (SQR(a) + SQR(b / s_el) + SQR(c)) + SQR(d);
+
+        if (opt.err[6] > 0.0) {
+            double e = fact * opt.err[6];
+            var += SQR(e) * (Math.pow(10, 0.1 * Math.max(opt.err[5] - snr_rover, 0.0)) +
+                             Math.pow(10, 0.1 * Math.max(opt.err[5] - snr_base, 0.0)));
+        }
+        if (opt.err[7] > 0.0) {
+            if (code) var += SQR(opt.err[7] * obs.Pstd[frq]);
+            else var += SQR(opt.err[7] * obs.Lstd[frq] * 0.2);
+        }
 
         if (opt.ionoopt == Constants.IONOOPT_IFLC) {
             var *= SQR(Math.pow(Constants.FREQL1 / SatUtils.sat2freq(sat, frq == 0 ? Constants.CODE_L1C : Constants.CODE_L2P, null), 2));
