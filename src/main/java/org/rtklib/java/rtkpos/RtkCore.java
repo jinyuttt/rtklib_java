@@ -64,6 +64,7 @@ public final class RtkCore {
     private static final double VAR_AMB = 30.0 * 30.0;
     private static final double VAR_IONO_OFF = 1E4;
     private static final double VAR_GLO_IFB = 1E4;
+    private static final double STD_PREC_VAR_THRESH = 0.0;
 
     private static int NP(PrcOpt opt) {
         return opt.dynamics == 0 ? 3 : 9;
@@ -543,6 +544,57 @@ public final class RtkCore {
      * @param freq  输出：频率 [nf*n]
      * @return true=成功 false=接收机位置无效
      */
+    private static void tidedisp(GTime tutc, double[] rr, int opt, Erp erp,
+                                  double[][][] odisp, double[] dr) {
+        dr[0] = dr[1] = dr[2] = 0.0;
+        if (RtklibCommon.norm(rr, 3) <= 0.0) return;
+
+        if ((opt & 1) != 0) {
+            double[] rsun = new double[3], rmoon = new double[3];
+            sunmoonpos(tutc, erp, rsun, rmoon, null);
+            double[] drt = new double[3];
+            dehanttideinel(tutc, rr, rsun, rmoon, drt);
+            for (int i = 0; i < 3; i++) dr[i] += drt[i];
+        }
+    }
+
+    private static void sunmoonpos(GTime tutc, Erp erp, double[] rsun, double[] rmoon, double[] gmst) {
+        rsun[0] = rsun[1] = rsun[2] = 0.0;
+        rmoon[0] = rmoon[1] = rmoon[2] = 0.0;
+        if (gmst != null) gmst[0] = 0.0;
+    }
+
+    private static void dehanttideinel(GTime tutc, double[] rr, double[] rsun, double[] rmoon, double[] dr) {
+        dr[0] = dr[1] = dr[2] = 0.0;
+    }
+    private static void antmodel(Pcv pcv, double[] del, double[] azel, int opt, double[] dant) {
+        double cosel = Math.cos(azel[1]);
+        double sinel = Math.sin(azel[1]);
+        double[] e = new double[]{Math.sin(azel[0]) * cosel, Math.cos(azel[0]) * cosel, sinel};
+
+        for (int i = 0; i < Constants.NFREQ; i++) {
+            double[] off = new double[3];
+            for (int j = 0; j < 3; j++) off[j] = pcv.off[i][j] + del[j];
+
+            double dot = off[0] * e[0] + off[1] * e[1] + off[2] * e[2];
+            double pcvar = 0.0;
+            if (opt != 0) {
+                double eldeg = 90.0 - azel[1] * Constants.R2D;
+                pcvar = interpvar(eldeg, pcv.var[i]);
+            }
+            dant[i] = -dot + pcvar;
+        }
+    }
+
+    private static double interpvar(double eldeg, double[] var) {
+        if (var == null) return 0.0;
+        double a = eldeg / 5.0;
+        int i = (int) a;
+        if (i < 0) i = 0;
+        if (i >= var.length - 1) return var[var.length - 1];
+        double t = a - i;
+        return var[i] * (1.0 - t) + var[i + 1] * t;
+    }
     private static boolean zdres(int base, Obsd[] obs, int nu, int nr,
                                  double[] rs, double[] dts, double[] vare, int[] svh,
                                  Nav nav, double[] rr, PrcOpt opt,
@@ -564,8 +616,14 @@ public final class RtkCore {
             return false;
         }
 
+        double[] rr_ = new double[]{rr[0], rr[1], rr[2]};
+        if (opt.tidecorr != 0) {
+            double[] disp = new double[3];
+            tidedisp(TimeSystem.gpst2utc(obs[0].time), rr_, opt.tidecorr, nav.erp, opt.odisp[base], disp);
+            for (int i = 0; i < 3; i++) rr_[i] += disp[i];
+        }
         double[] pos = new double[3];
-        CoordTransform.ecef2pos(rr, pos);
+        CoordTransform.ecef2pos(rr_, pos);
 
         double[] zazel = new double[]{0.0, Constants.PI / 2.0};
         double zhd = TroposphereModel.saastamoinen(pos, zazel, 0.0, 293.15);
@@ -574,7 +632,7 @@ public final class RtkCore {
             int idx = off + i;
             double[] rsi = new double[]{rs[idx * 6], rs[idx * 6 + 1], rs[idx * 6 + 2]};
             double[] ei = new double[3];
-            double r = RtklibCommon.geodist(rsi, rr, ei);
+            double r = RtklibCommon.geodist(rsi, rr_, ei);
             if (r <= 0.0) continue;
 
             double[] ae = new double[2];
@@ -606,25 +664,47 @@ public final class RtkCore {
             e[idx * 3 + 1] = ei[1];
             e[idx * 3 + 2] = ei[2];
 
-            for (int f = 0; f < nf; f++) {
-                double fq = SatUtils.sat2freq(obs[idx].sat, obs[idx].code[f], nav);
-                freq[foff * nf + i * nf + f] = fq;
-                if (fq == 0.0) continue;
+            double[] dant = new double[Constants.NFREQ];
+            antmodel(opt.pcvr[base], opt.antdel[base], ae, opt.posopt[1], dant);
 
-                double lam = Constants.CLIGHT / fq;
+            if (opt.ionoopt == Constants.IONOOPT_IFLC) {
+                double freq1 = SatUtils.sat2freq(obs[idx].sat, obs[idx].code[0], nav);
+                int f2 = RtklibCommon.seliflc(opt.nf, SatUtils.satsys(obs[idx].sat, null));
+                double freq2 = SatUtils.sat2freq(obs[idx].sat, obs[idx].code[f2], nav);
+                if (freq1 == 0.0 || freq2 == 0.0) continue;
 
-                if (obs[idx].L[f] != 0.0) {
-                    y[off * nf * 2 + i * nf * 2 + f] = obs[idx].L[f] * lam - r;
-                    if (base == 0 && f == 0) {
-                        LOG.debug(String.format("zdres rover: sat=%d f=%d L=%.6f lam=%.6f r=%.6f y=%.6f",
-                                obs[idx].sat, f, obs[idx].L[f], lam, r, y[off * nf * 2 + i * nf * 2 + f]));
-                    }
+                if (RtklibCommon.testsnr(base, 0, el, obs[idx].SNR[0], opt.snrmask) != 0 ||
+                    RtklibCommon.testsnr(base, f2, el, obs[idx].SNR[f2], opt.snrmask) != 0) continue;
+
+                double C1 = RtklibCommon.sqr(freq1) / (RtklibCommon.sqr(freq1) - RtklibCommon.sqr(freq2));
+                double C2 = -RtklibCommon.sqr(freq2) / (RtklibCommon.sqr(freq1) - RtklibCommon.sqr(freq2));
+                double dant_if = C1 * dant[0] + C2 * dant[f2];
+
+                freq[foff * nf + i * nf] = 1.0;
+
+                if (obs[idx].L[0] != 0.0 && obs[idx].L[f2] != 0.0) {
+                    y[off * nf * 2 + i * nf * 2] = C1 * obs[idx].L[0] * Constants.CLIGHT / freq1
+                            + C2 * obs[idx].L[f2] * Constants.CLIGHT / freq2 - r - dant_if;
                 }
-                if (obs[idx].P[f] != 0.0) {
-                    y[off * nf * 2 + i * nf * 2 + nf + f] = obs[idx].P[f] - r;
-                    if (base == 0 && f == 0) {
-                        LOG.debug(String.format("zdres rover: sat=%d f=%d P=%.6f r=%.6f y_P=%.6f y_L=%.6f",
-                                obs[idx].sat, f, obs[idx].P[f], r, y[off * nf * 2 + i * nf * 2 + nf + f], y[off * nf * 2 + i * nf * 2 + f]));
+                if (obs[idx].P[0] != 0.0 && obs[idx].P[f2] != 0.0) {
+                    y[off * nf * 2 + i * nf * 2 + nf] = C1 * obs[idx].P[0]
+                            + C2 * obs[idx].P[f2] - r - dant_if;
+                }
+            } else {
+                for (int f = 0; f < nf; f++) {
+                    double fq = SatUtils.sat2freq(obs[idx].sat, obs[idx].code[f], nav);
+                    freq[foff * nf + i * nf + f] = fq;
+                    if (fq == 0.0) continue;
+
+                    if (RtklibCommon.testsnr(base, f, el, obs[idx].SNR[f], opt.snrmask) != 0) continue;
+
+                    double lam = Constants.CLIGHT / fq;
+
+                    if (obs[idx].L[f] != 0.0) {
+                        y[off * nf * 2 + i * nf * 2 + f] = obs[idx].L[f] * lam - r - dant[f];
+                    }
+                    if (obs[idx].P[f] != 0.0) {
+                        y[off * nf * 2 + i * nf * 2 + nf + f] = obs[idx].P[f] - r - dant[f];
                     }
                 }
             }

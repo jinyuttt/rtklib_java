@@ -91,6 +91,11 @@ public class Nav {
     /** SSR corrections */
     public Ssr[] ssr;
 
+    public Erp erp;
+
+    public double[][][] cbias;
+    public double[][][] rbias;
+
     /**
      * Default constructor.
      */

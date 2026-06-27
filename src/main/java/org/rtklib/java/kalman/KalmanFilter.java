@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
  * <ul>
  *   <li>K = P * H^T * (H * P * H^T + R)^-1</li>
  *   <li>x_new = x + K * v</li>
- *   <li>P_new = (I - K*H) * P * (I - K*H)^T + K * R * K^T</li>
+ *   <li>P_new = (I - K*H) * P</li>
  * </ul>
  *
  * <p><b>时间更新（Predict）</b>：</p>
@@ -56,7 +56,7 @@ public final class KalmanFilter {
      *   <li>Q = H * PHt + R （新息协方差）</li>
      *   <li>K = PHt * Q^-1 （Kalman增益）</li>
      *   <li>x_new = x + K * v</li>
-     *   <li>P_new = (I-K*H)*P*(I-K*H)^T + K*R*K^T （Joseph形式，数值稳定）</li>
+     *   <li>P_new = (I-K*H)*P （与C版RTKLIB一致）</li>
      * </ol>
      *
      * @param x 状态向量 [n]，行优先，输入：预测值，输出：更新值

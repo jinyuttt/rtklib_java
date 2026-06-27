@@ -90,7 +90,7 @@ public class RtkTest {
                     obsd[i] = new Obsd(rtcm.obs.data[i]);
                     obsd[i].rcv = rcv;
                 }
-                epochs.add(new ObsEpoch(rtcm.obs.data[0].time, obsd, rtcm.obs.n));
+                            epochs.add(new ObsEpoch(rtcm.obs.data[0].time, obsd, rtcm.obs.n));
             }
         }
         return epochs;
