@@ -214,7 +214,7 @@ public class RtkTest {
         rtk.opt.tropopt = Constants.TROPOPT_SAAS;
         rtk.opt.modear = Constants.ARMODE_OFF;
 
-        System.arraycopy(basePos, 0, rtk.rb, 0, 3);
+        System.arraycopy(basePos, 0, rtk.opt.rb, 0, 3);
 
         int rtkCount = 0;
         int failCount = 0;

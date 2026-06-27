@@ -289,4 +289,12 @@ public final class TimeSystem {
     public static GTime timeget() {
         return new GTime(System.currentTimeMillis() / 1000L, 0.0);
     }
+    public static double time2doy(GTime t) {
+        double[] ep = new double[6];
+        time2epoch(t, ep);
+        ep[1] = ep[2] = 1.0;
+        ep[3] = ep[4] = ep[5] = 0.0;
+        return timediff(t, epoch2time(ep)) / 86400.0 + 1.0;
+    }
+
 }
