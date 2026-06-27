@@ -178,9 +178,7 @@ public final class RtkCore {
             }
         }
 
-        int stat = relpos(rtk, obs, nu, nr, nav);
-        rtk.epoch++;
-        return stat;
+        return relpos(rtk, obs, nu, nr, nav);
     }
 
     /**
@@ -211,79 +209,6 @@ public final class RtkCore {
      * @param nav 导航数据
      * @return 1:成功 0:失败
      */
-
-    /**
-     * 插值基准站观测残差。
-     *
-     * <p>当 option.intpref 启用时，对基准站的前一历元和当前历元观测残差进行
-     * 线性插值，以匹配流动站观测时间。对应 RTKLIB intpres()。</p>
-     *
-     * @param time 流动站观测时间
-     * @param obs  观测数据数组（含流动站和基准站）
-     * @param nu   流动站观测数
-     * @param nr   基准站观测数
-     * @param nav  导航数据
-     * @param rtk  RTK 状态
-     * @param y    基准站残差数组 [nf*2*nr]，位于 y[nu*nf*2] 处
-     * @return 时间差（秒）
-     */
-    private static double intpres(GTime time, Obsd[] obs, int nu, int nr, Nav nav,
-                                  Rtk rtk, double[] y) {
-        PrcOpt opt = rtk.opt;
-        int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
-
-        double tt = TimeSystem.timediff(time, obs[nu].time);
-
-        if (rtk.intpres_nb == 0 || rtk.epoch == 0 || Math.abs(tt) < Constants.DTTOL) {
-            rtk.intpres_nb = nr;
-            for (int i = 0; i < nr; i++) {
-                rtk.intpres_obsb[i] = new Obsd(obs[nu + i]);
-            }
-            return tt;
-        }
-
-        double ttb = TimeSystem.timediff(time, rtk.intpres_obsb[0].time);
-        if (Math.abs(ttb) > opt.maxtdiff * 2.0 || ttb == tt) return tt;
-
-        double[] rs = new double[Constants.MAXOBS * 6];
-        double[] dts = new double[Constants.MAXOBS * 2];
-        double[] var = new double[Constants.MAXOBS];
-        int[] svh = new int[Constants.MAXOBS * 2];
-        EphModel.satposs(time, rtk.intpres_obsb, rtk.intpres_nb, nav, rs, dts, var, svh);
-
-        double[] yb = new double[Constants.MAXOBS * Constants.NFREQ * 2];
-        double[] eb = new double[Constants.MAXOBS * 3];
-        double[] azelb = new double[Constants.MAXOBS * 2];
-        double[] freqb = new double[Constants.MAXOBS * Constants.NFREQ];
-        if (!zdres(1, rtk.intpres_obsb, 0, rtk.intpres_nb, rs, dts, var, svh, nav, rtk.rb, opt,
-                yb, eb, azelb, freqb)) {
-            return tt;
-        }
-
-        for (int i = 0; i < nr; i++) {
-            int j = 0;
-            for (; j < rtk.intpres_nb; j++) {
-                if (rtk.intpres_obsb[j].sat == obs[nu + i].sat) break;
-            }
-            if (j >= rtk.intpres_nb) continue;
-
-            double[] p = y; int pOff = (nu + i) * nf * 2;
-            double[] q = yb; int qOff = j * nf * 2;
-            for (int k = 0; k < nf * 2; k++) {
-                double pv = p[pOff + k];
-                double qv = q[qOff + k];
-                if (pv == 0.0 || qv == 0.0
-                        || (obs[nu + i].LLI[k % nf] & Constants.LLI_SLIP) != 0
-                        || (rtk.intpres_obsb[j].LLI[k % nf] & Constants.LLI_SLIP) != 0) {
-                    p[pOff + k] = 0.0;
-                } else {
-                    p[pOff + k] = (ttb * pv - tt * qv) / (ttb - tt);
-                }
-            }
-        }
-        return Math.abs(ttb) < Math.abs(tt) ? ttb : tt;
-    }
-
     private static int relpos(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav) {
         PrcOpt opt = rtk.opt;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
@@ -320,12 +245,7 @@ public final class RtkCore {
             return 0;
         }
 
-        double dt;
-        if (opt.intpref != 0) {
-            dt = intpres(obs[0].time, obs, nu, nr, nav, rtk, y);
-        } else {
-            dt = TimeSystem.timediff(obs[0].time, obs[nu].time);
-        }
+        double dt = TimeSystem.timediff(obs[0].time, obs[nu].time);
         rtk.sol.age = (float) dt;
         if (Math.abs(rtk.sol.age) > opt.maxtdiff) {
             LOG.warn("age of differential error (age={})", rtk.sol.age);
@@ -343,8 +263,6 @@ public final class RtkCore {
             rtk.nx = nx;
             rtk.x = new double[nx];
             rtk.P = new double[nx * nx];
-            rtk.epoch = 0;
-            rtk.intpres_nb = 0;
             initx(rtk, rtk.sol.rr[0] - rtk.rb[0], VAR_POS, 0);
             initx(rtk, rtk.sol.rr[1] - rtk.rb[1], VAR_POS, 1);
             initx(rtk, rtk.sol.rr[2] - rtk.rb[2], VAR_POS, 2);
@@ -632,16 +550,23 @@ public final class RtkCore {
         if (RtklibCommon.norm(rr, 3) <= 0.0) return;
 
         if ((opt & 1) != 0) {
-            double[] erpv = new double[5];
-            Tides.geterp(erp, tutc, erpv);
             double[] rsun = new double[3], rmoon = new double[3];
-            Tides.sunmoonpos(tutc, erpv, rsun, rmoon, null);
+            sunmoonpos(tutc, erp, rsun, rmoon, null);
             double[] drt = new double[3];
-            Tides.dehanttideinel(tutc, rr, rsun, rmoon, drt);
+            dehanttideinel(tutc, rr, rsun, rmoon, drt);
             for (int i = 0; i < 3; i++) dr[i] += drt[i];
         }
     }
 
+    private static void sunmoonpos(GTime tutc, Erp erp, double[] rsun, double[] rmoon, double[] gmst) {
+        rsun[0] = rsun[1] = rsun[2] = 0.0;
+        rmoon[0] = rmoon[1] = rmoon[2] = 0.0;
+        if (gmst != null) gmst[0] = 0.0;
+    }
+
+    private static void dehanttideinel(GTime tutc, double[] rr, double[] rsun, double[] rmoon, double[] dr) {
+        dr[0] = dr[1] = dr[2] = 0.0;
+    }
     private static void antmodel(Pcv pcv, double[] del, double[] azel, int opt, double[] dant) {
         double cosel = Math.cos(azel[1]);
         double sinel = Math.sin(azel[1]);
@@ -1075,7 +1000,7 @@ public final class RtkCore {
         }
 
         if (opt.ionoopt == Constants.IONOOPT_IFLC) {
-            var *= SQR(3.0);
+            var *= SQR(Math.pow(Constants.FREQL1 / SatUtils.sat2freq(sat, frq == 0 ? Constants.CODE_L1C : Constants.CODE_L2P, null), 2));
         }
 
         return var;
