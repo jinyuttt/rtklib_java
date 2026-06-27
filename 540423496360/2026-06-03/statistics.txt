@@ -1,0 +1,26 @@
+# Statistics for 540423496360 2026-06-03
+# Format: filename count
+21.rtcm3 1068
+0.rtcm3 960
+15.rtcm3 960
+14.rtcm3 960
+19.rtcm3 1154
+16.rtcm3 975
+17.rtcm3 960
+13.rtcm3 1072
+10.rtcm3 1025
+11.rtcm3 1161
+12.rtcm3 1196
+18.rtcm3 979
+22.rtcm3 998
+20.rtcm3 1192
+23.rtcm3 965
+4.rtcm3 969
+9.rtcm3 966
+1.rtcm3 969
+2.rtcm3 1017
+7.rtcm3 960
+8.rtcm3 960
+6.rtcm3 960
+3.rtcm3 1089
+5.rtcm3 960
