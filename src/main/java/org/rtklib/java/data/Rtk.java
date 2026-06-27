@@ -1,4 +1,4 @@
-﻿package org.rtklib.java.data;
+package org.rtklib.java.data;
 
 import org.rtklib.java.constants.Constants;
 
@@ -63,6 +63,15 @@ public class Rtk {
     /** 历元计数 [2]：{流动站, 基准站} */
     public int[] nepoch;
 
+    /** 当前历元号（用于intpres） */
+    public int epoch;
+
+    /** 基准站观测值内插：前一历元基准站观测数 */
+    public int intpres_nb;
+
+    /** 基准站观测值内插：前一历元基准站观测数据 */
+    public Obsd[] intpres_obsb;
+
     /** 卫星状态数组 [MAXSAT] */
     public Ssat[] ssat;
 
@@ -87,6 +96,9 @@ public class Rtk {
         this.nfix = 0;
         this.nband = 0;
         this.nepoch = new int[2];
+        this.epoch = 0;
+        this.intpres_nb = 0;
+        this.intpres_obsb = new Obsd[Constants.MAXOBS];
         this.ssat = new Ssat[Constants.MAXSAT];
         for (int i = 0; i < Constants.MAXSAT; i++) {
             this.ssat[i] = new Ssat();
