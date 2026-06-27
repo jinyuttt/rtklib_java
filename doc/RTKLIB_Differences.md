@@ -1,7 +1,9 @@
 # Java版与RTKLIB C版实现差异说明
 
 本文档记录Java版RTKLIB与C版RTKLIB（2.5.0）在实现上的有意差异。
-这些差异是经过SPP测试验证的必要修改，不应随意回退。
+这些差异是经过验证的必要修改或设计选择，不应随意回退。
+
+Bug 修复的调试过程不在本文档中，请参见 `SPP_Debug_Record.md` 和 `RTK_Debug_Record.md`。
 
 ---
 
@@ -277,128 +279,135 @@ if (opt.refpos <= Constants.POSOPT_RINEX && opt.mode != Constants.PMODE_SINGLE &
 但Java版目前**没有** `antpos()` / `avepos()` 的等价实现。
 基准站位置需要调用方在调用 `rtkpos()` 之前手动设置 `rtk.rb` 和 `rtk.opt.rb`。
 
-### 测试中的处理
-
-`RtkRinexCompareTest` 中使用硬编码的C版本SPP平均坐标：
-`java
-double[] cRefBasePos = new double[]{-493099.3671, 5551412.6391, 3092558.0152};
-System.arraycopy(cRefBasePos, 0, rtk.rb, 0, 3);
-System.arraycopy(cRefBasePos, 0, rtk.opt.rb, 0, 3);
-`
-
-这个值来自C版本 `rnx2rtkp` 输出文件头中的 `ref pos` 行。
-C版本使用 `POSOPT_SINGLE`（SPP平均所有历元）计算得到。
-
 ### 待完善
 
-Java版需要实现 `antpos()` / `avepos()` 的等价功能，支持从RINEX头或
-SPP平均自动获取基准站位置，避免硬编码。
+Java版需要实现 `antpos()` / `avepos()` 的等价功能，支持从 RINEX 头或
+SPP 平均自动获取基准站位置，避免硬编码。
 
 ---
 
-## 10. 对流层映射函数差异（待修复）
+## 10. 周跳检测函数差异
 
 ### C版行为
-`zdres()` 中使用 NMF（Niell Mapping Function）：
-`c
-zhd = tropmodel(obs[0].time, pos, zazel, 0.0);     // 天顶静力学延迟
-mapfh = tropmapf(obs[i].time, pos, azel+i*2, NULL);  // NMF映射函数
-r += mapfh * zhd;
-`
-
-`tropmapf()` -> `nmf()` 调用链包含：
-- 纬度内插 `interpc()`：按15度间隔对NMF系数表做线性内插
-- 季节修正：`y = (time2doy(time) - 28.0) / 365.25 + (lat < 0 ? 0.5 : 0)`
-- 连分式映射 `mapf()`：`(1+a/(1+b/(1+c))) / (sinel+a/(sinel+b/(sinel+c)))`
-- 高度修正 `dm`：`(1/sin(el) - mapf(el, aht)) * hgt / 1000`
+`udbias()` 中调用 4 个周跳检测函数：
+- `detslp_ll()`：LLI 标志检测周跳
+- `detslp_gf()`：几何无关组合（GF）检测周跳
+- `detslp_code()`：码类型变化检测周跳
+- `detslp_dop()`：多普勒-相位差检测周跳
 
 ### Java版行为
-`zdres()` 中使用简化映射函数：
-`java
-double zhd = TroposphereModel.saastamoinen(pos, zazel, 0.0, 293.15);
-double mapfh = 1.0 / (Math.sin(el) + 1E-10);   // 简化近似
-r += mapfh * zhd;
-`
+`udbias()` 中未调用任何周跳检测函数，仅清除 slip 标志。
+`CycleDetect` 类实现了非差 GF/MW 组合检测，但未被集成到 `udbias()` 中。
 
-### 数值差异
-以 zhd 约 2.3m 为例：
+### 影响
+周跳漏检 → 模糊度状态偏差累积 → 残差偏大 → outlier 频发 → 模糊度频繁重置。
 
-| 高度角 | 1/sin(el) | NMF(近似) | 映射函数差 | 延迟误差 |
-|--------|-----------|-----------|-----------|---------|
-| 10度 | 5.76 | ~5.5 | ~0.26 | ~0.6m |
-| 15度 | 3.86 | ~3.7 | ~0.16 | ~0.37m |
-| 20度 | 2.92 | ~2.8 | ~0.12 | ~0.28m |
-| 30度 | 2.00 | ~1.95 | ~0.05 | ~0.12m |
+### 待修复
+需要在 `udbias()` 中实现与 C 版等价的 4 个检测函数（`detslp_dop`, `detslp_code`, `detslp_ll`, `detslp_gf`）并正确调用。
 
-### 修复方案
-1. `TimeSystem.java`：添加 `time2doy()` 函数
-2. `TroposphereModel.java`：添加 `interpc()`、`mapfNmf()`、`nmf()`、`tropmapf()`
-3. `RtkCore.java`：将 `1.0 / (Math.sin(el) + 1E-10)` 替换为 `TroposphereModel.tropmapf()`
-
-### 当前状态
-NMF函数已实现，但实测映射函数差异（0.01~0.06）不足以解释14m偏差。
-14m偏差的根本原因仍在排查中。
----
 ---
 
-## 14. rtk.sol.time未更新导致Kalman滤波器冻结（已修复）
+## 11. 观测噪声模型 varerr()
 
-### 问题描述
+### C版行为
+`varerr()` 包含：
+- 星座因子修正（EFACT_GLO=1.5, EFACT_SBS=3.0, EFACT_GPS/GAL/CMP/QZS=1.0）
+- SNR 调整项：`10^(0.1*(thresh - snr))`
+- 接收机噪声项：`err[6]`/`err[7]`
 
-C版 rtkpos.c 第2372行：当P[0]!=0时（非首次历元），需要更新 rtk->sol.time 为当前观测时间：
-`c
-} else rtk->sol.time=obs[0].time;
-`
+### Java版行为
+与 C 版一致，已实现所有噪声项和星座因子。
 
-Java版缺失此 else 分支，导致 rtk.sol.time 只在首次SPP时设置，之后永远不变。
+---
 
-### 影响链
+## 12. 对流层映射函数
 
-1. rtk.sol.time 不更新 -> rtk.tt = timediff(rtk.sol.time, prevTime) 永远为 0
-2. tt=0 -> udpos() 中状态转移矩阵 F 的速度项 F[i*(i+3)] = tt = 0，位置不传播
-3. tt=0 -> 过程噪声 Q = prn^2 * |tt| = 0，协方差矩阵 P 不增长
-4. tt=0 -> udbias() 中模糊度过程噪声也为 0
-5. 结果：Kalman滤波器完全冻结，每个历元都是原地踏步
+### C版行为
+`zdres()` 中使用 NMF（Niell Mapping Function），通过 `tropmapf()` → `nmf()` 调用链计算。
 
-### 证据
+### Java版行为
+与 C 版一致，使用 `TroposphereModel.tropmapf()` 调用 NMF 映射函数。
 
-Java输出文件中240行数据全部是同一个时间戳（第1个历元的时间），而C版每个历元时间都不同。
+---
 
-### 修复
+## 13. Kalman 滤波器时间传播
 
-在 RtkCore.java 中添加 else 分支：
-`java
-} else {
-    rtk.sol.time = obs[0].time;
-}
-`
+### C版行为
+`rtkpos()` 中每历元更新 `rtk->sol.time = obs[0].time`，计算 `tt = timediff(sol.time, prevTime)`，
+用于状态转移矩阵 F 和过程噪声 Q 的时间传播。
 
-这很可能是14m偏差的根本原因。Kalman滤波器冻结后，模糊度无法收敛，定位结果停留在SPP精度水平。
+### Java版行为
+与 C 版一致，每历元更新 `rtk.sol.time` 并计算 `rtk.tt`。
 
+---
 
-## 15. varerr\(\) 缺少 SNR 和接收机噪声项（已修复）
+## 14. Kalman 滤波矩阵运算
 
-C版 rtkpos.c:L401-L446 的 varerr\(\) 包含两个 Java 版缺失的噪声项。
+### C版行为
+使用列优先矩阵，手动实现 Kalman 增益：
+```
+K = P * H^T * (H * P * H^T + R)^-1
+x = x + K * v
+```
 
-注意：默认配置下 err[6]=0.0 和 err[7]=0.0，因此此 Bug 在默认配置下不影响结果。
-但如果用户设置了这些参数，Java 版将忽略 SNR 和接收机噪声。
+### Java版行为
+使用行优先矩阵 + EJML 库实现，公式与 C 版一致。
+通过 `KalmanFilter.update()` 封装，内部包含状态压缩（ix 数组）和 Joseph 形式协方差更新。
 
-### 修复
+### 待验证
+需逐历元对比 C 版 trace 输出与 Java 版的 H/v/R 矩阵具体数值，确认行优先/列优先转换完全正确。
 
-- 修改 varerr\(\) 签名，添加 snr_rover, snr_base, obs 参数
-- 添加 SNR 调整项和接收机标准差项
-- 更新 ddres\(\) 中的调用点，传入 rtk.ssat[].snrRover/snrBase 和 obs
+---
 
-## 16. varerr\(\) 星座因子硬编码且 IRNSS 错误（已修复）
+## 15. 矩阵存储约定：行优先 vs 列优先
 
-Java 版 varerr\(\) 的星座因子使用硬编码值，且 IRNSS 使用 1.0 而非 C 版的 1.5。
-同时缺少 SYS_GPS 和 SYS_SBS 分支。
+### C版：列优先（Column-Major）
 
-### 修复
+C 版 RTKLIB 使用**列优先**存储二维矩阵。矩阵 `A[m][n]`（m 行 n 列）在内存中按列连续排列：
 
-使用 Constants.EFACT_* 常量替代硬编码值，添加所有星座分支。
+```
+A = [a00 a01 a02]    内存布局: [a00, a10, a20, a01, a11, a21, a02, a12, a22]
+    [a10 a11 a12]
+    [a20 a21 a22]
+```
 
-## 17. 对流层映射函数
+元素 `A[i][j]` 在内存中的偏移为 `j * m + i`。
 
-Java 版已实现 NMF 映射函数，通过 TroposphereModel.tropmapf 调用。
-与 C 版 rtkpos.c 中的 tropmapf 等价。此差异已不存在。
+### Java版：行优先（Row-Major）
+
+Java 版使用**行优先**存储二维矩阵。矩阵 `A[m][n]`（m 行 n 列）在内存中按行连续排列：
+
+```
+A = [a00 a01 a02]    内存布局: [a00, a01, a02, a10, a11, a12, a20, a21, a22]
+    [a10 a11 a12]
+    [a20 a21 a22]
+```
+
+元素 `A[i][j]` 在内存中的偏移为 `i * n + j`。
+
+### 影响范围
+
+整个项目中所有矩阵运算都使用行优先约定，包括：
+
+| 模块 | 矩阵 | 维度 |
+|------|------|------|
+| KalmanFilter | P（协方差）、H（设计矩阵）、K（增益）、R（噪声） | 动态 |
+| RtkCore | F（状态转移）、Q（过程噪声）、H/v/R（观测方程） | 动态 |
+| LAMBDA | Z（变换矩阵）、Q（协方差）、L/D（LDL分解） | 动态 |
+| 最小二乘 | A（设计矩阵）、Q（权重）、N（法方程） | 动态 |
+
+### 与 C 版矩阵的对应关系
+
+C 版列优先矩阵 `A_c[m][n]` 与 Java 版行优先矩阵 `A_j[m][n]` 在数学上表示同一个矩阵，
+但内存布局不同。当需要将 C 版矩阵直接复制到 Java 版时，需要转置。
+
+通过 EJML 库（`SimpleMatrix`）进行矩阵运算，无需手动处理索引转换。
+`SimpleMatrix` 内部使用行优先，`MatrixUtil.createMatrix(data, rows, cols)` 接受行优先数据。
+
+### 验证要点
+
+所有矩阵运算的正确性取决于：
+- 输入矩阵（H、R）按行优先填充
+- `MatrixUtil.createMatrix()` 的行列参数正确
+- 矩阵乘法结果的行列索引正确
+- 最终结果写回 `x[]` 和 `P[]` 时按行优先顺序
