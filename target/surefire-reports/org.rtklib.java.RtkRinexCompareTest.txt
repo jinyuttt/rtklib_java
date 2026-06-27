@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: org.rtklib.java.RtkRinexCompareTest
 -------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.948 s -- in org.rtklib.java.RtkRinexCompareTest
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.225 s -- in org.rtklib.java.RtkRinexCompareTest
