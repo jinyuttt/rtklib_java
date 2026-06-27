@@ -104,6 +104,8 @@ public class PrcOpt {
     /** Antenna types {rover,base} */
     public String[] anttype;
     /** Antenna delta {{rov_e,rov_n,rov_u},{ref_e,ref_n,ref_u}} */
+    public Pcv[] pcvr;
+    public double[][][][] odisp;
     public double[][] antdel;
     /** Excluded satellites (1:excluded, 2:included) */
     public int[] exsats;
@@ -193,6 +195,10 @@ public class PrcOpt {
         this.anttype = new String[2];
         this.anttype[0] = "";
         this.anttype[1] = "";
+        this.pcvr = new Pcv[2];
+        this.pcvr[0] = new Pcv();
+        this.pcvr[1] = new Pcv();
+        this.odisp = new double[2][2][11][3];
         this.antdel = new double[2][3];
         this.exsats = new int[Constants.MAXSAT];
         this.maxaveep = 1;
@@ -263,6 +269,10 @@ public class PrcOpt {
         this.ru = other.ru.clone();
         this.rb = other.rb.clone();
         this.anttype = other.anttype.clone();
+        this.pcvr = new Pcv[2];
+        this.pcvr[0] = new Pcv();
+        this.pcvr[1] = new Pcv();
+        this.odisp = new double[2][2][11][3];
         this.antdel = new double[2][3];
         for (int i = 0; i < 2; i++) this.antdel[i] = other.antdel[i].clone();
         this.exsats = other.exsats.clone();

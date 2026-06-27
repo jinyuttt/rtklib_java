@@ -111,6 +111,19 @@ public final class SppCore {
         P2 = obs.P[f2];
         var[0] = 0.0;
         if (P1 == 0.0 || (opt.ionoopt == Constants.IONOOPT_IFLC && P2 == 0.0)) return 0.0;
+
+        int biasIx = code2biasIx(sys, obs.code[0]);
+        if (biasIx > 0) {
+            P1 += nav.cbias[sat - 1][0][biasIx - 1];
+        }
+        if (sys == Constants.SYS_GAL && f2 == 1) {
+            // skip code bias for GAL L2, no GAL L2 bias available
+        } else {
+            biasIx = code2biasIx(sys, obs.code[f2]);
+            if (biasIx > 0) {
+                P2 += nav.cbias[sat - 1][1][biasIx - 1];
+            }
+        }
         if (opt.ionoopt == Constants.IONOOPT_IFLC) {
             if (sys == Constants.SYS_GPS || sys == Constants.SYS_QZS) {
                 gamma = (f2 == 1) ? RtklibCommon.sqr(Constants.FREQL1 / Constants.FREQL2)
@@ -170,6 +183,56 @@ public final class SppCore {
             }
         }
         return P1;
+    }
+
+    private static final int MAX_BIAS_SYS = 4;
+    private static final byte[][] CODE_BIAS_IX = new byte[MAX_BIAS_SYS][Constants.MAXCODE];
+    private static boolean biasIxInitialized = false;
+
+    private static void initBiasIx() {
+        for (int i = 0; i < MAX_BIAS_SYS; i++)
+            for (int j = 0; j < Constants.MAXCODE; j++)
+                CODE_BIAS_IX[i][j] = -1;
+        // GPS
+        CODE_BIAS_IX[0][Constants.CODE_L1W] = 0;
+        CODE_BIAS_IX[0][Constants.CODE_L1C] = 1;
+        CODE_BIAS_IX[0][Constants.CODE_L1L] = 2;
+        CODE_BIAS_IX[0][Constants.CODE_L1X] = 3;
+        CODE_BIAS_IX[0][Constants.CODE_L2W] = 0;
+        CODE_BIAS_IX[0][Constants.CODE_L2L] = 1;
+        CODE_BIAS_IX[0][Constants.CODE_L2S] = 2;
+        CODE_BIAS_IX[0][Constants.CODE_L2X] = 3;
+        // GLONASS
+        CODE_BIAS_IX[1][Constants.CODE_L1P] = 0;
+        CODE_BIAS_IX[1][Constants.CODE_L1C] = 1;
+        CODE_BIAS_IX[1][Constants.CODE_L2P] = 0;
+        CODE_BIAS_IX[1][Constants.CODE_L2C] = 1;
+        // Galileo
+        CODE_BIAS_IX[2][Constants.CODE_L1C] = 0;
+        CODE_BIAS_IX[2][Constants.CODE_L1X] = 1;
+        CODE_BIAS_IX[2][Constants.CODE_L5Q] = 0;
+        CODE_BIAS_IX[2][Constants.CODE_L5I] = 1;
+        CODE_BIAS_IX[2][Constants.CODE_L5X] = 2;
+        // Beidou
+        CODE_BIAS_IX[3][Constants.CODE_L2I] = 0;
+        CODE_BIAS_IX[3][Constants.CODE_L6I] = 0;
+        biasIxInitialized = true;
+    }
+
+    private static int code2biasIx(int sys, int code) {
+        if (!biasIxInitialized) initBiasIx();
+        int sysIx = sys2ix(sys);
+        if (sysIx < MAX_BIAS_SYS && code < Constants.MAXCODE)
+            return CODE_BIAS_IX[sysIx][code];
+        return 0;
+    }
+
+    private static int sys2ix(int sys) {
+        if (sys == Constants.SYS_GPS) return 0;
+        if (sys == Constants.SYS_GLO) return 1;
+        if (sys == Constants.SYS_GAL) return 2;
+        if (sys == Constants.SYS_CMP) return 3;
+        return MAX_BIAS_SYS;
     }
 
     private static int snrmask(Obsd obs, double[] azel, int idx, PrcOpt opt) {
@@ -272,8 +335,7 @@ public final class SppCore {
             }
             v[nv] = P - (r + dtr - Constants.CLIGHT * dts[i * 2] + dion + dtrp);
             if (iter <= 1) {
-                LOG.debug(String.format("SPP sat=%2d sys=%d P=%.3f r=%.3f dtr=%.6f dts=%.6f dion=%.3f dtrp=%.3f v=%.3f",
-                    sat, sys, P, r, dtr, dts[i * 2], dion, dtrp, v[nv]));
+                LOG.debug(String.format("SPP sat=%2d sys=%d P=%.3f r=%.3f dtr=%.6f dts=%.6f dion=%.3f dtrp=%.3f v=%.3f", sat, sys, P, r, dtr, dts[i * 2], dion, dtrp, v[nv]));
             }
             for (int j = 0; j < NX; j++) {
                 H[j + nv * NX] = (j < 3) ? -e[j] : (j == 3 ? 1.0 : 0.0);
