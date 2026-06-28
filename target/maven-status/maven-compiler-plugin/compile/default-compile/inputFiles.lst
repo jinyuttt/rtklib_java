@@ -44,6 +44,7 @@ D:\code\rtklib_java\src\main\java\org\rtklib\java\pntpos\PosHandler.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\pntpos\SppCore.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\pntpos\SppProcessor.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\ppp\PppCore.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\ppp\PppProcessor.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rinex\RinexNavWriter.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rinex\RinexObsWriter.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rinex\RinexParser.java
