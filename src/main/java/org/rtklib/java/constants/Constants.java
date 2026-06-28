@@ -1,4 +1,4 @@
-﻿package org.rtklib.java.constants;
+package org.rtklib.java.constants;
 
 /**
  * RTKLIB constants mapped from rtklib.h.

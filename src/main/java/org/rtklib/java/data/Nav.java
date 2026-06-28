@@ -96,6 +96,10 @@ public class Nav {
     public double[][][] cbias;
     public double[][][] rbias;
 
+    public PepH[] peph;
+    public Pclk[] pclk;
+    public Pcv[] pcvs;
+
     /**
      * Default constructor.
      */
@@ -165,6 +169,13 @@ public class Nav {
         this.ssr = new Ssr[Constants.MAXSAT];
         for (int i = 0; i < Constants.MAXSAT; i++) {
             this.ssr[i] = new Ssr();
+        }
+
+        this.peph = new PepH[0];
+        this.pclk = new Pclk[0];
+        this.pcvs = new Pcv[Constants.MAXSAT];
+        for (int i = 0; i < Constants.MAXSAT; i++) {
+            this.pcvs[i] = new Pcv();
         }
     }
 

@@ -384,6 +384,11 @@ public final class EphModel {
      */
     public static void satposs(GTime teph, Obsd[] obs, int n, Nav nav,
                                double[] rs, double[] dts, double[] vare, int[] svh) {
+        satposs(teph, obs, n, nav, rs, dts, vare, svh, Constants.EPHOPT_BRDC);
+    }
+
+    public static void satposs(GTime teph, Obsd[] obs, int n, Nav nav,
+                               double[] rs, double[] dts, double[] vare, int[] svh, int ephopt) {
         for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
             for (int j = 0; j < 6; j++) rs[j + i * 6] = 0.0;
             for (int j = 0; j < 2; j++) dts[j + i * 2] = 0.0;
@@ -399,7 +404,12 @@ public final class EphModel {
             GTime time = TimeSystem.timeadd(obs[i].time, -pr / Constants.CLIGHT);
 
             double[] dtOut = new double[1];
-            if (!ephclk(time, teph, obs[i].sat, nav, dtOut)) continue;
+            if (ephopt == Constants.EPHOPT_PREC) {
+                double[] varc = new double[1];
+                if (Sp3Reader.pephclk(time, obs[i].sat, nav, dtOut, varc) == 0) continue;
+            } else {
+                if (!ephclk(time, teph, obs[i].sat, nav, dtOut)) continue;
+            }
 
             time = TimeSystem.timeadd(time, -dtOut[0]);
 
@@ -408,20 +418,62 @@ public final class EphModel {
             double[] varei = new double[1];
             int[] svhi = new int[1];
 
-            if (!satposBrdc(time, teph, obs[i].sat, nav, rsi, dtsi, varei, svhi)) continue;
+            if (ephopt == Constants.EPHOPT_PREC) {
+                if (!satposPrec(time, obs[i].sat, nav, rsi, dtsi, varei)) continue;
+                svhi[0] = 0;
+            } else {
+                if (!satposBrdc(time, teph, obs[i].sat, nav, rsi, dtsi, varei, svhi)) continue;
+            }
 
             for (int j = 0; j < 6; j++) rs[j + i * 6] = rsi[j];
             for (int j = 0; j < 2; j++) dts[j + i * 2] = dtsi[j];
             vare[i] = varei[0];
             svh[i] = svhi[0];
 
-            if (dts[i * 2] == 0.0) {
+            if (dts[i * 2] == 0.0 && ephopt != Constants.EPHOPT_PREC) {
                 if (!ephclk(time, teph, obs[i].sat, nav, dtOut)) continue;
                 dts[i * 2] = dtOut[0];
                 dts[i * 2 + 1] = 0.0;
                 vare[i] = Constants.SQR_STD_BRDCCLK;
             }
         }
+    }
+
+    private static boolean satposPrec(GTime time, int sat, Nav nav,
+                                      double[] rs, double[] dts, double[] vare) {
+        double[] rsTmp = new double[3];
+        double[] dtsTmp = new double[1];
+        double[] vareTmp = new double[1];
+        double[] varcTmp = new double[1];
+
+        if (Sp3Reader.pephpos(time, sat, nav, rsTmp, dtsTmp, vareTmp, varcTmp) == 0) return false;
+
+        rs[0] = rsTmp[0];
+        rs[1] = rsTmp[1];
+        rs[2] = rsTmp[2];
+        rs[3] = rs[4] = rs[5] = 0.0;
+
+        double tt = 1E-3;
+        GTime time2 = TimeSystem.timeadd(time, tt);
+        double[] rs2 = new double[3];
+        double[] dts2 = new double[1];
+        if (Sp3Reader.pephpos(time2, sat, nav, rs2, dts2, null, null) != 0) {
+            for (int i = 0; i < 3; i++) rs[i + 3] = (rs2[i] - rs[i]) / tt;
+        }
+
+        if (Sp3Reader.pephclk(time, sat, nav, dtsTmp, varcTmp) != 0) {
+            dts[0] = dtsTmp[0];
+            double[] dts2c = new double[1];
+            GTime time2c = TimeSystem.timeadd(time, tt);
+            if (Sp3Reader.pephclk(time2c, sat, nav, dts2c, null) != 0) {
+                dts[1] = (dts2c[0] - dts[0]) / tt;
+            }
+        } else {
+            dts[0] = 0.0;
+        }
+
+        vare[0] = vareTmp[0];
+        return true;
     }
 
     /**

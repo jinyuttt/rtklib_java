@@ -10,6 +10,7 @@ import org.rtklib.java.ephemeris.EphModel;
 import org.rtklib.java.pntpos.SppCore;
 import org.rtklib.java.rtcm.Rtcm;
 import org.rtklib.java.rtkpos.RtkCore;
+import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.time.TimeSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -107,41 +108,63 @@ public class RtkTest {
         return rtcm.nav;
     }
 
-    private static double[] computeBasePosition(List<ObsEpoch> baseEpochs, Nav nav) {
+    private static double[] computeBasePosition(List<ObsEpoch> baseEpochs, Nav nav, PrcOpt rtkOpt) {
         PrcOpt opt = new PrcOpt();
         opt.mode = Constants.PMODE_SINGLE;
-        opt.nf = 2;
-        opt.navsys = Constants.SYS_GPS | Constants.SYS_GLO | Constants.SYS_GAL | Constants.SYS_CMP;
-        opt.elmin = 15.0 * Constants.D2R;
-        opt.ionoopt = Constants.IONOOPT_BRDC;
-        opt.tropopt = Constants.TROPOPT_SAAS;
+        opt.nf = rtkOpt.nf;
+        opt.navsys = rtkOpt.navsys;
+        opt.elmin = rtkOpt.elmin;
+        opt.ionoopt = rtkOpt.ionoopt;
+        opt.tropopt = rtkOpt.tropopt;
+        opt.sateph = rtkOpt.sateph;
+        opt.err = rtkOpt.err.clone();
+        opt.std = rtkOpt.std.clone();
+        opt.prn = rtkOpt.prn.clone();
+        opt.exsats = rtkOpt.exsats.clone();
 
         double[] sumPos = new double[3];
         int count = 0;
         Ssat[] ssat = new Ssat[Constants.MAXSAT];
         for (int i = 0; i < Constants.MAXSAT; i++) ssat[i] = new Ssat();
 
-        for (int ep = 0; ep < Math.min(10, baseEpochs.size()); ep++) {
+        GTime lastTime = null;
+        for (int ep = 0; ep < baseEpochs.size(); ep++) {
             ObsEpoch epoch = baseEpochs.get(ep);
-            Obsd[] tmpObs = new Obsd[epoch.n];
-            for (int i = 0; i < epoch.n; i++) {
-                tmpObs[i] = new Obsd(epoch.obsd[i]);
-                tmpObs[i].rcv = 1;
-            }
 
-            double[] rs = new double[epoch.n * 6];
-            double[] dts = new double[epoch.n * 2];
-            double[] vare = new double[epoch.n];
-            int[] svh = new int[epoch.n];
-            EphModel.satposs(epoch.time, tmpObs, epoch.n, nav, rs, dts, vare, svh);
+            if (lastTime != null) {
+                double dt = Math.abs(TimeSystem.timediff(epoch.time, lastTime));
+                if (dt < 0.99) continue;
+            }
+            lastTime = new GTime(epoch.time);
+
+            Obsd[] tmpObs = new Obsd[epoch.n];
+            int j = 0;
+            for (int i = 0; i < epoch.n; i++) {
+                int sys = SatUtils.satsys(epoch.obsd[i].sat, null);
+                if ((sys & opt.navsys) == 0) continue;
+                if (epoch.obsd[i].sat > 0 && epoch.obsd[i].sat <= opt.exsats.length
+                        && opt.exsats[epoch.obsd[i].sat - 1] == 1) continue;
+                tmpObs[j] = new Obsd(epoch.obsd[i]);
+                tmpObs[j].rcv = 1;
+                j++;
+            }
+            if (j <= 0) continue;
+            Obsd[] filteredObs = new Obsd[j];
+            System.arraycopy(tmpObs, 0, filteredObs, 0, j);
+
+            double[] rs = new double[j * 6];
+            double[] dts = new double[j * 2];
+            double[] vare = new double[j];
+            int[] svh = new int[j];
+            EphModel.satposs(epoch.time, filteredObs, j, nav, rs, dts, vare, svh);
 
             Sol sol = new Sol();
-            double[] azel = new double[epoch.n * 2];
-            int[] vsat = new int[epoch.n];
-            double[] resp = new double[epoch.n];
+            double[] azel = new double[j * 2];
+            int[] vsat = new int[j];
+            double[] resp = new double[j];
             String[] msg = new String[1];
 
-            if (SppCore.estpos(tmpObs, epoch.n, rs, dts, vare, svh, nav, opt,
+            if (SppCore.estpos(filteredObs, j, rs, dts, vare, svh, nav, opt,
                     ssat, sol, azel, vsat, resp, msg) == 1) {
                 sumPos[0] += sol.rr[0];
                 sumPos[1] += sol.rr[1];
@@ -196,14 +219,6 @@ public class RtkTest {
                     (int)ymdhms[3], (int)ymdhms[4], ymdhms[5], baseEpochs.get(i).n));
         }
 
-        log.info("计算基准站近似坐标...");
-        double[] basePos = computeBasePosition(baseEpochs, nav);
-        assertNotNull(basePos, "应能计算基准站近似坐标");
-        log.info(String.format("基准站近似坐标: X=%.3f Y=%.3f Z=%.3f", basePos[0], basePos[1], basePos[2]));
-
-        BufferedWriter writer = ResultWriter.create(resultFile, "RTK 定位结果");
-        ResultWriter.writePosHeader(writer, "RTK (Kinematic)");
-
         Rtk rtk = new Rtk();
         rtk.opt.mode = Constants.PMODE_KINEMA;
         rtk.opt.nf = 2;
@@ -213,6 +228,22 @@ public class RtkTest {
         rtk.opt.ionoopt = Constants.IONOOPT_BRDC;
         rtk.opt.tropopt = Constants.TROPOPT_SAAS;
         rtk.opt.modear = Constants.ARMODE_OFF;
+
+        log.info("计算基准站近似坐标...");
+        double[] basePos = computeBasePosition(baseEpochs, nav, rtk.opt);
+        assertNotNull(basePos, "应能计算基准站近似坐标");
+        log.info(String.format("基准站近似坐标: X=%.3f Y=%.3f Z=%.3f", basePos[0], basePos[1], basePos[2]));
+        double[] baseLlh = new double[3];
+        CoordTransform.ecef2pos(basePos, baseLlh);
+        log.info(String.format("基准站近似坐标(LLH): lat=%.9f lon=%.9f hgt=%.4f", baseLlh[0] / Constants.D2R, baseLlh[1] / Constants.D2R, baseLlh[2]));
+        double[] cRefLlh = {29.189057880 * Constants.D2R, 95.075927980 * Constants.D2R, 709.4898};
+        double[] cRefEcef = new double[3];
+        CoordTransform.pos2ecef(cRefLlh, cRefEcef);
+        log.info(String.format("C版ref pos ECEF: X=%.3f Y=%.3f Z=%.3f", cRefEcef[0], cRefEcef[1], cRefEcef[2]));
+        log.info(String.format("基站坐标差: dX=%.3f dY=%.3f dZ=%.3f", basePos[0] - cRefEcef[0], basePos[1] - cRefEcef[1], basePos[2] - cRefEcef[2]));
+
+        BufferedWriter writer = ResultWriter.create(resultFile, "RTK 定位结果");
+        ResultWriter.writePosHeader(writer, "RTK (Kinematic)");
 
         System.arraycopy(basePos, 0, rtk.opt.rb, 0, 3);
 
