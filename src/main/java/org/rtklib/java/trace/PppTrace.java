@@ -167,7 +167,7 @@ public final class PppTrace {
             for (int i = 0; i < Math.min(nv, 10); i++) {
                 if (hBuf.length() > 0) hBuf.append("|");
                 hBuf.append(String.format(Locale.US, "row%d=%s,%s,%s", i,
-                        f3(H[0 + nx * i]), f3(H[1 + nx * i]), f3(H[2 + nx * i])));
+                        f3(H[i * nx + 0]), f3(H[i * nx + 1]), f3(H[i * nx + 2])));
             }
             RtkTrace.safeCallback(cb, String.format(Locale.US,
                     "TRACE|PPP_STAGE3_H_POS|gpst=%.3f|epoch=%d|%s", gpstVal, epoch, hBuf.toString()));

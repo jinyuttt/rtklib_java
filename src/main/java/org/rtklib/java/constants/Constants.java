@@ -31,6 +31,9 @@ public final class Constants {
     /** speed of light (m/s) */
     public static final double CLIGHT = 299792458.0;
 
+    /** RTCM3 GLONASS pseudorange unit (m) */
+    public static final double PRUNIT_GLO = 599584.916;
+
     /** SPP通过 - error of broadcast clock (m), aligned with RTKLIB */
     public static final double STD_BRDCCLK = 30.0;
     /** SPP通过 - squared error of broadcast clock (m^2) */

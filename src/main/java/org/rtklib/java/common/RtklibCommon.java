@@ -21,7 +21,7 @@ import org.rtklib.java.data.SnrMask;
  * <h3>致命陷阱规避</h3>
  * <ul>
  *   <li>geodist() 包含 Sagnac 效应修正（地球自转），不可省略</li>
- *   <li>sat2freq() 对 GLONASS 需要 FCN 频率号，不可忽略</li>
+ *   <li>{@link SatUtils#sat2freq} 对 GLONASS 需要 FCN 频率号（-8偏移），不可忽略</li>
  *   <li>lsq() 使用 EJML 求解法方程，避免手撸数组导致的行列优先错误</li>
  * </ul>
  */

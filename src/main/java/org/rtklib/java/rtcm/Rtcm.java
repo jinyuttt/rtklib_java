@@ -73,6 +73,8 @@ public class Rtcm {
     }
     /** Lock time each satellite (for loss-of-lock detection) */
     public short[][] lock = new short[Constants.MAXSAT][Constants.NFREQ + Constants.NEXOBS];
+    /** Carrier phase previous value (for half-cycle ambiguity resolution) */
+    public double[][] cp = new double[Constants.MAXSAT][Constants.NFREQ + Constants.NEXOBS];
 
     /**
      * Default constructor.
@@ -261,9 +263,6 @@ public class Rtcm {
                 case 1075: return decodeType1075();
                 case 1076: return decodeType1076();
                 case 1077: return decodeType1077();
-                case 1078: return decodeMsm4(1078, Constants.SYS_GLO);
-                case 1079: return decodeMsm5(1079, Constants.SYS_GLO);
-                case 1080: return decodeMsm5(1080, Constants.SYS_GLO);
                 case 1081: return decodeType1081();
                 case 1082: return decodeType1082();
                 case 1083: return decodeType1083();
@@ -458,11 +457,82 @@ public class Rtcm {
         return true;
     }
 
-    // ---- Receiver / Antenna messages (1009-1013) -----------------------------
-    private boolean decodeType1009() { return decodeReceiverAntenna(1009, true); }
-    private boolean decodeType1010() { return decodeReceiverAntenna(1010, true); }
-    private boolean decodeType1011() { return decodeReceiverAntenna(1011, false); }
-    private boolean decodeType1012() { return decodeReceiverAntenna(1012, false); }
+    // ---- GLONASS observation messages (1009-1012) ----------------------------
+    private boolean decodeType1009() { return decodeObs1009To1012(false, 1); }
+    private boolean decodeType1010() { return decodeObs1009To1012(true, 1); }
+    private boolean decodeType1011() { return decodeObs1009To1012(false, 2); }
+    private boolean decodeType1012() { return decodeObs1009To1012(true, 2); }
+
+    private boolean decodeObs1009To1012(boolean extended, int nfreq) {
+        int i = 24 + 12;
+        int staid = (int) BitUtils.getbitu(buff, i, 12); i += 12;
+        double tod = BitUtils.getbitu(buff, i, 27) * 0.001; i += 27;
+        int sync = (int) BitUtils.getbitu(buff, i, 1); i += 1;
+        int nsat = (int) BitUtils.getbitu(buff, i, 5); i += 5;
+        if (!testStaid(staid)) return false;
+        adjdayGlot(tod);
+
+        if (this.obsflag != 0) {
+            this.obs.n = 0;
+            this.obsflag = 0;
+        }
+
+        for (int j = 0; j < nsat && this.obs.n < Constants.MAXOBS; j++) {
+            int prn = (int) BitUtils.getbitu(buff, i, 6); i += 6;
+            int code1 = (int) BitUtils.getbitu(buff, i, 1); i += 1;
+            int fcn = (int) BitUtils.getbitu(buff, i, 5); i += 5;
+            double pr1 = BitUtils.getbitu(buff, i, 25) * 0.02; i += 25;
+            int ppr1 = BitUtils.getbits(buff, i, 20); i += 20;
+            int lock1 = (int) BitUtils.getbitu(buff, i, 7); i += 7;
+            int amb = (int) BitUtils.getbitu(buff, i, 7); i += 7;
+            double cnr1 = BitUtils.getbitu(buff, i, 8) * 0.25; i += 8;
+
+            int sat = SatUtils.satno(Constants.SYS_GLO, prn);
+            if (sat == 0) continue;
+
+            if (this.nav.glo_fcn[prn - 1] == 0) {
+                this.nav.glo_fcn[prn - 1] = fcn - 7 + 8;
+            }
+
+            int index = obsindex(this.obs, this.time, sat);
+            if (index < 0) continue;
+
+            pr1 = pr1 + amb * Constants.PRUNIT_GLO;
+            this.obs.data[index].P[0] = pr1;
+
+            if (ppr1 != (int) 0xFFF80000) {
+                double freq1 = ObsCode.code2freq(Constants.SYS_GLO, Constants.CODE_L1C, fcn - 7);
+                double cp1 = adjcp(sat, 0, ppr1 * 0.0005 * freq1 / Constants.CLIGHT);
+                this.obs.data[index].L[0] = pr1 * freq1 / Constants.CLIGHT + cp1;
+            }
+            this.obs.data[index].LLI[0] = (short) lossoflock(sat, 0, lock1);
+            this.obs.data[index].SNR[0] = (float) snratio(cnr1);
+            this.obs.data[index].code[0] = (byte) (code1 != 0 ? Constants.CODE_L1P : Constants.CODE_L1C);
+
+            if (nfreq >= 2 && extended) {
+                int code2 = (int) BitUtils.getbitu(buff, i, 2); i += 2;
+                int pr21 = BitUtils.getbits(buff, i, 14); i += 14;
+                int ppr2 = BitUtils.getbits(buff, i, 20); i += 20;
+                int lock2 = (int) BitUtils.getbitu(buff, i, 7); i += 7;
+                double cnr2 = BitUtils.getbitu(buff, i, 8) * 0.25; i += 8;
+
+                if (pr21 != (int) 0xFFFFE000) {
+                    this.obs.data[index].P[1] = pr1 + pr21 * 0.02;
+                }
+                if (ppr2 != (int) 0xFFF80000) {
+                    double freq2 = ObsCode.code2freq(Constants.SYS_GLO, Constants.CODE_L2C, fcn - 7);
+                    double cp2 = adjcp(sat, 1, ppr2 * 0.0005 * freq2 / Constants.CLIGHT);
+                    this.obs.data[index].L[1] = pr1 * freq2 / Constants.CLIGHT + cp2;
+                }
+                this.obs.data[index].LLI[1] = (short) lossoflock(sat, 1, lock2);
+                this.obs.data[index].SNR[1] = (float) snratio(cnr2);
+                this.obs.data[index].code[1] = (byte) (code2 != 0 ? Constants.CODE_L2P : Constants.CODE_L2C);
+            }
+        }
+
+        this.obsflag = sync != 0 ? 0 : 1;
+        return true;
+    }
     private boolean decodeType1013() {
         int i = 24 + 12;
         int staid = (int) BitUtils.getbitu(buff, i, 12); i += 12;
@@ -1647,6 +1717,22 @@ public class Rtcm {
         int lli = (lock == 0 && this.lock[sat - 1][idx] == 0) || lock < this.lock[sat - 1][idx] ? 1 : 0;
         this.lock[sat - 1][idx] = (short) lock;
         return lli;
+    }
+
+    private double adjcp(int sat, int idx, double cp) {
+        if (this.cp[sat - 1][idx] == 0.0) {
+            /* no previous value */
+        } else if (cp < this.cp[sat - 1][idx] - 750.0) {
+            cp += 1500.0;
+        } else if (cp > this.cp[sat - 1][idx] + 750.0) {
+            cp -= 1500.0;
+        }
+        this.cp[sat - 1][idx] = cp;
+        return cp;
+    }
+
+    private static double snratio(double snr) {
+        return snr <= 0.0 || 100.0 <= snr ? 0.0 : snr;
     }
 
     // ---- Helper methods ------------------------------------------------------
