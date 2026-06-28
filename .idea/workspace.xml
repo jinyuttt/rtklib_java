@@ -5,8 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="6f762b44-3fe4-4566-a361-4d7e03803192" name="更改" comment="rtk">
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-org.rtklib.java.PppTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-org.rtklib.java.PppTest.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/org.rtklib.java.PppTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/org.rtklib.java.PppTest.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -61,6 +60,7 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "JUnit.RinexConversionTest.executor": "Debug",
     "JUnit.RinexConversionTest.testBaseRtcmToRinex.executor": "Debug",
     "JUnit.RinexConversionTest.testRoverRtcmToRinex.executor": "Run",
@@ -83,6 +83,7 @@
     "RunOnceActivity.MCP Project settings loaded": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "main",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "D:/code/rtklib_java/old",
     "project.structure.last.edited": "项目",
