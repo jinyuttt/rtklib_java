@@ -29,3 +29,6 @@ target/
 *.pos 
 *.py
 *.js
+*.txt
+*.Log
+".idea"
