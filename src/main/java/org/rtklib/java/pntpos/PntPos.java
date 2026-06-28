@@ -244,7 +244,7 @@ public final class PntPos {
             v[nv] = (-obs[i].D[0] * Constants.CLIGHT / freq - (rate + x[3] - Constants.CLIGHT * dts[1 + i * 2])) / sig;
 
             for (int j = 0; j < 4; j++) {
-                H[j + nv * 4] = ((j < 3) ? -e[j] : 1.0) / sig;
+                H[nv * 4 + j] = ((j < 3) ? -e[j] : 1.0) / sig;
             }
             nv++;
         }
