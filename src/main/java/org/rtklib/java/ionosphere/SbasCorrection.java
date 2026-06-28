@@ -723,8 +723,8 @@ public final class SbasCorrection {
         double[] prc = {0};
         var[0] = 0.0;
 
-        if (!sbslongcorr(time, sat, nav.sbssat, drs, dclk)) return 0;
-        if (!sbsfastcorr(time, sat, nav.sbssat, prc, var)) return 0;
+        if (sbslongcorr(time, sat, nav.sbssat, drs, dclk) == 0) return 0;
+        if (sbsfastcorr(time, sat, nav.sbssat, prc, var) == 0) return 0;
 
         for (int i = 0; i < 3; i++) rs[i] += drs[i];
         dts[0] += dclk[0] + prc[0] / Constants.CLIGHT;
