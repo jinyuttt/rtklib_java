@@ -220,7 +220,7 @@ public final class SppCore {
         biasIxInitialized = true;
     }
 
-    private static int code2biasIx(int sys, int code) {
+    public static int code2biasIx(int sys, int code) {
         if (!biasIxInitialized) initBiasIx();
         int sysIx = sys2ix(sys);
         if (sysIx < MAX_BIAS_SYS && code < Constants.MAXCODE)

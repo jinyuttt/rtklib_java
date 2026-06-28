@@ -13,12 +13,15 @@ import org.rtklib.java.time.TimeSystem;
 import org.rtklib.java.trace.PppTrace;
 import org.rtklib.java.trace.TraceCallback;
 import org.rtklib.java.trace.TraceControl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.rtklib.java.troposphere.TroposphereModel;
 
 public final class PppCore {
     private PppCore() {
     }
 
+    private static final Logger LOG = LoggerFactory.getLogger(PppCore.class);
     private static final int MAX_ITER = 8;
     private static final int MIN_NSAT_SOL = 4;
 
@@ -173,6 +176,8 @@ public final class PppCore {
             System.arraycopy(rtk.P, 0, Pp, 0, nx * nx);
 
             int nv = pppRes(0, obs, n, rs, dts, var, svh, exc, nav, xp, rtk, v, H, R, azel, nx);
+
+            LOG.debug("pppos iter={} nv={} nx={}", iter, nv, nx);
 
             if (iter == 0) {
                 PppTrace.tracePppSatPos(ctrl, cb, rtk.epoch, obs[0].time, obs, n, rs, dts, var, svh, azel, exc);
@@ -524,6 +529,8 @@ public final class PppCore {
 
         CoordTransform.ecef2pos(rr, pos);
 
+        int excCount = 0, geodistFail = 0, elFail = 0, sysFail = 0, tropFail = 0, ionoFail = 0, measFail = 0;
+
         for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
             int sat = obs[i].sat;
             int sys = SatUtils.satsys(sat, null);
@@ -535,6 +542,7 @@ public final class PppCore {
             double r = RtklibCommon.geodist(rsi, rr, e);
             if (r <= 0.0) {
                 exc[i] = 1;
+                geodistFail++;
                 continue;
             }
 
@@ -544,6 +552,7 @@ public final class PppCore {
             azel[i * 2 + 1] = azelI[1];
             if (el < opt.elmin) {
                 exc[i] = 1;
+                elFail++;
                 continue;
             }
 
@@ -552,18 +561,24 @@ public final class PppCore {
 
             if (sys == 0 || rtk.ssat[sat - 1].vs == 0 ||
                     RtklibCommon.satexclude(sat, varRs[i], svh[i], opt) != 0 || exc[i] != 0) {
+                if (post == 0 && i < 3) {
+                    LOG.debug("pppRes sat={} sys={} vs={} satexcl={} exc={} varRs={} svh={}",
+                        sat, sys, rtk.ssat[sat - 1].vs,
+                        RtklibCommon.satexclude(sat, varRs[i], svh[i], opt), exc[i], varRs[i], svh[i]);
+                }
                 exc[i] = 1;
+                sysFail++;
                 continue;
             }
 
             double dtrp = 0.0;
             double vart = 0.0;
-            if (!modelTrop(obs[i].time, pos, azelI, opt, x, dtdx, nav)) continue;
+            if (!modelTrop(obs[i].time, pos, azelI, opt, x, dtdx, nav)) { tropFail++; continue; }
             dtrp = dtdx[0];
 
             double dion = 0.0;
             double vari = 0.0;
-            if (!modelIono(obs[i].time, pos, azelI, opt, sat, x, nav, dion_vari)) continue;
+            if (!modelIono(obs[i].time, pos, azelI, opt, sat, x, nav, dion_vari)) { ionoFail++; continue; }
             dion = dion_vari[0];
             vari = dion_vari[1];
 
@@ -668,6 +683,11 @@ public final class PppCore {
                 for (int i = 0; i < nv; i++) R[j * nv + i] = 0.0;
                 R[j * nv + j] = varr[j];
             }
+        }
+
+        if (post == 0) {
+            LOG.debug("pppRes: n={} nv={} geodist={} el={} sys={} trop={} iono={} meas={}",
+                n, nv, geodistFail, elFail, sysFail, tropFail, ionoFail, measFail);
         }
 
         return post != 0 ? 1 : nv;
