@@ -33,24 +33,35 @@ public class PppTest {
     private static final Logger log = LoggerFactory.getLogger(PppTest.class);
 
     private static final String BASE_DIR = System.getProperty("user.dir");
-    private static final String RTCM_ROVER = BASE_DIR + "\\RTKLIB_EX_2.5.0\\rover_0608.rtcm3";
-    private static final String RTCM_BASE = BASE_DIR + "\\RTKLIB_EX_2.5.0\\base_0608.rtcm3";
-    private static final String SP3_FILE = BASE_DIR + "\\RTKLIB-2.5.0\\test\\data\\sp3\\igs15904.sp3";
-    private static final String CLK_FILE = BASE_DIR + "\\RTKLIB-2.5.0\\test\\data\\sp3\\igs15904.clk";
-    private static final String SP3_FILE_ALT = BASE_DIR + "\\RTKLIB_EX_2.5.0\\igs15904.sp3";
-    private static final String CLK_FILE_ALT = BASE_DIR + "\\RTKLIB_EX_2.5.0\\igs15904.clk";
+
+    private static final String RTCM_ROVER = BASE_DIR + "\\testdat\\rover.rtcm";
+    private static final String RTCM_BASE = BASE_DIR + "\\testdat\\base.rtcm";
+
+    private static final String SP3_FILE = BASE_DIR + "\\WUM0MGXNRT_20261581500_02D_05M_ORB.SP3\\WUM0MGXNRT_20261581500_02D_05M_ORB.SP3";
+    private static final String CLK_FILE = BASE_DIR + "\\WUM0MGXNRT_20261581500_02D_05M_CLK.CLK\\WUM0MGXNRT_20261581500_02D_05M_CLK.CLK";
 
     private static String roverObsFile;
     private static String roverNavFile;
     private static boolean rtcmFilesExist;
+    private static boolean sp3FilesExist;
 
     static boolean filesExist() {
         return rtcmFilesExist;
     }
 
+    static boolean sp3Exists() {
+        return sp3FilesExist;
+    }
+
     @BeforeAll
     static void setup() {
         rtcmFilesExist = new File(RTCM_ROVER).exists();
+        sp3FilesExist = new File(SP3_FILE).exists() && new File(CLK_FILE).exists();
+
+        log.info("RTCM rover: {} exists={}", RTCM_ROVER, rtcmFilesExist);
+        log.info("SP3: {} exists={}", SP3_FILE, new File(SP3_FILE).exists());
+        log.info("CLK: {} exists={}", CLK_FILE, new File(CLK_FILE).exists());
+
         if (rtcmFilesExist) {
             try {
                 String tempDir = System.getProperty("java.io.tmpdir") + "\\ppp_test_" + System.currentTimeMillis();
@@ -94,12 +105,9 @@ public class PppTest {
     @Test
     @DisplayName("2. SP3 file reading")
     void testSp3Read() {
-        String sp3Path = new File(SP3_FILE).exists() ? SP3_FILE : SP3_FILE_ALT;
-        File f = new File(sp3Path);
-        log.info("SP3 file: {} exists={}", sp3Path, f.exists());
-        assumeTrue(f.exists(), "SP3 file not found: " + sp3Path);
+        assumeTrue(new File(SP3_FILE).exists(), "SP3 file not found: " + SP3_FILE);
         Nav nav = new Nav();
-        Sp3Reader.readsp3(sp3Path, nav, 0);
+        Sp3Reader.readsp3(SP3_FILE, nav, 0);
         log.info("SP3 loaded: ne={}, peph={}", nav.ne, nav.peph != null ? nav.peph.length : "null");
         if (nav.ne > 0) {
             log.info("First peph time: {}", nav.peph[0].time);
@@ -110,18 +118,15 @@ public class PppTest {
     @Test
     @DisplayName("3. CLK file reading")
     void testClkRead() {
-        String clkPath = new File(CLK_FILE).exists() ? CLK_FILE : CLK_FILE_ALT;
-        File f = new File(clkPath);
-        log.info("CLK file: {} exists={}", clkPath, f.exists());
-        assumeTrue(f.exists(), "CLK file not found: " + clkPath);
+        assumeTrue(new File(CLK_FILE).exists(), "CLK file not found: " + CLK_FILE);
         Nav nav = new Nav();
-        ClkReader.readclk(clkPath, nav);
+        ClkReader.readclk(CLK_FILE, nav);
         log.info("CLK loaded: nc={}", nav.nc);
         assertTrue(nav.nc > 0, "Should have loaded CLK records");
     }
 
     @Test
-    @DisplayName("4. PPP core with RTCM-converted RINEX (BDS dual-freq)")
+    @DisplayName("4. PPP core with RTCM-converted RINEX (BDS dual-freq, broadcast eph)")
     @EnabledIf("filesExist")
     void testPppCoreWithRinex() {
         RinexParser parser = new RinexParser();
@@ -194,7 +199,7 @@ public class PppTest {
     }
 
     @Test
-    @DisplayName("5. RinexPppProcessor end-to-end")
+    @DisplayName("5. RinexPppProcessor end-to-end (broadcast eph)")
     @EnabledIf("filesExist")
     void testRinexPppProcessor() {
         PrcOpt opt = RinexPppProcessor.createDefaultOpt();
@@ -215,7 +220,7 @@ public class PppTest {
     }
 
     @Test
-    @DisplayName("6. PppProcessor with RTCM file")
+    @DisplayName("6. PppProcessor with RTCM file (broadcast eph)")
     @EnabledIf("filesExist")
     void testPppProcessorWithRtcm() {
         PrcOpt opt = PppProcessor.createDefaultOpt();
@@ -236,7 +241,7 @@ public class PppTest {
     }
 
     @Test
-    @DisplayName("7. PppProcessor with RINEX file")
+    @DisplayName("7. PppProcessor with RINEX file (broadcast eph)")
     @EnabledIf("filesExist")
     void testPppProcessorWithRinex() {
         PrcOpt opt = PppProcessor.createDefaultOpt();
@@ -250,6 +255,105 @@ public class PppTest {
         log.info("PppProcessor RINEX: total={}, success={}, fail={}",
                 result.totalEpochs, result.successCount, result.failCount);
         assertTrue(result.totalEpochs > 0, "Should process epochs");
+    }
+
+    @Test
+    @DisplayName("8. RinexPppProcessor with SP3+CLK precise ephemeris")
+    @EnabledIf("filesExist")
+    void testPppWithPreciseEph() {
+        assumeTrue(sp3FilesExist, "SP3/CLK files not found");
+
+        PrcOpt opt = RinexPppProcessor.createDefaultOpt();
+        opt.navsys = Constants.SYS_CMP;
+        opt.sateph = Constants.EPHOPT_PREC;
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        RinexPppProcessor processor = new RinexPppProcessor(opt, baos);
+
+        RinexPppProcessor.PppResult result = processor.process(roverObsFile, roverNavFile, SP3_FILE, CLK_FILE);
+
+        log.info("PPP with precise eph: total={}, success={}, fail={}",
+                result.totalEpochs, result.successCount, result.failCount);
+        assertTrue(result.totalEpochs > 0, "Should process epochs");
+
+        if (!result.solutions.isEmpty()) {
+            Sol firstSol = result.solutions.get(0);
+            double[] pos = new double[3];
+            CoordTransform.ecef2pos(firstSol.rr, pos);
+            log.info(String.format("First solution: lat=%.9f lon=%.9f h=%.3f ns=%d stat=%d",
+                    Math.toDegrees(pos[0]), Math.toDegrees(pos[1]),
+                    pos[2], firstSol.ns, firstSol.stat));
+
+            Sol lastSol = result.solutions.get(result.solutions.size() - 1);
+            CoordTransform.ecef2pos(lastSol.rr, pos);
+            log.info(String.format("Last solution: lat=%.9f lon=%.9f h=%.3f ns=%d stat=%d",
+                    Math.toDegrees(pos[0]), Math.toDegrees(pos[1]),
+                    pos[2], lastSol.ns, lastSol.stat));
+        }
+
+        String output = baos.toString();
+        log.info("Output lines: {}", output.split("\n").length);
+    }
+
+    @Test
+    @DisplayName("9. PppProcessor with RTCM + SP3+CLK precise ephemeris")
+    @EnabledIf("filesExist")
+    void testPppProcessorRtcmWithPreciseEph() {
+        assumeTrue(sp3FilesExist, "SP3/CLK files not found");
+
+        PrcOpt opt = PppProcessor.createDefaultOpt();
+        opt.navsys = Constants.SYS_CMP;
+        opt.sateph = Constants.EPHOPT_PREC;
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PppProcessor processor = new PppProcessor(opt, null, baos);
+        processor.loadSp3(SP3_FILE);
+        processor.loadClk(CLK_FILE);
+
+        try {
+            PppProcessor.PppResult result = processor.process(RTCM_ROVER);
+            log.info("PppProcessor RTCM+SP3: total={}, success={}, fail={}",
+                    result.totalEpochs, result.successCount, result.failCount);
+            assertTrue(result.totalEpochs > 0, "Should process epochs");
+
+            if (!result.solutions.isEmpty()) {
+                Sol lastSol = result.solutions.get(result.solutions.size() - 1);
+                double[] pos = new double[3];
+                CoordTransform.ecef2pos(lastSol.rr, pos);
+                log.info("Last solution: lat={} lon={} h={} ns={} stat={}",
+                        Math.toDegrees(pos[0]), Math.toDegrees(pos[1]),
+                        pos[2], lastSol.ns, lastSol.stat);
+            }
+        } catch (IOException e) {
+            fail("IO error: " + e.getMessage());
+        }
+    }
+
+    @Test
+    @DisplayName("10. PppProcessor RINEX with SP3+CLK precise ephemeris")
+    @EnabledIf("filesExist")
+    void testPppProcessorRinexWithPreciseEph() {
+        assumeTrue(sp3FilesExist, "SP3/CLK files not found");
+
+        PrcOpt opt = PppProcessor.createDefaultOpt();
+        opt.navsys = Constants.SYS_CMP;
+        opt.sateph = Constants.EPHOPT_PREC;
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PppProcessor processor = new PppProcessor(opt, null, baos);
+
+        PppProcessor.PppResult result = processor.processRinex(roverObsFile, roverNavFile, SP3_FILE, CLK_FILE);
+        log.info("PppProcessor RINEX+SP3: total={}, success={}, fail={}",
+                result.totalEpochs, result.successCount, result.failCount);
+        assertTrue(result.totalEpochs > 0, "Should process epochs");
+
+        String output = baos.toString();
+        String[] lines = output.split("\n");
+        int solLines = 0;
+        for (String line : lines) {
+            if (!line.startsWith("#") && line.trim().length() > 0) solLines++;
+        }
+        log.info("Solution lines in output: {}", solLines);
     }
 
     private static void assumeTrue(boolean condition, String message) {

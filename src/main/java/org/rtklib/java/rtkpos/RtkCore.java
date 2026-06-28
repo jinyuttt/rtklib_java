@@ -588,22 +588,16 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         if (RtklibCommon.norm(rr, 3) <= 0.0) return;
 
         if ((opt & 1) != 0) {
+            double[] erpv = new double[4];
+            if (Tides.geterp(erp, tutc, erpv) == 0) {
+                erpv[0] = erpv[1] = erpv[2] = erpv[3] = 0.0;
+            }
             double[] rsun = new double[3], rmoon = new double[3];
-            sunmoonpos(tutc, erp, rsun, rmoon, null);
+            Tides.sunmoonpos(tutc, erpv, rsun, rmoon, null);
             double[] drt = new double[3];
-            dehanttideinel(tutc, rr, rsun, rmoon, drt);
+            Tides.dehanttideinel(tutc, rr, rsun, rmoon, drt);
             for (int i = 0; i < 3; i++) dr[i] += drt[i];
         }
-    }
-
-    private static void sunmoonpos(GTime tutc, Erp erp, double[] rsun, double[] rmoon, double[] gmst) {
-        rsun[0] = rsun[1] = rsun[2] = 0.0;
-        rmoon[0] = rmoon[1] = rmoon[2] = 0.0;
-        if (gmst != null) gmst[0] = 0.0;
-    }
-
-    private static void dehanttideinel(GTime tutc, double[] rr, double[] rsun, double[] rmoon, double[] dr) {
-        dr[0] = dr[1] = dr[2] = 0.0;
     }
     private static void antmodel(Pcv pcv, double[] del, double[] azel, int opt, double[] dant) {
         double cosel = Math.cos(azel[1]);

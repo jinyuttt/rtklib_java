@@ -100,6 +100,7 @@ public final class SppCore {
     }
 
     private static int getseleph(int sys) {
+        if (sys == Constants.SYS_GAL) return 1;
         return 0;
     }
 

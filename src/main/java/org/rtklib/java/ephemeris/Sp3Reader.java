@@ -88,9 +88,12 @@ public final class Sp3Reader {
             PepH currentPeph = null;
             int nRead = 0;
             int epochCount = 0;
+            int lineNum2 = 0;
 
             while ((line = br.readLine()) != null) {
-                if (line.length() > 0 && line.charAt(0) == '*' && line.length() >= 3 && line.charAt(1) == ' ' && line.charAt(2) == ' ') {
+                lineNum2++;
+                boolean isEpoch = line.length() > 0 && line.charAt(0) == '*' && line.length() >= 3 && line.charAt(1) == ' ' && line.charAt(2) == ' ';
+                if (isEpoch) {
                     if (currentPeph != null && nRead > 0) {
                         pephList.add(currentPeph);
                     }
@@ -124,7 +127,6 @@ public final class Sp3Reader {
             if (currentPeph != null && nRead > 0 && !pephList.contains(currentPeph)) {
                 pephList.add(currentPeph);
             }
-            System.out.println("[Sp3Reader] epochs=" + epochCount + " pephList=" + pephList.size() + " nRead=" + nRead);
         } catch (IOException e) {
             // ignore
         }
@@ -146,6 +148,7 @@ public final class Sp3Reader {
 
     private static GTime parseTime(String s) {
         try {
+            while (s.length() < 28) s += " ";
             int year = Integer.parseInt(s.substring(0, 4).trim());
             int month = Integer.parseInt(s.substring(5, 7).trim());
             int day = Integer.parseInt(s.substring(8, 10).trim());
