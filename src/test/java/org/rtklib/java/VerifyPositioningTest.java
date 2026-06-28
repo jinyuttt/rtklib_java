@@ -260,8 +260,9 @@ public class VerifyPositioningTest {
             int start = epochStarts.get(ei);
             int end = epochStarts.get(ei + 1);
             Obsd[] epochObs = java.util.Arrays.copyOfRange(allObs, start, end);
+            for (Obsd o : epochObs) o.rcv = 1;
 
-            PppCore.pppos(rtk, epochObs, epochObs.length, nav);
+            RtkCore.rtkpos(rtk, epochObs, epochObs.length, nav);
 
             double[] llh = new double[3];
             CoordTransform.ecef2pos(rtk.sol.rr, llh);

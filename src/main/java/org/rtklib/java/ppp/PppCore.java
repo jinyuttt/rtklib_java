@@ -123,6 +123,14 @@ public final class PppCore {
         TraceCallback cb = rtk.traceCallback;
         rtk.epoch++;
 
+        {
+            int vsCount = 0;
+            for (int ii = 0; ii < Constants.MAXSAT; ii++) {
+                if (rtk.ssat[ii].vs != 0) vsCount++;
+            }
+            LOG.debug("pppos entry: vsCount={}", vsCount);
+        }
+
         if (rtk.nx == 0 || rtk.nx != nx) {
             rtk.nx = nx;
             rtk.x = new double[nx];
@@ -456,16 +464,18 @@ public final class PppCore {
                                  double[] dantr, double[] dants, double phw,
                                  double[] L, double[] P, double[] Lc, double[] Pc) {
         double[] freq = new double[Constants.NFREQ];
+        double[] lam = new double[Constants.NFREQ];
         Lc[0] = Pc[0] = 0.0;
 
         for (int i = 0; i < opt.nf; i++) {
             L[i] = P[i] = 0.0;
             freq[i] = SatUtils.sat2freq(obs.sat, obs.code[i], nav);
+            lam[i] = freq[i] > 0.0 ? Constants.CLIGHT / freq[i] : 0.0;
             if (freq[i] == 0.0 || obs.L[i] == 0.0 || obs.P[i] == 0.0) continue;
 
-            if (RtklibCommon.testsnr(0, i, azel[1], obs.SNR[i] * 0.25f, opt.snrmask) != 0) continue;
+            if (RtklibCommon.testsnr(0, 0, azel[1], obs.SNR[i] * 0.25f, opt.snrmask) != 0) continue;
 
-            L[i] = obs.L[i] * Constants.CLIGHT / freq[i] - dants[i] - dantr[i] - phw * Constants.CLIGHT / freq[i];
+            L[i] = obs.L[i] * lam[i] - dants[i] - dantr[i] - phw * lam[i];
             P[i] = obs.P[i] - dants[i] - dantr[i];
         }
 
@@ -476,19 +486,26 @@ public final class PppCore {
         double C2 = -SQR(freq[frq2]) / (SQR(freq[0]) - SQR(freq[frq2]));
 
         if (opt.ionoopt != Constants.IONOOPT_IFLC && P[0] != 0.0) {
-            double gamma = SQR(freq[frq2] / freq[0]);
+            double gamma = SQR(lam[0] / lam[frq2]);
+            int sys = SatUtils.satsys(obs.sat, null);
             double P1_P2 = 0.0;
+            double P1_C1 = 0.0;
+
             if (nav.cbias != null && obs.sat - 1 < nav.cbias.length &&
-                nav.cbias[obs.sat - 1] != null && nav.cbias[obs.sat - 1].length > 0 &&
-                nav.cbias[obs.sat - 1][0] != null && nav.cbias[obs.sat - 1][0].length > 0) {
-                P1_P2 = nav.cbias[obs.sat - 1][0][0];
-            }
-            if (P1_P2 == 0.0) {
-                int sys = SatUtils.satsys(obs.sat, null);
-                if ((sys & (Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_QZS)) != 0) {
-                    P1_P2 = (1.0 - gamma) * gettgd(obs.sat, nav);
+                nav.cbias[obs.sat - 1] != null) {
+                if (nav.cbias[obs.sat - 1].length > 0 &&
+                    nav.cbias[obs.sat - 1][0] != null && nav.cbias[obs.sat - 1][0].length > 0) {
+                    P1_P2 = nav.cbias[obs.sat - 1][0][0];
+                }
+                if (nav.cbias[obs.sat - 1].length > 1 &&
+                    nav.cbias[obs.sat - 1][1] != null && nav.cbias[obs.sat - 1][1].length > 0) {
+                    P1_C1 = nav.cbias[obs.sat - 1][1][0];
                 }
             }
+            if (P1_P2 == 0.0 && (sys & (Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_QZS)) != 0) {
+                P1_P2 = (1.0 - gamma) * gettgd(obs.sat, nav);
+            }
+            if (obs.code[0] == Constants.CODE_L1C) P[0] += P1_C1;
             P[0] -= P1_P2 / (1.0 - gamma);
         }
 
@@ -522,8 +539,9 @@ public final class PppCore {
         for (int i = 0; i < 3; i++) rr[i] = x[i];
 
         if (opt.tidecorr != 0) {
+            int tideopt = opt.tidecorr == 1 ? 1 : 7;
             double[] disp = new double[3];
-            tidedisp(TimeSystem.gpst2utc(obs[0].time), rr, opt.tidecorr, nav.erp, opt.odisp[0], disp);
+            tidedisp(TimeSystem.gpst2utc(obs[0].time), rr, tideopt, nav.erp, opt.odisp[0], disp);
             for (int i = 0; i < 3; i++) rr[i] += disp[i];
         }
 
@@ -561,10 +579,10 @@ public final class PppCore {
 
             if (sys == 0 || rtk.ssat[sat - 1].vs == 0 ||
                     RtklibCommon.satexclude(sat, varRs[i], svh[i], opt) != 0 || exc[i] != 0) {
-                if (post == 0 && i < 3) {
-                    LOG.debug("pppRes sat={} sys={} vs={} satexcl={} exc={} varRs={} svh={}",
+                if (post == 0 && sysFail < 3) {
+                    LOG.debug(String.format("pppRes sat=%d sys=%d vs=%d satexcl=%d exc=%d varRs=%.3f svh=%d",
                         sat, sys, rtk.ssat[sat - 1].vs,
-                        RtklibCommon.satexclude(sat, varRs[i], svh[i], opt), exc[i], varRs[i], svh[i]);
+                        RtklibCommon.satexclude(sat, varRs[i], svh[i], opt), exc[i], varRs[i], svh[i]));
                 }
                 exc[i] = 1;
                 sysFail++;
