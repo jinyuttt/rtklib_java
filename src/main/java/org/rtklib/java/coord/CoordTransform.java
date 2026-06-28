@@ -242,6 +242,13 @@ public final class CoordTransform {
         return Math.sqrt(dot3(a, a));
     }
 
+    public static boolean normv3(double[] a, double[] b) {
+        double r = norm3(a);
+        if (r <= 0.0) return false;
+        for (int i = 0; i < 3; i++) b[i] = a[i] / r;
+        return true;
+    }
+
     /**
      * n维向量范数。
      *
