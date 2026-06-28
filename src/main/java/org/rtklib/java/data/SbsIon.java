@@ -33,7 +33,7 @@ public class SbsIon {
  * SBAS ionospheric correction class.
  * Aligned with RTKLIB sbsigp_t structure.
  */
-class SbsIgp {
+public class SbsIgp {
     /** Correction time */
     public GTime t0;
     
