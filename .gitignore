@@ -27,3 +27,5 @@ replay_pid*
 target/ 
 *.trace 
 *.pos 
+*.py
+*.js
