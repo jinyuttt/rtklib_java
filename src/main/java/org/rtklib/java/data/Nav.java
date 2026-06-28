@@ -1,5 +1,6 @@
 package org.rtklib.java.data;
 
+import java.util.Arrays;
 import org.rtklib.java.constants.Constants;
 
 /**
@@ -171,6 +172,8 @@ public class Nav {
             this.ssr[i] = new Ssr();
         }
 
+        this.erp = new Erp();
+
         this.peph = new PepH[0];
         this.pclk = new Pclk[0];
         this.pcvs = new Pcv[Constants.MAXSAT];
@@ -201,21 +204,21 @@ public class Nav {
             this.seph[i] = new Seph();
         }
         
-        this.utc_gps = new double[8];
-        this.utc_glo = new double[8];
-        this.utc_gal = new double[8];
-        this.utc_qzs = new double[8];
-        this.utc_cmp = new double[8];
-        this.utc_irn = new double[9];
-        this.utc_sbs = new double[4];
+        Arrays.fill(this.utc_gps, 0.0);
+        Arrays.fill(this.utc_glo, 0.0);
+        Arrays.fill(this.utc_gal, 0.0);
+        Arrays.fill(this.utc_qzs, 0.0);
+        Arrays.fill(this.utc_cmp, 0.0);
+        Arrays.fill(this.utc_irn, 0.0);
+        Arrays.fill(this.utc_sbs, 0.0);
         
-        this.ion_gps = new double[8];
-        this.ion_gal = new double[4];
-        this.ion_qzs = new double[8];
-        this.ion_cmp = new double[8];
-        this.ion_irn = new double[8];
+        Arrays.fill(this.ion_gps, 0.0);
+        Arrays.fill(this.ion_gal, 0.0);
+        Arrays.fill(this.ion_qzs, 0.0);
+        Arrays.fill(this.ion_cmp, 0.0);
+        Arrays.fill(this.ion_irn, 0.0);
         
-        this.glo_fcn = new int[32];
+        Arrays.fill(this.glo_fcn, 0);
         this.sbssat = new SbsSat();
         
         for (int i = 0; i <= Constants.MAXBAND; i++) {
@@ -226,5 +229,7 @@ public class Nav {
             this.dgps[i] = new Dgps();
             this.ssr[i] = new Ssr();
         }
+
+        this.erp = new Erp();
     }
 }

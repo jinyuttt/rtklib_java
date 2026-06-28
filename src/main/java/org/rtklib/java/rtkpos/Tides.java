@@ -22,7 +22,7 @@ public class Tides {
 
     private static final double[] EP2000 = {2000, 1, 1, 12, 0, 0};
 
-    /* ======== 矩阵运算（列优先，Fortran 风格，与 C 版一致） ======== */
+    /* ======== 矩阵运算（行优先，row-major，与项目 MatrixUtil 一致） ======== */
 
     /** 向量内积 */
     private static double dot(double[] a, double[] b, int n) {
@@ -38,71 +38,71 @@ public class Tides {
         return Math.sqrt(s);
     }
 
-    /** 绕 X 轴旋转矩阵（列优先，与 C 宏 Rx 一致） */
+    /** 绕 X 轴旋转矩阵（行优先：M[i*3+j] = 第i行第j列） */
     private static void Rx(double t, double[] X) {
         double ct = Math.cos(t), st = Math.sin(t);
         X[0] = 1.0; X[1] = 0.0; X[2] = 0.0;
-        X[3] = 0.0; X[4] = ct;  X[5] = st;
-        X[6] = 0.0; X[7] = -st; X[8] = ct;
+        X[3] = 0.0; X[4] = ct;  X[5] = -st;
+        X[6] = 0.0; X[7] = st;  X[8] = ct;
     }
 
-    /** 绕 Y 轴旋转矩阵（列优先，与 C 宏 Ry 一致） */
+    /** 绕 Y 轴旋转矩阵（行优先：M[i*3+j] = 第i行第j列） */
     private static void Ry(double t, double[] X) {
         double ct = Math.cos(t), st = Math.sin(t);
-        X[0] = ct;  X[1] = 0.0; X[2] = -st;
+        X[0] = ct;  X[1] = 0.0; X[2] = st;
         X[3] = 0.0; X[4] = 1.0; X[5] = 0.0;
-        X[6] = st;  X[7] = 0.0; X[8] = ct;
+        X[6] = -st; X[7] = 0.0; X[8] = ct;
     }
 
-    /** 绕 Z 轴旋转矩阵（列优先，与 C 宏 Rz 一致） */
+    /** 绕 Z 轴旋转矩阵（行优先：M[i*3+j] = 第i行第j列） */
     private static void Rz(double t, double[] X) {
         double ct = Math.cos(t), st = Math.sin(t);
-        X[0] = ct;  X[1] = st;  X[2] = 0.0;
-        X[3] = -st; X[4] = ct;  X[5] = 0.0;
+        X[0] = ct;  X[1] = -st; X[2] = 0.0;
+        X[3] = st;  X[4] = ct;  X[5] = 0.0;
         X[6] = 0.0; X[7] = 0.0; X[8] = 1.0;
     }
 
     /**
-     * 矩阵乘法 C = A * B（列优先，Fortran 风格）。
+     * 矩阵乘法 C = A * B（行优先，row-major）。
      * @param tr "NN"=正常, "NT"=A * B^T, "TN"=A^T * B, "TT"=A^T * B^T
      */
     private static void matmul(String tr, int n, int k, int m,
                                double[] A, double[] B, double[] C) {
         int f = (tr.charAt(0) != 'N' ? 2 : 0) + (tr.charAt(1) != 'N' ? 1 : 0);
         switch (f) {
-            case 0: /* NN */
-                for (int j = 0; j < k; j++) {
-                    for (int i = 0; i < n; i++) {
+            case 0: /* NN: C[i*k+j] = sum_x A[i*m+x] * B[x*k+j] */
+                for (int i = 0; i < n; i++) {
+                    for (int j = 0; j < k; j++) {
                         double d = 0.0;
-                        for (int x = 0; x < m; x++) d += A[i + x * n] * B[x + j * m];
-                        C[i + j * n] = d;
+                        for (int x = 0; x < m; x++) d += A[i * m + x] * B[x * k + j];
+                        C[i * k + j] = d;
                     }
                 }
                 break;
-            case 1: /* NT */
-                for (int j = 0; j < k; j++) {
-                    for (int i = 0; i < n; i++) {
+            case 1: /* NT: C[i*k+j] = sum_x A[i*m+x] * B[j*m+x] */
+                for (int i = 0; i < n; i++) {
+                    for (int j = 0; j < k; j++) {
                         double d = 0.0;
-                        for (int x = 0; x < m; x++) d += A[i + x * n] * B[j + x * k];
-                        C[i + j * n] = d;
+                        for (int x = 0; x < m; x++) d += A[i * m + x] * B[j * m + x];
+                        C[i * k + j] = d;
                     }
                 }
                 break;
-            case 2: /* TN */
-                for (int j = 0; j < k; j++) {
-                    for (int i = 0; i < n; i++) {
+            case 2: /* TN: C[i*k+j] = sum_x A[x*m+i] * B[x*k+j] */
+                for (int i = 0; i < n; i++) {
+                    for (int j = 0; j < k; j++) {
                         double d = 0.0;
-                        for (int x = 0; x < m; x++) d += A[x + i * m] * B[x + j * m];
-                        C[i + j * n] = d;
+                        for (int x = 0; x < m; x++) d += A[x * m + i] * B[x * k + j];
+                        C[i * k + j] = d;
                     }
                 }
                 break;
-            case 3: /* TT */
-                for (int j = 0; j < k; j++) {
-                    for (int i = 0; i < n; i++) {
+            case 3: /* TT: C[i*k+j] = sum_x A[x*m+i] * B[j*m+x] */
+                for (int i = 0; i < n; i++) {
+                    for (int j = 0; j < k; j++) {
                         double d = 0.0;
-                        for (int x = 0; x < m; x++) d += A[x + i * m] * B[j + x * k];
-                        C[i + j * n] = d;
+                        for (int x = 0; x < m; x++) d += A[x * m + i] * B[j * m + x];
+                        C[i * k + j] = d;
                     }
                 }
                 break;

@@ -329,6 +329,56 @@ public class Rtcm {
         int nsat = (int) BitUtils.getbitu(buff, i, 5); i += 5;
         if (!testStaid(staid)) return false;
         adjweek(tow);
+
+        if (this.obsflag != 0) {
+            this.obs.n = 0;
+            this.obsflag = 0;
+        }
+
+        for (int j = 0; j < nsat && this.obs.n < Constants.MAXOBS; j++) {
+            int prn = (int) BitUtils.getbitu(buff, i, 6); i += 6;
+            int sat = SatUtils.satno(Constants.SYS_GPS, prn);
+            if (sat == 0) continue;
+
+            Obsd obs = this.obs.data[this.obs.n];
+            obs.time = this.time;
+            obs.sat = sat;
+
+            if (nfreq >= 1) {
+                double code1 = BitUtils.getbitu(buff, i, 1); i += 1;
+                double pr1 = extended ? BitUtils.getbits(buff, i, 24) * 0.02 : BitUtils.getbitu(buff, i, 24) * 0.02;
+                i += 24;
+                double cp1 = extended ? BitUtils.getbits(buff, i, 20) * 0.0005 : BitUtils.getbitu(buff, i, 20) * 0.0005;
+                i += 20;
+                double lli1 = BitUtils.getbitu(buff, i, 2); i += 2;
+                double cnr1 = BitUtils.getbitu(buff, i, 1); i += 1;
+
+                obs.P[0] = pr1 == 0.0 ? 0.0 : pr1;
+                obs.L[0] = cp1 == 0.0 ? 0.0 : cp1;
+                obs.SNR[0] = (short) cnr1;
+                obs.LLI[0] = (short) lli1;
+                obs.code[0] = code1 != 0 ? Constants.CODE_L1P : Constants.CODE_L1C;
+            }
+
+            if (nfreq >= 2) {
+                double code2 = BitUtils.getbitu(buff, i, 2); i += 2;
+                double pr2 = extended ? BitUtils.getbits(buff, i, 20) * 0.02 : BitUtils.getbitu(buff, i, 20) * 0.02;
+                i += 20;
+                double cp2 = extended ? BitUtils.getbits(buff, i, 20) * 0.0005 : BitUtils.getbitu(buff, i, 20) * 0.0005;
+                i += 20;
+                double lli2 = BitUtils.getbitu(buff, i, 2); i += 2;
+                double cnr2 = BitUtils.getbitu(buff, i, 1); i += 1;
+
+                obs.P[1] = pr2 == 0.0 ? 0.0 : pr2;
+                obs.L[1] = cp2 == 0.0 ? 0.0 : cp2;
+                obs.SNR[1] = (short) cnr2;
+                obs.LLI[1] = (short) lli2;
+                obs.code[1] = code2 != 0 ? Constants.CODE_L2P : Constants.CODE_L2C;
+            }
+
+            this.obs.n++;
+        }
+
         this.time = this.obs.data[0].time.time > 0 ? this.obs.data[0].time : this.time;
         this.obsflag = sync != 0 ? 0 : 1;
         return true;
@@ -709,11 +759,91 @@ public class Rtcm {
         this.nav.eph[sat - 1] = eph;
         this.ephset = 0;
         this.ephsat = sat;
-        log.info("RTCM 1042 eph stored: sat={} prn={} week={} toe={} A={}", 
+        log.debug("RTCM 1042 eph stored: sat={} prn={} week={} toe={} A={}", 
                 sat, prn, eph.week, eph.toes, String.format("%.1f", eph.A));
         return true;
     }
-    private boolean decodeType1044() { return true; }  // QZSS (not implemented)
+    private boolean decodeType1044() {
+        int i = 24 + 12;
+        if (i + 476 > this.len * 8) {
+            log.warn("rtcm3 1044 length error: len={}", this.len);
+            return false;
+        }
+
+        Eph eph = new Eph();
+        int prn = (int) BitUtils.getbitu(buff, i, 4); i += 4;
+        int week = (int) BitUtils.getbitu(buff, i, 10); i += 10;
+        eph.sva = (int) BitUtils.getbitu(buff, i, 4); i += 4;
+        eph.code = (int) BitUtils.getbitu(buff, i, 2); i += 2;
+        eph.idot = BitUtils.getbits(buff, i, 14) * Constants.P2_43 * Constants.SC2RAD; i += 14;
+        eph.iode = (int) BitUtils.getbitu(buff, i, 8); i += 8;
+        double toc = BitUtils.getbitu(buff, i, 16) * 16.0; i += 16;
+        eph.f2 = BitUtils.getbits(buff, i, 8) * Constants.P2_55; i += 8;
+        eph.f1 = BitUtils.getbits(buff, i, 16) * Constants.P2_43; i += 16;
+        eph.f0 = BitUtils.getbits(buff, i, 22) * Constants.P2_31; i += 22;
+        eph.iodc = (int) BitUtils.getbitu(buff, i, 10); i += 10;
+        eph.crs = BitUtils.getbits(buff, i, 16) * Constants.P2_5; i += 16;
+        eph.deln = BitUtils.getbits(buff, i, 16) * Constants.P2_43 * Constants.SC2RAD; i += 16;
+        eph.M0 = BitUtils.getbits(buff, i, 32) * Constants.P2_31 * Constants.SC2RAD; i += 32;
+        eph.cuc = BitUtils.getbits(buff, i, 16) * Constants.P2_29; i += 16;
+        eph.e = BitUtils.getbitu(buff, i, 32) * Constants.P2_33; i += 32;
+        eph.cus = BitUtils.getbits(buff, i, 16) * Constants.P2_29; i += 16;
+        double sqrtA = BitUtils.getbitu(buff, i, 32) * Constants.P2_19; i += 32;
+        eph.toes = BitUtils.getbitu(buff, i, 16) * 16.0; i += 16;
+        eph.cic = BitUtils.getbits(buff, i, 16) * Constants.P2_29; i += 16;
+        eph.OMG0 = BitUtils.getbits(buff, i, 32) * Constants.P2_31 * Constants.SC2RAD; i += 32;
+        eph.cis = BitUtils.getbits(buff, i, 16) * Constants.P2_29; i += 16;
+        eph.i0 = BitUtils.getbits(buff, i, 32) * Constants.P2_31 * Constants.SC2RAD; i += 32;
+        eph.crc = BitUtils.getbits(buff, i, 16) * Constants.P2_5; i += 16;
+        eph.omg = BitUtils.getbits(buff, i, 32) * Constants.P2_31 * Constants.SC2RAD; i += 32;
+        eph.OMGd = BitUtils.getbits(buff, i, 24) * Constants.P2_43 * Constants.SC2RAD; i += 24;
+        eph.tgd[0] = BitUtils.getbits(buff, i, 8) * Constants.P2_31; i += 8;
+        eph.svh = (int) BitUtils.getbitu(buff, i, 6); i += 6;
+        eph.flag = (int) BitUtils.getbitu(buff, i, 1); i += 1;
+        eph.fit = BitUtils.getbitu(buff, i, 1) == 1 ? 6.0 : 4.0; i += 1;
+
+        int sat = SatUtils.satno(Constants.SYS_QZS, prn);
+        if (sat == 0) {
+            log.warn("rtcm3 1044 satellite number error: prn={}", prn);
+            return false;
+        }
+
+        eph.sat = sat;
+        eph.week = adjustGpsWeek(week);
+
+        if (!timeInitialized) {
+            eph.toe = TimeSystem.gpst2time(eph.week, eph.toes);
+            eph.toc = TimeSystem.gpst2time(eph.week, toc);
+            eph.ttr = eph.toe;
+            eph.A = sqrtA * sqrtA;
+            this.time = eph.toe;
+            timeInitialized = true;
+        } else {
+            double tt = TimeSystem.timediff(TimeSystem.gpst2time(eph.week, eph.toes), this.time);
+            while (tt < -302400.0) { eph.week++; tt += 604800.0; }
+            while (tt >= 302400.0) { eph.week--; tt -= 604800.0; }
+            eph.toe = TimeSystem.gpst2time(eph.week, eph.toes);
+            int tocWeek = eph.week;
+            double ttToc = TimeSystem.timediff(TimeSystem.gpst2time(tocWeek, toc), this.time);
+            while (ttToc < -302400.0) { tocWeek++; ttToc += 604800.0; }
+            while (ttToc >= 302400.0) { tocWeek--; ttToc -= 604800.0; }
+            eph.toc = TimeSystem.gpst2time(tocWeek, toc);
+            eph.ttr = this.time;
+            eph.A = sqrtA * sqrtA;
+        }
+
+        if (!this.opt.contains("-EPHALL")) {
+            if (this.nav.eph[sat - 1] != null && eph.iode == this.nav.eph[sat - 1].iode) {
+                return true;
+            }
+        }
+
+        this.nav.eph[sat - 1] = eph;
+        this.ephsat = sat;
+        this.ephset = 0;
+        log.debug("RTCM 1044 QZSS eph stored: sat={} prn={}", sat, prn);
+        return true;
+    }
     private boolean decodeType1021() { return true; }  // Helmert (not supported)
     private boolean decodeType1022() { return true; }  // Molodensky (not supported)
     private boolean decodeType1023() { return true; }  // Network RTK (not supported)
