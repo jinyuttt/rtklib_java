@@ -1,6 +1,8 @@
 package org.rtklib.java.data;
 
 import org.rtklib.java.constants.Constants;
+import org.rtklib.java.trace.TraceControl;
+import org.rtklib.java.trace.TraceCallback;
 
 /**
  * RTK解算控制与状态结构体。
@@ -78,6 +80,13 @@ public class Rtk {
     /** 处理选项 */
     public PrcOpt opt;
 
+    
+    /** 追踪日志控制参数 */
+    public TraceControl traceControl;
+
+    /** 追踪日志回调接口 */
+    public TraceCallback traceCallback;
+
     /** 模糊度控制信息 */
     public Ambc ambc;
 
@@ -105,5 +114,9 @@ public class Rtk {
         }
         this.opt = new PrcOpt();
         this.ambc = new Ambc();
+        this.traceControl = null;
+        this.traceCallback = null;
     }
 }
+
+

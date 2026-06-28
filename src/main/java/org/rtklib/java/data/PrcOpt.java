@@ -67,6 +67,10 @@ public class PrcOpt {
     public int rovpos;
     /** Base position for relative mode */
     public int refpos;
+    /** Processing mode: PROCMODE_REALTIME or PROCMODE_POST */
+    public int procmode;
+    /** Reference station position mode: REFPOS_FIXED, REFPOS_SPP_AVERAGE, or REFPOS_RTCM */
+    public int refposmode;
     /** Code/phase error ratio */
     public double[] eratio;
     /** Observation error terms (8 entries) */
@@ -160,6 +164,8 @@ public class PrcOpt {
         this.sbassatsel = 0;
         this.rovpos = 0;
         this.refpos = 0;
+        this.procmode = Constants.PROCMODE_POST;
+        this.refposmode = Constants.REFPOS_FIXED;
         this.eratio = new double[Constants.MAXFREQ];
         for (int i = 0; i < Constants.MAXFREQ; i++) this.eratio[i] = 300.0;
         this.err = new double[8];
@@ -251,6 +257,8 @@ public class PrcOpt {
         this.sbassatsel = other.sbassatsel;
         this.rovpos = other.rovpos;
         this.refpos = other.refpos;
+        this.procmode = other.procmode;
+        this.refposmode = other.refposmode;
         this.eratio = other.eratio.clone();
         this.err = other.err.clone();
         this.std = other.std.clone();

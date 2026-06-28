@@ -10,9 +10,14 @@ import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
 import org.rtklib.java.ephemeris.EphModel;
 import org.rtklib.java.kalman.KalmanFilter;
+import org.rtklib.java.pntpos.PntPos;
 import org.rtklib.java.pntpos.SppCore;
 import org.rtklib.java.time.TimeSystem;
 import org.rtklib.java.troposphere.TroposphereModel;
+import org.rtklib.java.trace.RtkTrace;
+import org.rtklib.java.trace.TraceControl;
+import org.rtklib.java.trace.TraceCallback;
+import java.util.Arrays;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -117,17 +122,12 @@ public final class RtkCore {
 
         LOG.debug("rtkpos: nu={} nr={} stat={}", nu, nr, rtk.sol.stat);
 
-        GTime prevTime = new GTime(rtk.sol.time);
+        rtk.epoch++;
+GTime prevTime = new GTime(rtk.sol.time);
 
-        if (rtk.P[0] == 0.0) {
-            double[] rs_spp = new double[nu * 6];
-            double[] dts_spp = new double[nu * 2];
-            double[] vare_spp = new double[nu];
-            int[] svh_spp = new int[nu];
-            EphModel.satposs(obs[0].time, obs, nu, nav, rs_spp, dts_spp, vare_spp, svh_spp);
-            if (SppCore.estpos(obs, nu, rs_spp, dts_spp, vare_spp, svh_spp, nav, opt,
-                    rtk.ssat, rtk.sol, azel, new int[nu], new double[nu], msg) == 0) {
-                return 0;
+        if (rtk.P[0] == 0.0 || rtk.P[0] > STD_PREC_VAR_THRESH) {
+            if (PntPos.pntpos(obs, nu, nav, opt, rtk.sol, null, rtk.ssat) == 0) {
+                if (opt.dynamics == 0) return 0;
             }
         } else {
             rtk.sol.time = obs[0].time;
@@ -142,25 +142,26 @@ public final class RtkCore {
         if (opt.mode == Constants.PMODE_SINGLE) {
             return 1;
         }
+        if (opt.mode >= Constants.PMODE_PPP_KINEMA) {
+            org.rtklib.java.ppp.PppCore.pppos(rtk, obs, nu, nav);
+            return rtk.sol.stat != Constants.SOLQ_NONE ? 1 : 0;
+        }
+        if (opt.outsingle == 0) {
+            rtk.sol.stat = Constants.SOLQ_NONE;
+        }
 
         if (nr == 0) {
             return 1;
         }
 
-        if (opt.refpos <= Constants.POSOPT_RINEX && opt.mode != Constants.PMODE_SINGLE &&
+        if (opt.refposmode != Constants.REFPOS_RTCM && opt.mode != Constants.PMODE_SINGLE &&
                 opt.mode != Constants.PMODE_MOVEB) {
             for (i = 0; i < 6; i++) rtk.rb[i] = i < 3 ? opt.rb[i] : 0.0;
         }
 
         if (opt.mode == Constants.PMODE_MOVEB) {
-            if (rtk.sol.stat == Constants.SOLQ_NONE) {
-                double[] rs_spp = new double[nu * 6];
-                double[] dts_spp = new double[nu * 2];
-                double[] vare_spp = new double[nu];
-                int[] svh_spp = new int[nu];
-                EphModel.satposs(obs[0].time, obs, nu, nav, rs_spp, dts_spp, vare_spp, svh_spp);
-                if (SppCore.estpos(obs, nu, rs_spp, dts_spp, vare_spp, svh_spp, nav, opt,
-                        rtk.ssat, solb, azel, new int[nr], new double[nr], msg) == 0) {
+            if (rtk.P[0] == 0.0 || rtk.P[0] > STD_PREC_VAR_THRESH) {
+                if (PntPos.pntpos(Arrays.copyOfRange(obs, nu, nu + nr), nr, nav, opt, solb, null, null) == 0) {
                     return 0;
                 }
                 if (Math.abs(rtk.rb[0]) < 0.1) {
@@ -171,9 +172,11 @@ public final class RtkCore {
                         rtk.rb[i + 3] = 0;
                     }
                 }
+            } else {
+                solb.time = obs[nu].time;
             }
-            double age = TimeSystem.timediff(rtk.sol.time, solb.time);
-            if (Math.abs(age) > Math.min(TTOL_MOVEB, opt.maxtdiff)) {
+            rtk.sol.age = (float) TimeSystem.timediff(rtk.sol.time, solb.time);
+            if (Math.abs(rtk.sol.age) > Math.min(TTOL_MOVEB, opt.maxtdiff)) {
                 return 0;
             }
         }
@@ -258,6 +261,11 @@ public final class RtkCore {
         }
 
         ns = selsat(obs, azel, nu, nr, opt, sat, iu, ir);
+
+        RtkTrace.traceStage0(rtk.traceControl, rtk.traceCallback, rtk.epoch,
+                obs, nu, nr, nav, rtk.ssat);
+        RtkTrace.traceStage1(rtk.traceControl, rtk.traceCallback, rtk.epoch,
+                obs[0].time, sat, ns, nf, rs, dts, nav, rtk.rb, iu);
         if (ns <= 0) return 0;
 
         int nState = NR(opt);
@@ -279,6 +287,9 @@ public final class RtkCore {
         }
 
         udstate(rtk, obs, sat, iu, ir, ns, nav, nf);
+
+RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
+        obs[0].time, rtk, sat, ns, nf);
 
         StringBuilder satListStr = new StringBuilder();
         for (i = 0; i < ns; i++) {
@@ -348,6 +359,13 @@ public final class RtkCore {
                 stat = Constants.SOLQ_NONE;
                 break;
             }
+            int refSatForTrace = 0;
+            for (int ri = 0; ri < ns; ri++) {
+                if (rtk.ssat[sat[ri] - 1].fix[0] == 2) { refSatForTrace = sat[ri]; break; }
+            }
+            RtkTrace.traceStage3(rtk.traceControl, rtk.traceCallback, rtk.epoch,
+                    obs[0].time, refSatForTrace, sat, ns, nf, v, nv, R, H, rtk.nx, opt);
+
             double xp0 = xp[0], xp1 = xp[1], xp2 = xp[2];
             StringBuilder vAll = new StringBuilder("v=[");
             for (int vi = 0; vi < nv; vi++) {
@@ -362,10 +380,13 @@ public final class RtkCore {
             for (int vi = 0; vi < nv; vi++) rDiag.append(String.format("%.4f ", R[vi * nv + vi]));
             rDiag.append("]");
             LOG.debug(String.format("pre-filter: nv=%d %s %s xp0=(%.6f,%.6f,%.6f) P0=%.1f P1=%.1f P2=%.1f", nv, vAll, rDiag, xp0, xp1, xp2, Pp[0], Pp[1*nx+1], Pp[2*nx+2]));
+            double[] xpBeforeFilter = xp.clone();
             int info = filter(xp, Pp, H, v, R, nx, nv);
             LOG.debug(String.format("filter: info=%d nv=%d dxp=(%.6f,%.6f,%.6f) P0=%.4f P1=%.4f P2=%.4f",
                     info, nv,
                     xp[0] - xp0, xp[1] - xp1, xp[2] - xp2, Pp[0], Pp[1*nx+1], Pp[2*nx+2]));
+            RtkTrace.traceStage4(rtk.traceControl, rtk.traceCallback, rtk.epoch,
+                    obs[0].time, info, xp, xpBeforeFilter, rtk.nx, Pp);
             if (info != 0) {
                 LOG.debug("filter error (info={})", info);
                 stat = Constants.SOLQ_NONE;
@@ -399,6 +420,9 @@ public final class RtkCore {
                 stat = Constants.SOLQ_NONE;
             }
         }
+
+        int lambdaFixed = 0;
+        double[] lambdaDxShift = null;
 
         if (opt.modear != Constants.ARMODE_OFF && stat == Constants.SOLQ_FLOAT) {
             int[] ix = new int[nx * 2];
@@ -462,6 +486,9 @@ public final class RtkCore {
                                     iu, ir, ns, nf, nav, v, null, R, vflg);
                             if (nv > 0) {
                                 stat = Constants.SOLQ_FIX;
+                                lambdaFixed = 1;
+                                lambdaDxShift = new double[3];
+                                for (int si = 0; si < 3; si++) lambdaDxShift[si] = xa[si] - rtk.x[si];
                                 if (++rtk.nfix >= rtk.opt.minfix) {
                                     if (rtk.opt.modear == Constants.ARMODE_FIXHOLD) {
                                         holdamb(rtk, xa, sat, ns, nf, nx, nav);
@@ -473,6 +500,9 @@ public final class RtkCore {
                 }
             }
         }
+        RtkTrace.traceStage5(rtk.traceControl, rtk.traceCallback, rtk.epoch,
+                obs[0].time, lambdaFixed, rtk.sol.ratio, sat, ns, nf, rtk, xa, lambdaDxShift);
+
 
         if (stat == Constants.SOLQ_FIX) {
             for (i = 0; i < 3; i++) {
@@ -508,6 +538,9 @@ public final class RtkCore {
         }
 
         rtk.sol.stat = (byte) stat;
+        RtkTrace.traceStage6(rtk.traceControl, rtk.traceCallback, rtk.epoch,
+                obs[0].time, rtk.sol, opt.niter);
+
 
         LOG.debug("relpos done: nv={} stat={} x[0..2]=({},{},{})",
                 nv, stat,
