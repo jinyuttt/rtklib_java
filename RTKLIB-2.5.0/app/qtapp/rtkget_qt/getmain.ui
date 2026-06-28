@@ -1,0 +1,690 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainForm</class>
+ <widget class="QWidget" name="MainForm">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>755</width>
+    <height>423</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>RTKGet</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QWidget" name="stationPanel" native="true">
+     <property name="text" stdset="0">
+      <string/>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_3">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item row="1" column="0" rowspan="6" colspan="3">
+       <widget class="QListWidget" name="dataListWidget">
+        <property name="selectionMode">
+         <enum>QAbstractItemView::MultiSelection</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QComboBox" name="cBDataType">
+        <property name="toolTip">
+         <string>Select data provider</string>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="3" colspan="4">
+       <widget class="QComboBox" name="cBDirectory">
+        <property name="toolTip">
+         <string>Download Directory</string>
+        </property>
+        <property name="editable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="5" rowspan="5" colspan="3">
+       <widget class="QListWidget" name="stationListWidget">
+        <property name="toolTip">
+         <string>Station List</string>
+        </property>
+        <property name="selectionMode">
+         <enum>QAbstractItemView::MultiSelection</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="4">
+       <widget class="QPushButton" name="btnKeywords">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>Show placeholders available to specify directory</string>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/buttons/key</normaloff>:/buttons/key</iconset>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="7">
+       <widget class="QPushButton" name="btnStations">
+        <property name="toolTip">
+         <string>Load Station List</string>
+        </property>
+        <property name="text">
+         <string>...</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="3">
+       <widget class="QCheckBox" name="cBLocalDirectory">
+        <property name="toolTip">
+         <string>Specify local download directory</string>
+        </property>
+        <property name="text">
+         <string> Local Directory</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="3">
+       <widget class="QLabel" name="lbTimeSpan">
+        <property name="text">
+         <string>Time Span (GPST)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="6">
+       <widget class="QPushButton" name="btnAll">
+        <property name="toolTip">
+         <string>Select/Clear All</string>
+        </property>
+        <property name="text">
+         <string>&amp;All</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="3" colspan="2">
+       <widget class="QWidget" name="panelFTP" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text" stdset="0">
+         <string/>
+        </property>
+        <layout class="QGridLayout" name="gridLayout_2">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="lEFtpPasswd">
+           <property name="toolTip">
+            <string>Password</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QCheckBox" name="cBHidePasswd">
+           <property name="toolTip">
+            <string>Show password</string>
+           </property>
+           <property name="text">
+            <string>Password</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLineEdit" name="lEFtpLogin">
+           <property name="toolTip">
+            <string>User name</string>
+           </property>
+           <property name="text">
+            <string>anonymous</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="0">
+          <widget class="QLabel" name="lblUser">
+           <property name="text">
+            <string>FTP Login</string>
+           </property>
+           <property name="buddy">
+            <cstring>lEFtpLogin</cstring>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="6" column="7">
+       <widget class="QPushButton" name="btnDir">
+        <property name="toolTip">
+         <string>Select local download directory</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/buttons/folder</normaloff>:/buttons/folder</iconset>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="3">
+       <widget class="QCheckBox" name="cBSkipExist">
+        <property name="toolTip">
+         <string>Don't download file if they already exist</string>
+        </property>
+        <property name="text">
+         <string> Skip Existing Files</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3" colspan="2">
+       <widget class="QWidget" name="timePanel" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text" stdset="0">
+         <string/>
+        </property>
+        <layout class="QGridLayout" name="gridLayout">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item row="1" column="0">
+          <widget class="QLabel" name="lbStart">
+           <property name="text">
+            <string>Start</string>
+           </property>
+           <property name="buddy">
+            <cstring>dateTimeStart</cstring>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="lbEnd">
+           <property name="text">
+            <string>End</string>
+           </property>
+           <property name="buddy">
+            <cstring>dateTimeStop</cstring>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QComboBox" name="cBTimeInterval">
+           <property name="toolTip">
+            <string>Download time interval</string>
+           </property>
+           <property name="currentIndex">
+            <number>7</number>
+           </property>
+           <item>
+            <property name="text">
+             <string>-</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>15 min</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>30 min</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>1 H</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>3 H</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>6 H</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>12 H</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>24 H</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>7 day</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item row="2" column="5">
+          <widget class="QPushButton" name="btnTimeStop">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>30</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>Show details of stop time</string>
+           </property>
+           <property name="text">
+            <string>?</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="2" colspan="2">
+          <widget class="QLabel" name="lbNo">
+           <property name="text">
+            <string>No.</string>
+           </property>
+           <property name="buddy">
+            <cstring>lENumber</cstring>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="lbInterval">
+           <property name="text">
+            <string>Interval</string>
+           </property>
+           <property name="buddy">
+            <cstring>cBTimeInterval</cstring>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="5">
+          <widget class="QPushButton" name="btnTimeStart">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>30</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>Show details of start time</string>
+           </property>
+           <property name="text">
+            <string>?</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1" colspan="4">
+          <widget class="QDateTimeEdit" name="dateTimeStart">
+           <property name="displayFormat">
+            <string>yyyy/MM/dd hh:mm:ss</string>
+           </property>
+           <property name="calendarPopup">
+            <bool>true</bool>
+           </property>
+           <property name="timeSpec">
+            <enum>Qt::UTC</enum>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1" colspan="4">
+          <widget class="QDateTimeEdit" name="dateTimeStop">
+           <property name="displayFormat">
+            <string>yyyy/MM/dd hh:mm:ss</string>
+           </property>
+           <property name="calendarPopup">
+            <bool>true</bool>
+           </property>
+           <property name="timeSpec">
+            <enum>Qt::UTC</enum>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="4" colspan="2">
+          <widget class="QLineEdit" name="lENumber">
+           <property name="toolTip">
+            <string>Sequence number or interval (e.g. &quot;2&quot; or &quot;1-5&quot;)</string>
+           </property>
+           <property name="text">
+            <string>0</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="4" column="3">
+       <widget class="QCheckBox" name="cBUnzip">
+        <property name="toolTip">
+         <string>Keep uncompressed files</string>
+        </property>
+        <property name="text">
+         <string> Unzip/Uncompact Files</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="5">
+       <widget class="QLabel" name="lbStation">
+        <property name="text">
+         <string>Stations (0)</string>
+        </property>
+        <property name="buddy">
+         <cstring>stationListWidget</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1" colspan="2">
+       <widget class="QComboBox" name="cBSubType">
+        <property name="toolTip">
+         <string>Select type of data</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="0" colspan="8">
+       <widget class="QLabel" name="lbMessage1">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>30</width>
+          <height>16777215</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="msg2" native="true">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="text" stdset="0">
+      <string/>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout_3">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="lbMessage2"/>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbImage">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="msg3" native="true">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="text" stdset="0">
+      <string/>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout_4">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QPushButton" name="btnAbout">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>30</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>About RTKGet</string>
+        </property>
+        <property name="text">
+         <string>?</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbMessage3"/>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnTray">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>Minimize window to tray</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/buttons/tray</normaloff>:/buttons/tray</iconset>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="panelButtons" native="true">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="text" stdset="0">
+      <string/>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QPushButton" name="btnFile">
+        <property name="toolTip">
+         <string>Show dowloaded files</string>
+        </property>
+        <property name="text">
+         <string>&amp;Files...</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnLog">
+        <property name="toolTip">
+         <string>Show log file</string>
+        </property>
+        <property name="text">
+         <string>&amp;Log...</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnOptions">
+        <property name="toolTip">
+         <string>Show Option Dialog</string>
+        </property>
+        <property name="text">
+         <string>&amp;Options...</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/buttons/tool</normaloff>:/buttons/tool</iconset>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnTest">
+        <property name="toolTip">
+         <string>Test download</string>
+        </property>
+        <property name="text">
+         <string>&amp;Test...</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnDownload">
+        <property name="text">
+         <string>&amp;Download</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnExit">
+        <property name="text">
+         <string>&amp;Exit</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>cBDataType</tabstop>
+  <tabstop>cBSubType</tabstop>
+  <tabstop>dataListWidget</tabstop>
+  <tabstop>btnAll</tabstop>
+  <tabstop>btnStations</tabstop>
+  <tabstop>stationListWidget</tabstop>
+  <tabstop>dateTimeStart</tabstop>
+  <tabstop>btnTimeStart</tabstop>
+  <tabstop>dateTimeStop</tabstop>
+  <tabstop>btnTimeStop</tabstop>
+  <tabstop>cBTimeInterval</tabstop>
+  <tabstop>lENumber</tabstop>
+  <tabstop>lEFtpLogin</tabstop>
+  <tabstop>cBHidePasswd</tabstop>
+  <tabstop>lEFtpPasswd</tabstop>
+  <tabstop>cBSkipExist</tabstop>
+  <tabstop>cBUnzip</tabstop>
+  <tabstop>cBLocalDirectory</tabstop>
+  <tabstop>btnKeywords</tabstop>
+  <tabstop>cBDirectory</tabstop>
+  <tabstop>btnDir</tabstop>
+  <tabstop>btnAbout</tabstop>
+  <tabstop>btnTray</tabstop>
+  <tabstop>btnFile</tabstop>
+  <tabstop>btnLog</tabstop>
+  <tabstop>btnOptions</tabstop>
+  <tabstop>btnTest</tabstop>
+  <tabstop>btnDownload</tabstop>
+  <tabstop>btnExit</tabstop>
+ </tabstops>
+ <resources>
+  <include location="../icon/resources.qrc"/>
+ </resources>
+ <connections/>
+</ui>
