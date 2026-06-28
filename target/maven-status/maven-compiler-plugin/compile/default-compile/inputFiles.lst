@@ -25,8 +25,12 @@ D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Pcv.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\PepH.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\PrcOpt.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Rtk.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\data\SbsFCorr.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\SbsIon.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\data\SbsLCorr.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\data\SbsMsg.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\SbsSat.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\data\SbsSatP.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Seph.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\SnrMask.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Sol.java
@@ -38,6 +42,8 @@ D:\code\rtklib_java\src\main\java\org\rtklib\java\ephemeris\ClkReader.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\ephemeris\EphModel.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\ephemeris\Sp3Reader.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\ionosphere\IonosphereModel.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\ionosphere\SbasCorrection.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\ionosphere\SbsIgpBand.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\kalman\KalmanFilter.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\pntpos\PntPos.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\pntpos\PosHandler.java

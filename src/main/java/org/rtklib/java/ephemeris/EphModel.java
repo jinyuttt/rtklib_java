@@ -8,6 +8,7 @@ import org.rtklib.java.data.GTime;
 import org.rtklib.java.data.Nav;
 import org.rtklib.java.data.Obsd;
 import org.rtklib.java.data.Seph;
+import org.rtklib.java.ionosphere.SbasCorrection;
 import org.rtklib.java.time.TimeSystem;
 
 /**
@@ -317,6 +318,10 @@ public final class EphModel {
                 Seph seph = EphModel.searchSbsEphemeris(nav, sat, time);
                 if (seph != null) {
                     seph2pos(time, seph, rs, dts, vare);
+                    double[] varc = new double[1];
+                    if (SbasCorrection.sbssatcorr(time, sat, nav, rs, dts, varc) != 0) {
+                        vare[0] += varc[0];
+                    }
                 }
                 break;
         }
@@ -565,6 +570,10 @@ public final class EphModel {
             GTime time2 = TimeSystem.timeadd(time, tt);
             seph2pos(time2, seph, rst, dtst, vare);
             svh[0] = seph.svh;
+            double[] varc = new double[1];
+            if (SbasCorrection.sbssatcorr(time, sat, nav, rs, dts, varc) != 0) {
+                vare[0] += varc[0];
+            }
         } else {
             return false;
         }

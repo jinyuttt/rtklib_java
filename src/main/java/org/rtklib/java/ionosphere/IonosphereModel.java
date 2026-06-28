@@ -6,6 +6,7 @@ import org.rtklib.java.data.GTime;
 import org.rtklib.java.data.Nav;
 import org.rtklib.java.time.TimeSystem;
 import org.rtklib.java.common.RtklibCommon;
+import org.rtklib.java.ionosphere.SbasCorrection;
 
 /**
  * Ionosphere delay correction models.
@@ -34,6 +35,16 @@ public final class IonosphereModel {
             }
             out[0] = ionmodel(time, pos, azel, nav.ion_gps);
             out[1] = RtklibCommon.sqr(out[0] * ERR_BRDCI);
+            return true;
+        }
+        if (ionoopt == Constants.IONOOPT_SBAS) {
+            double[] delay = {0.0}, var = {0.0};
+            if (SbasCorrection.sbsioncorr(time, nav, pos, azel, delay, var) != 0) {
+                out[0] = delay[0];
+                out[1] = var[0];
+            } else {
+                out[1] = RtklibCommon.sqr(ERR_ION);
+            }
             return true;
         }
         if (ionoopt == Constants.IONOOPT_OFF) {

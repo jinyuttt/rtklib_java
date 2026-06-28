@@ -1,8 +1,8 @@
 -------------------------------------------------------------------------------
 Test set: org.rtklib.java.RinexSppTest
 -------------------------------------------------------------------------------
-Tests run: 5, Failures: 0, Errors: 1, Skipped: 1, Time elapsed: 0.476 s <<< FAILURE! -- in org.rtklib.java.RinexSppTest
-org.rtklib.java.RinexSppTest.testCompareSppWithRtklibC(Path) -- Time elapsed: 0.057 s <<< ERROR!
+Tests run: 5, Failures: 0, Errors: 1, Skipped: 1, Time elapsed: 0.841 s <<< FAILURE! -- in org.rtklib.java.RinexSppTest
+org.rtklib.java.RinexSppTest.testCompareSppWithRtklibC(Path) -- Time elapsed: 0.071 s <<< ERROR!
 java.io.IOException: Cannot run program "D:\code\rtklib_java\RTKLIB_EX_2.5.0\rnx2rtkp.exe": CreateProcess error=2, 系统找不到指定的文件。
 	at java.base/java.lang.ProcessBuilder.start(ProcessBuilder.java:1170)
 	at java.base/java.lang.ProcessBuilder.start(ProcessBuilder.java:1089)

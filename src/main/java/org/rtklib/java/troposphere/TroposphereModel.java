@@ -4,6 +4,7 @@ import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.GTime;
 import org.rtklib.java.data.Nav;
 import org.rtklib.java.common.RtklibCommon;
+import org.rtklib.java.ionosphere.SbasCorrection;
 import org.rtklib.java.time.TimeSystem;
 
 /**
@@ -28,6 +29,12 @@ public final class TroposphereModel {
         if (tropopt == Constants.TROPOPT_SAAS || tropopt == Constants.TROPOPT_EST || tropopt == Constants.TROPOPT_ESTG) {
             out[0] = saastamoinen(pos, azel, REL_HUMI, 293.15);
             out[1] = RtklibCommon.sqr(ERR_SAAS / (Math.sin(azel[1]) + 0.1));
+            return true;
+        }
+        if (tropopt == Constants.TROPOPT_SBAS) {
+            double[] var = {0.0};
+            out[0] = SbasCorrection.sbstropcorr(time, pos, azel, var);
+            out[1] = var[0];
             return true;
         }
         if (tropopt == Constants.TROPOPT_OFF) {
