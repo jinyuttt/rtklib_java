@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>CmdOptDialog</class>
+ <widget class="QWidget" name="CmdOptDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>388</width>
+    <height>435</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Serial/TCP Commands</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QCheckBox" name="cBOpenCommands">
+     <property name="toolTip">
+      <string>Send commands at startup</string>
+     </property>
+     <property name="text">
+      <string>Commands at start&amp;up</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPlainTextEdit" name="tEOpenCommands">
+     <property name="toolTip">
+      <string>Commands to be executed at startup</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="cBCloseCommands">
+     <property name="toolTip">
+      <string>Send commands at shutdown</string>
+     </property>
+     <property name="text">
+      <string>Commands at shut&amp;down</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPlainTextEdit" name="tECloseCommands">
+     <property name="toolTip">
+      <string>Commands to be executed at shutdown</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="cBPeriodicCommands">
+     <property name="toolTip">
+      <string>Send commands periodically</string>
+     </property>
+     <property name="text">
+      <string>&amp;Periodic Commands</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="label">
+     <property name="text">
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Syntax: &lt;span style=&quot; font-style:italic;&quot;&gt;&amp;lt;command&amp;gt; # cycle (ms)&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPlainTextEdit" name="tEPeriodicCommands">
+     <property name="toolTip">
+      <string>Commands to be executed periodically</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <item>
+      <widget class="QPushButton" name="btnLoad">
+       <property name="toolTip">
+        <string/>
+       </property>
+       <property name="text">
+        <string>&amp;Load...</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnSave">
+       <property name="toolTip">
+        <string/>
+       </property>
+       <property name="text">
+        <string>&amp;Save...</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QDialogButtonBox" name="buttonBox">
+       <property name="standardButtons">
+        <set>QDialogButtonBox::StandardButton::Cancel|QDialogButtonBox::StandardButton::Ok</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

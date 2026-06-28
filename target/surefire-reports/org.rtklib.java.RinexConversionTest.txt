@@ -1,4 +1,36 @@
 -------------------------------------------------------------------------------
 Test set: org.rtklib.java.RinexConversionTest
 -------------------------------------------------------------------------------
-Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.251 s -- in org.rtklib.java.RinexConversionTest
+Tests run: 5, Failures: 0, Errors: 2, Skipped: 0, Time elapsed: 0.776 s <<< FAILURE! -- in org.rtklib.java.RinexConversionTest
+org.rtklib.java.RinexConversionTest.testCompareObsWithRtklibC(Path) -- Time elapsed: 0.360 s <<< ERROR!
+java.nio.file.NoSuchFileException: D:\code\rtklib_java\540423494727\2026-06-08\full.obs
+	at java.base/sun.nio.fs.WindowsException.translateToIOException(WindowsException.java:85)
+	at java.base/sun.nio.fs.WindowsException.rethrowAsIOException(WindowsException.java:103)
+	at java.base/sun.nio.fs.WindowsException.rethrowAsIOException(WindowsException.java:108)
+	at java.base/sun.nio.fs.WindowsFileSystemProvider.newByteChannel(WindowsFileSystemProvider.java:234)
+	at java.base/java.nio.file.Files.newByteChannel(Files.java:380)
+	at java.base/java.nio.file.Files.newByteChannel(Files.java:432)
+	at java.base/java.nio.file.spi.FileSystemProvider.newInputStream(FileSystemProvider.java:420)
+	at java.base/java.nio.file.Files.newInputStream(Files.java:160)
+	at java.base/java.nio.file.Files.newBufferedReader(Files.java:2910)
+	at java.base/java.nio.file.Files.readAllLines(Files.java:3405)
+	at java.base/java.nio.file.Files.readAllLines(Files.java:3446)
+	at org.rtklib.java.RinexConversionTest.parseRinex3ObsWithTypes(RinexConversionTest.java:288)
+	at org.rtklib.java.RinexConversionTest.testCompareObsWithRtklibC(RinexConversionTest.java:208)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+org.rtklib.java.RinexConversionTest.testCompareNavWithRtklibC(Path) -- Time elapsed: 0.130 s <<< ERROR!
+java.io.FileNotFoundException: D:\code\rtklib_java\540423494727\2026-06-08\full.nav (系统找不到指定的文件。)
+	at java.base/java.io.FileInputStream.open0(Native Method)
+	at java.base/java.io.FileInputStream.open(FileInputStream.java:213)
+	at java.base/java.io.FileInputStream.<init>(FileInputStream.java:152)
+	at java.base/java.io.FileInputStream.<init>(FileInputStream.java:106)
+	at java.base/java.io.FileReader.<init>(FileReader.java:60)
+	at org.rtklib.java.RinexConversionTest.parseRinexNav(RinexConversionTest.java:507)
+	at org.rtklib.java.RinexConversionTest.testCompareNavWithRtklibC(RinexConversionTest.java:374)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+

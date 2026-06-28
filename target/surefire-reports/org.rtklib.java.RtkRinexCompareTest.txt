@@ -1,4 +1,10 @@
 -------------------------------------------------------------------------------
 Test set: org.rtklib.java.RtkRinexCompareTest
 -------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.244 s -- in org.rtklib.java.RtkRinexCompareTest
+Tests run: 1, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.074 s <<< FAILURE! -- in org.rtklib.java.RtkRinexCompareTest
+org.rtklib.java.RtkRinexCompareTest -- Time elapsed: 0.074 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: 应成功解析 rover OBS ==> expected: <true> but was: <false>
+	at org.rtklib.java.RtkRinexCompareTest.loadRinexData(RtkRinexCompareTest.java:57)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+

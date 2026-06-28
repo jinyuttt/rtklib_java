@@ -1,0 +1,52 @@
+3 postpos : ti=0 tu=0 n=3 outfile=D:/code/rtklib_java/540423494727/2026-06-08\rtk_c_trace5.pos
+3 openses :
+3 execses_b: n=3 outfile=D:/code/rtklib_java/540423494727/2026-06-08\rtk_c_trace5.pos
+2 readpreceph: n=3
+3 readpephs: file=D:/code/rtklib_java/temp_rinex\ROVER.obs
+3 expath  : path=D:/code/rtklib_java/temp_rinex\ROVER.obs nmax=1024
+3 expath  : file=D:/code/rtklib_java/temp_rinex\ROVER.obs
+3 readpephs: file=D:/code/rtklib_java/temp_rinex\base.obs
+3 expath  : path=D:/code/rtklib_java/temp_rinex\base.obs nmax=1024
+3 expath  : file=D:/code/rtklib_java/temp_rinex\base.obs
+3 readpephs: file=D:/code/rtklib_java/temp_rinex\ROVER.nav
+3 expath  : path=D:/code/rtklib_java/temp_rinex\ROVER.nav nmax=1024
+3 expath  : file=D:/code/rtklib_java/temp_rinex\ROVER.nav
+3 readrnxc: file=D:/code/rtklib_java/temp_rinex\ROVER.obs
+3 expath  : path=D:/code/rtklib_java/temp_rinex\ROVER.obs nmax=1024
+3 expath  : file=D:/code/rtklib_java/temp_rinex\ROVER.obs
+3 readrnxfile: file=D:/code/rtklib_java/temp_rinex\ROVER.obs flag=1 index=0
+3 rtk_uncompress: file=D:/code/rtklib_java/temp_rinex\ROVER.obs
+3 rtk_uncompress: stat=0
+3 readrnxfp: flag=1 index=0
+3 readrnxh:
+3 readrnxc: file=D:/code/rtklib_java/temp_rinex\base.obs
+3 expath  : path=D:/code/rtklib_java/temp_rinex\base.obs nmax=1024
+3 expath  : file=D:/code/rtklib_java/temp_rinex\base.obs
+3 readrnxfile: file=D:/code/rtklib_java/temp_rinex\base.obs flag=1 index=0
+3 rtk_uncompress: file=D:/code/rtklib_java/temp_rinex\base.obs
+3 rtk_uncompress: stat=0
+3 readrnxfp: flag=1 index=0
+3 readrnxh:
+3 readrnxc: file=D:/code/rtklib_java/temp_rinex\ROVER.nav
+3 expath  : path=D:/code/rtklib_java/temp_rinex\ROVER.nav nmax=1024
+3 expath  : file=D:/code/rtklib_java/temp_rinex\ROVER.nav
+3 readrnxfile: file=D:/code/rtklib_java/temp_rinex\ROVER.nav flag=1 index=0
+3 rtk_uncompress: file=D:/code/rtklib_java/temp_rinex\ROVER.nav
+3 rtk_uncompress: stat=0
+3 readrnxfp: flag=1 index=0
+3 readrnxh:
+4 decode_navh:
+3 sbsreadmsg: file=D:/code/rtklib_java/temp_rinex\ROVER.obs sel=0
+3 sbsreadmsgt: file=D:/code/rtklib_java/temp_rinex\ROVER.obs sel=0
+3 expath  : path=D:/code/rtklib_java/temp_rinex\ROVER.obs nmax=1024
+3 expath  : file=D:/code/rtklib_java/temp_rinex\ROVER.obs
+3 sbsreadmsg: file=D:/code/rtklib_java/temp_rinex\base.obs sel=0
+3 sbsreadmsgt: file=D:/code/rtklib_java/temp_rinex\base.obs sel=0
+3 expath  : path=D:/code/rtklib_java/temp_rinex\base.obs nmax=1024
+3 expath  : file=D:/code/rtklib_java/temp_rinex\base.obs
+3 sbsreadmsg: file=D:/code/rtklib_java/temp_rinex\ROVER.nav sel=0
+3 sbsreadmsgt: file=D:/code/rtklib_java/temp_rinex\ROVER.nav sel=0
+3 expath  : path=D:/code/rtklib_java/temp_rinex\ROVER.nav nmax=1024
+3 expath  : file=D:/code/rtklib_java/temp_rinex\ROVER.nav
+3 execses_r: n=3 outfile=D:/code/rtklib_java/540423494727/2026-06-08\rtk_c_trace5.pos
+3 execses : n=3 outfile=D:/code/rtklib_java/540423494727/2026-06-08\rtk_c_trace5.pos
