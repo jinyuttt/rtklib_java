@@ -32,3 +32,5 @@ target/
 *.txt
 *.Log
 ".idea"
+.idea/
+*.iml
