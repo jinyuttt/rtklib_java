@@ -153,6 +153,10 @@ public final class PppCore {
 
         EphModel.satposs(obs[0].time, obs, n, nav, rs, dts, var, svh, opt.sateph);
 
+        if (opt.posopt[3] != 0) {
+            testeclipse(obs, n, nav, rs);
+        }
+
         PppTrace.tracePppUdstate(ctrl, cb, rtk.epoch, obs[0].time, rtk, nx);
 
         int maxnv = n * NF(opt) * 2 + Constants.MAXSAT + 3;
@@ -454,6 +458,8 @@ public final class PppCore {
             freq[i] = SatUtils.sat2freq(obs.sat, obs.code[i], nav);
             if (freq[i] == 0.0 || obs.L[i] == 0.0 || obs.P[i] == 0.0) continue;
 
+            if (RtklibCommon.testsnr(0, i, azel[1], obs.SNR[i] * 0.25f, opt.snrmask) != 0) continue;
+
             L[i] = obs.L[i] * Constants.CLIGHT / freq[i] - dants[i] - dantr[i] - phw * Constants.CLIGHT / freq[i];
             P[i] = obs.P[i] - dants[i] - dantr[i];
         }
@@ -463,6 +469,23 @@ public final class PppCore {
 
         double C1 = SQR(freq[0]) / (SQR(freq[0]) - SQR(freq[frq2]));
         double C2 = -SQR(freq[frq2]) / (SQR(freq[0]) - SQR(freq[frq2]));
+
+        if (opt.ionoopt != Constants.IONOOPT_IFLC && P[0] != 0.0) {
+            double gamma = SQR(freq[frq2] / freq[0]);
+            double P1_P2 = 0.0;
+            if (nav.cbias != null && obs.sat - 1 < nav.cbias.length &&
+                nav.cbias[obs.sat - 1] != null && nav.cbias[obs.sat - 1].length > 0 &&
+                nav.cbias[obs.sat - 1][0] != null && nav.cbias[obs.sat - 1][0].length > 0) {
+                P1_P2 = nav.cbias[obs.sat - 1][0][0];
+            }
+            if (P1_P2 == 0.0) {
+                int sys = SatUtils.satsys(obs.sat, null);
+                if ((sys & (Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_QZS)) != 0) {
+                    P1_P2 = (1.0 - gamma) * gettgd(obs.sat, nav);
+                }
+            }
+            P[0] -= P1_P2 / (1.0 - gamma);
+        }
 
         if (L[0] != 0.0 && L[frq2] != 0.0) Lc[0] = C1 * L[0] + C2 * L[frq2];
         if (P[0] != 0.0 && P[frq2] != 0.0) Pc[0] = C1 * P[0] + C2 * P[frq2];
@@ -492,6 +515,13 @@ public final class PppCore {
         }
 
         for (int i = 0; i < 3; i++) rr[i] = x[i];
+
+        if (opt.tidecorr != 0) {
+            double[] disp = new double[3];
+            tidedisp(TimeSystem.gpst2utc(obs[0].time), rr, opt.tidecorr, nav.erp, opt.odisp[0], disp);
+            for (int i = 0; i < 3; i++) rr[i] += disp[i];
+        }
+
         CoordTransform.ecef2pos(rr, pos);
 
         for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
@@ -795,6 +825,24 @@ public final class PppCore {
         return x * x;
     }
 
+    private static void tidedisp(GTime tutc, double[] rr, int opt, Erp erp,
+                                  double[][][] odisp, double[] dr) {
+        dr[0] = dr[1] = dr[2] = 0.0;
+        if (RtklibCommon.norm(rr, 3) <= 0.0) return;
+
+        if ((opt & 1) != 0) {
+            double[] erpv = new double[4];
+            if (Tides.geterp(erp, tutc, erpv) == 0) {
+                erpv[0] = erpv[1] = erpv[2] = erpv[3] = 0.0;
+            }
+            double[] rsun = new double[3], rmoon = new double[3];
+            Tides.sunmoonpos(tutc, erpv, rsun, rmoon, null);
+            double[] drt = new double[3];
+            Tides.dehanttideinel(tutc, rr, rsun, rmoon, drt);
+            for (int i = 0; i < 3; i++) dr[i] += drt[i];
+        }
+    }
+
     private static void windupcorr(GTime time, double[] rs, double[] rr, Ssat ssat) {
         double[] ek = new double[3], exs = new double[3], eys = new double[3], ezs = new double[3];
         double[] ess = new double[3], exr = new double[3], eyr = new double[3];
@@ -917,5 +965,38 @@ public final class PppCore {
 
         return (obs.L[0] * lam1 - obs.L[1] * lam2) -
                (freq1 * obs.P[0] + freq2 * obs.P[1]) / f1pf2;
+    }
+
+    private static void testeclipse(Obsd[] obs, int n, Nav nav, double[] rs) {
+        double[] rsun = new double[3], esun = new double[3], erpv = new double[5];
+        Tides.sunmoonpos(TimeSystem.gpst2utc(obs[0].time), erpv, rsun, null, null);
+        if (!CoordTransform.normv3(rsun, esun)) return;
+
+        for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
+            String type = nav.pcvs[obs[i].sat - 1].type;
+            double r = RtklibCommon.norm(new double[]{rs[i * 6], rs[i * 6 + 1], rs[i * 6 + 2]}, 3);
+            if (r <= 0.0) continue;
+
+            if (type != null && !type.isEmpty() && !type.contains("BLOCK IIA")) continue;
+
+            double[] rsi = new double[]{rs[i * 6], rs[i * 6 + 1], rs[i * 6 + 2]};
+            double cosa = CoordTransform.dot3(rsi, esun) / r;
+            if (cosa < -1.0) cosa = -1.0;
+            else if (cosa > 1.0) cosa = 1.0;
+            double ang = Math.acos(cosa);
+
+            if (ang < Constants.PI / 2.0 || r * Math.sin(ang) > Constants.RE_WGS84) continue;
+
+            for (int j = 0; j < 3; j++) rs[i * 6 + j] = 0.0;
+        }
+    }
+
+    private static double gettgd(int sat, Nav nav) {
+        if (nav.eph == null) return 0.0;
+        for (int i = 0; i < nav.eph.length; i++) {
+            if (nav.eph[i].sat != sat) continue;
+            return Constants.CLIGHT * nav.eph[i].tgd[0];
+        }
+        return 0.0;
     }
 }
