@@ -11,6 +11,7 @@ import org.rtklib.java.ephemeris.ClkReader;
 import org.rtklib.java.ephemeris.Sp3Reader;
 import org.rtklib.java.pntpos.PntPos;
 import org.rtklib.java.ppp.PppCore;
+import org.rtklib.java.ppp.PppProcessor;
 import org.rtklib.java.rinex.RinexParser;
 import org.rtklib.java.rinex.RinexPppProcessor;
 import org.rtklib.java.rinex.RtcmFileToRinexConverter;
@@ -20,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,6 +37,8 @@ public class PppTest {
     private static final String RTCM_BASE = BASE_DIR + "\\RTKLIB_EX_2.5.0\\base_0608.rtcm3";
     private static final String SP3_FILE = BASE_DIR + "\\RTKLIB-2.5.0\\test\\data\\sp3\\igs15904.sp3";
     private static final String CLK_FILE = BASE_DIR + "\\RTKLIB-2.5.0\\test\\data\\sp3\\igs15904.clk";
+    private static final String SP3_FILE_ALT = BASE_DIR + "\\RTKLIB_EX_2.5.0\\igs15904.sp3";
+    private static final String CLK_FILE_ALT = BASE_DIR + "\\RTKLIB_EX_2.5.0\\igs15904.clk";
 
     private static String roverObsFile;
     private static String roverNavFile;
@@ -90,23 +94,28 @@ public class PppTest {
     @Test
     @DisplayName("2. SP3 file reading")
     void testSp3Read() {
-        File f = new File(SP3_FILE);
-        log.info("SP3 file: {} exists={}", SP3_FILE, f.exists());
-        assumeTrue(f.exists(), "SP3 file not found: " + SP3_FILE);
+        String sp3Path = new File(SP3_FILE).exists() ? SP3_FILE : SP3_FILE_ALT;
+        File f = new File(sp3Path);
+        log.info("SP3 file: {} exists={}", sp3Path, f.exists());
+        assumeTrue(f.exists(), "SP3 file not found: " + sp3Path);
         Nav nav = new Nav();
-        Sp3Reader.readsp3(SP3_FILE, nav, 0);
-        log.info("SP3 loaded: ne={}", nav.ne);
+        Sp3Reader.readsp3(sp3Path, nav, 0);
+        log.info("SP3 loaded: ne={}, peph={}", nav.ne, nav.peph != null ? nav.peph.length : "null");
+        if (nav.ne > 0) {
+            log.info("First peph time: {}", nav.peph[0].time);
+        }
         assertTrue(nav.ne > 0, "Should have loaded SP3 ephemerides");
     }
 
     @Test
     @DisplayName("3. CLK file reading")
     void testClkRead() {
-        File f = new File(CLK_FILE);
-        log.info("CLK file: {} exists={}", CLK_FILE, f.exists());
-        assumeTrue(f.exists(), "CLK file not found: " + CLK_FILE);
+        String clkPath = new File(CLK_FILE).exists() ? CLK_FILE : CLK_FILE_ALT;
+        File f = new File(clkPath);
+        log.info("CLK file: {} exists={}", clkPath, f.exists());
+        assumeTrue(f.exists(), "CLK file not found: " + clkPath);
         Nav nav = new Nav();
-        ClkReader.readclk(CLK_FILE, nav);
+        ClkReader.readclk(clkPath, nav);
         log.info("CLK loaded: nc={}", nav.nc);
         assertTrue(nav.nc > 0, "Should have loaded CLK records");
     }
@@ -203,6 +212,44 @@ public class PppTest {
 
         String output = baos.toString();
         log.info("Output preview:\n{}", output.substring(0, Math.min(500, output.length())));
+    }
+
+    @Test
+    @DisplayName("6. PppProcessor with RTCM file")
+    @EnabledIf("filesExist")
+    void testPppProcessorWithRtcm() {
+        PrcOpt opt = PppProcessor.createDefaultOpt();
+        opt.navsys = Constants.SYS_CMP;
+        opt.sateph = Constants.EPHOPT_BRDC;
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PppProcessor processor = new PppProcessor(opt, null, baos);
+
+        try {
+            PppProcessor.PppResult result = processor.process(RTCM_ROVER);
+            log.info("PppProcessor RTCM: total={}, success={}, fail={}",
+                    result.totalEpochs, result.successCount, result.failCount);
+            assertTrue(result.totalEpochs > 0, "Should process epochs");
+        } catch (IOException e) {
+            fail("IO error: " + e.getMessage());
+        }
+    }
+
+    @Test
+    @DisplayName("7. PppProcessor with RINEX file")
+    @EnabledIf("filesExist")
+    void testPppProcessorWithRinex() {
+        PrcOpt opt = PppProcessor.createDefaultOpt();
+        opt.navsys = Constants.SYS_CMP;
+        opt.sateph = Constants.EPHOPT_BRDC;
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PppProcessor processor = new PppProcessor(opt, null, baos);
+
+        PppProcessor.PppResult result = processor.processRinex(roverObsFile, roverNavFile, null, null);
+        log.info("PppProcessor RINEX: total={}, success={}, fail={}",
+                result.totalEpochs, result.successCount, result.failCount);
+        assertTrue(result.totalEpochs > 0, "Should process epochs");
     }
 
     private static void assumeTrue(boolean condition, String message) {
