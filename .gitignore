@@ -35,3 +35,6 @@ target/
 .idea/
 *.iml
 target/
+RTKLIB_EX_2.5.0/
+RTKLIB_2.5.0/
+
