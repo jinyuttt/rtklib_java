@@ -37,7 +37,7 @@ public class SbsSat {
  * SBAS satellite correction parameter class.
  * Aligned with RTKLIB sbssatp_t structure.
  */
-class SbsSatP {
+public class SbsSatP {
     /** Satellite number */
     public int sat;
     
@@ -61,7 +61,7 @@ class SbsSatP {
  * SBAS fast correction class.
  * Aligned with RTKLIB sbsfcorr_t structure.
  */
-class SbsFCorr {
+public class SbsFCorr {
     /** Time of applicability (TOF) */
     public GTime t0;
     
@@ -101,7 +101,7 @@ class SbsFCorr {
  * SBAS long term satellite error correction class.
  * Aligned with RTKLIB sbslcorr_t structure.
  */
-class SbsLCorr {
+public class SbsLCorr {
     /** Correction time */
     public GTime t0;
     
