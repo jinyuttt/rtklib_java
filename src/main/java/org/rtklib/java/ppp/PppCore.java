@@ -7,6 +7,9 @@ import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
 import org.rtklib.java.ephemeris.EphModel;
 import org.rtklib.java.kalman.KalmanFilter;
+import org.rtklib.java.trace.PppTrace;
+import org.rtklib.java.trace.TraceCallback;
+import org.rtklib.java.trace.TraceControl;
 import org.rtklib.java.troposphere.TroposphereModel;
 
 public final class PppCore {
@@ -107,6 +110,9 @@ public final class PppCore {
     public static void pppos(Rtk rtk, Obsd[] obs, int n, Nav nav) {
         PrcOpt opt = rtk.opt;
         int nx = pppnx(opt);
+        TraceControl ctrl = rtk.traceControl;
+        TraceCallback cb = rtk.traceCallback;
+        rtk.epoch++;
 
         if (rtk.nx == 0 || rtk.nx != nx) {
             rtk.nx = nx;
@@ -137,7 +143,11 @@ public final class PppCore {
 
         udstate_ppp(rtk, obs, n, nav, nx);
 
+        PppTrace.tracePppInput(ctrl, cb, rtk.epoch, obs[0].time, obs, n, nav);
+
         EphModel.satposs(obs[0].time, obs, n, nav, rs, dts, var, svh, opt.sateph);
+
+        PppTrace.tracePppUdstate(ctrl, cb, rtk.epoch, obs[0].time, rtk, nx);
 
         int maxnv = n * NF(opt) * 2 + Constants.MAXSAT + 3;
         double[] xp = new double[nx];
@@ -153,9 +163,23 @@ public final class PppCore {
             System.arraycopy(rtk.P, 0, Pp, 0, nx * nx);
 
             int nv = pppRes(0, obs, n, rs, dts, var, svh, exc, nav, xp, rtk, v, H, R, azel, nx);
+
+            if (iter == 0) {
+                PppTrace.tracePppSatPos(ctrl, cb, rtk.epoch, obs[0].time, obs, n, rs, dts, var, svh, azel, exc);
+            }
+
+            PppTrace.tracePppRes(ctrl, cb, rtk.epoch, obs[0].time, nv, v, R, nx, H, opt);
+
             if (nv == 0) break;
 
-            if (KalmanFilter.update(xp, Pp, H, v, R, nx, nv) != 0) break;
+            double[] xpPrev = new double[nx];
+            System.arraycopy(xp, 0, xpPrev, 0, nx);
+
+            int info = KalmanFilter.update(xp, Pp, H, v, R, nx, nv);
+
+            PppTrace.tracePppFilter(ctrl, cb, rtk.epoch, obs[0].time, info, xp, xpPrev, Pp, nx);
+
+            if (info != 0) break;
 
             if (pppRes(iter + 1, obs, n, rs, dts, var, svh, exc, nav, xp, rtk, null, null, null, azel, nx) != 0) {
                 System.arraycopy(xp, 0, rtk.x, 0, nx);
@@ -168,6 +192,8 @@ public final class PppCore {
         if (stat == Constants.SOLQ_PPP) {
             updateStat(rtk, obs, n, stat, nx);
         }
+
+        PppTrace.tracePppResult(ctrl, cb, rtk.epoch, obs[0].time, rtk.sol, MAX_ITER);
     }
 
     private static void udstate_ppp(Rtk rtk, Obsd[] obs, int n, Nav nav, int nx) {

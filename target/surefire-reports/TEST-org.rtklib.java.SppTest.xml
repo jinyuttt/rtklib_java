@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="org.rtklib.java.SppTest" time="0.001" tests="1" errors="1" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="org.rtklib.java.SppTest" time="0.078" tests="1" errors="1" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="21"/>
     <property name="sun.cpu.isalist" value="amd64"/>
@@ -15,9 +15,9 @@
     <property name="sun.java.launcher" value="SUN_STANDARD"/>
     <property name="user.country" value="CN"/>
     <property name="sun.boot.library.path" value="C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot\bin"/>
-    <property name="sun.java.command" value="C:\Users\Admin\AppData\Local\Temp\surefire7846532405805196978\surefirebooter-20260628193704329_3.jar C:\Users\Admin\AppData\Local\Temp\surefire7846532405805196978 2026-06-28T19-37-04_179-jvmRun1 surefire-20260628193704329_1tmp surefire_0-20260628193704329_2tmp"/>
+    <property name="sun.java.command" value="C:\Users\Admin\AppData\Local\Temp\surefire1574367950269970098\surefirebooter-20260628195617248_3.jar C:\Users\Admin\AppData\Local\Temp\surefire1574367950269970098 2026-06-28T19-56-17_112-jvmRun1 surefire-20260628195617248_1tmp surefire_0-20260628195617248_2tmp"/>
     <property name="jdk.debug" value="release"/>
-    <property name="test" value="RinexConversionTest,RinexSppTest,SppProcessorTest,SppTest"/>
+    <property name="test" value="SppTest"/>
     <property name="surefire.test.class.path" value="D:\code\rtklib_java\target\test-classes;D:\code\rtklib_java\target\classes;D:\pro\repo\org\ejml\ejml-simple\0.43.1\ejml-simple-0.43.1.jar;D:\pro\repo\org\ejml\ejml-core\0.43.1\ejml-core-0.43.1.jar;D:\pro\repo\org\ejml\ejml-fdense\0.43.1\ejml-fdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-ddense\0.43.1\ejml-ddense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-cdense\0.43.1\ejml-cdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-zdense\0.43.1\ejml-zdense-0.43.1.jar;D:\pro\repo\org\ejml\ejml-dsparse\0.43.1\ejml-dsparse-0.43.1.jar;D:\pro\repo\org\ejml\ejml-fsparse\0.43.1\ejml-fsparse-0.43.1.jar;D:\pro\repo\org\slf4j\slf4j-api\2.0.9\slf4j-api-2.0.9.jar;D:\pro\repo\ch\qos\logback\logback-classic\1.4.14\logback-classic-1.4.14.jar;D:\pro\repo\ch\qos\logback\logback-core\1.4.14\logback-core-1.4.14.jar;D:\pro\repo\org\junit\jupiter\junit-jupiter\5.10.1\junit-jupiter-5.10.1.jar;D:\pro\repo\org\junit\jupiter\junit-jupiter-api\5.10.1\junit-jupiter-api-5.10.1.jar;D:\pro\repo\org\opentest4j\opentest4j\1.3.0\opentest4j-1.3.0.jar;D:\pro\repo\org\junit\platform\junit-platform-commons\1.10.1\junit-platform-commons-1.10.1.jar;D:\pro\repo\org\apiguardian\apiguardian-api\1.1.2\apiguardian-api-1.1.2.jar;D:\pro\repo\org\junit\jupiter\junit-jupiter-params\5.10.1\junit-jupiter-params-5.10.1.jar;D:\pro\repo\org\junit\jupiter\junit-jupiter-engine\5.10.1\junit-jupiter-engine-5.10.1.jar;D:\pro\repo\org\junit\platform\junit-platform-engine\1.10.1\junit-platform-engine-1.10.1.jar;"/>
     <property name="sun.cpu.endian" value="little"/>
     <property name="user.home" value="C:\Users\Admin"/>
@@ -31,7 +31,7 @@
     <property name="line.separator" value="&#10;"/>
     <property name="java.vm.specification.vendor" value="Oracle Corporation"/>
     <property name="java.specification.name" value="Java Platform API Specification"/>
-    <property name="surefire.real.class.path" value="C:\Users\Admin\AppData\Local\Temp\surefire7846532405805196978\surefirebooter-20260628193704329_3.jar"/>
+    <property name="surefire.real.class.path" value="C:\Users\Admin\AppData\Local\Temp\surefire1574367950269970098\surefirebooter-20260628195617248_3.jar"/>
     <property name="user.script" value=""/>
     <property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
     <property name="java.runtime.version" value="21.0.8+9-LTS"/>
@@ -61,7 +61,7 @@
     <property name="sun.io.unicode.encoding" value="UnicodeLittle"/>
     <property name="java.class.version" value="65.0"/>
   </properties>
-  <testcase name="" classname="org.rtklib.java.SppTest" time="0.001">
+  <testcase name="" classname="org.rtklib.java.SppTest" time="0.078">
     <error message="C:\Users\jinyu\Desktop\540423494727\2026-06-08\1.rtcm3 (系统找不到指定的路径。)" type="java.io.FileNotFoundException"><![CDATA[java.io.FileNotFoundException: C:\Users\jinyu\Desktop\540423494727\2026-06-08\1.rtcm3 (系统找不到指定的路径。)
 	at java.base/java.io.FileInputStream.open0(Native Method)
 	at java.base/java.io.FileInputStream.open(FileInputStream.java:213)

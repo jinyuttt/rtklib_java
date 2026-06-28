@@ -3,6 +3,7 @@ org\rtklib\java\rtkpos\RtkCore.class
 org\rtklib\java\data\Ssat.class
 org\rtklib\java\rinex\RinexPppProcessor$PppResult.class
 org\rtklib\java\rinex\RinexParser.class
+org\rtklib\java\trace\PppTrace.class
 org\rtklib\java\ephemeris\Sp3Reader.class
 org\rtklib\java\rtcm\Rtcm.class
 org\rtklib\java\rinex\RtcmFileToRinexConverter.class
