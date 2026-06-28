@@ -6,7 +6,10 @@ import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
 import org.rtklib.java.ephemeris.EphModel;
+import org.rtklib.java.ionosphere.IonosphereModel;
 import org.rtklib.java.kalman.KalmanFilter;
+import org.rtklib.java.rtkpos.Tides;
+import org.rtklib.java.time.TimeSystem;
 import org.rtklib.java.trace.PppTrace;
 import org.rtklib.java.trace.TraceCallback;
 import org.rtklib.java.trace.TraceControl;
@@ -29,6 +32,9 @@ public final class PppCore {
     private static final double VAR_GLO_IFB = 0.6 * 0.6;
 
     private static final double ERR_SAAS = 0.3;
+    private static final double ERR_BRDCI = 0.5;
+    private static final double ERR_CBIAS = 0.3;
+    private static final double VAR_IONO_OFF = 30.0 * 30.0;
     private static final double REL_HUMI = 0.7;
 
     private static final double EFACT_GPS = 1.0;
@@ -330,6 +336,7 @@ public final class PppCore {
 
         detslpLl(rtk, obs, n);
         detslpGf(rtk, obs, n, nav);
+        detslpMw(rtk, obs, n, nav);
 
         for (int f = 0; f < NF(opt); f++) {
             for (int i = 0; i < Constants.MAXSAT; i++) {
@@ -476,6 +483,7 @@ public final class PppCore {
         double[] Pc = new double[1];
         double[] dantr = new double[Constants.NFREQ];
         double[] dants = new double[Constants.NFREQ];
+        double[] dion_vari = new double[2];
         double[] varr = new double[n * 2 * NF(opt)];
         int nv = 0;
 
@@ -525,9 +533,21 @@ public final class PppCore {
 
             double dion = 0.0;
             double vari = 0.0;
-            modelIono(obs[i].time, pos, azelI, opt, sat, x, nav);
+            if (!modelIono(obs[i].time, pos, azelI, opt, sat, x, nav, dion_vari)) continue;
+            dion = dion_vari[0];
+            vari = dion_vari[1];
 
             for (int j = 0; j < Constants.NFREQ; j++) dantr[j] = dants[j] = 0.0;
+
+            if (opt.posopt[0] != 0) {
+                satantpcv(rsi, rr, nav.pcvs[sat - 1], dants);
+            }
+
+            antmodel(opt.pcvr[0], opt.antdel[0], azelI, opt.posopt[1], dantr);
+
+            if (opt.posopt[2] != 0) {
+                windupcorr(rtk.sol.time, rsi, rr, rtk.ssat[sat - 1]);
+            }
 
             double phw = rtk.ssat[sat - 1].phw;
             corrMeas(obs[i], nav, azelI, opt, dantr, dants, phw, L, P_arr, Lc, Pc);
@@ -667,8 +687,37 @@ public final class PppCore {
         dtdx[0] = mH * zhd + mW * (x[0] - zhd);
     }
 
-    private static void modelIono(GTime time, double[] pos, double[] azel,
-                                  PrcOpt opt, int sat, double[] x, Nav nav) {
+    private static boolean modelIono(GTime time, double[] pos, double[] azel,
+                                     PrcOpt opt, int sat, double[] x, Nav nav,
+                                     double[] out) {
+        out[0] = 0.0;
+        out[1] = 0.0;
+
+        if (opt.ionoopt == Constants.IONOOPT_BRDC) {
+            double[] ionOut = new double[2];
+            IonosphereModel.ionocorr(time, nav, sat, pos, azel, opt.ionoopt, ionOut);
+            out[0] = ionOut[0];
+            out[1] = ionOut[1];
+            return true;
+        }
+        if (opt.ionoopt == Constants.IONOOPT_SBAS) {
+            double[] ionOut = new double[2];
+            IonosphereModel.ionocorr(time, nav, sat, pos, azel, opt.ionoopt, ionOut);
+            out[0] = ionOut[0];
+            out[1] = ionOut[1];
+            return true;
+        }
+        if (opt.ionoopt == Constants.IONOOPT_EST) {
+            int idx = II(sat, opt);
+            out[0] = x[idx];
+            out[1] = 0.0;
+            return true;
+        }
+        if (opt.ionoopt == Constants.IONOOPT_IFLC) {
+            return true;
+        }
+        out[1] = VAR_IONO_OFF;
+        return true;
     }
 
     private static double ionmapf(double[] pos, double[] azel) {
@@ -744,5 +793,129 @@ public final class PppCore {
 
     private static double SQR(double x) {
         return x * x;
+    }
+
+    private static void windupcorr(GTime time, double[] rs, double[] rr, Ssat ssat) {
+        double[] ek = new double[3], exs = new double[3], eys = new double[3], ezs = new double[3];
+        double[] ess = new double[3], exr = new double[3], eyr = new double[3];
+        double[] eks = new double[3], ekr = new double[3], E = new double[9];
+        double[] dr = new double[3], ds = new double[3], drs = new double[3];
+        double[] r = new double[3], pos = new double[3], rsun = new double[3];
+        double[] erpv = new double[5];
+
+        Tides.sunmoonpos(TimeSystem.gpst2utc(time), erpv, rsun, null, null);
+
+        for (int i = 0; i < 3; i++) r[i] = rr[i] - rs[i];
+        if (!CoordTransform.normv3(r, ek)) return;
+
+        for (int i = 0; i < 3; i++) r[i] = -rs[i];
+        if (!CoordTransform.normv3(r, ezs)) return;
+        for (int i = 0; i < 3; i++) r[i] = rsun[i] - rs[i];
+        if (!CoordTransform.normv3(r, ess)) return;
+        CoordTransform.cross3(ezs, ess, r);
+        if (!CoordTransform.normv3(r, eys)) return;
+        CoordTransform.cross3(eys, ezs, exs);
+
+        CoordTransform.ecef2pos(rr, pos);
+        CoordTransform.xyz2enu(pos, E);
+        exr[0] = E[3]; exr[1] = E[4]; exr[2] = E[5];
+        eyr[0] = -E[0]; eyr[1] = -E[1]; eyr[2] = -E[2];
+
+        CoordTransform.cross3(ek, eys, eks);
+        CoordTransform.cross3(ek, eyr, ekr);
+        for (int i = 0; i < 3; i++) {
+            ds[i] = exs[i] - ek[i] * CoordTransform.dot3(ek, exs) - eks[i];
+            dr[i] = exr[i] - ek[i] * CoordTransform.dot3(ek, exr) + ekr[i];
+        }
+        double cosp = CoordTransform.dot3(ds, dr) / CoordTransform.norm3(ds) / CoordTransform.norm3(dr);
+        if (cosp < -1.0) cosp = -1.0;
+        else if (cosp > 1.0) cosp = 1.0;
+        double ph = Math.acos(cosp) / 2.0 / Math.PI;
+        CoordTransform.cross3(ds, dr, drs);
+        if (CoordTransform.dot3(ek, drs) < 0.0) ph = -ph;
+
+        ssat.phw = ph + Math.floor(ssat.phw - ph + 0.5);
+    }
+
+    private static void satantpcv(double[] rs, double[] rr, Pcv pcv, double[] dant) {
+        double[] ru = new double[3], rz = new double[3], eu = new double[3], ez = new double[3];
+        for (int i = 0; i < 3; i++) {
+            ru[i] = rr[i] - rs[i];
+            rz[i] = -rs[i];
+        }
+        if (!CoordTransform.normv3(ru, eu) || !CoordTransform.normv3(rz, ez)) return;
+
+        double cosa = CoordTransform.dot3(eu, ez);
+        if (cosa < -1.0) cosa = -1.0;
+        else if (cosa > 1.0) cosa = 1.0;
+        double nadir = Math.acos(cosa);
+
+        antmodelS(pcv, nadir, dant);
+    }
+
+    private static void antmodelS(Pcv pcv, double nadir, double[] dant) {
+        for (int i = 0; i < Constants.NFREQ; i++) {
+            dant[i] = interpvar(nadir * Constants.R2D * 5.0, pcv.var[i]);
+        }
+    }
+
+    private static double interpvar(double eldeg, double[] var) {
+        if (var == null) return 0.0;
+        double a = eldeg / 5.0;
+        int i = (int) a;
+        if (i < 0) i = 0;
+        if (i >= var.length - 1) return var[var.length - 1];
+        double t = a - i;
+        return var[i] * (1.0 - t) + var[i + 1] * t;
+    }
+
+    private static void antmodel(Pcv pcv, double[] del, double[] azel, int opt, double[] dant) {
+        double cosel = Math.cos(azel[1]);
+        double sinel = Math.sin(azel[1]);
+        double[] ev = new double[]{Math.sin(azel[0]) * cosel, Math.cos(azel[0]) * cosel, sinel};
+
+        for (int i = 0; i < Constants.NFREQ; i++) {
+            double[] off = new double[3];
+            for (int j = 0; j < 3; j++) off[j] = pcv.off[i][j] + del[j];
+
+            double dot = off[0] * ev[0] + off[1] * ev[1] + off[2] * ev[2];
+            double pcvar = 0.0;
+            if (opt != 0) {
+                double eldeg = 90.0 - azel[1] * Constants.R2D;
+                pcvar = interpvar(eldeg, pcv.var[i]);
+            }
+            dant[i] = -dot + pcvar;
+        }
+    }
+
+    private static void detslpMw(Rtk rtk, Obsd[] obs, int n, Nav nav) {
+        for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
+            double mw = mwmeas(obs[i], nav);
+            if (mw == 0.0) continue;
+
+            double mw0 = rtk.ssat[obs[i].sat - 1].mw[0];
+            rtk.ssat[obs[i].sat - 1].mw[0] = mw;
+
+            if (mw0 != 0.0 && Math.abs(mw - mw0) > rtk.opt.thresslip) {
+                for (int j = 0; j < rtk.opt.nf; j++) {
+                    rtk.ssat[obs[i].sat - 1].slip[j] |= 1;
+                }
+            }
+        }
+    }
+
+    private static double mwmeas(Obsd obs, Nav nav) {
+        double freq1 = SatUtils.sat2freq(obs.sat, obs.code[0], nav);
+        double freq2 = SatUtils.sat2freq(obs.sat, obs.code[1], nav);
+        if (freq1 == 0.0 || freq2 == 0.0 || obs.L[0] == 0.0 || obs.L[1] == 0.0 ||
+            obs.P[0] == 0.0 || obs.P[1] == 0.0) return 0.0;
+
+        double lam1 = Constants.CLIGHT / freq1;
+        double lam2 = Constants.CLIGHT / freq2;
+        double f1f2 = freq1 - freq2;
+        double f1pf2 = freq1 + freq2;
+
+        return (obs.L[0] * lam1 - obs.L[1] * lam2) -
+               (freq1 * obs.P[0] + freq2 * obs.P[1]) / f1pf2;
     }
 }
