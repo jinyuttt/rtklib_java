@@ -71,6 +71,7 @@ D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkPos.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkProcessor.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\Tides.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\time\TimeSystem.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\trace\PppTrace.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\trace\RtkTrace.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\trace\TraceCallback.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\trace\TraceControl.java
