@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="6f762b44-3fe4-4566-a361-4d7e03803192" name="更改" comment="rtk">
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-org.rtklib.java.PppTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-org.rtklib.java.PppTest.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/org.rtklib.java.PppTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/org.rtklib.java.PppTest.txt" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Class" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;jinyurrr&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/jinyuttt/rtklib_java.git&quot;,
+    &quot;accountId&quot;: &quot;f93dea81-7281-4550-a1d6-9cddc54d3a5b&quot;
+  }
+}</component>
+  <component name="MavenImportPreferences">
+    <option name="generalSettings">
+      <MavenGeneralSettings>
+        <option name="customMavenHome" value="D:\pro\apache-maven-3.9.11" />
+        <option name="mavenHomeTypeForPersistence" value="CUSTOM" />
+        <option name="userSettingsFile" value="D:\pro\apache-maven-3.9.11\conf\settings.xml" />
+      </MavenGeneralSettings>
+    </option>
+  </component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2
+}</component>
+  <component name="ProjectId" id="3FbqJbFGD6Gj1FXhuHQF8AgVzaF" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "JUnit.RinexConversionTest.executor": "Debug",
+    "JUnit.RinexConversionTest.testBaseRtcmToRinex.executor": "Debug",
+    "JUnit.RinexConversionTest.testRoverRtcmToRinex.executor": "Run",
+    "JUnit.RinexConversionTest.testRtcmDataExtraction.executor": "Debug",
+    "JUnit.RinexConversionTest.testRtcmToRinex211.executor": "Debug",
+    "JUnit.RinexDebugTest.testHeaderLine.executor": "Debug",
+    "JUnit.RinexDiagTest.executor": "Debug",
+    "JUnit.RinexSppTest.testDualStationRinex.executor": "Debug",
+    "JUnit.RinexSppTest.testRinexSppPositioning.executor": "Debug",
+    "JUnit.RtcmCallbackDecoderTest.testRtcmCallbackDecoderTimeCorrection.executor": "Debug",
+    "JUnit.RtcmParserTest.executor": "Debug",
+    "JUnit.RtcmParserTest.testRoverRtcmParsing.executor": "Debug",
+    "JUnit.RtcmParserTest.testRtcmParsingWithResultFile.executor": "Debug",
+    "JUnit.RtkTest.executor": "Debug",
+    "JUnit.SppTest.executor": "Debug",
+    "JUnit.SppTest.testSppPositioning.executor": "Debug",
+    "Maven.rtklib-java [clean].executor": "Run",
+    "Maven.rtklib-java [compile].executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "D:/code/rtklib_java/old",
+    "project.structure.last.edited": "项目",
+    "project.structure.proportion": "0.0",
+    "project.structure.side.proportion": "0.0",
+    "settings.editor.selected.configurable": "preferences.pluginManager"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="D:\code\rtklib_java\old" />
+      <recent name="D:\code\rtklib_java\atx" />
+      <recent name="D:\code\rtklib_java" />
+    </key>
+  </component>
+  <component name="RunManager" selected="JUnit.RtkTest">
+    <configuration name="RinexConversionTest" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+      <module name="rtklib-java" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="org.rtklib.java.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <option name="PACKAGE_NAME" value="org.rtklib.java" />
+      <option name="MAIN_CLASS_NAME" value="org.rtklib.java.RinexConversionTest" />
+      <option name="TEST_OBJECT" value="class" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="RinexConversionTest.testBaseRtcmToRinex" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+      <module name="rtklib-java" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="org.rtklib.java.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <option name="PACKAGE_NAME" value="org.rtklib.java" />
+      <option name="MAIN_CLASS_NAME" value="org.rtklib.java.RinexConversionTest" />
+      <option name="METHOD_NAME" value="testBaseRtcmToRinex(java.nio.file.Path)" />
+      <option name="TEST_OBJECT" value="method" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="RinexDiagTest" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+      <module name="rtklib-java" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="org.rtklib.java.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <option name="PACKAGE_NAME" value="org.rtklib.java" />
+      <option name="MAIN_CLASS_NAME" value="org.rtklib.java.RinexDiagTest" />
+      <option name="TEST_OBJECT" value="class" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="RinexSppTest.testDualStationRinex" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+      <module name="rtklib-java" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="org.rtklib.java.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <option name="PACKAGE_NAME" value="org.rtklib.java" />
+      <option name="MAIN_CLASS_NAME" value="org.rtklib.java.RinexSppTest" />
+      <option name="METHOD_NAME" value="testDualStationRinex(java.nio.file.Path)" />
+      <option name="TEST_OBJECT" value="method" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="RtkTest" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+      <module name="rtklib-java" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="org.rtklib.java.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <option name="PACKAGE_NAME" value="org.rtklib.java" />
+      <option name="MAIN_CLASS_NAME" value="org.rtklib.java.RtkTest" />
+      <option name="TEST_OBJECT" value="class" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="JUnit.RtkTest" />
+        <item itemvalue="JUnit.RinexSppTest.testDualStationRinex" />
+        <item itemvalue="JUnit.RinexDiagTest" />
+        <item itemvalue="JUnit.RinexConversionTest" />
+        <item itemvalue="JUnit.RinexConversionTest.testBaseRtcmToRinex" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-30f59d01ecdd-2fc7cc6b9a17-intellij.indexing.shared.core-IU-253.31033.145" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="默认任务">
+      <changelist id="6f762b44-3fe4-4566-a361-4d7e03803192" name="更改" comment="" />
+      <created>1782354045584</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1782354045584</updated>
+    </task>
+    <task id="LOCAL-00001" summary="rtk">
+      <option name="closed" value="true" />
+      <created>1782564406790</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1782564406790</updated>
+    </task>
+    <task id="LOCAL-00002" summary="rtk">
+      <option name="closed" value="true" />
+      <created>1782569337120</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1782569337120</updated>
+    </task>
+    <task id="LOCAL-00003" summary="rtk">
+      <option name="closed" value="true" />
+      <created>1782571711085</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1782571711085</updated>
+    </task>
+    <task id="LOCAL-00004" summary="rtk">
+      <option name="closed" value="true" />
+      <created>1782575200776</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1782575200776</updated>
+    </task>
+    <task id="LOCAL-00005" summary="rtk">
+      <option name="closed" value="true" />
+      <created>1782577144680</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1782577144680</updated>
+    </task>
+    <task id="LOCAL-00006" summary="rtk">
+      <option name="closed" value="true" />
+      <created>1782585228538</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1782585228538</updated>
+    </task>
+    <task id="LOCAL-00007" summary="rtk">
+      <option name="closed" value="true" />
+      <created>1782585729116</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1782585729116</updated>
+    </task>
+    <task id="LOCAL-00008" summary="rtk">
+      <option name="closed" value="true" />
+      <created>1782623874992</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1782623874992</updated>
+    </task>
+    <task id="LOCAL-00009" summary="rtk">
+      <option name="closed" value="true" />
+      <created>1782625912435</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1782625912435</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
+    <servers />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="rtk" />
+    <option name="LAST_COMMIT_MESSAGE" value="rtk" />
+  </component>
+</project>
