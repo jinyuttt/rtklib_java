@@ -126,7 +126,16 @@ public final class RtkCore {
 GTime prevTime = new GTime(rtk.sol.time);
 
         if (rtk.P[0] == 0.0 || rtk.P[0] > STD_PREC_VAR_THRESH) {
-            if (PntPos.pntpos(obs, nu, nav, opt, rtk.sol, null, rtk.ssat) == 0) {
+            int pntResult = PntPos.pntpos(obs, nu, nav, opt, rtk.sol, null, rtk.ssat);
+            LOG.debug("rtkpos pntpos result={} nu={}", pntResult, nu);
+            if (pntResult == 1) {
+                int vsCount = 0;
+                for (int ii = 0; ii < Constants.MAXSAT; ii++) {
+                    if (rtk.ssat[ii].vs != 0) vsCount++;
+                }
+                LOG.debug("rtkpos after pntpos: vsCount={}", vsCount);
+            }
+            if (pntResult == 0) {
                 if (opt.dynamics == 0) return 0;
             }
         } else {
