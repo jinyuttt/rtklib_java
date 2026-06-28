@@ -32,7 +32,7 @@ public class SppTest {
     private static final Logger log = LoggerFactory.getLogger(SppTest.class);
 
     private static final String ROVER_PATH =
-            "C:\\Users\\jinyu\\Desktop\\540423494727\\2026-06-08\\1.rtcm3";
+            "C:\\Users\\admin\\Desktop\\540423494727\\2026-06-08\\1.rtcm3";
 
     private static final String RESULT_DIR = "C:\\Users\\admin\\Desktop\\rtklib_java_results";
 
