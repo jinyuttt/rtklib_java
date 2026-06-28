@@ -1,8 +1,8 @@
 -------------------------------------------------------------------------------
 Test set: org.rtklib.java.SppTest
 -------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.078 s <<< FAILURE! -- in org.rtklib.java.SppTest
-org.rtklib.java.SppTest -- Time elapsed: 0.078 s <<< ERROR!
+Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.002 s <<< FAILURE! -- in org.rtklib.java.SppTest
+org.rtklib.java.SppTest -- Time elapsed: 0.002 s <<< ERROR!
 java.io.FileNotFoundException: C:\Users\jinyu\Desktop\540423494727\2026-06-08\1.rtcm3 (系统找不到指定的路径。)
 	at java.base/java.io.FileInputStream.open0(Native Method)
 	at java.base/java.io.FileInputStream.open(FileInputStream.java:213)

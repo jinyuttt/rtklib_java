@@ -514,9 +514,12 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
             }
         }
         for (i = 3; i < 6; i++) rtk.sol.rr[i] = 0.0;
-        for (i = 0; i < 6; i++) {
-            rtk.sol.qr[i] = (float) Math.sqrt(Math.abs(rtk.P[i * nx + i]));
+        for (i = 0; i < 3; i++) {
+            rtk.sol.qr[i] = (float) rtk.P[i * nx + i];
         }
+        rtk.sol.qr[3] = (float) rtk.P[1];
+        rtk.sol.qr[4] = (float) rtk.P[2 * nx + 1];
+        rtk.sol.qr[5] = (float) rtk.P[2];
 
         for (i = 0; i < n; i++) {
             for (j = 0; j < nf; j++) {

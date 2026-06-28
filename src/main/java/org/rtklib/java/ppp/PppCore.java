@@ -552,8 +552,8 @@ public final class PppCore {
                 }
 
                 if (H != null) {
-                    for (int kk = 0; kk < nx; kk++) H[kk + nx * nv] = 0.0;
-                    for (int kk = 0; kk < 3; kk++) H[kk + nx * nv] = -e[kk];
+                    for (int kk = 0; kk < nx; kk++) H[nv * nx + kk] = 0.0;
+                    for (int kk = 0; kk < 3; kk++) H[nv * nx + kk] = -e[kk];
                 }
 
                 int k;
@@ -567,29 +567,29 @@ public final class PppCore {
                 double cdtr = x[IC(k, opt)];
 
                 if (H != null) {
-                    H[IC(k, opt) + nx * nv] = 1.0;
+                    H[nv * nx + IC(k, opt)] = 1.0;
                     if (opt.tropopt == Constants.TROPOPT_EST || opt.tropopt == Constants.TROPOPT_ESTG) {
                         int nt = opt.tropopt >= Constants.TROPOPT_ESTG ? 3 : 1;
                         for (int kk = 0; kk < nt; kk++) {
-                            H[IT(opt) + kk + nx * nv] = dtdx[kk];
+                            H[nv * nx + IT(opt) + kk] = dtdx[kk];
                         }
                     }
                 }
 
                 if (opt.ionoopt == Constants.IONOOPT_EST) {
                     if (x[II(sat, opt)] == 0.0) continue;
-                    if (H != null) H[II(sat, opt) + nx * nv] = C * ionmapf(pos, azelI);
+                    if (H != null) H[nv * nx + II(sat, opt)] = C * ionmapf(pos, azelI);
                 }
 
                 if (frq == 2 && code == 1) {
                     dcb = x[ID(opt)];
-                    if (H != null) H[ID(opt) + nx * nv] = 1.0;
+                    if (H != null) H[nv * nx + ID(opt)] = 1.0;
                 }
 
                 if (code == 0) {
                     bias = x[IB(sat, frq, opt)];
                     if (bias == 0.0) continue;
-                    if (H != null) H[IB(sat, frq, opt) + nx * nv] = 1.0;
+                    if (H != null) H[nv * nx + IB(sat, frq, opt)] = 1.0;
                 }
 
                 double res = y - (r + cdtr - Constants.CLIGHT * dts[i * 2] + dtrp + C * dion + dcb + bias);
@@ -615,8 +615,8 @@ public final class PppCore {
 
         if (R != null) {
             for (int j = 0; j < nv; j++) {
-                for (int i = 0; i < nv; i++) R[i + j * nv] = 0.0;
-                R[j + j * nv] = varr[j];
+                for (int i = 0; i < nv; i++) R[j * nv + i] = 0.0;
+                R[j * nv + j] = varr[j];
             }
         }
 
