@@ -645,7 +645,7 @@ public class RinexSppTest {
             for (int j = 0; j < nv; j++) {
                 double sig = Math.sqrt(var[j]);
                 v[j] /= sig;
-                for (int k = 0; k < NX; k++) H[k + j * NX] /= sig;
+                for (int k = 0; k < NX; k++) H[j * NX + k] /= sig;
             }
             if (RtklibCommon.lsq(H, v, NX, nv, dx, Q) != 0) break;
             for (int j = 0; j < NX; j++) x[j] += dx[j];

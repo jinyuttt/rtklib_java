@@ -339,7 +339,7 @@ public final class SppCore {
                 LOG.debug(String.format("SPP sat=%2d sys=%d P=%.3f r=%.3f dtr=%.6f dts=%.6f dion=%.3f dtrp=%.3f v=%.3f", sat, sys, P, r, dtr, dts[i * 2], dion, dtrp, v[nv]));
             }
             for (int j = 0; j < NX; j++) {
-                H[j + nv * NX] = (j < 3) ? -e[j] : (j == 3 ? 1.0 : 0.0);
+                H[nv * NX + j] = (j < 3) ? -e[j] : (j == 3 ? 1.0 : 0.0);
             }
             /* [DIFF-C] In C version, x[3] is GPS-specific clock bias. GPS satellites set
                mask[0]=1 via else branch, other systems set mask[si-3]=1. In Java version,
@@ -351,7 +351,7 @@ public final class SppCore {
             int si = sysIdx(sys, opt);
             if (si > 0) {
                 v[nv] -= x[si];
-                H[si + nv * NX] = 1.0;
+                H[nv * NX + si] = 1.0;
                 mask[si - 3] = 1;
             } else {
                 mask[0] = 1;
@@ -367,7 +367,7 @@ public final class SppCore {
         for (int i = 0; i < nClock; i++) {
             if (mask[i] != 0) continue;
             v[nv] = 0.0;
-            for (int j = 0; j < NX; j++) H[j + nv * NX] = (j == i + 3) ? 1.0 : 0.0;
+            for (int j = 0; j < NX; j++) H[nv * NX + j] = (j == i + 3) ? 1.0 : 0.0;
             var[nv++] = 0.01;
         }
         return nv;
@@ -401,7 +401,7 @@ public final class SppCore {
             for (int j = 0; j < nv; j++) {
                 double sig = Math.sqrt(var[j]);
                 v[j] /= sig;
-                for (int k = 0; k < NX; k++) H[k + j * NX] /= sig;
+                for (int k = 0; k < NX; k++) H[j * NX + k] /= sig;
             }
             if (RtklibCommon.lsq(H, v, NX, nv, dx, Q) != 0) {
                 msg[0] = "lsq error";
@@ -421,9 +421,9 @@ public final class SppCore {
                 if ((opt.navsys & Constants.SYS_CMP) != 0) sol.dtr[dtrIdx++] = x[sysIdx(Constants.SYS_CMP, opt)] / Constants.CLIGHT;
                 if ((opt.navsys & Constants.SYS_IRN) != 0) sol.dtr[dtrIdx++] = x[sysIdx(Constants.SYS_IRN, opt)] / Constants.CLIGHT;
                 for (int j = 0; j < 6; j++) sol.rr[j] = (j < 3) ? x[j] : 0.0;
-                for (int j = 0; j < 3; j++) sol.qr[j] = (float) Q[j + j * NX];
+                for (int j = 0; j < 3; j++) sol.qr[j] = (float) Q[j * NX + j];
                 sol.qr[3] = (float) Q[1];
-                sol.qr[4] = (float) Q[2 + NX];
+                sol.qr[4] = (float) Q[2 * NX + 1];
                 sol.qr[5] = (float) Q[2];
                 sol.ns = (byte) ns[0];
                 sol.age = sol.ratio = 0.0f;
