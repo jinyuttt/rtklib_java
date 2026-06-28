@@ -1,4 +1,19 @@
 -------------------------------------------------------------------------------
 Test set: org.rtklib.java.RinexSppTest
 -------------------------------------------------------------------------------
-Tests run: 5, Failures: 0, Errors: 0, Skipped: 1, Time elapsed: 2.090 s -- in org.rtklib.java.RinexSppTest
+Tests run: 5, Failures: 0, Errors: 1, Skipped: 1, Time elapsed: 0.476 s <<< FAILURE! -- in org.rtklib.java.RinexSppTest
+org.rtklib.java.RinexSppTest.testCompareSppWithRtklibC(Path) -- Time elapsed: 0.057 s <<< ERROR!
+java.io.IOException: Cannot run program "D:\code\rtklib_java\RTKLIB_EX_2.5.0\rnx2rtkp.exe": CreateProcess error=2, 系统找不到指定的文件。
+	at java.base/java.lang.ProcessBuilder.start(ProcessBuilder.java:1170)
+	at java.base/java.lang.ProcessBuilder.start(ProcessBuilder.java:1089)
+	at org.rtklib.java.RinexSppTest.testCompareSppWithRtklibC(RinexSppTest.java:456)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+Caused by: java.io.IOException: CreateProcess error=2, 系统找不到指定的文件。
+	at java.base/java.lang.ProcessImpl.create(Native Method)
+	at java.base/java.lang.ProcessImpl.<init>(ProcessImpl.java:506)
+	at java.base/java.lang.ProcessImpl.start(ProcessImpl.java:159)
+	at java.base/java.lang.ProcessBuilder.start(ProcessBuilder.java:1126)
+	... 5 more
+

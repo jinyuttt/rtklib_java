@@ -1,0 +1,564 @@
+
+GNSS RTK 追踪日志系统设计方案
+版本：1.0
+状态：定稿
+适用范围：Java RTK/PPP 解算库的追踪日志模块
+
+一、设计目标与范围
+1.1 核心目标
+当解算结果出现异常（如模糊度从3变成5、位置跳变、固定失败）时，能够完整还原每个历元从输入到输出的全过程，精准定位问题发生在哪个环节。
+
+1.2 设计原则
+原则	说明
+阶段固定	7阶段逻辑架构固定，所有历元走相同流程
+输出可配	通过位掩码控制阶段开启/关闭，默认全关
+库内构造	日志内容由库内部按规格构造，调用方只负责接收
+零阻塞	回调接口必须快速返回，不阻塞解算线程
+纯文本	所有输出为管道符分隔的键值对，便于解析
+1.3 范围边界
+库负责	调用方负责
+定义 TraceControl 参数结构	创建 TraceControl 对象并传入
+定义 TraceCallback 回调接口	实现 TraceCallback 接口
+算法执行中按阶段构造日志字符串	决定日志落地方式（文件/MQTT/队列）
+判断全局开关、阶段开关、采样控制	保证回调实现线程安全、非阻塞
+格式化数值（Locale.US）	日志文件的轮转、清理、归档
+异常时记录错误追踪	日志的采集、检索、展示
+二、整体架构
+2.1 7阶段时序图
+text
+历元开始
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段0：输入数据（原始观测 + 星历）                          │
+│ 职责：外部数据源校验，含流动站/基准站观测、星历、载噪比    │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段1：卫星位置、钟差与全量误差改正                        │
+│ 职责：解算卫星ECEF坐标，计算卫星钟差、对流层、电离层、PCV  │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段2：状态时间更新 & 先验状态                             │
+│ 职责：状态时序外推、周跳检测、粗差剔除、状态重置           │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段3：双差残差与设计矩阵（ddres）                         │
+│ 职责：构建双差观测方程，计算残差v、设计矩阵H、观测噪声R    │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段4：卡尔曼滤波更新（filter）                            │
+│ 职责：滤波观测更新，计算状态修正量dxp，输出浮点解          │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段5：模糊度固定（resamb_LAMBDA）                         │
+│ 职责：LAMBDA整数搜索、Ratio检验，输出固定模糊度与位置修正  │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 阶段6：结果输出                                            │
+│ 职责：汇总解状态、坐标、精度、统计量，单历元链路收尾       │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+  下一历元
+2.2 异常分支处理
+所有异常触发逻辑（周跳、粗差、重初始化）全部收口在阶段2，通过以下字段显性体现：
+
+字段	含义	溯源价值
+slip=1	该卫星发生周跳，模糊度在本阶段被重置	解释为何某卫星模糊度突变为初始值
+rejc>=2	该卫星粗差累计超限，触发状态重置	解释为何滤波器被强制重初始化
+global=1	全局状态重置	解释为何所有卫星模糊度同时变化
+溯源规则：若模糊度跳变，优先检查阶段2的 slip 和 reset 字段，区分“主动重置”和“滤波计算导致跳变”。
+
+三、参数接口定义
+3.1 TraceControl 结构
+java
+public class TraceControl {
+    // 全局总开关，false则所有阶段都不输出，不检查任何后续条件
+    public boolean enabled = false;
+
+    // 阶段位掩码，控制哪些阶段开启（仅在enabled=true时生效）
+    // 使用 STAGE_INPUT, STAGE_SATPOS, STAGE_UDSTATE, STAGE_DDRES, STAGE_FILTER, STAGE_LAMBDA, STAGE_RESULT
+    public int stages = 0;
+
+    // 内容标志位掩码，控制阶段内详细程度（仅在enabled=true时生效）
+    // 使用 CONTENT_RESIDUAL_ONLY, CONTENT_H_MATRIX, CONTENT_SUMMARY_ONLY
+    public int contentFlags = 0;
+
+    // 最多记录多少个历元，0=不限（仅在enabled=true时生效）
+    public int maxEpochs = 0;
+
+    // 采样间隔：1=每个历元都记，10=每10个历元记一次（仅在enabled=true时生效）
+    public int samplerate = 1;
+
+    // 只记录这些卫星的细节（PRN号数组），空=全部（仅在enabled=true时生效）
+    public int[] targetSats = new int[0];
+}
+3.2 位掩码常量定义
+阶段位掩码（stages字段）：
+
+java
+public static final int STAGE_INPUT   = 1 << 0;  // 阶段0
+public static final int STAGE_SATPOS  = 1 << 1;  // 阶段1
+public static final int STAGE_UDSTATE = 1 << 2;  // 阶段2
+public static final int STAGE_DDRES   = 1 << 3;  // 阶段3
+public static final int STAGE_FILTER  = 1 << 4;  // 阶段4
+public static final int STAGE_LAMBDA  = 1 << 5;  // 阶段5
+public static final int STAGE_RESULT  = 1 << 6;  // 阶段6
+内容标志位（contentFlags字段）：
+
+java
+public static final int CONTENT_RESIDUAL_ONLY = 1 << 0;  // 阶段3：只输出残差v，不输出H矩阵
+public static final int CONTENT_H_MATRIX      = 1 << 1;  // 阶段3：输出H矩阵
+public static final int CONTENT_SUMMARY_ONLY  = 1 << 2;  // 阶段2/5：只输出摘要，不输出全量
+3.3 TraceCallback 回调接口
+java
+public interface TraceCallback {
+    /**
+     * 接收追踪日志内容。
+     *
+     * 重要约束：
+     * 1. 此方法由解算线程同步调用，必须快速返回，不得执行阻塞I/O
+     * 2. 实现必须是线程安全的
+     * 3. 推荐实现方式：将内容放入BlockingQueue，由独立消费者线程异步落盘
+     *
+     * @param content 格式为 "TRACE|阶段标识|键1=值1|键2=值2|..." 的字符串
+     */
+    void onTrace(String content);
+}
+四、统一输出格式规范
+4.1 基本格式
+text
+TRACE|{phaseId}|gpst={gpst}|epoch={epoch}|{field1}={value1}|{field2}={value2}|...
+4.2 字段规范
+规则	说明
+分隔符	管道符 |
+键值对	key=value，等号前后无空格
+数值格式	必须使用 String.format(Locale.US, "%.xf", value)，禁止依赖系统默认Locale
+空值	输出 null 字符串，不省略字段
+数组	多个值用逗号分隔，如 pairs=G01-G03,G01-G05
+多行	同一阶段的多行输出，每行独立调用 onTrace()
+4.3 公共字段
+每个阶段输出的每一行都包含以下公共字段：
+
+字段	类型	说明
+gpst	double	GPS周秒（精度0.001s）
+epoch	int	历元序号（从0开始）
+五、逐阶段输出规格
+5.1 阶段0：输入数据
+触发条件：enabled=true 且 (stages & STAGE_INPUT) != 0
+
+阶段标识：STAGE0
+
+输出行1（阶段头）：
+
+text
+TRACE|STAGE0|gpst=123456.000|epoch=42|rover_ns=10|base_ns=10|common_ns=8|rover_valid=1|base_valid=1|eph_valid=1
+字段	类型	说明
+rover_ns	int	流动站观测卫星数
+base_ns	int	基准站观测卫星数
+common_ns	int	共视卫星数
+rover_valid	int	流动站数据有效（0/1）
+base_valid	int	基准站数据有效（0/1）
+eph_valid	int	星历有效（0/1）
+输出行2~N（每颗共视卫星一行）：
+
+text
+TRACE|STAGE0_SAT|gpst=123456.000|epoch=42|sat=G01|rover_L1=12345678.900|rover_P1=22345678.900|rover_SNR=45.0|base_L1=12345678.800|base_P1=22345678.800|base_SNR=44.0|el=45.2|az=120.5
+字段	类型	说明
+sat	string	卫星PRN（如G01、C19）
+rover_L1	double	流动站L1载波相位（米），保留3位
+rover_L2	double	流动站L2载波相位（米），无L2时填0.000
+rover_P1	double	流动站P1伪距（米），保留3位
+rover_P2	double	流动站P2伪距（米），无P2时填0.000
+rover_SNR	double	流动站信噪比（dB-Hz），保留1位
+base_L1	double	基准站L1载波相位（米），保留3位
+base_L2	double	基准站L2载波相位（米），无L2时填0.000
+base_P1	double	基准站P1伪距（米），保留3位
+base_P2	double	基准站P2伪距（米），无P2时填0.000
+base_SNR	double	基准站信噪比（dB-Hz），保留1位
+el	double	高度角（度），保留1位
+az	double	方位角（度），保留1位
+输出规则：
+
+只输出共视卫星（流动站和基准站同时可见的卫星）
+
+targetSats 不为空时，只输出指定的卫星
+
+基准站缺失的观测值填 0.000
+
+5.2 阶段1：卫星位置、钟差与全量误差改正
+触发条件：enabled=true 且 (stages & STAGE_SATPOS) != 0
+
+阶段标识：STAGE1
+
+输出行（每颗卫星一行）：
+
+text
+TRACE|STAGE1|gpst=123456.000|epoch=42|sat=G01|pos_x=12345678.900|pos_y=-2345678.900|pos_z=3456789.100|clock=-0.000123|trop=0.456|iono=0.234|geom_dist=24567890.123|pcv=0.001
+字段	类型	说明
+sat	string	卫星PRN
+pos_x	double	卫星ECEF X坐标（米），保留3位
+pos_y	double	卫星ECEF Y坐标（米），保留3位
+pos_z	double	卫星ECEF Z坐标（米），保留3位
+clock	double	卫星钟差改正（米），保留6位
+trop	double	对流层延迟改正（米），保留3位
+iono	double	电离层延迟改正（米），保留3位，单频/短基线填0.000
+geom_dist	double	卫星到接收机理论几何距离（米），保留3位
+pcv	double	天线相位中心改正（米），保留3位，无改正填0.000
+输出规则：
+
+只输出共视卫星（与阶段0卫星列表一致）
+
+所有改正数为已应用到观测值的改正量（非原始值）
+
+5.3 阶段2：状态时间更新 & 先验状态
+触发条件：enabled=true 且 (stages & STAGE_UDSTATE) != 0
+
+阶段标识：STAGE2
+
+输出行1（先验位置）：
+
+text
+TRACE|STAGE2|gpst=123456.000|epoch=42|pos_x=1234567.800|pos_y=-234567.900|pos_z=3456789.000
+字段	类型	说明
+pos_x	double	先验位置X（ECEF，米），保留3位
+pos_y	double	先验位置Y（ECEF，米），保留3位
+pos_z	double	先验位置Z（ECEF，米），保留3位
+输出行2~N（每颗卫星每个频率一行）：
+
+text
+TRACE|STAGE2_BIAS|gpst=123456.000|epoch=42|sat=G01|freq=0|bias=3.123|var=83.600|slip=0|rejc=0
+字段	类型	说明
+sat	string	卫星PRN
+freq	int	频率索引（0=L1，1=L2）
+bias	double	模糊度先验值（周），保留3位
+var	double	模糊度方差，保留3位
+slip	int	周跳标志（0=无，1=发生周跳）
+rejc	int	粗差累计计数
+输出行N+1（重置状态）：
+
+text
+TRACE|STAGE2_RESET|gpst=123456.000|epoch=42|global=0|partial=
+或（有重置时）：
+
+text
+TRACE|STAGE2_RESET|gpst=123456.000|epoch=42|global=0|partial=G03,G07
+字段	类型	说明
+global	int	全局重置标志（0=无，1=发生）
+partial	string	部分重置的卫星列表，逗号分隔，无重置时为空字符串
+输出规则：
+
+CONTENT_SUMMARY_ONLY 模式下，只输出 STAGE2 位置行，不输出逐卫星的 STAGE2_BIAS
+
+STAGE2_RESET 始终输出（即使无重置）
+
+溯源优先级：
+
+若某卫星 slip=1 → 该卫星模糊度在本阶段被重置 → 解释跳变
+
+若 global=1 → 全局状态重置 → 解释所有卫星同时跳变
+
+若 partial 非空 → 这些卫星被重置 → 解释部分卫星跳变
+
+5.4 阶段3：双差残差与设计矩阵
+触发条件：enabled=true 且 (stages & STAGE_DDRES) != 0
+
+阶段标识：STAGE3
+
+输出行1（阶段头）：
+
+text
+TRACE|STAGE3|gpst=123456.000|epoch=42|ref=G01|pairs=G01-G03,G01-G05,G01-G07|nv=6
+字段	类型	说明
+ref	string	参考星PRN
+pairs	string	双差卫星对列表（参考星-非参考星），逗号分隔
+nv	int	双差观测数
+输出行2（残差v）：
+
+text
+TRACE|STAGE3_V|gpst=123456.000|epoch=42|v0=0.123|v1=-0.456|v2=0.789|v3=-1.234|v4=0.567|v5=-0.891
+字段	类型	说明
+v0..vN	double	残差向量各元素（米），保留3位
+输出行3（观测噪声R对角线）：
+
+text
+TRACE|STAGE3_R|gpst=123456.000|epoch=42|r0=0.0001|r1=0.0001|r2=11.4500|r3=0.0001|r4=0.0001|r5=0.0001
+字段	类型	说明
+r0..rN	double	观测噪声方差对角线，保留4位
+输出行4~（H矩阵，仅在 CONTENT_H_MATRIX 开启时输出）：
+
+H矩阵位置列（3列 × nv行）：
+
+text
+TRACE|STAGE3_H_POS|gpst=123456.000|epoch=42|row0=0.234,-0.123,0.567|row1=-0.345,0.678,-0.234|row2=0.111,-0.222,0.333
+H矩阵模糊度列系数：
+
+text
+TRACE|STAGE3_H_BIAS|gpst=123456.000|epoch=42|G01=-1.000|G03=1.000|G05=1.000|G07=1.000
+字段	类型	说明
+row0..rowN	double[]	H矩阵位置列，每行3个数（dx/dy/dz偏导数），保留3位
+SAT	double	该卫星模糊度列系数（参考星为-1，非参考星为+1，不参与为0）
+输出规则：
+
+CONTENT_RESIDUAL_ONLY 模式：只输出 STAGE3_V 和 STAGE3_R，不输出 H 矩阵
+
+CONTENT_H_MATRIX 模式：输出完整的 H 矩阵
+
+非参考星数量较多时，STAGE3_H_POS 可能输出多行
+
+5.5 阶段4：卡尔曼滤波更新
+触发条件：enabled=true 且 (stages & STAGE_FILTER) != 0
+
+阶段标识：STAGE4
+
+输出行1（阶段头）：
+
+text
+TRACE|STAGE4|gpst=123456.000|epoch=42|info=0
+字段	类型	说明
+info	int	0=成功，-1=矩阵奇异，-2=迭代不收敛，-3=协方差溢出
+输出行2（状态修正量dxp）：
+
+text
+TRACE|STAGE4_DXP|gpst=123456.000|epoch=42|dx0=0.012|dx1=-0.034|dx2=0.056|dx3=0.001|dx4=-0.002|dx5=0.003
+字段	类型	说明
+dx0..dxN	double	状态修正量向量，保留3位，长度=nx
+输出行3（后验协方差对角线）：
+
+text
+TRACE|STAGE4_PDIAG|gpst=123456.000|epoch=42|p0=83.600|p1=76.400|p2=88.100|p3=0.234|p4=0.189|p5=0.201
+字段	类型	说明
+p0..pN	double	后验协方差对角线，保留3位，长度=nx
+输出规则：
+
+info != 0 时，DXP 和 PDIAG 仍然输出（记录异常状态下的值）
+
+不输出完整P矩阵（避免日志爆炸）
+
+5.6 阶段5：模糊度固定
+触发条件：enabled=true 且 (stages & STAGE_LAMBDA) != 0
+
+阶段标识：STAGE5
+
+输出行1（阶段头）：
+
+text
+TRACE|STAGE5|gpst=123456.000|epoch=42|fixed=1|ratio=3.500
+或（固定失败）：
+
+text
+TRACE|STAGE5|gpst=123456.000|epoch=42|fixed=0|ratio=1.200
+字段	类型	说明
+fixed	int	固定成功标志（0/1）
+ratio	double	次小残差与最小残差之比，保留3位
+输出行2（浮点模糊度）：
+
+text
+TRACE|STAGE5_FLOAT|gpst=123456.000|epoch=42|G01_L1=3.123|G01_L2=2.987|G03_L1=5.456|G03_L2=4.321
+输出行3（固定模糊度，仅 fixed=1 时输出）：
+
+text
+TRACE|STAGE5_FIXED|gpst=123456.000|epoch=42|G01_L1=3.000|G01_L2=3.000|G03_L1=5.000|G03_L2=4.000
+固定失败时：
+
+text
+TRACE|STAGE5_FIXED|null
+输出行4（位置修正量）：
+
+text
+TRACE|STAGE5_SHIFT|gpst=123456.000|epoch=42|dx=0.001|dy=-0.002|dz=0.003
+固定失败时：
+
+text
+TRACE|STAGE5_SHIFT|dx=0.000|dy=0.000|dz=0.000
+字段	类型	说明
+SAT_Lf	double	卫星某频率的模糊度值，保留3位
+dx/dy/dz	double	固定后位置修正量（米），保留3位
+输出规则：
+
+浮点模糊度始终输出
+
+固定成功时输出固定模糊度，失败时输出 null
+
+CONTENT_SUMMARY_ONLY 模式下，只输出 STAGE5 头行，不输出详细模糊度
+
+5.7 阶段6：结果输出
+触发条件：enabled=true 且 (stages & STAGE_RESULT) != 0（建议始终开启）
+
+阶段标识：STAGE6
+
+输出行：
+
+text
+TRACE|STAGE6|gpst=123456.000|epoch=42|Q=4|lat=29.191500|lon=95.073500|h=935.200|sdn=0.030|sde=0.040|sdu=0.050|ns=10|iter=2
+字段	类型	说明
+Q	int	解状态：0=无解，1=单点定位，2=浮点解，4=固定解，5=差分解
+lat	double	纬度（度），保留6位
+lon	double	经度（度），保留6位
+h	double	椭球高（米），保留3位
+sdn	double	北方向标准差（米），保留3位
+sde	double	东方向标准差（米），保留3位
+sdu	double	天向标准差（米），保留3位
+ns	int	实际使用的卫星数
+iter	int	滤波迭代次数
+输出规则：
+
+每历元输出一行
+
+始终输出，即使 Q=0（无解）
+
+六、判断流程与过滤规则
+6.1 完整判断链（按优先级排列）
+text
+if (!traceControl.enabled) return;                    // ① 全局开关，最先判断
+if (epoch >= traceControl.maxEpochs && maxEpochs > 0) return;
+if (epoch % traceControl.samplerate != 0) return;
+if ((traceControl.stages & stageBit) == 0) return;    // ② 阶段开关在全局之后
+// 构造日志内容并回调
+callback.onTrace(content);
+优先级说明：
+
+enabled=false 时，后面的 stages、maxEpochs、samplerate、targetSats 全都不需要检查
+
+位运算虽轻量，但高频调用下累积开销不可忽略
+
+语义清晰：enabled 是总闸，stages 是分路开关
+
+6.2 卫星过滤
+targetSats 不为空时：
+
+阶段0的 STAGE0_SAT 行：只输出在 targetSats 中的卫星
+
+阶段1的 STAGE1 行：只输出在 targetSats 中的卫星
+
+阶段2的 STAGE2_BIAS 行：只输出在 targetSats 中的卫星
+
+阶段3的 H 矩阵和残差：不按卫星过滤（因为双差是组合量，单独过滤某颗卫星会破坏完整性）
+
+阶段5的模糊度：只输出在 targetSats 中的卫星
+
+6.3 异常保护
+java
+try {
+    String content = buildTraceContent(...);
+    callback.onTrace(content);
+} catch (Exception e) {
+    // 日志回调异常不影响解算
+    // 可选：记录一条内部错误日志
+}
+七、Java 实现约束
+7.1 浮点数格式化（硬性要求）
+所有数值输出必须使用：
+
+java
+String.format(Locale.US, "%.3f", value)
+严禁使用：
+
+java
+Double.toString(value)           // 格式不可控
+String.format("%.3f", value)     // 依赖系统默认Locale
+new DecimalFormat("0.000")       // 依赖系统默认Locale
+原因：欧洲语言环境（德语、法语、俄语）下，String.format 可能输出 12,34 而非 12.34，导致下游解析器按逗号分割字段时数值解析错误。
+
+7.2 数组边界检查
+所有数组访问前必须检查边界：
+
+java
+if (index < 0 || index >= array.length) {
+    callback.onTrace("TRACE|ERROR|msg=index out of bounds|...");
+    return defaultValue;
+}
+重点关注：
+
+卫星号索引：sat - 1 必须 ≥ 0 且 < MAXSAT
+
+模糊度索引：IB(sat, freq) 返回值必须 < nx
+
+残差向量：v[i] 的 i 必须 < nv
+
+7.3 回调非阻塞要求
+TraceCallback.onTrace() 由解算线程同步调用，调用方必须保证实现快速返回。
+
+推荐实现模式：
+
+java
+class AsyncTraceCallback implements TraceCallback {
+    private final BlockingQueue<String> queue = new LinkedBlockingQueue<>();
+
+    public AsyncTraceCallback() {
+        new Thread(() -> {
+            while (true) {
+                String content = queue.take();
+                // 异步落盘
+            }
+        }).start();
+    }
+
+    @Override
+    public void onTrace(String content) {
+        queue.offer(content);  // 非阻塞，立即返回
+    }
+}
+库侧不做以下事情：
+
+不检查回调是否阻塞
+
+不设置超时
+
+不提供日志队列（由调用方管理）
+
+库侧仅做以下保护：
+
+在回调外包一层 try-catch，确保回调异常不影响解算
+
+记录回调异常到内部错误日志（如果有）
+
+八、使用示例
+8.1 调用方完整示例
+java
+// 1. 创建追踪控制参数
+TraceControl ctrl = new TraceControl();
+ctrl.enabled = true;
+ctrl.stages = TraceControl.STAGE_DDRES | TraceControl.STAGE_FILTER | TraceControl.STAGE_RESULT;
+ctrl.contentFlags = TraceControl.CONTENT_RESIDUAL_ONLY;
+ctrl.maxEpochs = 100;
+ctrl.samplerate = 1;
+ctrl.targetSats = new int[]{1, 3, 5};  // G01, G03, G05
+
+// 2. 实现异步回调
+TraceCallback callback = new AsyncTraceCallback();
+
+// 3. 注入到解算器
+solver.setTraceControl(ctrl, callback);
+
+// 4. 开始解算
+solver.process(epochData);
+8.2 典型使用场景
+场景	stages	contentFlags	说明
+日常运行	STAGE_RESULT	0	只记录最终结果
+怀疑数据问题	STAGE_INPUT | STAGE_SATPOS | STAGE_RESULT	检查原始观测和改正数
+怀疑滤波发散	STAGE_UDSTATE | STAGE_DDRES | STAGE_FILTER | STAGE_RESULT	检查状态重置、残差和滤波修正
+怀疑固定错误	STAGE_UDSTATE | STAGE_DDRES | STAGE_LAMBDA | STAGE_RESULT	检查模糊度浮点/固定值
+全链路排查	全部7阶段	CONTENT_H_MATRIX	输出全部，限制 maxEpochs=10
+与C版本对比	全部7阶段	CONTENT_H_MATRIX	输出完整矩阵，逐行对比
+九、附录：字段类型速查表
+类型	格式	示例	说明
+int	十进制整数	42	无小数
+double	固定小数位	123.456	按字段规定的位数输出
+string	无空格字符串	G01	卫星PRN或标识
+flag	0/1	1	布尔标志
+array	逗号分隔	G01-G03,G01-G05	用于列表型字段
+null	字符串 null	null	固定失败或无值
+key-value	键=值	G01_L1=3.123	用于模糊度等映射型数据

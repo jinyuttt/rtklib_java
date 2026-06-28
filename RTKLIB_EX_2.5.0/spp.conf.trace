@@ -1,0 +1,20 @@
+3 readobsnav: ts=2026/01/10 12:00:00 n=2
+3 readrnxt: file=C:\Users\yang\Desktop\≤‚ ‘\202601101500.484.obs rcv=1
+3 expath  : path=C:\Users\yang\Desktop\≤‚ ‘\202601101500.484.obs nmax=1024
+3 readrnxfile: file=C:\Users\yang\Desktop\≤‚ ‘\202601101500.484.obs flag=0 index=1
+3 rtk_uncompress: file=C:\Users\yang\Desktop\≤‚ ‘\202601101500.484.obs
+3 rtk_uncompress: stat=0
+2 rinex file open error: C:\Users\yang\Desktop\≤‚ ‘\202601101500.484.obs
+3 readrnxt: file=move.nav rcv=1
+3 expath  : path=move.nav nmax=1024
+3 readrnxfile: file=move.nav flag=0 index=1
+3 rtk_uncompress: file=move.nav
+3 rtk_uncompress: stat=0
+2 rinex file open error: move.nav
+1 
+3 freeobsnav:
+3 freepreceph:
+3 free_rtcm:
+3 closeses:
+3 closegoid:
+3 rtkclosestat:
