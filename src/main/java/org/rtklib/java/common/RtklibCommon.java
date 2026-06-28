@@ -240,34 +240,6 @@ public final class RtklibCommon {
     }
 
     /**
-     * 获取卫星信号频率。
-     *
-     * <p>对应RTKLIB sat2freq()。根据卫星号、码类型和导航数据
-     * 计算信号频率（Hz）。</p>
-     *
-     * <p><b>GLONASS特殊处理</b>：GLONASS使用FDMA，频率取决于FCN频道号，
-     * 频率 = FREQ1_GLO + fcn * DFRQ1_GLO。</p>
-     *
-     * @param sat  卫星号
-     * @param code 码类型索引
-     * @param nav  导航数据
-     * @return 信号频率（Hz），0表示无效
-     */
-    public static double sat2freq(int sat, int code, Nav nav) {
-        int sys = SatUtils.satsys(sat, null);
-        int fcn = 0;
-
-        if (sys == Constants.SYS_GLO && nav != null) {
-            int prn = sat - Constants.SYS_GLO;
-            if (prn >= 1 && prn <= 24 && nav.glo_fcn != null && nav.glo_fcn.length >= prn) {
-                fcn = nav.glo_fcn[prn - 1];
-            }
-        }
-
-        return ObsCode.code2freq(sys, code, fcn);
-    }
-
-    /**
      * 最小二乘估计。
      *
      * <p>对应RTKLIB lsq()。求解法方程：</p>

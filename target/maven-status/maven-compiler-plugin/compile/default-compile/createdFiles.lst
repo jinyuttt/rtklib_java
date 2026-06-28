@@ -8,7 +8,6 @@ org\rtklib\java\ephemeris\Sp3Reader.class
 org\rtklib\java\rtcm\Rtcm.class
 org\rtklib\java\rinex\RtcmFileToRinexConverter.class
 org\rtklib\java\common\ObsCode.class
-org\rtklib\java\cycle\CycleDetect.class
 org\rtklib\java\ppp\PppProcessor.class
 org\rtklib\java\rinex\RinexSppProcessor.class
 org\rtklib\java\ephemeris\EphModel.class

@@ -8,7 +8,6 @@ D:\code\rtklib_java\src\main\java\org\rtklib\java\common\SatUtils.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\constants\ChiSqr.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\constants\Constants.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\coord\CoordTransform.java
-D:\code\rtklib_java\src\main\java\org\rtklib\java\cycle\CycleDetect.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Alm.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Ambc.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Dgps.java
