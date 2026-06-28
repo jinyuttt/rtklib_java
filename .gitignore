@@ -24,3 +24,6 @@ hs_err_pid*
 replay_pid*
 "RTKLIB_EX_2.5.0/"
 "RTKLIB_2.5.0/"
+target/ 
+*.trace 
+*.pos 
