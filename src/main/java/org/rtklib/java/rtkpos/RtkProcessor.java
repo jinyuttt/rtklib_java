@@ -11,10 +11,10 @@ import org.rtklib.java.trace.TraceControl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.rtklib.java.common.CompatFileIO;
+
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -606,13 +606,13 @@ public class RtkProcessor {
     }
 
     public RtkResult process(String roverFilePath, String baseFilePath) throws IOException {
-        byte[] roverData = Files.readAllBytes(Paths.get(roverFilePath));
-        byte[] baseData = (baseFilePath != null) ? Files.readAllBytes(Paths.get(baseFilePath)) : null;
+        byte[] roverData = CompatFileIO.readAllBytes(roverFilePath);
+        byte[] baseData = (baseFilePath != null) ? CompatFileIO.readAllBytes(baseFilePath) : null;
         return process(roverData, baseData);
     }
 
     public RtkResult process(String filePath) throws IOException {
-        byte[] data = Files.readAllBytes(Paths.get(filePath));
+        byte[] data = CompatFileIO.readAllBytes(filePath);
         return process(data);
     }
 

@@ -9,10 +9,10 @@ import org.rtklib.java.coord.CoordTransform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.rtklib.java.common.CompatFileIO;
+
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -438,7 +438,7 @@ public class SppProcessor {
      * @throws IOException 文件读取失败
      */
     public SppResult process(String filePath) throws IOException {
-        byte[] data = Files.readAllBytes(Paths.get(filePath));
+        byte[] data = CompatFileIO.readAllBytes(filePath);
         return process(data);
     }
 
