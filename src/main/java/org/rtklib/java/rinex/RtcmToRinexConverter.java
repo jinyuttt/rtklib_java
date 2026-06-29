@@ -1,6 +1,7 @@
 package org.rtklib.java.rinex;
 
 import org.rtklib.java.rtcm.*;
+import org.rtklib.java.common.CompatFileIO;
 import org.rtklib.java.data.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -108,10 +109,10 @@ public class RtcmToRinexConverter {
             sta.marker = sta.name;
         }
 
-        String obsFile = java.nio.file.Paths.get(outputDir, stationName + ".obs").toString();
+        String obsFile = CompatFileIO.joinPath(outputDir, stationName + ".obs");
         obsWriter = new RinexObsWriter(version, obsFile, sta);
 
-        String navFile = java.nio.file.Paths.get(outputDir, stationName + ".nav").toString();
+        String navFile = CompatFileIO.joinPath(outputDir, stationName + ".nav");
         navWriter = new RinexNavWriter(version, navFile);
     }
 

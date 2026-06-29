@@ -12,10 +12,10 @@ import org.rtklib.java.time.TimeSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.rtklib.java.common.CompatFileIO;
+
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -353,7 +353,7 @@ public class PppProcessor {
     }
 
     public PppResult process(String filePath) throws IOException {
-        byte[] data = Files.readAllBytes(Paths.get(filePath));
+        byte[] data = CompatFileIO.readAllBytes(filePath);
         return process(data);
     }
 

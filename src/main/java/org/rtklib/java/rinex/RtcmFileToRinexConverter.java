@@ -1,14 +1,11 @@
 package org.rtklib.java.rinex;
 
+import org.rtklib.java.common.CompatFileIO;
 import org.rtklib.java.data.Sta;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 /**
  * RTCM文件转RINEX文件转换器。
@@ -54,13 +51,10 @@ public class RtcmFileToRinexConverter {
      * @throws IOException 文件读取失败
      */
     public boolean convert(String rtcmFilePath) throws IOException {
-        byte[] rtcmData;
-        try (FileInputStream fis = new FileInputStream(rtcmFilePath)) {
-            rtcmData = fis.readAllBytes();
-        }
+        byte[] rtcmData = CompatFileIO.readAllBytes(rtcmFilePath);
         log.info("Read RTCM file: {} ({} bytes)", rtcmFilePath, rtcmData.length);
 
-        Files.createDirectories(Path.of(outputDir));
+        CompatFileIO.createDirectories(outputDir);
 
         RtcmToRinexConverter converter = new RtcmToRinexConverter(version, outputDir, stationName);
         boolean ok = converter.convert(rtcmData, rtcmData.length);
@@ -92,13 +86,13 @@ public class RtcmFileToRinexConverter {
      * 获取生成的RINEX观测文件路径。
      */
     public String getObsFilePath() {
-        return Paths.get(outputDir, stationName + ".obs").toString();
+        return CompatFileIO.joinPath(outputDir, stationName + ".obs");
     }
 
     /**
      * 获取生成的RINEX导航文件路径。
      */
     public String getNavFilePath() {
-        return Paths.get(outputDir, stationName + ".nav").toString();
+        return CompatFileIO.joinPath(outputDir, stationName + ".nav");
     }
 }
