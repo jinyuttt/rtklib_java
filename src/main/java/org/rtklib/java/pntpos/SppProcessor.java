@@ -149,8 +149,8 @@ public class SppProcessor {
     public static PrcOpt createDefaultOpt() {
         PrcOpt opt = new PrcOpt();
         opt.mode = Constants.PMODE_SINGLE;
-        opt.nf = 2;
-        opt.navsys = Constants.SYS_CMP;
+        opt.nf = 3;
+        opt.navsys = Constants.SYS_GPS | Constants.SYS_GLO | Constants.SYS_GAL | Constants.SYS_CMP;
         opt.elmin = 15.0 * Constants.D2R;
         opt.ionoopt = Constants.IONOOPT_BRDC;
         opt.tropopt = Constants.TROPOPT_SAAS;

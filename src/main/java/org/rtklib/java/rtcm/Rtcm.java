@@ -658,6 +658,8 @@ public class Rtcm {
         
         if (!this.opt.contains("-EPHALL")) {
             if (this.nav.eph[sat - 1] != null && eph.iode == this.nav.eph[sat - 1].iode) {
+                this.ephsat = sat;
+                this.ephset = 0;
                 return true;
             }
         }
@@ -741,6 +743,8 @@ public class Rtcm {
             if (this.nav.geph[prn - 1] != null &&
                 Math.abs(TimeSystem.timediff(geph.toe, this.nav.geph[prn - 1].toe)) < 1.0 &&
                 geph.svh == this.nav.geph[prn - 1].svh) {
+                this.ephsat = sat;
+                this.ephset = 0;
                 return true;
             }
         }
@@ -822,6 +826,8 @@ public class Rtcm {
                 Math.abs(TimeSystem.timediff(eph.toe, this.nav.eph[sat - 1].toe)) < 1.0 &&
                 eph.iode == this.nav.eph[sat - 1].iode &&
                 eph.iodc == this.nav.eph[sat - 1].iodc) {
+                this.ephsat = sat;
+                this.ephset = 0;
                 return true;
             }
         }
@@ -904,6 +910,8 @@ public class Rtcm {
 
         if (!this.opt.contains("-EPHALL")) {
             if (this.nav.eph[sat - 1] != null && eph.iode == this.nav.eph[sat - 1].iode) {
+                this.ephsat = sat;
+                this.ephset = 0;
                 return true;
             }
         }
@@ -1013,6 +1021,8 @@ public class Rtcm {
         if (!this.opt.contains("-EPHALL")) {
             if (this.nav.eph[sat - 1 + Constants.MAXSAT] != null && 
                 eph.iode == this.nav.eph[sat - 1 + Constants.MAXSAT].iode) {
+                this.ephsat = sat;
+                this.ephset = 1;
                 return true;
             }
         }
@@ -1103,6 +1113,8 @@ public class Rtcm {
         
         if (!this.opt.contains("-EPHALL")) {
             if (this.nav.eph[sat - 1] != null && eph.iode == this.nav.eph[sat - 1].iode) {
+                this.ephsat = sat;
+                this.ephset = 0;
                 return true;
             }
         }

@@ -136,8 +136,8 @@ public class PrcOpt {
     public PrcOpt() {
         this.mode = Constants.PMODE_SINGLE;
         this.soltype = Constants.SOLTYPE_FORWARD;
-        this.nf = 2;
-        this.navsys = Constants.SYS_GPS | Constants.SYS_GLO | Constants.SYS_GAL | Constants.SYS_CMP | Constants.SYS_QZS;
+        this.nf = 3;
+        this.navsys = Constants.SYS_GPS | Constants.SYS_GLO | Constants.SYS_GAL | Constants.SYS_CMP;
         this.elmin = 15.0 * Constants.D2R;
         this.snrmask = new SnrMask();
         this.sateph = Constants.EPHOPT_BRDC;
