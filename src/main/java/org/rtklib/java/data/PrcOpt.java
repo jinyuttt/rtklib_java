@@ -129,6 +129,10 @@ public class PrcOpt {
     public int freqopt;
     /** PPP option string */
     public String pppopt;
+    /** Output throttle interval (number of epochs, 0:disable) */
+    public int outputThrottleInterval;
+    /** Output throttle sleep time (ms) */
+    public int outputThrottleSleepMs;
 
     /**
      * Default constructor with RTKLIB default values.
@@ -217,6 +221,8 @@ public class PrcOpt {
         this.syncsol = 0;
         this.freqopt = 0;
         this.pppopt = "";
+        this.outputThrottleInterval = 100;
+        this.outputThrottleSleepMs = 10;
     }
 
     /**
@@ -292,5 +298,7 @@ public class PrcOpt {
         this.syncsol = other.syncsol;
         this.freqopt = other.freqopt;
         this.pppopt = other.pppopt;
+        this.outputThrottleInterval = other.outputThrottleInterval;
+        this.outputThrottleSleepMs = other.outputThrottleSleepMs;
     }
 }

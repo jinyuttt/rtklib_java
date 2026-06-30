@@ -84,6 +84,9 @@ public class SppProcessor {
     private int totalEpochs = 0;
     private int successCount = 0;
     private int failCount = 0;
+    private int outputCount = 0;
+    private int sleepInterval = 100;
+    private int sleepMs = 10;
     private final List<Sol> solutions = new ArrayList<>();
 
     private byte[] pending = new byte[4096];
@@ -101,6 +104,7 @@ public class SppProcessor {
         this.opt = new PrcOpt(opt);
         this.handler = handler;
         for (int i = 0; i < Constants.MAXSAT; i++) ssat[i] = new Ssat();
+        initFromOpt();
 
         if (outputStream != null) {
             this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
@@ -146,6 +150,18 @@ public class SppProcessor {
      *
      * @return 默认的PrcOpt配置
      */
+    public void setOutputThrottle(int interval, int sleepMs) {
+        this.sleepInterval = interval;
+        this.sleepMs = sleepMs;
+    }
+
+    private void initFromOpt() {
+        if (opt != null) {
+            this.sleepInterval = opt.outputThrottleInterval;
+            this.sleepMs = opt.outputThrottleSleepMs;
+        }
+    }
+
     public static PrcOpt createDefaultOpt() {
         PrcOpt opt = new PrcOpt();
         opt.mode = Constants.PMODE_SINGLE;
@@ -154,6 +170,8 @@ public class SppProcessor {
         opt.elmin = 15.0 * Constants.D2R;
         opt.ionoopt = Constants.IONOOPT_BRDC;
         opt.tropopt = Constants.TROPOPT_SAAS;
+        opt.outputThrottleInterval = 100;
+        opt.outputThrottleSleepMs = 10;
         return opt;
     }
 
@@ -574,6 +592,11 @@ public class SppProcessor {
             if (handler != null) {
                 handler.onPosFail(time, msg[0]);
             }
+        }
+
+        outputCount++;
+        if (sleepInterval > 0 && outputCount % sleepInterval == 0) {
+            try { Thread.sleep(sleepMs); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }
     }
 
