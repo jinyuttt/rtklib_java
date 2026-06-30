@@ -100,6 +100,9 @@ public class RtkProcessor {
     private int totalEpochs = 0;
     private int successCount = 0;
     private int failCount = 0;
+    private int outputCount = 0;
+    private int sleepInterval = 100;
+    private int sleepMs = 10;
     private final List<Sol> solutions = new ArrayList<>();
 
     private byte[] pendingRover = new byte[4096];
@@ -119,6 +122,7 @@ public class RtkProcessor {
         this.handler = handler;
         this.rtk = new Rtk();
         this.rtk.opt = this.opt;
+        initFromOpt();
 
         if (outputStream != null) {
             this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
@@ -145,6 +149,18 @@ public class RtkProcessor {
         this(createDefaultOpt(), null, null);
     }
 
+    public void setOutputThrottle(int interval, int sleepMs) {
+        this.sleepInterval = interval;
+        this.sleepMs = sleepMs;
+    }
+
+    private void initFromOpt() {
+        if (opt != null) {
+            this.sleepInterval = opt.outputThrottleInterval;
+            this.sleepMs = opt.outputThrottleSleepMs;
+        }
+    }
+
     public static PrcOpt createDefaultOpt() {
         PrcOpt opt = new PrcOpt();
         opt.mode = Constants.PMODE_KINEMA;
@@ -159,6 +175,8 @@ public class RtkProcessor {
         opt.intpref = 1;
         opt.maxtdiff = 30.0;
         opt.outsingle = 1;
+        opt.outputThrottleInterval = 100;
+        opt.outputThrottleSleepMs = 10;
         return opt;
     }
 
@@ -456,6 +474,11 @@ public class RtkProcessor {
             if (handler != null) {
                 handler.onPosFail(time, "RTK positioning failed");
             }
+        }
+
+        outputCount++;
+        if (sleepInterval > 0 && outputCount % sleepInterval == 0) {
+            try { Thread.sleep(sleepMs); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }
     }
 
