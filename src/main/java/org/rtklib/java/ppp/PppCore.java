@@ -8,6 +8,7 @@ import org.rtklib.java.data.*;
 import org.rtklib.java.ephemeris.EphModel;
 import org.rtklib.java.ionosphere.IonosphereModel;
 import org.rtklib.java.kalman.KalmanFilter;
+import org.rtklib.java.pntpos.SppCore;
 import org.rtklib.java.rtkpos.Tides;
 import org.rtklib.java.time.TimeSystem;
 import org.rtklib.java.trace.PppTrace;
@@ -467,16 +468,34 @@ public final class PppCore {
         double[] lam = new double[Constants.NFREQ];
         Lc[0] = Pc[0] = 0.0;
 
+        int sys = SatUtils.satsys(obs.sat, null);
+
         for (int i = 0; i < opt.nf; i++) {
             L[i] = P[i] = 0.0;
             freq[i] = SatUtils.sat2freq(obs.sat, obs.code[i], nav);
             lam[i] = freq[i] > 0.0 ? Constants.CLIGHT / freq[i] : 0.0;
             if (freq[i] == 0.0 || obs.L[i] == 0.0 || obs.P[i] == 0.0) continue;
 
-            if (RtklibCommon.testsnr(0, 0, azel[1], obs.SNR[i] * 0.25f, opt.snrmask) != 0) continue;
+            if (RtklibCommon.testsnr(0, 0, azel[1], obs.SNR[i], opt.snrmask) != 0) continue;
 
             L[i] = obs.L[i] * lam[i] - dants[i] - dantr[i] - phw * lam[i];
             P[i] = obs.P[i] - dants[i] - dantr[i];
+
+            int frq;
+            if (sys == Constants.SYS_GAL && (i == 1 || i == 2)) frq = 3 - i;
+            else frq = i;
+            if (frq < Constants.MAX_CODE_BIAS_FREQS) {
+                int biasIx = SppCore.code2biasIx(sys, obs.code[i]);
+                if (biasIx > 0) {
+                    if (nav.cbias != null && obs.sat - 1 < nav.cbias.length &&
+                        nav.cbias[obs.sat - 1] != null &&
+                        frq < nav.cbias[obs.sat - 1].length &&
+                        nav.cbias[obs.sat - 1][frq] != null &&
+                        biasIx - 1 < nav.cbias[obs.sat - 1][frq].length) {
+                        P[i] += nav.cbias[obs.sat - 1][frq][biasIx - 1];
+                    }
+                }
+            }
         }
 
         int frq2 = L[1] == 0.0 ? 2 : 1;
@@ -484,30 +503,6 @@ public final class PppCore {
 
         double C1 = SQR(freq[0]) / (SQR(freq[0]) - SQR(freq[frq2]));
         double C2 = -SQR(freq[frq2]) / (SQR(freq[0]) - SQR(freq[frq2]));
-
-        if (opt.ionoopt != Constants.IONOOPT_IFLC && P[0] != 0.0) {
-            double gamma = SQR(lam[0] / lam[frq2]);
-            int sys = SatUtils.satsys(obs.sat, null);
-            double P1_P2 = 0.0;
-            double P1_C1 = 0.0;
-
-            if (nav.cbias != null && obs.sat - 1 < nav.cbias.length &&
-                nav.cbias[obs.sat - 1] != null) {
-                if (nav.cbias[obs.sat - 1].length > 0 &&
-                    nav.cbias[obs.sat - 1][0] != null && nav.cbias[obs.sat - 1][0].length > 0) {
-                    P1_P2 = nav.cbias[obs.sat - 1][0][0];
-                }
-                if (nav.cbias[obs.sat - 1].length > 1 &&
-                    nav.cbias[obs.sat - 1][1] != null && nav.cbias[obs.sat - 1][1].length > 0) {
-                    P1_C1 = nav.cbias[obs.sat - 1][1][0];
-                }
-            }
-            if (P1_P2 == 0.0 && (sys & (Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_QZS)) != 0) {
-                P1_P2 = (1.0 - gamma) * gettgd(obs.sat, nav);
-            }
-            if (obs.code[0] == Constants.CODE_L1C) P[0] += P1_C1;
-            P[0] -= P1_P2 / (1.0 - gamma);
-        }
 
         if (L[0] != 0.0 && L[frq2] != 0.0) Lc[0] = C1 * L[0] + C2 * L[frq2];
         if (P[0] != 0.0 && P[frq2] != 0.0) Pc[0] = C1 * P[0] + C2 * P[frq2];
@@ -539,9 +534,8 @@ public final class PppCore {
         for (int i = 0; i < 3; i++) rr[i] = x[i];
 
         if (opt.tidecorr != 0) {
-            int tideopt = opt.tidecorr == 1 ? 1 : 7;
             double[] disp = new double[3];
-            tidedisp(TimeSystem.gpst2utc(obs[0].time), rr, tideopt, nav.erp, opt.odisp[0], disp);
+            tidedisp(TimeSystem.gpst2utc(obs[0].time), rr, opt.tidecorr, nav.erp, opt.odisp[0], disp);
             for (int i = 0; i < 3; i++) rr[i] += disp[i];
         }
 

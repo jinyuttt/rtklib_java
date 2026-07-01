@@ -468,8 +468,8 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                     if (s[0] > 0.0 && s[1] / s[0] >= rtk.sol.thres) {
                         double[] ddBias = new double[nb];
                         for (i = 0; i < nb; i++) {
-                            ddBias[i] = b[i];
-                            y_dd[i] -= b[i];
+                            ddBias[i] = b[i * 2];
+                            y_dd[i] -= b[i * 2];
                         }
 
                         SimpleMatrix QbMat = MatrixUtil.createMatrix(Qb, nb, nb);
