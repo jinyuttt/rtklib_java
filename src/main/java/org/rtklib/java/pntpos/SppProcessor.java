@@ -246,7 +246,7 @@ public class SppProcessor {
         sol.rr = new double[6];
         sol.qr = new float[6];
         sol.qv = new float[6];
-        sol.dtr = new double[6];
+        sol.dtr = new double[7];
         sol.stat = 0;
         sol.ns = 0;
         sol.type = 0;

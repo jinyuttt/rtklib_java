@@ -66,7 +66,7 @@ public class Sol {
         this.rr = new double[6];
         this.qr = new float[6];
         this.qv = new float[6];
-        this.dtr = new double[6];
+        this.dtr = new double[7];
         this.type = 0;
         this.stat = 0;
         this.ns = 0;

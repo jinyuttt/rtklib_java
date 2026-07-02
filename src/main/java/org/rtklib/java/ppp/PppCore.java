@@ -7,6 +7,7 @@ import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
 import org.rtklib.java.ephemeris.EphModel;
 import org.rtklib.java.ionosphere.IonosphereModel;
+import org.rtklib.java.ionosphere.SbasCorrection;
 import org.rtklib.java.kalman.KalmanFilter;
 import org.rtklib.java.pntpos.SppCore;
 import org.rtklib.java.rtkpos.Tides;
@@ -268,20 +269,15 @@ public final class PppCore {
         double[] x = rtk.x;
         double[] P = rtk.P;
         PrcOpt opt = rtk.opt;
-        double dtr = 0.0;
-
-        if (rtk.sol.stat == Constants.SOLQ_NONE) {
-            for (int i = 0; i < NC(); i++) {
-                initx(x, P, nx, 0.0, VAR_CLK, IC(i, opt));
-            }
-        } else {
-            dtr = x[IC(0, opt)];
-        }
+        double dtr;
 
         for (int i = 0; i < NC(); i++) {
-            int idx = IC(i, opt);
-            x[idx] = dtr;
-            P[idx * nx + idx] += SQR(opt.sclkstab) * Math.abs(rtk.tt);
+            if (opt.sateph == Constants.EPHOPT_PREC) {
+                dtr = rtk.sol.dtr[0];
+            } else {
+                dtr = i == 0 ? rtk.sol.dtr[0] : rtk.sol.dtr[0] + rtk.sol.dtr[i];
+            }
+            initx(x, P, nx, Constants.CLIGHT * dtr, VAR_CLK, IC(i, opt));
         }
     }
 
@@ -290,26 +286,26 @@ public final class PppCore {
         double[] P = rtk.P;
         PrcOpt opt = rtk.opt;
         double[] pos = new double[3];
-        double[] zazel = {0.0, Constants.PI / 2.0};
+        double[] azel = {0.0, Constants.PI / 2.0};
 
-        CoordTransform.ecef2pos(rtk.x, pos);
-        double zhd = TroposphereModel.saastamoinen(pos, zazel, REL_HUMI, 293.15);
+        int i = IT(opt);
 
-        if (rtk.opt.tropopt == Constants.TROPOPT_EST) {
-            if (rtk.sol.stat == Constants.SOLQ_NONE) {
-                initx(x, P, nx, zhd, VAR_ZTD, IT(opt));
+        if (rtk.x[i] == 0.0) {
+            CoordTransform.ecef2pos(rtk.sol.rr, pos);
+            double[] var = new double[1];
+            double ztd = SbasCorrection.sbstropcorr(rtk.sol.time, pos, azel, var);
+            initx(x, P, nx, ztd, var[0], i);
+
+            if (opt.tropopt >= Constants.TROPOPT_ESTG) {
+                for (int j = i + 1; j < i + 3; j++) initx(x, P, nx, 1E-6, VAR_GRA, j);
             }
-            int idx = IT(opt);
-            P[idx * nx + idx] += SQR(opt.prn[2]) * Math.abs(rtk.tt);
-        } else if (rtk.opt.tropopt == Constants.TROPOPT_ESTG) {
-            if (rtk.sol.stat == Constants.SOLQ_NONE) {
-                initx(x, P, nx, zhd, VAR_ZTD, IT(opt));
-                initx(x, P, nx, 1E-6, VAR_GRA, IT(opt) + 1);
-                initx(x, P, nx, 1E-6, VAR_GRA, IT(opt) + 2);
-            }
-            for (int i = 0; i < 3; i++) {
-                int idx = IT(opt) + i;
-                P[idx * nx + idx] += SQR(opt.prn[2]) * Math.abs(rtk.tt);
+        } else {
+            P[i + i * nx] += SQR(opt.prn[2]) * Math.abs(rtk.tt);
+
+            if (opt.tropopt >= Constants.TROPOPT_ESTG) {
+                for (int j = i + 1; j < i + 3; j++) {
+                    P[j + j * nx] += SQR(opt.prn[2] * 0.1) * Math.abs(rtk.tt);
+                }
             }
         }
     }
@@ -585,8 +581,11 @@ public final class PppCore {
 
             double dtrp = 0.0;
             double vart = 0.0;
-            if (!modelTrop(obs[i].time, pos, azelI, opt, x, dtdx, nav)) { tropFail++; continue; }
-            dtrp = dtdx[0];
+            double[] dtrpArr = new double[1];
+            double[] vartArr = new double[1];
+            if (!modelTrop(obs[i].time, pos, azelI, opt, x, dtdx, nav, dtrpArr, vartArr)) { tropFail++; continue; }
+            dtrp = dtrpArr[0];
+            vart = vartArr[0];
 
             double dion = 0.0;
             double vari = 0.0;
@@ -706,9 +705,12 @@ public final class PppCore {
     }
 
     private static boolean modelTrop(GTime time, double[] pos, double[] azel,
-                                     PrcOpt opt, double[] x, double[] dtdx, Nav nav) {
+                                     PrcOpt opt, double[] x, double[] dtdx, Nav nav,
+                                     double[] dtrp, double[] var) {
         if (opt.tropopt == Constants.TROPOPT_SAAS) {
-            dtdx[0] = TroposphereModel.saastamoinen(pos, azel, REL_HUMI, 293.15);
+            dtrp[0] = TroposphereModel.saastamoinen(pos, azel, REL_HUMI, 293.15);
+            var[0] = SQR(ERR_SAAS);
+            dtdx[0] = 0.0;
             dtdx[1] = 0.0;
             dtdx[2] = 0.0;
             return true;
@@ -717,19 +719,21 @@ public final class PppCore {
             double[] trp = new double[3];
             int nt = opt.tropopt == Constants.TROPOPT_EST ? 1 : 3;
             for (int i = 0; i < nt; i++) trp[i] = x[IT(opt) + i];
-            tropModelPrec(time, pos, azel, trp, dtdx);
+            dtrp[0] = tropModelPrec(time, pos, azel, trp, dtdx, var);
             return true;
         }
+        dtrp[0] = 0.0;
+        var[0] = 0.0;
         dtdx[0] = 0.0;
         dtdx[1] = 0.0;
         dtdx[2] = 0.0;
         return true;
     }
 
-    private static void tropModelPrec(GTime time, double[] pos, double[] azel,
-                                      double[] x, double[] dtdx) {
+    private static double tropModelPrec(GTime time, double[] pos, double[] azel,
+                                        double[] x, double[] dtdx, double[] var) {
         double[] zazel = {0.0, Constants.PI / 2.0};
-        double zhd = TroposphereModel.saastamoinen(pos, zazel, REL_HUMI, 293.15);
+        double zhd = TroposphereModel.saastamoinen(pos, zazel, 0.0, 293.15);
 
         double[] mapfw = new double[1];
         double mH = TroposphereModel.tropmapf(time, pos, azel, mapfw);
@@ -746,7 +750,9 @@ public final class PppCore {
             dtdx[1] = gradN * (x[0] - zhd);
             dtdx[2] = gradE * (x[0] - zhd);
         }
-        dtdx[0] = mH * zhd + mW * (x[0] - zhd);
+        dtdx[0] = mW;
+        var[0] = SQR(0.01);
+        return mH * zhd + mW * (x[0] - zhd);
     }
 
     private static boolean modelIono(GTime time, double[] pos, double[] azel,
@@ -771,7 +777,7 @@ public final class PppCore {
         }
         if (opt.ionoopt == Constants.IONOOPT_EST) {
             int idx = II(sat, opt);
-            out[0] = x[idx];
+            out[0] = x[idx] * ionmapf(pos, azel);
             out[1] = 0.0;
             return true;
         }
