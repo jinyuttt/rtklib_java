@@ -7,7 +7,7 @@ import java.util.*;
 
 public class RtcmMsgTypes {
     public static void main(String[] args) throws Exception {
-        String roverPath = "C:\\Users\\admin\\Desktop\\540423494727\\2026-06-08\\1.rtcm3";
+        String roverPath = "C:\\Users\\admin\\Desktop\\<DEVICE_ID>\\2026-06-08\\1.rtcm3";
         byte[] data = Files.readAllBytes(Paths.get(roverPath));
 
         Rtcm rtcm = new Rtcm();

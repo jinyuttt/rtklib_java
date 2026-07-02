@@ -9,7 +9,7 @@ import java.io.*;
 public class TimeDebugTest {
     @Test
     void testMessageOrder() throws Exception {
-        String file = "C:\\Users\\admin\\Desktop\\540423494727\\2026-06-08\\1.rtcm3";
+        String file = "C:\\Users\\admin\\Desktop\\<DEVICE_ID>\\2026-06-08\\1.rtcm3";
         byte[] data = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(file));
         
         Rtcm rtcm = new Rtcm();

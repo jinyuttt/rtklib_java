@@ -36,10 +36,10 @@ public class RinexConversionTest {
     private static final Logger log = LoggerFactory.getLogger(RinexConversionTest.class);
 
     private static final String ROVER_PATH =
-            "C:\\Users\\admin\\Desktop\\540423494727\\2026-06-08\\1.rtcm3";
+            "C:\\Users\\admin\\Desktop\\<ROVER_DEVICE_ID>\\2026-06-08\\1.rtcm3";
 
     private static final String BASE_PATH =
-            "C:\\Users\\admin\\Desktop\\540423496360\\2026-06-08\\1.rtcm3";
+            "C:\\Users\\admin\\Desktop\\<BASE_DEVICE_ID>\\2026-06-08\\1.rtcm3";
 
     private static byte[] roverData;
     private static byte[] baseData;
@@ -205,7 +205,7 @@ public class RinexConversionTest {
         assertTrue(Files.exists(javaObsFile), "Java obs file should exist");
 
         RinexObsData javaData = parseRinex3ObsWithTypes(javaObsFile.toString());
-        RinexObsData cData = parseRinex3ObsWithTypes("D:\\code\\rtklib_java\\540423494727\\2026-06-08\\full.obs");
+        RinexObsData cData = parseRinex3ObsWithTypes("D:\\code\\rtklib_java\\<DEVICE_ID>\\2026-06-08\\full.obs");
 
         log.info("Java obs types: {}", javaData.obsTypesBySys);
         log.info("C obs types: {}", cData.obsTypesBySys);
@@ -371,7 +371,7 @@ public class RinexConversionTest {
         assertTrue(Files.exists(javaNavFile), "Java nav file should exist");
 
         Map<String, double[]> javaNav = parseRinexNav(javaNavFile.toString());
-        Map<String, double[]> cNav = parseRinexNav("D:\\code\\rtklib_java\\540423494727\\2026-06-08\\full.nav");
+        Map<String, double[]> cNav = parseRinexNav("D:\\code\\rtklib_java\\<DEVICE_ID>\\2026-06-08\\full.nav");
 
         log.info("Java nav entries: {}, C nav entries: {}", javaNav.size(), cNav.size());
 

@@ -26,7 +26,7 @@ public class RinexSppProcessorTest {
     private static final Logger log = LoggerFactory.getLogger(RinexSppProcessorTest.class);
 
     private static final String ROVER_PATH =
-            "C:\\Users\\admin\\Desktop\\540423494727\\2026-06-08\\1.rtcm3";
+            "C:\\Users\\admin\\Desktop\\<DEVICE_ID>\\2026-06-08\\1.rtcm3";
 
     private static byte[] roverData;
 

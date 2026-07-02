@@ -38,10 +38,10 @@ public class RinexSppTest {
     private static final Logger log = LoggerFactory.getLogger(RinexSppTest.class);
 
     private static final String ROVER_PATH =
-            "C:\\Users\\admin\\Desktop\\540423494727\\2026-06-08\\1.rtcm3";
+            "C:\\Users\\admin\\Desktop\\<ROVER_DEVICE_ID>\\2026-06-08\\1.rtcm3";
 
     private static final String BASE_PATH =
-            "C:\\Users\\admin\\Desktop\\540423496360\\2026-06-08\\1.rtcm3";
+            "C:\\Users\\admin\\Desktop\\<BASE_DEVICE_ID>\\2026-06-08\\1.rtcm3";
 
     private static byte[] roverData;
     private static byte[] baseData;

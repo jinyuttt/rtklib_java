@@ -22,7 +22,7 @@ public class SppProcessorTest {
 
     private static final Logger log = LoggerFactory.getLogger(SppProcessorTest.class);
     private static final String ROVER_PATH =
-            "C:\\Users\\admin\\Desktop\\540423494727\\2026-06-08\\1.rtcm3";
+            "C:\\Users\\admin\\Desktop\\<DEVICE_ID>\\2026-06-08\\1.rtcm3";
     private static final String RESULT_DIR = "C:\\Users\\admin\\Desktop\\rtklib_java_results";
     private static byte[] roverData;
 
@@ -160,7 +160,7 @@ public class SppProcessorTest {
     @Test
     @DisplayName("6. Compare with rtklib C SPP result")
     void testCompareWithRtklibC() throws Exception {
-        String rtklibCFile = "D:\\code\\rtklib_java\\540423494727\\2026-06-08\\spp_c_full.pos";
+        String rtklibCFile = "D:\\code\\rtklib_java\\<DEVICE_ID>\\2026-06-08\\spp_c_full.pos";
         assertTrue(new File(rtklibCFile).exists(), "rtklib C result file should exist");
 
         Map<String, double[]> rtklibResult = parsePosFile(rtklibCFile);
