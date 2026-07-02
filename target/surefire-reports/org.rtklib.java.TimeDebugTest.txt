@@ -1,4 +1,18 @@
 -------------------------------------------------------------------------------
 Test set: org.rtklib.java.TimeDebugTest
 -------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.005 s -- in org.rtklib.java.TimeDebugTest
+Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.041 s <<< FAILURE! -- in org.rtklib.java.TimeDebugTest
+org.rtklib.java.TimeDebugTest.testMessageOrder -- Time elapsed: 0.017 s <<< ERROR!
+java.nio.file.InvalidPathException: Illegal char <<> at index 23: C:\Users\admin\Desktop\<DEVICE_ID>\2026-06-08\1.rtcm3
+	at java.base/sun.nio.fs.WindowsPathParser.normalize(WindowsPathParser.java:204)
+	at java.base/sun.nio.fs.WindowsPathParser.parse(WindowsPathParser.java:175)
+	at java.base/sun.nio.fs.WindowsPathParser.parse(WindowsPathParser.java:77)
+	at java.base/sun.nio.fs.WindowsPath.parse(WindowsPath.java:92)
+	at java.base/sun.nio.fs.WindowsFileSystem.getPath(WindowsFileSystem.java:231)
+	at java.base/java.nio.file.Path.of(Path.java:148)
+	at java.base/java.nio.file.Paths.get(Paths.java:69)
+	at org.rtklib.java.TimeDebugTest.testMessageOrder(TimeDebugTest.java:13)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+

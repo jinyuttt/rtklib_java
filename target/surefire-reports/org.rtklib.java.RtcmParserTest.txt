@@ -1,4 +1,14 @@
 -------------------------------------------------------------------------------
 Test set: org.rtklib.java.RtcmParserTest
 -------------------------------------------------------------------------------
-Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.909 s -- in org.rtklib.java.RtcmParserTest
+Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.120 s <<< FAILURE! -- in org.rtklib.java.RtcmParserTest
+org.rtklib.java.RtcmParserTest -- Time elapsed: 0.120 s <<< ERROR!
+java.io.FileNotFoundException: C:\Users\admin\Desktop\<ROVER_DEVICE_ID>\2026-06-08\1.rtcm3 (文件名、目录名或卷标语法不正确。)
+	at java.base/java.io.FileInputStream.open0(Native Method)
+	at java.base/java.io.FileInputStream.open(FileInputStream.java:213)
+	at java.base/java.io.FileInputStream.<init>(FileInputStream.java:152)
+	at java.base/java.io.FileInputStream.<init>(FileInputStream.java:106)
+	at org.rtklib.java.RtcmParserTest.loadData(RtcmParserTest.java:79)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
