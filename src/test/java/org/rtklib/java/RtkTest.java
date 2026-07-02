@@ -28,11 +28,19 @@ public class RtkTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtkTest.class);
 
+    private static final String DATA_BASE =
+            "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage";
+
+    private static final String ROVER_ID = "GS2025090017";
+    private static final String BASE_ID = "GS2025090006";
+    private static final String DATE = "2026-07-01";
+    private static final int HOUR = 8;
+
     private static final String ROVER_PATH =
-            "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage\\<ROVER_DEVICE_ID>\\2026-07-01\\0.rtcm3";
+            DATA_BASE + "\\" + ROVER_ID + "\\" + DATE + "\\" + HOUR + ".rtcm3";
 
     private static final String BASE_PATH =
-            "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage\\<BASE_DEVICE_ID>\\2026-07-01\\0.rtcm3";
+            DATA_BASE + "\\" + BASE_ID + "\\" + DATE + "\\" + HOUR + ".rtcm3";
 
     private static final String RESULT_DIR = "D:\\code\\rtklib_java\\rtk_compare\\java_results";
 

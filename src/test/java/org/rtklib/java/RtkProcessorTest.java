@@ -27,10 +27,10 @@ public class RtkProcessorTest {
     private static final Logger log = LoggerFactory.getLogger(RtkProcessorTest.class);
 
     private static final String ROVER_PATH =
-            "C:\\Users\\admin\\Desktop\\<ROVER_DEVICE_ID>\\2026-06-08\\1.rtcm3";
+            "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage\\GS2025090003\\2026-06-30\\16.rtcm3";
     private static final String BASE_PATH =
-            "C:\\Users\\admin\\Desktop\\<BASE_DEVICE_ID>\\2026-06-08\\1.rtcm3";
-    private static final String RESULT_DIR = "C:\\Users\\admin\\Desktop\\rtklib_java_results";
+            "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage\\GS2025090017\\2026-06-30\\16.rtcm3";
+    private static final String RESULT_DIR = "D:\\code\\rtklib_java\\rtklib_java_results";
 
     private static byte[] roverData;
     private static byte[] baseData;
@@ -121,6 +121,7 @@ public class RtkProcessorTest {
 
         log.info("RtkResult from file: total={}, success={}, fail={}", result.totalEpochs, result.successCount, result.failCount);
         assertTrue(result.totalEpochs > 0, "Should have processed epochs from file");
+        assertTrue(result.successCount > 0, "Should have successful solutions from file");
     }
 
     @Test
@@ -132,6 +133,7 @@ public class RtkProcessorTest {
 
         log.info("Single stream: total={}, success={}, fail={}", result.totalEpochs, result.successCount, result.failCount);
         assertTrue(result.totalEpochs > 0, "Should have processed epochs");
+        assertTrue(result.successCount > 0, "Should have successful solutions in single stream");
     }
 
     @Test
@@ -202,6 +204,7 @@ public class RtkProcessorTest {
 
         log.info("Custom config: total={}, success={}, fail={}", result.totalEpochs, result.successCount, result.failCount);
         assertTrue(result.totalEpochs > 0, "Should have processed epochs");
+        assertTrue(result.successCount > 0, "Should have successful solutions with custom config");
     }
 
     @Test
@@ -217,6 +220,7 @@ public class RtkProcessorTest {
         RtkProcessor.RtkResult result = rtk.process(roverData, baseData);
         log.info("Manual base pos: total={}, success={}, fail={}", result.totalEpochs, result.successCount, result.failCount);
         assertTrue(result.totalEpochs > 0, "Should have processed epochs");
+        assertTrue(result.successCount > 0, "Should have successful solutions with manual base position");
     }
 
     @Test

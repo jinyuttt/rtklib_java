@@ -304,15 +304,6 @@ public final class RtklibCommon {
         }
         int newN = j + 1;
 
-        int epochs = 0;
-        for (int i = 0; i < newN; ) {
-            int ei;
-            for (ei = i + 1; ei < newN; ei++) {
-                if (TimeSystem.timediff(obs[ei].time, obs[i].time) > Constants.DTTOL) break;
-            }
-            i = ei;
-            epochs++;
-        }
-        return epochs;
+        return newN;
     }
 }

@@ -1,8 +1,8 @@
 -------------------------------------------------------------------------------
 Test set: org.rtklib.java.RtkRinexCompareTest
 -------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 1.892 s <<< FAILURE! -- in org.rtklib.java.RtkRinexCompareTest
-org.rtklib.java.RtkRinexCompareTest.testRtkCompareWithRtklib -- Time elapsed: 1.584 s <<< ERROR!
+Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 2.061 s <<< FAILURE! -- in org.rtklib.java.RtkRinexCompareTest
+org.rtklib.java.RtkRinexCompareTest.testRtkCompareWithRtklib -- Time elapsed: 1.881 s <<< ERROR!
 java.io.FileNotFoundException: D:\code\rtklib_java\RTKLIB_EX_2.5.0\rtk_c_ref.pos (系统找不到指定的文件。)
 	at java.base/java.io.FileInputStream.open0(Native Method)
 	at java.base/java.io.FileInputStream.open(FileInputStream.java:213)
