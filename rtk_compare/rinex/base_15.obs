@@ -1,0 +1,16 @@
+     2.11           OBSERVATION DATA    M: Mixed            RINEX VERSION / TYPE
+CONVBIN EX 2.5.0                        20260702 031244 UTC PGM / RUN BY / DATE 
+format: RTCM 3                                              COMMENT             
+log: D:\code\monitor\compare_test_realtime\base_15.rtcm3    COMMENT             
+0000                                                        MARKER NAME         
+                                                            MARKER NUMBER       
+                                                            OBSERVER / AGENCY   
+                                                            REC # / TYPE / VERS 
+                                                            ANT # / TYPE        
+ -1083472.4132  5483515.8821  3066256.4629                  APPROX POSITION XYZ 
+        0.0000        0.0000        0.0000                  ANTENNA: DELTA H/E/N
+     1     1                                                WAVELENGTH FACT L1/2
+     0                                                      # / TYPES OF OBSERV 
+  2026    07    01    07    00   30.0000000     GPS         TIME OF FIRST OBS   
+  2026    07    01    08    00   00.0000000     GPS         TIME OF LAST OBS    
+                                                            END OF HEADER       
