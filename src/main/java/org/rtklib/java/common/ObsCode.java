@@ -141,11 +141,11 @@ public final class ObsCode {
             }
             case Constants.SYS_CMP: {
                 char c = obs.charAt(0);
-                if (c == '1') return Constants.FREQL1;
                 if (c == '2') return Constants.FREQ1_CMP;
+                if (c == '7') return Constants.FREQ2_CMP;
                 if (c == '5') return Constants.FREQL5;
                 if (c == '6') return Constants.FREQ3_CMP;
-                if (c == '7') return Constants.FREQ2_CMP;
+                if (c == '1') return Constants.FREQL1;
                 if (c == '8') return Constants.FREQE5ab;
                 return 0.0;
             }
@@ -214,17 +214,29 @@ public final class ObsCode {
         return -1;
     }
 
+    private static final int[] OBSFREQS = {
+        0, 1, 1, 1, 1,  1, 1, 1, 1, 1,
+        1, 1, 1, 1, 2,  2, 2, 2, 2, 2,
+        2, 2, 2, 2, 3,  3, 3, 5, 5, 5,
+        4, 4, 4, 4, 4,  4, 4, 6, 6, 6,
+        2, 2, 4, 4, 3,  3, 3, 1, 1, 0,
+        3, 3, 3, 5, 5,  5, 3, 3, 5, 5,
+        5, 5, 1, 5, 5,  5, 4, 4, 4, 4,
+        0
+    };
+
     private static int code2freqBds(int code) {
         String obs = code2obs(code);
         if (obs.isEmpty()) return -1;
-        char c = obs.charAt(0);
-        if (c == '2') return 0;  /* B1I */
-        if (c == '7') return 1;  /* B2b */
-        if (c == '5') return 2;  /* B2a */
-        if (c == '6') return 3;  /* B3  */
-        if (c == '1') return 4;  /* B1C */
-        if (c == '8') return 5;  /* B2ab */
-        return -1;
+        switch (obs.charAt(0)) {
+            case '2': return 0;
+            case '7': return 1;
+            case '5': return 2;
+            case '6': return 3;
+            case '1': return 4;
+            case '8': return 5;
+            default:  return -1;
+        }
     }
 
     private static int code2freqIrn(int code) {

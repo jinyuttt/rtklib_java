@@ -1295,6 +1295,19 @@ public class Rtcm {
         log.debug("decode_msm_head: sys={} staid={} nsat={} nsig={} sync={} iod={} ncell={}",
                 sys, staid, h.nsat, h.nsig, sync[0], iod[0], ncell);
 
+        if (sys == Constants.SYS_CMP && ncell > 0) {
+            StringBuilder sigStr = new StringBuilder();
+            for (int si = 0; si < h.nsig; si++) sigStr.append(h.sigs[si]).append(",");
+            StringBuilder cmStr = new StringBuilder();
+            for (int si = 0; si < h.nsig; si++) {
+                cmStr.append(String.format(" sig%d(id%d):", si, h.sigs[si]));
+                for (int sj = 0; sj < Math.min(h.nsat, 3); sj++) {
+                    cmStr.append(h.cellmask[si + sj * h.nsig]);
+                }
+            }
+            log.info("BDS MSM: nsig={} nsat={} ncell={} sigs=[{}] {}", h.nsig, h.nsat, ncell, sigStr, cmStr);
+        }
+
         return ncell;
     }
 
@@ -1652,13 +1665,13 @@ public class Rtcm {
             }
             code[i] = ObsCode.obs2code(sig[i]);
             idx[i] = ObsCode.code2idx(sys, code[i]);
-            log.debug("MSM sig[{}] sigid={} sigstr={} code={} idx={}", i, h.sigs[i], sig[i], code[i], idx[i]);
+            log.info("MSM sig[{}] sigid={} sigstr={} code={} idx={}", i, h.sigs[i], sig[i], code[i], idx[i]);
         }
 
         ObsCode.sigindex(sys, code, h.nsig, idx);
 
         for (i = 0; i < h.nsig; i++) {
-            log.debug("MSM after sigindex: sig[{}] code={} idx={}", i, code[i], idx[i]);
+            log.info("MSM after sigindex: sig[{}] code={} idx={}", i, code[i], idx[i]);
         }
 
         for (i = j = 0; i < h.nsat; i++) {
@@ -1696,6 +1709,12 @@ public class Rtcm {
                without j++. DO NOT change to {j++; continue;} */
             for (k = 0; k < h.nsig; k++) {
                 if (h.cellmask[k + i * h.nsig] == 0) continue;
+
+                if (sat != 0 && index >= 0 && idx[k] >= 0 && i < 2 && k < 3) {
+                    log.info("saveMsmObs: sat={} i={} k={} sig={} code={} idx={} cellmask={} pr={}",
+                            sat, i, k, sig[k], code[k], idx[k], h.cellmask[k + i * h.nsig],
+                            pr[j] > -1E12 ? String.format("%.1f", pr[j]) : "INVALID");
+                }
 
                 if (sat != 0 && index >= 0 && idx[k] >= 0) {
                     freq = fcn < -7 ? 0.0 : ObsCode.code2freq(sys, code[k], fcn);
@@ -1763,7 +1782,7 @@ public class Rtcm {
        the first ephemeris message establish the correct time base.
        DO NOT modify without re-running SppTest validation. */
     private void adjweek(double tow) {
-        if (!timeInitialized) {
+        if (this.time.time == 0) {
             this.time = TimeSystem.gpst2time(0, tow);
             return;
         }
@@ -1777,8 +1796,8 @@ public class Rtcm {
 
     /* [SPP-PASSED] Same rationale as adjweek: no CPU time dependency for offline processing. */
     private void adjdayGlot(double tod) {
-        if (!timeInitialized) {
-            return;
+        if (this.time.time == 0) {
+            this.time = TimeSystem.utc2gpst(TimeSystem.timeget());
         }
         GTime time = TimeSystem.timeadd(TimeSystem.gpst2utc(this.time), 10800.0);
         int[] weekArr = new int[1];
@@ -1792,7 +1811,6 @@ public class Rtcm {
         this.time = TimeSystem.utc2gpst(TimeSystem.timeadd(time, -10800.0));
     }
 
-    /* [SPP-PASSED] No CPU time fallback when time uninitialized. */
     private int adjustGpsWeek(int week) {
         if (!timeInitialized) return week;
         int[] wArr = new int[1];

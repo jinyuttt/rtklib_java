@@ -1,10 +1,17 @@
 -------------------------------------------------------------------------------
 Test set: org.rtklib.java.RtkRinexCompareTest
 -------------------------------------------------------------------------------
-Tests run: 1, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.072 s <<< FAILURE! -- in org.rtklib.java.RtkRinexCompareTest
-org.rtklib.java.RtkRinexCompareTest -- Time elapsed: 0.072 s <<< FAILURE!
-org.opentest4j.AssertionFailedError: 应成功解析 rover OBS ==> expected: <true> but was: <false>
-	at org.rtklib.java.RtkRinexCompareTest.loadRinexData(RtkRinexCompareTest.java:57)
+Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 1.892 s <<< FAILURE! -- in org.rtklib.java.RtkRinexCompareTest
+org.rtklib.java.RtkRinexCompareTest.testRtkCompareWithRtklib -- Time elapsed: 1.584 s <<< ERROR!
+java.io.FileNotFoundException: D:\code\rtklib_java\RTKLIB_EX_2.5.0\rtk_c_ref.pos (系统找不到指定的文件。)
+	at java.base/java.io.FileInputStream.open0(Native Method)
+	at java.base/java.io.FileInputStream.open(FileInputStream.java:213)
+	at java.base/java.io.FileInputStream.<init>(FileInputStream.java:152)
+	at java.base/java.io.FileInputStream.<init>(FileInputStream.java:106)
+	at java.base/java.io.FileReader.<init>(FileReader.java:60)
+	at org.rtklib.java.RtkRinexCompareTest.readRtklibPosFile(RtkRinexCompareTest.java:303)
+	at org.rtklib.java.RtkRinexCompareTest.testRtkCompareWithRtklib(RtkRinexCompareTest.java:289)
 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
 

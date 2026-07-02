@@ -140,15 +140,15 @@ public class PrcOpt {
     public PrcOpt() {
         this.mode = Constants.PMODE_SINGLE;
         this.soltype = Constants.SOLTYPE_FORWARD;
-        this.nf = 3;
+        this.nf = 2;
         this.navsys = Constants.SYS_GPS | Constants.SYS_GLO | Constants.SYS_GAL | Constants.SYS_CMP;
         this.elmin = 15.0 * Constants.D2R;
         this.snrmask = new SnrMask();
         this.sateph = Constants.EPHOPT_BRDC;
-        this.modear = Constants.ARMODE_OFF;
-        this.glomodear = Constants.GLO_ARMODE_OFF;
-        this.gpsmodear = 0;
-        this.bdsmodear = 0;
+        this.modear = Constants.ARMODE_FIXHOLD;
+        this.glomodear = Constants.GLO_ARMODE_AUTOCAL;
+        this.gpsmodear = 1;
+        this.bdsmodear = 1;
         this.arfilter = 1;
         this.maxout = 20;
         this.minlock = 0;

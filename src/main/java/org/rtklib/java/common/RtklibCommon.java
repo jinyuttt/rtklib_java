@@ -5,7 +5,10 @@ import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.Nav;
 import org.rtklib.java.data.PrcOpt;
+import org.rtklib.java.data.Obsd;
 import org.rtklib.java.data.SnrMask;
+import org.rtklib.java.time.TimeSystem;
+import java.util.Arrays;
 
 /**
  * RTKLIB通用工具函数。
@@ -279,5 +282,37 @@ public final class RtklibCommon {
         } catch (Exception e) {
             return -1;
         }
+    }
+
+    public static int sortobs(Obsd[] obs, int n) {
+        if (n <= 0) return 0;
+
+        Arrays.sort(obs, 0, n, (o1, o2) -> {
+            double tt = TimeSystem.timediff(o1.time, o2.time);
+            if (Math.abs(tt) > Constants.DTTOL) return tt < 0 ? -1 : 1;
+            if (o1.rcv != o2.rcv) return Integer.compare(o1.rcv, o2.rcv);
+            return Integer.compare(o1.sat, o2.sat);
+        });
+
+        int j = 0;
+        for (int i = 1; i < n; i++) {
+            if (obs[i].sat != obs[j].sat ||
+                obs[i].rcv != obs[j].rcv ||
+                TimeSystem.timediff(obs[i].time, obs[j].time) != 0.0) {
+                obs[++j] = obs[i];
+            }
+        }
+        int newN = j + 1;
+
+        int epochs = 0;
+        for (int i = 0; i < newN; ) {
+            int ei;
+            for (ei = i + 1; ei < newN; ei++) {
+                if (TimeSystem.timediff(obs[ei].time, obs[i].time) > Constants.DTTOL) break;
+            }
+            i = ei;
+            epochs++;
+        }
+        return epochs;
     }
 }

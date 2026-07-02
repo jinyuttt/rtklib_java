@@ -133,8 +133,7 @@ public final class KalmanFilter {
             SimpleMatrix Hct = MatrixUtil.transpose(HcMat);
             SimpleMatrix PHt = MatrixUtil.multiply(PcMat, Hct);
             SimpleMatrix HPHt = MatrixUtil.multiply(HcMat, PHt);
-            SimpleMatrix S = MatrixUtil.add(HPHt, RMat);
-            SimpleMatrix Sinv = MatrixUtil.invert(S);
+            SimpleMatrix S = MatrixUtil.add(HPHt, RMat);SimpleMatrix Sinv = MatrixUtil.invert(S);
             SimpleMatrix K = MatrixUtil.multiply(PHt, Sinv);
 
             SimpleMatrix KV = MatrixUtil.multiply(K, V);
@@ -142,14 +141,22 @@ public final class KalmanFilter {
 
             if (LOG.isDebugEnabled()) {
                 StringBuilder sb = new StringBuilder();
-                sb.append("K(row0)[0:9]=[");
-                for (int i = 0; i < Math.min(k, 10); i++) sb.append(String.format("%.8f ", K.get(0, i)));
-                sb.append("]\n");
+                sb.append(String.format("K shape: %dx%d (states x obs)\n", k, m));
+                for (int i = 0; i < k; i++) {
+                    sb.append(String.format("K[state%d ix=%d]: ", i, ix[i]));
+                    double kRowSum = 0;
+                    for (int j = 0; j < m; j++) {
+                        double kval = K.get(i, j);
+                        kRowSum += kval;
+                        if (Math.abs(kval) > 1e-6) sb.append(String.format("[%d]=%.6f ", j, kval));
+                    }
+                    sb.append(String.format(" sum=%.6f\n", kRowSum));
+                }
                 sb.append("KV=[");
-                for (int i = 0; i < Math.min(k, 10); i++) sb.append(String.format("%.6f ", KV.get(i, 0)));
+                for (int i = 0; i < k; i++) sb.append(String.format("%.6f ", KV.get(i, 0)));
                 sb.append("]\n");
                 sb.append("dx=[");
-                for (int i = 0; i < Math.min(k, 10); i++) sb.append(String.format("%.6f ", XcNew.get(i, 0) - xc[i]));
+                for (int i = 0; i < k; i++) sb.append(String.format("%.6f ", XcNew.get(i, 0) - xc[i]));
                 sb.append("]\n");
                 LOG.debug(sb.toString());
             }
@@ -157,15 +164,22 @@ public final class KalmanFilter {
             SimpleMatrix Ic = MatrixUtil.identity(k);
             SimpleMatrix KHc = MatrixUtil.multiply(K, HcMat);
             SimpleMatrix I_KH = MatrixUtil.subtract(Ic, KHc);
-            SimpleMatrix P_new = MatrixUtil.multiply(I_KH, PcMat);
+
+            SimpleMatrix I_KH_T = MatrixUtil.transpose(I_KH);
+            SimpleMatrix P_temp = MatrixUtil.multiply(I_KH, PcMat);
+            SimpleMatrix P_new = MatrixUtil.multiply(P_temp, I_KH_T);
+
+            SimpleMatrix KR = MatrixUtil.multiply(K, RMat);
+            SimpleMatrix KRKt = MatrixUtil.multiply(KR, MatrixUtil.transpose(K));
+            P_new = MatrixUtil.add(P_new, KRKt);
 
             if (LOG.isDebugEnabled()) {
                 StringBuilder sb = new StringBuilder();
                 sb.append("P_new_diag=[");
-                for (int i = 0; i < Math.min(k, 10); i++) sb.append(String.format("%.4f ", P_new.get(i, i)));
+                for (int i = 0; i < k; i++) sb.append(String.format("%.4f ", P_new.get(i, i)));
                 sb.append("]\n");
                 sb.append("I_KH_diag=[");
-                for (int i = 0; i < Math.min(k, 10); i++) sb.append(String.format("%.6f ", I_KH.get(i, i)));
+                for (int i = 0; i < k; i++) sb.append(String.format("%.6f ", I_KH.get(i, i)));
                 sb.append("]\n");
                 LOG.debug(sb.toString());
             }

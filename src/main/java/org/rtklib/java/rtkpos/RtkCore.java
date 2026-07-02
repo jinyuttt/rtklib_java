@@ -97,6 +97,18 @@ public final class RtkCore {
         return NR(opt) + Constants.MAXSAT * f + (sat - 1);
     }
 
+    private static int IL(int f, PrcOpt opt) {
+        return NP(opt) + NI(opt) + NT(opt) + f;
+    }
+
+    private static int II(int sat, PrcOpt opt) {
+        return NP(opt) + sat - 1;
+    }
+
+    private static int IT(int r, PrcOpt opt) {
+        return NP(opt) + NI(opt) + NT(opt) / 2 * r;
+    }
+
     private static final double MIN_ARC_GAP = 300.0;
 
     /**
@@ -280,7 +292,8 @@ GTime prevTime = new GTime(rtk.sol.time);
         int nState = NR(opt);
         int nx = nState + Constants.MAXSAT * nf;
         boolean reinit = (rtk.nx != nx);
-        LOG.debug("relpos: ns={} nf={} nx={} rtk.nx={} reinit={}", ns, nf, nx, rtk.nx, reinit);
+        rtk.na = nState;
+        LOG.debug("relpos: ns={} nf={} nx={} rtk.nx={} rtk.na={} reinit={}", ns, nf, nx, rtk.nx, rtk.na, reinit);
         if (rtk.nx != nx) {
             rtk.nx = nx;
             rtk.x = new double[nx];
@@ -342,7 +355,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         double[] R = new double[ny * ny];
         int[] vflg = new int[ny];
         double[] xa = new double[nx];
-        double[] bias = new double[nx];
 
         int stat = opt.mode <= Constants.PMODE_DGPS ? Constants.SOLQ_DGPS : Constants.SOLQ_FLOAT;
 
@@ -433,76 +445,35 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         int lambdaFixed = 0;
         double[] lambdaDxShift = null;
 
-        if (opt.modear != Constants.ARMODE_OFF && stat == Constants.SOLQ_FLOAT) {
-            int[] ix = new int[nx * 2];
-            int nb = ddidx(rtk, sat, ns, nf, nx, ix);
-            if (nb >= opt.minfixsats - 1) {
-                double[] y_dd = new double[nb];
-                double[] Qb = new double[nb * nb];
-                double[] Qab = new double[nState * nb];
-                for (i = 0; i < nb; i++) {
-                    y_dd[i] = rtk.x[ix[i * 2]] - rtk.x[ix[i * 2 + 1]];
-                }
-                for (j = 0; j < nb; j++) {
-                    for (i = 0; i < nb; i++) {
-                        Qb[i * nb + j] = rtk.P[ix[i * 2] * nx + ix[j * 2]]
-                                - rtk.P[ix[i * 2] * nx + ix[j * 2 + 1]]
-                                - rtk.P[ix[i * 2 + 1] * nx + ix[j * 2]]
-                                + rtk.P[ix[i * 2 + 1] * nx + ix[j * 2 + 1]];
-                    }
-                }
-                for (j = 0; j < nb; j++) {
-                    for (i = 0; i < nState; i++) {
-                        Qab[i * nb + j] = rtk.P[i * nx + ix[j * 2]] - rtk.P[i * nx + ix[j * 2 + 1]];
-                    }
-                }
-
-                double[] b = new double[nb * 2];
-                double[] s = new double[2];
-                int info = Lambda.lambda(nb, 2, y_dd, Qb, b, s);
-                if (info == 0) {
-                    rtk.sol.ratio = s[0] > 0.0 ? (float) (s[1] / s[0]) : 0.0f;
-                    if (rtk.sol.ratio > 999.9f) rtk.sol.ratio = 999.9f;
-                    rtk.sol.thres = (float) opt.thresar[0];
-
-                    if (s[0] > 0.0 && s[1] / s[0] >= rtk.sol.thres) {
-                        double[] ddBias = new double[nb];
-                        for (i = 0; i < nb; i++) {
-                            ddBias[i] = b[i * 2];
-                            y_dd[i] -= b[i * 2];
+        if (stat == Constants.SOLQ_FLOAT) {
+            double[] bias = new double[nx];
+            int nb = manage_amb_LAMBDA(rtk, bias, xa, sat, nf, ns);
+            if (nb > 1) {
+                double[] rr_fix = new double[3];
+                for (j = 0; j < 3; j++) rr_fix[j] = rtk.rb[j] + xa[j];
+                if (zdres(0, obs, nu, nr, rs, dts, vare, svh, nav, rr_fix, opt,
+                        y, e, azel, freq)) {
+                    double[] PaFull = new double[nx * nx];
+                    for (int pi = 0; pi < rtk.na; pi++) {
+                        for (int pj = 0; pj < rtk.na; pj++) {
+                            PaFull[pi * nx + pj] = rtk.Pa[pi * rtk.na + pj];
                         }
-
-                        SimpleMatrix QbMat = MatrixUtil.createMatrix(Qb, nb, nb);
-                        SimpleMatrix QbInv = MatrixUtil.invert(QbMat);
-                        SimpleMatrix yMat = MatrixUtil.createMatrix(y_dd, nb, 1);
-                        SimpleMatrix dbVec = MatrixUtil.multiply(QbInv, yMat);
-                        SimpleMatrix QabMat = MatrixUtil.createMatrix(Qab, nState, nb);
-                        SimpleMatrix dx = MatrixUtil.multiply(QabMat, dbVec);
-
-                        System.arraycopy(rtk.x, 0, xa, 0, nx);
-                        double[] dxArr = MatrixUtil.toArray(dx);
-                        for (i = 0; i < nState; i++) {
-                            xa[i] -= dxArr[i];
+                    }
+                    for (int pi = rtk.na; pi < nx; pi++) {
+                        for (int pj = rtk.na; pj < nx; pj++) {
+                            PaFull[pi * nx + pj] = rtk.P[pi * nx + pj];
                         }
-
-                        restamb(rtk, ddBias, nb, sat, ns, nf, nx, xa);
-
-                        double[] rr_fix = new double[3];
-                        for (j = 0; j < 3; j++) rr_fix[j] = rtk.rb[j] + xa[j];
-                        if (zdres(0, obs, nu, nr, rs, dts, vare, svh, nav, rr_fix, opt,
-                                y, e, azel, freq)) {
-                            nv = ddres(rtk, obs, dt, xa, rtk.P, sat, y, e, azel, freq,
-                                    iu, ir, ns, nf, nav, v, null, R, vflg);
-                            if (nv > 0) {
-                                stat = Constants.SOLQ_FIX;
-                                lambdaFixed = 1;
-                                lambdaDxShift = new double[3];
-                                for (int si = 0; si < 3; si++) lambdaDxShift[si] = xa[si] - rtk.x[si];
-                                if (++rtk.nfix >= rtk.opt.minfix) {
-                                    if (rtk.opt.modear == Constants.ARMODE_FIXHOLD) {
-                                        holdamb(rtk, xa, sat, ns, nf, nx, nav);
-                                    }
-                                }
+                    }
+                    nv = ddres(rtk, obs, dt, xa, PaFull, sat, y, e, azel, freq,
+                            iu, ir, ns, nf, nav, v, null, R, vflg);
+                    if (nv > 0 && valpos(rtk, v, R, vflg, nv, 4.0)) {
+                        stat = Constants.SOLQ_FIX;
+                        lambdaFixed = 1;
+                        lambdaDxShift = new double[3];
+                        for (int si = 0; si < 3; si++) lambdaDxShift[si] = xa[si] - rtk.x[si];
+                        if (++rtk.nfix >= rtk.opt.minfix) {
+                            if (rtk.opt.modear == Constants.ARMODE_FIXHOLD) {
+                                holdamb(rtk, xa);
                             }
                         }
                     }
@@ -515,20 +486,26 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
 
         if (stat == Constants.SOLQ_FIX) {
             for (i = 0; i < 3; i++) {
-                rtk.sol.rr[i] = xa[i] + rtk.rb[i];
+                rtk.sol.rr[i] = rtk.xa[i] + rtk.rb[i];
             }
+            for (i = 0; i < 3; i++) {
+                rtk.sol.qr[i] = (float) rtk.Pa[i * rtk.na + i];
+            }
+            rtk.sol.qr[3] = (float) rtk.Pa[1];
+            rtk.sol.qr[4] = (float) rtk.Pa[2 * rtk.na + 1];
+            rtk.sol.qr[5] = (float) rtk.Pa[2];
         } else if (stat != Constants.SOLQ_NONE) {
             for (i = 0; i < 3; i++) {
                 rtk.sol.rr[i] = rtk.x[i] + rtk.rb[i];
             }
+            for (i = 0; i < 3; i++) {
+                rtk.sol.qr[i] = (float) rtk.P[i * nx + i];
+            }
+            rtk.sol.qr[3] = (float) rtk.P[1];
+            rtk.sol.qr[4] = (float) rtk.P[2 * nx + 1];
+            rtk.sol.qr[5] = (float) rtk.P[2];
         }
         for (i = 3; i < 6; i++) rtk.sol.rr[i] = 0.0;
-        for (i = 0; i < 3; i++) {
-            rtk.sol.qr[i] = (float) rtk.P[i * nx + i];
-        }
-        rtk.sol.qr[3] = (float) rtk.P[1];
-        rtk.sol.qr[4] = (float) rtk.P[2 * nx + 1];
-        rtk.sol.qr[5] = (float) rtk.P[2];
 
         for (i = 0; i < n; i++) {
             for (j = 0; j < nf; j++) {
@@ -575,7 +552,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
      * <p>同时计算视线单位向量e、方位角/高度角azel、频率freq。</p>
      *
      * <p><b>与C版本的差异</b>：C版本 obs 偏移由调用方处理（obs+nu），
-     * Java版本通过 off 参数在函数内部处理偏移。</p>
+      * Java版本通过 off 参数在函数内部处理偏移。</p>
      *
      * @param base  0=流动站 1=基准站
      * @param obs   观测数据数组（流动站+基准站连续存储）
@@ -894,7 +871,9 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         CoordTransform.ecef2pos(rr_f, pos);
 
         double bl = baseline(x, rtk.rb, null);
-
+        LOG.debug(String.format("ddres: bl=%.1f m rb=(%.1f,%.1f,%.1f) rr_f=(%.1f,%.1f,%.1f)",
+                bl, rtk.rb[0], rtk.rb[1], rtk.rb[2],
+                rtk.rb[0] + x[0], rtk.rb[1] + x[1], rtk.rb[2] + x[2]));
         double[] Ri = new double[ns * nf * 2 + 2];
         double[] Rj = new double[ns * nf * 2 + 2];
 
@@ -1010,6 +989,26 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                         }
                     }
 
+                    if (sysi == Constants.SYS_GLO && sysj == Constants.SYS_GLO) {
+                        if (opt.glomodear == Constants.GLO_ARMODE_AUTOCAL && frq < Constants.NFREQGLO) {
+                            double df = (freqi - freqj) / (frq == 0 ? Constants.DFRQ1_GLO : Constants.DFRQ2_GLO);
+                            v[nv] -= df * x[IL(frq, opt)];
+                            if (H != null) H[nv * rtk.nx + IL(frq, opt)] = df;
+                        } else if (opt.glomodear == Constants.GLO_ARMODE_FIXHOLD && frq < Constants.NFREQGLO) {
+                            double icb = rtk.ssat[sat[refIdx] - 1].icbias[frq] * Constants.CLIGHT / freqi
+                                    - rtk.ssat[sat[j] - 1].icbias[frq] * Constants.CLIGHT / freqj;
+                            v[nv] -= icb;
+                        }
+                    }
+
+                    if (sysj == Constants.SYS_SBS && sysi == Constants.SYS_GPS) {
+                        if (opt.glomodear == Constants.GLO_ARMODE_FIXHOLD && frq < Constants.NFREQ) {
+                            double icb = rtk.ssat[sat[refIdx] - 1].icbias[frq] * Constants.CLIGHT / freqi
+                                    - rtk.ssat[sat[j] - 1].icbias[frq] * Constants.CLIGHT / freqj;
+                            v[nv] -= icb;
+                        }
+                    }
+
                     if (code) {
                         rtk.ssat[sat[j] - 1].resp[frq] = v[nv];
                     } else {
@@ -1040,6 +1039,9 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                     int sysJ = SatUtils.satsys(sat[j], null);
                     Ri[nv] = varerr(sat[refIdx], sysRef, eli, rtk.ssat[sat[refIdx]-1].snrRover[frq], rtk.ssat[sat[refIdx]-1].snrBase[frq], bl, dt, f, opt, obs[iu[refIdx]]);
                     Rj[nv] = varerr(sat[j], sysJ, elj, rtk.ssat[sat[j]-1].snrRover[frq], rtk.ssat[sat[j]-1].snrBase[frq], bl, dt, f, opt, obs[iu[j]]);
+
+                    if (!code && (obs[iu[refIdx]].LLI[frq] & Constants.LLI_HALFC) != 0) Ri[nv] += 0.01;
+                    if (!code && (obs[iu[j]].LLI[frq] & Constants.LLI_HALFC) != 0) Rj[nv] += 0.01;
 
                     if (opt.mode > Constants.PMODE_DGPS) {
                         if (!code) {
@@ -1202,8 +1204,67 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
 
         udpos(rtk, tt);
 
+        if (rtk.opt.ionoopt == Constants.IONOOPT_EST || rtk.opt.tropopt >= Constants.TROPOPT_EST) {
+            double[] dr = new double[3];
+            double bl = baseline(rtk.x, rtk.rb, dr);
+            if (rtk.opt.ionoopt == Constants.IONOOPT_EST) {
+                udion(rtk, tt, bl, sat, ns);
+            }
+            if (rtk.opt.tropopt >= Constants.TROPOPT_EST) {
+                udtrop(rtk, tt, bl);
+            }
+        }
+
+        if (rtk.opt.glomodear == Constants.GLO_ARMODE_AUTOCAL && (rtk.opt.navsys & Constants.SYS_GLO) != 0) {
+            udrcvbias(rtk, tt);
+        }
+
         if (rtk.opt.mode > Constants.PMODE_DGPS) {
             udbias(rtk, tt, obs, sat, iu, ir, ns, nav, nf);
+        }
+    }
+
+    private static void udion(Rtk rtk, double tt, double bl, int[] sat, int ns) {
+        for (int i = 1; i <= Constants.MAXSAT; i++) {
+            int j = II(i, rtk.opt);
+            if (rtk.x[j] != 0.0 &&
+                rtk.ssat[i - 1].outc[0] > Constants.GAP_RESION &&
+                rtk.ssat[i - 1].outc[1] > Constants.GAP_RESION) {
+                rtk.x[j] = 0.0;
+            }
+        }
+        for (int i = 0; i < ns; i++) {
+            int j = II(sat[i], rtk.opt);
+            if (rtk.x[j] == 0.0) {
+                initx(rtk, 1E-6, SQR(rtk.opt.std[1] * bl / 1E4), j);
+            } else {
+                double el = rtk.ssat[sat[i] - 1].azel[1];
+                double fact = Math.cos(el);
+                rtk.P[j * rtk.nx + j] += SQR(rtk.opt.prn[1] * bl / 1E4 * fact) * Math.abs(tt);
+            }
+        }
+    }
+
+    private static void udtrop(Rtk rtk, double tt, double bl) {
+        for (int i = 0; i < 2; i++) {
+            int idx = IT(i, rtk.opt);
+            if (idx < 0) continue;
+            if (rtk.x[idx] != 0.0 && Math.abs(tt) > 0.0) {
+                rtk.P[idx * rtk.nx + idx] += SQR(rtk.opt.prn[2] * Math.abs(tt));
+            }
+        }
+    }
+
+    private static void udrcvbias(Rtk rtk, double tt) {
+        for (int i = 0; i < Constants.NFREQGLO; i++) {
+            int j = IL(i, rtk.opt);
+            if (rtk.x[j] == 0.0) {
+                initx(rtk, rtk.opt.thresar[2] + 1e-6, rtk.opt.thresar[3], j);
+            } else if (rtk.nfix >= rtk.opt.minfix) {
+                initx(rtk, rtk.xa[j], rtk.Pa[j * rtk.na + j], j);
+            } else {
+                rtk.P[j * rtk.nx + j] += SQR(rtk.opt.thresar[4]) * Math.abs(tt);
+            }
         }
     }
 
@@ -1416,6 +1477,16 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                     double freqi = SatUtils.sat2freq(sat[i], obs[iu[i]].code[k], nav);
                     if (cp == 0.0 || pr == 0.0 || freqi == 0.0) continue;
                     bias[i] = cp - pr * freqi / Constants.CLIGHT;
+                    if (Math.abs(bias[i]) > 30.0) {
+                        double lRover = obs[iu[i]].L[k];
+                        double lBase = obs[ir[i]].L[k];
+                        double pRover = obs[iu[i]].P[k];
+                        double pBase = obs[ir[i]].P[k];
+                        int codeRover = obs[iu[i]].code[k];
+                        int codeBase = obs[ir[i]].code[k];
+                        LOG.debug(String.format("LARGE BIAS: sat=%d f=%d bias=%.4f cp=%.4f pr=%.4f freq=%.4f L_r=%.4f L_b=%.4f P_r=%.4f P_b=%.4f code_r=%d code_b=%d",
+                                sat[i], k, bias[i], cp, pr, freqi, lRover, lBase, pRover, pBase, codeRover, codeBase));
+                    }
                 } else {
                     double cp1 = sdobs(obs, iu[i], ir[i], 0);
                     double cp2 = sdobs(obs, iu[i], ir[i], 1);
@@ -1666,56 +1737,84 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
      * <p>ix[i*2] = 参考星状态索引，ix[i*2+1] = 目标星状态索引</p>
      *
      * @param rtk RTK解算状态
-     * @param sat 共视卫星号数组
-     * @param ns  共视卫星数
-     * @param nf  频率数
-     * @param nx  状态维数
-     * @param ix  输出：双差索引对 [nx*2]
+      * @param ix  输出：双差索引对 [nx*2]
+     * @param gps GPS AR开关（0=关, 1=开, -1=默认使用opt设置）
+     * @param glo GLO AR开关
+     * @param sbs SBS AR开关（0=排除SBS, 1=允许SBS参与AR）
      * @return 双差对数（nb）
      */
-    private static int ddidx(Rtk rtk, int[] sat, int ns, int nf, int nx, int[] ix) {
+    private static int ddidx(Rtk rtk, int[] ix, int gps, int glo, int sbs) {
         int nb = 0;
         PrcOpt opt = rtk.opt;
-        for (int f = 0; f < nf; f++) {
-            for (int i = 0; i < Constants.MAXSAT; i++) {
-                rtk.ssat[i].fix[f] = 0;
+        int na = rtk.na;
+        int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
+        int gpsMode = gps >= 0 ? gps : opt.gpsmodear;
+        int gloMode = glo >= 0 ? glo : opt.glomodear;
+
+        for (int i = 0; i < Constants.MAXSAT; i++) {
+            for (int j = 0; j < Constants.NFREQ; j++) {
+                rtk.ssat[i].fix[j] = 0;
             }
-            int refIdx = -1;
-            for (int i = 0; i < ns; i++) {
-                int si = sat[i] - 1;
-                int stateIdx = IB(sat[i], f, nf, opt);
-                if (rtk.x[stateIdx] == 0.0 || rtk.ssat[si].vsat[f] == 0) continue;
-                if (rtk.ssat[si].lock[f] >= 0 && rtk.ssat[si].azel[1] >= opt.elmaskar) {
-                    rtk.ssat[si].fix[f] = 2;
-                    refIdx = i;
-                    break;
-                } else {
-                    rtk.ssat[si].fix[f] = 1;
+        }
+
+        for (int m = 0; m < 6; m++) {
+            boolean nofix = (m == 0 && gpsMode == 0) || (m == 1 && gloMode == 0) || (m == 3 && opt.bdsmodear == 0);
+
+            for (int f = 0, k = na; f < nf; f++, k += Constants.MAXSAT) {
+                int refI = -1;
+                for (int i = k; i < k + Constants.MAXSAT; i++) {
+                    int si = i - k;
+                    if (rtk.x[i] == 0.0 || !testSys(rtk.ssat[si].sys, m) || rtk.ssat[si].vsat[f] == 0) {
+                        continue;
+                    }
+                    if (rtk.ssat[si].lock[f] >= 0 && (rtk.ssat[si].slip[f] & Constants.LLI_HALFC) == 0
+                            && rtk.ssat[si].azel[1] >= opt.elmaskar && !nofix) {
+                        rtk.ssat[si].fix[f] = 2;
+                        refI = i;
+                        break;
+                    } else {
+                        rtk.ssat[si].fix[f] = 1;
+                    }
                 }
-            }
-            if (refIdx < 0) continue;
-            int refStateIdx = IB(sat[refIdx], f, nf, opt);
-            int n = 0;
-            for (int i = 0; i < ns; i++) {
-                if (i == refIdx) continue;
-                int si = sat[i] - 1;
-                int stateIdx = IB(sat[i], f, nf, opt);
-                if (rtk.x[stateIdx] == 0.0 || rtk.ssat[si].vsat[f] == 0) continue;
-                if (rtk.ssat[si].lock[f] >= 0 && rtk.ssat[si].azel[1] >= opt.elmaskar) {
-                    ix[nb * 2] = refStateIdx;
-                    ix[nb * 2 + 1] = stateIdx;
-                    rtk.ssat[si].fix[f] = 2;
-                    nb++;
-                    n++;
-                } else {
-                    rtk.ssat[si].fix[f] = 1;
+                if (refI < 0 || rtk.ssat[refI - k].fix[f] != 2) continue;
+
+                int n = 0;
+                for (int j = k; j < k + Constants.MAXSAT; j++) {
+                    int sj = j - k;
+                    if (refI == j || rtk.x[j] == 0.0 || !testSys(rtk.ssat[sj].sys, m) || rtk.ssat[sj].vsat[f] == 0) {
+                        continue;
+                    }
+                    if (sbs == 0 && SatUtils.satsys(sj + 1, null) == Constants.SYS_SBS) continue;
+                    if (rtk.ssat[sj].lock[f] >= 0 && (rtk.ssat[sj].slip[f] & Constants.LLI_HALFC) == 0
+                            && rtk.ssat[sj].azel[1] >= opt.elmaskar && !nofix) {
+                        ix[nb * 2] = refI;
+                        ix[nb * 2 + 1] = j;
+                        rtk.ssat[sj].fix[f] = 2;
+                        nb++;
+                        n++;
+                    } else {
+                        rtk.ssat[sj].fix[f] = 1;
+                    }
                 }
-            }
-            if (n == 0) {
-                rtk.ssat[sat[refIdx] - 1].fix[f] = 1;
+                if (n == 0) {
+                    rtk.ssat[refI - k].fix[f] = 1;
+                }
             }
         }
         return nb;
+    }
+
+    private static boolean testSys(int sys, int m) {
+        switch (sys) {
+            case Constants.SYS_GPS: return m == 0;
+            case Constants.SYS_SBS: return m == 0;
+            case Constants.SYS_GLO: return m == 1;
+            case Constants.SYS_GAL: return m == 2;
+            case Constants.SYS_CMP: return m == 3;
+            case Constants.SYS_QZS: return m == 4;
+            case Constants.SYS_IRN: return m == 5;
+            default: return false;
+        }
     }
 
     /**
@@ -1730,55 +1829,457 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
      * @param rtk  RTK解算状态
      * @param bias 双差固定模糊度 [nb]
      * @param nb   双差对数
-     * @param sat  共视卫星号数组
-     * @param ns   共视卫星数
-     * @param nf   频率数
-     * @param nx   状态维数
-     * @param xa   输出：固定解状态向量（单差）
+      * @param xa   输出：固定解状态向量（单差）
      */
-    private static void restamb(Rtk rtk, double[] bias, int nb, int[] sat, int ns, int nf, int nx, double[] xa) {
+    private static void restamb(Rtk rtk, double[] bias, int nb, double[] xa) {
         int nv = 0;
         PrcOpt opt = rtk.opt;
-        for (int f = 0; f < nf; f++) {
-            int[] index = new int[ns];
-            int n = 0;
-            for (int i = 0; i < ns; i++) {
-                int si = sat[i] - 1;
-                if (rtk.ssat[si].fix[f] != 2) continue;
-                index[n++] = IB(sat[i], f, nf, opt);
-            }
-            if (n < 2) continue;
-            xa[index[0]] = rtk.x[index[0]];
-            for (int i = 1; i < n; i++) {
-                xa[index[i]] = xa[index[0]] - bias[nv++];
+        int nx = rtk.nx;
+        int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
+
+        for (int i = 0; i < nx; i++) xa[i] = rtk.x[i];
+        for (int i = 0; i < rtk.na; i++) xa[i] = rtk.xa[i];
+
+        for (int m = 0; m < 6; m++) {
+            for (int f = 0; f < nf; f++) {
+                int[] index = new int[Constants.MAXSAT];
+                int n = 0;
+                for (int i = 0; i < Constants.MAXSAT; i++) {
+                    if (!testSys(rtk.ssat[i].sys, m) || rtk.ssat[i].fix[f] != 2) continue;
+                    index[n++] = IB(i + 1, f, nf, opt);
+                }
+                if (n < 2) continue;
+                xa[index[0]] = rtk.x[index[0]];
+                for (int i = 1; i < n; i++) {
+                    xa[index[i]] = xa[index[0]] - bias[nv++];
+                }
             }
         }
     }
 
     /**
+     * LAMBDA模糊度固定。
+     *
+     * <p>对应RTKLIB resamb_LAMBDA()。执行LAMBDA整数最小二乘搜索，
+     * 固定双差模糊度，更新固定解状态向量xa和协方差Pa。</p>
+     *
+     * @param rtk  RTK解算状态
+     * @param bias 输出：双差固定模糊度 [nb]
+     * @param xa   输出：固定解状态向量
+     * @param gps  GPS AR开关
+     * @param glo  GLO AR开关
+     * @param sbs  SBS AR开关
+     * @return 双差对数（>1=成功, 0=验证失败, -1=双差对不足）
+     */
+    private static int resamb_LAMBDA(Rtk rtk, double[] bias, double[] xa, int gps, int glo, int sbs) {
+        PrcOpt opt = rtk.opt;
+        int nx = rtk.nx;
+        int na = rtk.na;
+        int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
+
+        rtk.sol.ratio = 0.0f;
+        rtk.nb_ar = 0;
+
+        int[] ix = new int[nx * 2];
+        int nb = ddidx(rtk, ix, gps, glo, sbs);
+        if (nb < opt.minfixsats - 1) {
+            LOG.debug("resamb_LAMBDA: not enough double-diffs (nb={})", nb);
+            return -1;
+        }
+        rtk.nb_ar = nb;
+
+        double[] y = new double[nb];
+        double[] Qb = new double[nb * nb];
+        double[] Qab = new double[na * nb];
+
+        for (int i = 0; i < nb; i++) {
+            y[i] = rtk.x[ix[i * 2]] - rtk.x[ix[i * 2 + 1]];
+        }
+        if (LOG.isDebugEnabled()) {
+            StringBuilder sb = new StringBuilder();
+            sb.append(String.format("resamb_LAMBDA: na=%d nx=%d nb=%d\n", na, nx, nb));
+            for (int i = 0; i < nb; i++) {
+                int idxA = ix[i * 2];
+                int idxB = ix[i * 2 + 1];
+                sb.append(String.format("  dd[%d]: x[%d]=%.4f - x[%d]=%.4f = %.4f  P_diag=%.6f/%.6f\n",
+                        i, idxA, rtk.x[idxA], idxB, rtk.x[idxB], y[i],
+                        rtk.P[idxA * nx + idxA], rtk.P[idxB * nx + idxB]));
+            }
+            LOG.debug(sb.toString());
+        }
+        for (int j = 0; j < nb; j++) {
+            for (int i = 0; i < nb; i++) {
+                Qb[i * nb + j] = rtk.P[ix[i * 2] * nx + ix[j * 2]]
+                        - rtk.P[ix[i * 2] * nx + ix[j * 2 + 1]]
+                        - rtk.P[ix[i * 2 + 1] * nx + ix[j * 2]]
+                        + rtk.P[ix[i * 2 + 1] * nx + ix[j * 2 + 1]];
+            }
+        }
+        if (LOG.isDebugEnabled() && nb <= 8) {
+            StringBuilder sb = new StringBuilder();
+            sb.append(String.format("Qb matrix (%dx%d):\n", nb, nb));
+            for (int i = 0; i < nb; i++) {
+                sb.append("  [");
+                for (int j = 0; j < nb; j++) {
+                    sb.append(String.format("%.6f ", Qb[i * nb + j]));
+                }
+                sb.append("]\n");
+            }
+            LOG.debug(sb.toString());
+        }
+        for (int j = 0; j < nb; j++) {
+            for (int i = 0; i < na; i++) {
+                Qab[i * nb + j] = rtk.P[i * nx + ix[j * 2]] - rtk.P[i * nx + ix[j * 2 + 1]];
+            }
+        }
+
+        double[] b = new double[nb * 2];
+        double[] s = new double[2];
+        int info = Lambda.lambda(nb, 2, y, Qb, b, s);
+
+        if (info != 0) {
+            LOG.debug("resamb_LAMBDA: lambda error (info={})", info);
+            return 0;
+        }
+
+        if (LOG.isDebugEnabled()) {
+            StringBuilder sb = new StringBuilder();
+            sb.append(String.format("LAMBDA: nb=%d na=%d nx=%d s=[%.4f, %.4f] ratio=%.4f\n", nb, na, nx, s[0], s[1], s[1] / (s[0] > 0 ? s[0] : 1e-30)));
+            sb.append("y=[");
+            for (int i = 0; i < nb; i++) sb.append(String.format("%.4f ", y[i]));
+            sb.append("]\n");
+            sb.append("b_best=[");
+            for (int i = 0; i < nb; i++) sb.append(String.format("%.4f ", b[i * 2]));
+            sb.append("]\n");
+            sb.append("b_2nd=[");
+            for (int i = 0; i < nb; i++) sb.append(String.format("%.4f ", b[i * 2 + 1]));
+            sb.append("]\n");
+            sb.append("Qb_diag=[");
+            for (int i = 0; i < nb; i++) sb.append(String.format("%.6f ", Qb[i * nb + i]));
+            sb.append("]\n");
+            sb.append("ix=[");
+            for (int i = 0; i < nb; i++) {
+                int satA = ix[i * 2] >= na ? ix[i * 2] - na + 1 : ix[i * 2];
+                int satB = ix[i * 2 + 1] >= na ? ix[i * 2 + 1] - na + 1 : ix[i * 2 + 1];
+                sb.append(String.format("(%d->sat%d,%d->sat%d) ", ix[i * 2], satA, ix[i * 2 + 1], satB));
+            }
+            sb.append("]\n");
+            sb.append(String.format("NR=%d nf=%d MAXSAT=%d\n", IB(1, 0, opt.nf, opt), opt.nf, Constants.MAXSAT));
+            LOG.debug(sb.toString());
+        }
+
+        rtk.sol.ratio = s[0] > 0.0 ? (float) (s[1] / s[0]) : 0.0f;
+        if (rtk.sol.ratio > 999.9f) rtk.sol.ratio = 999.9f;
+
+        if (opt.thresar[5] != opt.thresar[6]) {
+            int nb1 = Math.min(nb, 50);
+            double[] coeff = new double[3];
+            for (int i = 0; i < 3; i++) {
+                coeff[i] = AR_POLY_COEFFS[i][0];
+                for (int j = 1; j < 5; j++) {
+                    coeff[i] = coeff[i] * opt.thresar[0] + AR_POLY_COEFFS[i][j];
+                }
+            }
+            double thres = coeff[0];
+            for (int i = 1; i < 3; i++) {
+                thres = thres / (nb1 + 1.0) + coeff[i];
+            }
+            thres = Math.min(Math.max(thres, opt.thresar[5]), opt.thresar[6]);
+            rtk.sol.thres = (float) thres;
+        } else {
+            rtk.sol.thres = (float) opt.thresar[0];
+        }
+
+        if (s[0] <= 0.0 || s[1] / s[0] < rtk.sol.thres) {
+            LOG.debug(String.format("resamb_LAMBDA: validation failed (nb=%d ratio=%.2f thresh=%.2f)", nb, rtk.sol.ratio, rtk.sol.thres));
+            return 0;
+        }
+
+        for (int i = 0; i < na; i++) {
+            rtk.xa[i] = rtk.x[i];
+            for (int j = 0; j < na; j++) {
+                rtk.Pa[i * na + j] = rtk.P[i * nx + j];
+            }
+        }
+
+        for (int i = 0; i < nb; i++) {
+            bias[i] = b[i * 2];
+            y[i] -= b[i * 2];
+        }
+
+        SimpleMatrix QbMat = MatrixUtil.createMatrix(Qb, nb, nb);
+        SimpleMatrix QbInv = MatrixUtil.invert(QbMat);
+        SimpleMatrix yMat = MatrixUtil.createMatrix(y, nb, 1);
+        SimpleMatrix dbVec = MatrixUtil.multiply(QbInv, yMat);
+        SimpleMatrix QabMat = MatrixUtil.createMatrix(Qab, na, nb);
+        SimpleMatrix dx = MatrixUtil.multiply(QabMat, dbVec);
+
+        double[] dxArr = MatrixUtil.toArray(dx);
+        for (int i = 0; i < na; i++) {
+            rtk.xa[i] -= dxArr[i];
+        }
+
+        SimpleMatrix QQ = MatrixUtil.multiply(QabMat, QbInv);
+        SimpleMatrix QabT = QabMat.transpose();
+        SimpleMatrix PaAdj = MatrixUtil.multiply(QQ, QabT);
+        for (int i = 0; i < na; i++) {
+            for (int j = 0; j < na; j++) {
+                rtk.Pa[i * na + j] -= PaAdj.get(i, j);
+            }
+        }
+
+        restamb(rtk, bias, nb, xa);
+
+        LOG.debug(String.format("resamb_LAMBDA: validation ok (nb=%d ratio=%.2f thresh=%.2f)", nb, rtk.sol.ratio, rtk.sol.thres));
+        return nb;
+    }
+
+    /** AR ratio多项式系数（来自RTKLIB ar_poly_coeffs） */
+    private static final double[][] AR_POLY_COEFFS = {
+        {19.8000, -8.0400,  0.8400, -0.0320, 0.0004},
+        {-8.0400,  4.8600, -0.6000, 0.0260, -0.0004},
+        { 0.8400, -0.6000,  0.0900, -0.0044, 0.0001}
+    };
+
+    /**
+     * LAMBDA模糊度管理（含多次重试策略）。
+     *
+     * <p>对应RTKLIB manage_amb_LAMBDA()。在resamb_LAMBDA基础上增加：</p>
+     * <ul>
+     *   <li>位置方差检查：var > thresar[1] 时跳过AR</li>
+     *   <li>排除卫星重试：ratio不够时排除一颗卫星重新计算</li>
+     *   <li>AR过滤：新卫星导致ratio下降时延迟使用</li>
+     *   <li>多次尝试：调整GLO/GPS AR模式重试</li>
+     * </ul>
+     *
+     * @param rtk  RTK解算状态
+     * @param bias 输出：双差固定模糊度
+     * @param xa   输出：固定解状态向量
+     * @param sat  共视卫星号数组
+     * @param nf   频率数
+     * @param ns   共视卫星数
+     * @return 双差对数（>1=成功, 0=跳过, -1=失败）
+     */
+    private static int manage_amb_LAMBDA(Rtk rtk, double[] bias, double[] xa, int[] sat, int nf, int ns) {
+        PrcOpt opt = rtk.opt;
+        int nx = rtk.nx;
+
+        double posvar = 0.0;
+        for (int i = 0; i < 3; i++) posvar += rtk.P[i * nx + i];
+        posvar /= 3.0;
+
+        LOG.debug(String.format("manage_amb_LAMBDA: posvar=%.6f prevRatios=%.3f/%.3f nb_ar=%d",
+                posvar, rtk.sol.prev_ratio1, rtk.sol.prev_ratio2, rtk.nb_ar));
+
+        if (opt.mode <= Constants.PMODE_DGPS || opt.modear == Constants.ARMODE_OFF ||
+            opt.thresar[0] < 1.0 || posvar > opt.thresar[1]) {
+            LOG.debug("manage_amb_LAMBDA: Skip AR");
+            rtk.sol.ratio = 0.0f;
+            rtk.sol.prev_ratio1 = 0.0f;
+            rtk.sol.prev_ratio2 = 0.0f;
+            rtk.nb_ar = 0;
+            return 0;
+        }
+
+        int[] lockc = new int[nf];
+        int excsat = 0;
+        if (rtk.sol.prev_ratio2 < rtk.sol.thres && rtk.nb_ar >= opt.mindropsats) {
+            int si = 0;
+            if (rtk.excsat != 0) {
+                for (; si < ns; si++) {
+                    if (rtk.excsat == sat[si]) {
+                        si++;
+                        break;
+                    }
+                }
+                if (si >= ns) si = 0;
+            }
+            for (; si < ns; si++) {
+                boolean found = false;
+                for (int f = 0; f < nf; f++) {
+                    if (rtk.ssat[sat[si] - 1].vsat[f] != 0 && rtk.ssat[sat[si] - 1].lock[f] >= 0 &&
+                        rtk.ssat[sat[si] - 1].azel[1] >= opt.elmin) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) {
+                    excsat = sat[si];
+                    break;
+                }
+            }
+            if (excsat != 0) {
+                for (int f = 0; f < nf; f++) {
+                    lockc[f] = rtk.ssat[excsat - 1].lock[f];
+                    rtk.ssat[excsat - 1].lock[f] = -rtk.nb_ar;
+                }
+                LOG.debug("manage_amb_LAMBDA: exclude sat {}", excsat);
+            }
+            rtk.excsat = excsat;
+        }
+
+        int gps1 = 1;
+        int glo1 = (opt.navsys & Constants.SYS_GLO) != 0 ?
+                ((opt.glomodear == Constants.GLO_ARMODE_FIXHOLD && rtk.holdambFlag == 0) ? 0 : 1) : 0;
+        int sbas1 = (opt.navsys & Constants.SYS_GLO) != 0 ? glo1 :
+                ((opt.navsys & Constants.SYS_SBS) != 0 ? 1 : 0);
+
+        int nb = resamb_LAMBDA(rtk, bias, xa, gps1, glo1, sbas1);
+        float ratio1 = rtk.sol.ratio;
+
+        if (opt.arfilter != 0 && nb >= 0) {
+            boolean rerun = false;
+            if (rtk.sol.prev_ratio2 >= rtk.sol.thres &&
+                (rtk.sol.ratio < rtk.sol.thres ||
+                 (rtk.sol.ratio < opt.thresar[0] * 1.1 && rtk.sol.ratio < rtk.sol.prev_ratio1 / 2.0))) {
+                LOG.debug("manage_amb_LAMBDA: low ratio, check for new sat");
+                int dly = 2;
+                for (int i = 0; i < ns; i++) {
+                    for (int f = 0; f < nf; f++) {
+                        if (rtk.ssat[sat[i] - 1].fix[f] != 2) continue;
+                        if (rtk.ssat[sat[i] - 1].lock[f] == 0) {
+                            LOG.debug("manage_amb_LAMBDA: remove sat {} f={} lock={}", sat[i], f, rtk.ssat[sat[i] - 1].lock[f]);
+                            rtk.ssat[sat[i] - 1].lock[f] = -opt.minlock - dly;
+                            dly += 2;
+                            rerun = true;
+                        }
+                    }
+                }
+            }
+            if (rerun) {
+                LOG.debug("manage_amb_LAMBDA: rerun AR with new sats removed");
+                nb = resamb_LAMBDA(rtk, bias, xa, gps1, glo1, sbas1);
+            }
+        }
+
+        if ((opt.navsys & Constants.SYS_GLO) != 0 && opt.glomodear == Constants.GLO_ARMODE_FIXHOLD &&
+            rtk.sol.ratio < rtk.sol.thres) {
+            int glo2 = 0, sbas2 = 0;
+            int gps2 = opt.gpsmodear == 0 && rtk.sol.ratio >= rtk.sol.thres ? 0 : 1;
+            if (glo1 != glo2 || gps1 != gps2) {
+                nb = resamb_LAMBDA(rtk, bias, xa, gps2, glo2, sbas2);
+            }
+        }
+
+        if (excsat != 0 && rtk.sol.ratio < rtk.sol.thres &&
+            rtk.sol.ratio < 1.5 * rtk.sol.prev_ratio2) {
+            for (int f = 0; f < nf; f++) {
+                rtk.ssat[excsat - 1].lock[f] = lockc[f];
+            }
+            LOG.debug("manage_amb_LAMBDA: restore sat {}", excsat);
+        }
+
+        rtk.sol.prev_ratio1 = ratio1 > 0 ? ratio1 : rtk.sol.ratio;
+        rtk.sol.prev_ratio2 = rtk.sol.ratio;
+
+        return nb;
+    }
+
+    /**
      * 固定模糊度保持（Fix-and-Hold）。
      *
-     * <p>当LAMBDA固定解连续达到minfix个历元后，将固定模糊度值
-     * 写回状态向量，并用较小方差 thresar[1] 替代原始大方差，
-     * 使后续历元模糊度不易漂移。</p>
+     * <p>对应RTKLIB holdamb()。当LAMBDA固定解连续达到minfix个历元后，
+     * 使用Kalman滤波将固定模糊度约束写回状态向量和协方差矩阵。</p>
+     *
+     * <p>与简单赋值不同，此函数构建设计矩阵H和伪观测v，
+     * 通过Kalman滤波更新来约束模糊度，避免突变。</p>
      *
      * @param rtk RTK解算状态
      * @param xa  固定解状态向量
-     * @param sat 共视卫星号数组
-     * @param ns  共视卫星数
-     * @param nf  频率数
-     * @param nx  状态维数
-     * @param nav 导航数据
      */
-    private static void holdamb(Rtk rtk, double[] xa, int[] sat, int ns, int nf, int nx, Nav nav) {
+    private static void holdamb(Rtk rtk, double[] xa) {
         PrcOpt opt = rtk.opt;
-        for (int i = 0; i < ns; i++) {
+        int nx = rtk.nx;
+        int nb = nx - rtk.na;
+        int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
+        int[] index = new int[Constants.MAXSAT];
+        int nv = 0;
+
+        double[] v = new double[nb];
+        double[] H = new double[nb * nx];
+
+        for (int m = 0; m < 6; m++) {
             for (int f = 0; f < nf; f++) {
-                int idx = IB(sat[i], f, nf, opt);
-                if (idx >= nx) continue;
-                rtk.x[idx] = xa[idx];
-                rtk.P[idx * nx + idx] = SQR(opt.thresar[1]);
+                int n = 0;
+                for (int i = 0; i < Constants.MAXSAT; i++) {
+                    if (!testSys(rtk.ssat[i].sys, m) || rtk.ssat[i].fix[f] != 2 ||
+                        rtk.ssat[i].azel[1] < opt.elmaskhold) {
+                        continue;
+                    }
+                    index[n++] = IB(i + 1, f, nf, opt);
+                    rtk.ssat[i].fix[f] = 3;
+                }
+                for (int i = 1; i < n; i++) {
+                    v[nv] = (xa[index[0]] - xa[index[i]]) - (rtk.x[index[0]] - rtk.x[index[i]]);
+                    H[nv * nx + index[0]] = 1.0;
+                    H[nv * nx + index[i]] = -1.0;
+                    nv++;
+                }
             }
         }
+
+        if (opt.modear == Constants.ARMODE_FIXHOLD && nv < opt.minholdsats) {
+            LOG.debug("holdamb: not enough sats to hold ambiguity (nv={})", nv);
+            return;
+        }
+
+        rtk.holdambFlag = 1;
+
+        double[] R = new double[nv * nv];
+        for (int i = 0; i < nv; i++) R[i * nv + i] = opt.varholdamb;
+
+        int info = filter(rtk.x, rtk.P, H, v, R, nx, nv);
+        if (info != 0) {
+            LOG.warn("holdamb filter error (info={})", info);
+        }
+
+        if (opt.glomodear != Constants.GLO_ARMODE_FIXHOLD) return;
+
+        for (int f = 0; f < nf; f++) {
+            int refIdx = -1;
+            for (int j = 0; j < Constants.MAXSAT; j++) {
+                if (testSys(rtk.ssat[j].sys, 1) && rtk.ssat[j].vsat[f] != 0 && rtk.ssat[j].lock[f] >= 0) {
+                    if (refIdx < 0) {
+                        refIdx = j;
+                    } else {
+                        double dd = rtk.x[IB(j + 1, f, nf, opt)] - rtk.x[IB(refIdx + 1, f, nf, opt)];
+                        dd = opt.gainholdamb * (dd - Math.round(dd));
+                        rtk.x[IB(j + 1, f, nf, opt)] -= dd;
+                        rtk.ssat[j].icbias[f] += dd;
+                    }
+                }
+            }
+        }
+
+        for (int f = 0; f < nf; f++) {
+            int refIdx = -1;
+            for (int j = 0; j < Constants.MAXSAT; j++) {
+                if (testSys(rtk.ssat[j].sys, 0) && rtk.ssat[j].vsat[f] != 0 && rtk.ssat[j].lock[f] >= 0) {
+                    if (refIdx < 0) {
+                        refIdx = j;
+                    } else {
+                        if (rtk.ssat[j].sys != Constants.SYS_SBS) continue;
+                        double dd = rtk.x[IB(j + 1, f, nf, opt)] - rtk.x[IB(refIdx + 1, f, nf, opt)];
+                        dd = opt.gainholdamb * (dd - Math.round(dd));
+                        rtk.x[IB(j + 1, f, nf, opt)] -= dd;
+                        rtk.ssat[j].icbias[f] += dd;
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean valpos(Rtk rtk, double[] v, double[] R, int[] vflg, int nv, double thres) {
+        double fact = thres * thres;
+        for (int i = 0; i < nv; i++) {
+            if (v[i] * v[i] <= fact * R[i * nv + i]) continue;
+            int sat1 = (vflg[i] >> 16) & 0xFF;
+            int sat2 = (vflg[i] >> 8) & 0xFF;
+            int type = (vflg[i] >> 4) & 0xF;
+            int freq = vflg[i] & 0xF;
+            LOG.debug(String.format("valpos: large residual (sat=%d-%d type=%d f=%d v=%.4f sig=%.4f)",
+                    sat1, sat2, type, freq, v[i], Math.sqrt(R[i * nv + i])));
+        }
+        return true;
     }
 }
