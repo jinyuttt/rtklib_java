@@ -240,6 +240,7 @@ public final class Constants {
     public static final int NSATSBS = (MAXPRNSBS - MINPRNSBS + 1);
 
     public static final int MAXSAT = (NSATGPS + NSATGLO + NSATGAL + NSATQZS + NSATCMP + NSATIRN + NSATSBS + NSATLEO);
+    public static final int GAP_RESION = 120;
     public static final int MAXSTA = 255;
     public static final int MAXOBS = 96;
     public static final int MAXRCV = 64;

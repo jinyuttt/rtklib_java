@@ -90,6 +90,15 @@ public class Rtk {
     /** 模糊度控制信息 */
     public Ambc ambc;
 
+    /** 上次AR使用的双差对数（manage_amb_LAMBDA用） */
+    public int nb_ar;
+
+    /** AR中被排除的卫星号（0=无排除） */
+    public int excsat;
+
+    /** Fix-and-Hold是否已执行标志 */
+    public int holdambFlag;
+
     /**
      * 默认构造函数，初始化所有字段。
      */
@@ -114,9 +123,10 @@ public class Rtk {
         }
         this.opt = new PrcOpt();
         this.ambc = new Ambc();
+        this.nb_ar = 0;
+        this.excsat = 0;
+        this.holdambFlag = 0;
         this.traceControl = null;
         this.traceCallback = null;
     }
 }
-
-

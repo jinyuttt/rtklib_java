@@ -1,8 +1,8 @@
 -------------------------------------------------------------------------------
 Test set: org.rtklib.java.RinexConversionTest
 -------------------------------------------------------------------------------
-Tests run: 5, Failures: 0, Errors: 2, Skipped: 0, Time elapsed: 0.313 s <<< FAILURE! -- in org.rtklib.java.RinexConversionTest
-org.rtklib.java.RinexConversionTest.testCompareObsWithRtklibC(Path) -- Time elapsed: 0.122 s <<< ERROR!
+Tests run: 5, Failures: 0, Errors: 2, Skipped: 0, Time elapsed: 1.173 s <<< FAILURE! -- in org.rtklib.java.RinexConversionTest
+org.rtklib.java.RinexConversionTest.testCompareObsWithRtklibC(Path) -- Time elapsed: 0.505 s <<< ERROR!
 java.nio.file.NoSuchFileException: D:\code\rtklib_java\540423494727\2026-06-08\full.obs
 	at java.base/sun.nio.fs.WindowsException.translateToIOException(WindowsException.java:85)
 	at java.base/sun.nio.fs.WindowsException.rethrowAsIOException(WindowsException.java:103)
@@ -21,7 +21,7 @@ java.nio.file.NoSuchFileException: D:\code\rtklib_java\540423494727\2026-06-08\f
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
 
-org.rtklib.java.RinexConversionTest.testCompareNavWithRtklibC(Path) -- Time elapsed: 0.054 s <<< ERROR!
+org.rtklib.java.RinexConversionTest.testCompareNavWithRtklibC(Path) -- Time elapsed: 0.175 s <<< ERROR!
 java.io.FileNotFoundException: D:\code\rtklib_java\540423494727\2026-06-08\full.nav (系统找不到指定的路径。)
 	at java.base/java.io.FileInputStream.open0(Native Method)
 	at java.base/java.io.FileInputStream.open(FileInputStream.java:213)

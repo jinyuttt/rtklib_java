@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: org.rtklib.java.RtkTest
 -------------------------------------------------------------------------------
-Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.257 s -- in org.rtklib.java.RtkTest
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.867 s -- in org.rtklib.java.RtkTest

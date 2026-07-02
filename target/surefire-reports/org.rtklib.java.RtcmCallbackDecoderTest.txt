@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: org.rtklib.java.RtcmCallbackDecoderTest
 -------------------------------------------------------------------------------
-Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.263 s -- in org.rtklib.java.RtcmCallbackDecoderTest
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.536 s -- in org.rtklib.java.RtcmCallbackDecoderTest

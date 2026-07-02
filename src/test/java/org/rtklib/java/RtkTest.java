@@ -29,12 +29,12 @@ public class RtkTest {
     private static final Logger log = LoggerFactory.getLogger(RtkTest.class);
 
     private static final String ROVER_PATH =
-            "C:\\Users\\admin\\Desktop\\540423494727\\2026-06-08\\1.rtcm3";
+            "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage\\GS2025090006\\2026-07-01\\0.rtcm3";
 
     private static final String BASE_PATH =
-            "C:\\Users\\admin\\Desktop\\540423496360\\2026-06-08\\1.rtcm3";
+            "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage\\GS2025090017\\2026-07-01\\0.rtcm3";
 
-    private static final String RESULT_DIR = "C:\\Users\\admin\\Desktop\\rtklib_java_results";
+    private static final String RESULT_DIR = "D:\\code\\rtklib_java\\rtk_compare\\java_results";
 
     private static byte[] roverData;
     private static byte[] baseData;
@@ -220,14 +220,14 @@ public class RtkTest {
         }
 
         Rtk rtk = new Rtk();
-        rtk.opt.mode = Constants.PMODE_KINEMA;
+        rtk.opt.mode = Constants.PMODE_STATIC;
         rtk.opt.nf = 2;
-        rtk.opt.navsys = Constants.SYS_CMP;
+        rtk.opt.navsys = Constants.SYS_GPS | Constants.SYS_SBS | Constants.SYS_GLO | Constants.SYS_GAL | Constants.SYS_CMP;
 
         rtk.opt.elmin = 15.0 * Constants.D2R;
         rtk.opt.ionoopt = Constants.IONOOPT_BRDC;
         rtk.opt.tropopt = Constants.TROPOPT_SAAS;
-        rtk.opt.modear = Constants.ARMODE_OFF;
+        rtk.opt.modear = Constants.ARMODE_FIXHOLD;
 
         log.info("计算基准站近似坐标...");
         double[] basePos = computeBasePosition(baseEpochs, nav, rtk.opt);
@@ -244,6 +244,8 @@ public class RtkTest {
 
         BufferedWriter writer = ResultWriter.create(resultFile, "RTK 定位结果");
         ResultWriter.writePosHeader(writer, "RTK (Kinematic)");
+        String ecefFile = RESULT_DIR + "\\3_rtk_result_ecef.pos";
+        BufferedWriter ecefWriter = ResultWriter.create(ecefFile, "RTK 定位结果 (ECEF)");
 
         System.arraycopy(basePos, 0, rtk.opt.rb, 0, 3);
 
@@ -260,7 +262,7 @@ public class RtkTest {
         for (ObsEpoch roverEpoch : roverEpochs) {
             GTime roverTime = roverEpoch.time;
 
-            while (baseIdx < baseEpochs.size()) {
+            while (baseIdx >= 0 && baseIdx < baseEpochs.size()) {
                 double dt = TimeSystem.timediff(baseEpochs.get(baseIdx).time, roverTime);
                 if (Math.abs(dt) < 1.0) break;
                 if (dt > 0) { baseIdx = -1; break; }
@@ -297,6 +299,7 @@ public class RtkTest {
             if (result == 1) {
                 rtkCount++;
                 ResultWriter.writePosLine(writer, rtk.sol);
+                ResultWriter.writeEcefLine(ecefWriter, rtk.sol);
                 if (rtk.sol.stat == Constants.SOLQ_FIX) fixCount++;
                 else if (rtk.sol.stat == Constants.SOLQ_FLOAT) floatCount++;
                 else if (rtk.sol.stat == Constants.SOLQ_SINGLE) singleCount++;
@@ -307,6 +310,7 @@ public class RtkTest {
 
         ResultWriter.writeSummary(writer, matchedEpochs, rtkCount, failCount, fixCount, floatCount, singleCount);
         writer.close();
+        ecefWriter.close();
 
         log.info("RTK 结果已写入: {}", resultFile);
         log.info("RTK 结果: 匹配历元={}, 成功={}, 失败={}", matchedEpochs, rtkCount, failCount);

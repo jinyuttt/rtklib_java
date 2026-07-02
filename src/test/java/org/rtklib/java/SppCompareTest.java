@@ -330,12 +330,16 @@ public class SppCompareTest {
     }
 
     static class JavaResult {
+        final GTime time;
         final String timeKey;
         final double lat, lon, h;
         final int ns, stat;
 
         JavaResult(GTime time, double[] llh, int ns, int stat) {
-            this.timeKey = formatTimeKey(time);
+            this.time = new GTime(time);
+            int[] week = new int[1];
+            double tow = TimeSystem.time2gpst(time, week);
+            this.timeKey = String.format("%04d %09.3f", week[0], tow);
             this.lat = llh[0] * Constants.R2D;
             this.lon = llh[1] * Constants.R2D;
             this.h = llh[2];

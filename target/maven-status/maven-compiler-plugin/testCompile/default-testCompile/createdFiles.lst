@@ -1,7 +1,15 @@
-org\rtklib\java\RtkTraceTest$1.class
 org\rtklib\java\RtkProcessorTest$1.class
+org\rtklib\java\SppCompareTest.class
 org\rtklib\java\VerifyPositioningTest.class
 org\rtklib\java\RtkProcessorTest.class
-org\rtklib\java\RtkTraceTest.class
+org\rtklib\java\SppCompareTest$CResult.class
 org\rtklib\java\PppTest.class
+org\rtklib\java\SppCompareTest$ObsEpoch.class
+org\rtklib\java\SppCompareRunner$CResult.class
+org\rtklib\java\SppCompareRunner$ObsEpoch.class
+org\rtklib\java\SppCompareTest$JavaResult.class
+org\rtklib\java\RtkTraceTest$1.class
+org\rtklib\java\SppCompareRunner.class
+org\rtklib\java\SppCompareRunner$JavaResult.class
+org\rtklib\java\RtkTraceTest.class
 org\rtklib\java\RtkProcessorTest$2.class

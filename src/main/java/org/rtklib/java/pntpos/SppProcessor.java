@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.rtklib.java.common.CompatFileIO;
+import org.rtklib.java.common.RtklibCommon;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -554,6 +555,7 @@ public class SppProcessor {
     }
 
     private void processEpoch(Obsd[] obsData, int n, GTime time, Nav nav) {
+        n = RtklibCommon.sortobs(obsData, n);
         totalEpochs++;
 
         double[] rs = new double[n * 6];

@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.rtklib.java.common.CompatFileIO;
+import org.rtklib.java.common.RtklibCommon;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -448,8 +449,8 @@ public class RtkProcessor {
     }
 
     private void processEpoch(Obsd[] obs, int n, GTime time, Nav nav) {
+        n = RtklibCommon.sortobs(obs, n);
         totalEpochs++;
-
 
         int result = RtkCore.rtkpos(rtk, obs, n, nav);
 
