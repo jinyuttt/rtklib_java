@@ -63,8 +63,6 @@ public class SppCompareRunner {
     }
 
     public static void main(String[] args) throws Exception {
-        System.out.println("===== 加载 RINEX 数据 =====");
-
         RinexParser parser = new RinexParser();
         if (!parser.parseObs(OBS_FILE)) {
             System.err.println("解析 OBS 失败: " + OBS_FILE);
@@ -78,16 +76,7 @@ public class SppCompareRunner {
         Nav nav = parser.nav;
         List<ObsEpoch> obsEpochs = groupObsByEpoch(parser.obs.data, parser.obs.n);
 
-        System.out.println("历元数: " + obsEpochs.size() + ", 导航星历: eph=" + nav.n);
 
-        for (int i = 0; i < Math.min(3, obsEpochs.size()); i++) {
-            double[] ymdhms = TimeSystem.time2ymdhms(obsEpochs.get(i).time);
-            System.out.printf("历元 #%d: %04d-%02d-%02d %02d:%02d:%06.3f nsat=%d%n",
-                    i + 1, (int) ymdhms[0], (int) ymdhms[1], (int) ymdhms[2],
-                    (int) ymdhms[3], (int) ymdhms[4], ymdhms[5], obsEpochs.get(i).n);
-        }
-
-        // 配置: BDS-only, 与 C spp_bds.pos 一致
         PrcOpt opt = new PrcOpt();
         opt.mode = Constants.PMODE_SINGLE;
         opt.nf = 2;
@@ -102,8 +91,6 @@ public class SppCompareRunner {
         Sol sol = new Sol();
         List<JavaResult> javaResults = new ArrayList<>();
         int failCount = 0;
-
-        System.out.println("\n===== 运行 SPP 定位 =====");
 
         for (int ep = 0; ep < obsEpochs.size(); ep++) {
             ObsEpoch epoch = obsEpochs.get(ep);
@@ -130,15 +117,9 @@ public class SppCompareRunner {
                 javaResults.add(new JavaResult(epoch.time, llh, sol.ns, sol.stat));
             } else {
                 failCount++;
-                if (failCount <= 5) {
-                    System.out.println("  历元 " + ep + " 失败: " + (msg[0] != null ? msg[0] : "unknown"));
-                }
             }
         }
 
-        System.out.println("Java SPP: 成功=" + javaResults.size() + ", 失败=" + failCount);
-
-        // 写入 Java 结果
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(JAVA_RESULT_FILE))) {
             writer.write("% program   : rtklib_java SPP\n");
             writer.write("% inp file  : 1.obs\n");
@@ -151,11 +132,8 @@ public class SppCompareRunner {
                         jr.timeKey, jr.lat, jr.lon, jr.h, jr.stat, jr.ns));
             }
         }
-        System.out.println("Java 结果已写入: " + JAVA_RESULT_FILE);
 
-        // 读取 C 参考结果
         List<CResult> cResults = readSppBdsPos(C_REF_FILE);
-        System.out.println("RTKLIB C SPP: " + cResults.size() + " 个解");
 
         // 对比
         Map<String, CResult> cMap = new LinkedHashMap<>();
@@ -171,20 +149,12 @@ public class SppCompareRunner {
         int nsDiffCount = 0;
         List<String> largeErrLines = new ArrayList<>();
 
-        System.out.println();
-        System.out.printf("%-22s  %14s %14s %10s  %3s %3s  |  dLat(deg)  dLon(deg)  dH(m)   3D(m)%n",
-                "Time", "Lat_java", "Lon_java", "H_java", "nsJ", "nsC");
-        System.out.println("-".repeat(130));
-
         for (JavaResult jr : javaResults) {
             String timeKey = jr.timeKey;
             CResult cr = cMap.get(timeKey);
 
             if (cr == null) {
                 unmatched++;
-                if (unmatched <= 5) {
-                    System.out.println("  Java 解未在 C 结果中找到: " + timeKey);
-                }
                 continue;
             }
 
@@ -208,41 +178,11 @@ public class SppCompareRunner {
 
             if (jr.ns != cr.ns) nsDiffCount++;
 
-            if (compared <= 10 || d3 > 0.5 || jr.ns != cr.ns) {
-                String line = String.format("%-22s  %14.9f %14.9f %10.4f  %3d %3d  |  %9.6f  %9.6f  %8.3f %8.3f%s",
-                        timeKey, jr.lat, jr.lon, jr.h, jr.ns, cr.ns,
-                        latDiff, lonDiff, hDiff, d3,
-                        d3 > 1.0 ? " ***" : "");
-                System.out.println(line);
-                if (d3 > 1.0) largeErrLines.add(line);
+            if (d3 > 1.0) {
+                largeErrLines.add(String.format("%s 3D=%.3f", timeKey, d3));
             }
         }
 
-        System.out.println("-".repeat(130));
-        System.out.println("\n===== 对比汇总 =====");
-        System.out.println("C 历元数: " + cResults.size() + ", Java 解数: " + javaResults.size() + ", 匹配: " + compared + ", 未匹配: " + unmatched);
-        if (compared > 0) {
-            System.out.printf("平均纬度偏差: %.9f deg (%.3f m), 最大: %.9f deg (%.3f m)%n",
-                    sumLatDiff / compared, sumLatDiff / compared * 111000,
-                    maxLatDiff, maxLatDiff * 111000);
-            System.out.printf("平均经度偏差: %.9f deg (%.3f m), 最大: %.9f deg (%.3f m)%n",
-                    sumLonDiff / compared, sumLonDiff / compared * 111000 * Math.cos(Math.toRadians(29.19)),
-                    maxLonDiff, maxLonDiff * 111000 * Math.cos(Math.toRadians(29.19)));
-            System.out.printf("平均高程偏差: %.3f m, 最大: %.3f m%n",
-                    sumHDiff / compared, maxHDiff);
-            System.out.printf("平均 3D 偏差: %.3f m, 最大: %.3f m%n",
-                    sum3D / compared, max3D);
-            System.out.println("ns 不一致历元: " + nsDiffCount + "/" + compared);
-        }
-
-        if (!largeErrLines.isEmpty()) {
-            System.out.println("\n===== 大偏差历元 (3D > 1m) =====");
-            for (String line : largeErrLines) {
-                System.out.println(line);
-            }
-        }
-
-        // 判断
         if (compared == 0) {
             System.err.println("ERROR: 没有匹配的历元!");
             System.exit(1);
@@ -252,7 +192,6 @@ public class SppCompareRunner {
             System.err.printf("ERROR: 平均 3D 偏差 %.3f m > 5 m, SPP 结果异常!%n", avg3D);
             System.exit(1);
         }
-        System.out.printf("%nOK: 平均 3D 偏差 %.3f m < 5 m, SPP 结果正常%n", avg3D);
     }
 
     private static List<ObsEpoch> groupObsByEpoch(Obsd[] data, int n) {

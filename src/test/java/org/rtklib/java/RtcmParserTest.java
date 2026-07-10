@@ -444,7 +444,6 @@ public class RtcmParserTest {
     }
 
     private void compareMsm1124(byte[] buff) {
-        System.out.println("--- MSM 1124 逐位对比 ---");
         StringBuilder sb = new StringBuilder();
 
         int i = 24;
@@ -591,11 +590,9 @@ public class RtcmParserTest {
                 }
             }
         }
-        System.out.print(sb.toString());
     }
 
     private void compareEph1042(byte[] buff) {
-        System.out.println("--- 星历 1042 逐位对比 ---");
         StringBuilder sb = new StringBuilder();
 
         int i = 24;
@@ -672,7 +669,6 @@ public class RtcmParserTest {
                 }
             }
         }
-        System.out.print(sb.toString());
     }
 
     @Test

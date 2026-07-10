@@ -132,20 +132,16 @@ public final class RtkCore {
         for (nu = 0; nu < n && obs[nu].rcv == 1; nu++) ;
         for (nr = 0; nu + nr < n && obs[nu + nr].rcv == 2; nr++) ;
 
-        LOG.debug("rtkpos: nu={} nr={} stat={}", nu, nr, rtk.sol.stat);
-
         rtk.epoch++;
 GTime prevTime = new GTime(rtk.sol.time);
 
         if (rtk.P[0] == 0.0 || rtk.P[0] > STD_PREC_VAR_THRESH) {
             int pntResult = PntPos.pntpos(obs, nu, nav, opt, rtk.sol, null, rtk.ssat);
-            LOG.debug("rtkpos pntpos result={} nu={}", pntResult, nu);
             if (pntResult == 1) {
                 int vsCount = 0;
                 for (int ii = 0; ii < Constants.MAXSAT; ii++) {
                     if (rtk.ssat[ii].vs != 0) vsCount++;
                 }
-                LOG.debug("rtkpos after pntpos: vsCount={}", vsCount);
             }
             if (pntResult == 0) {
                 if (opt.dynamics == 0) return 0;
@@ -293,7 +289,6 @@ GTime prevTime = new GTime(rtk.sol.time);
         int nx = nState + Constants.MAXSAT * nf;
         boolean reinit = (rtk.nx != nx);
         rtk.na = nState;
-        LOG.debug("relpos: ns={} nf={} nx={} rtk.nx={} rtk.na={} reinit={}", ns, nf, nx, rtk.nx, rtk.na, reinit);
         if (rtk.nx != nx) {
             rtk.nx = nx;
             rtk.x = new double[nx];
@@ -325,7 +320,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                     rtk.ssat[sat[i] - 1].lock[0], rtk.ssat[sat[i] - 1].lock[1],
                     rtk.ssat[sat[i] - 1].vsat[0], rtk.ssat[sat[i] - 1].vsat[1]));
         }
-        LOG.debug("sat list after udstate: " + satListStr);
         StringBuilder ambStr = new StringBuilder();
         for (i = 0; i < ns; i++) {
             for (f = 0; f < nf; f++) {
@@ -335,8 +329,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                 }
             }
         }
-        LOG.debug("amb states after udstate: " + ambStr);
-
         for (i = 0; i < ns; i++) {
             for (f = 0; f < nf; f++) {
                 rtk.ssat[sat[i] - 1].snrRover[f] = obs[iu[i]].SNR[f];
@@ -361,13 +353,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         double[] rr_rover = new double[3];
 
         for (i = 0; i < opt.niter; i++) {
-            LOG.debug(String.format("iter %d start: xp0=(%.6f,%.6f,%.6f) Pp[0]=%.4f Pp[432]=%.4f Pp[862]=%.4f Pp[1]=%.4f Pp[2]=%.4f",
-                    i, xp[0], xp[1], xp[2], Pp[0], Pp[1*nx+1], Pp[2*nx+2], Pp[1], Pp[2]));
             for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xp[j];
-            LOG.debug(String.format("rover pos: rr=(%.2f,%.2f,%.2f) xp=(%.6f,%.6f,%.6f) rb=(%.2f,%.2f,%.2f)",
-                    rr_rover[0], rr_rover[1], rr_rover[2],
-                    xp[0], xp[1], xp[2],
-                    rtk.rb[0], rtk.rb[1], rtk.rb[2]));
             if (!zdres(0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
                     y, e, azel, freq)) {
                 LOG.warn("rover initial position error");
@@ -376,7 +362,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
             }
             if ((nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
                     iu, ir, ns, nf, nav, v, H, R, vflg)) < 4) {
-                LOG.debug("not enough double-differenced residual, nv={}", nv);
+                RtkTrace.traceDiag(rtk.traceControl, rtk.traceCallback, rtk.epoch, obs[0].time, "STAGE3_INSUFF", String.format("nv=%d", nv));
                 stat = Constants.SOLQ_NONE;
                 break;
             }
@@ -388,28 +374,12 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                     obs[0].time, refSatForTrace, sat, ns, nf, v, nv, R, H, rtk.nx, opt);
 
             double xp0 = xp[0], xp1 = xp[1], xp2 = xp[2];
-            StringBuilder vAll = new StringBuilder("v=[");
-            for (int vi = 0; vi < nv; vi++) {
-                int sat1 = (vflg[vi] >> 16) & 0xFF;
-                int sat2 = (vflg[vi] >> 8) & 0xFF;
-                int isCode = (vflg[vi] >> 4) & 1;
-                int frqIdx = vflg[vi] & 0xF;
-                vAll.append(String.format("%d:%d%d%d=%.4f ", sat1, sat2, isCode, frqIdx, v[vi]));
-            }
-            vAll.append("]");
-            StringBuilder rDiag = new StringBuilder("Rdiag=[");
-            for (int vi = 0; vi < nv; vi++) rDiag.append(String.format("%.4f ", R[vi * nv + vi]));
-            rDiag.append("]");
-            LOG.debug(String.format("pre-filter: nv=%d %s %s xp0=(%.6f,%.6f,%.6f) P0=%.1f P1=%.1f P2=%.1f", nv, vAll, rDiag, xp0, xp1, xp2, Pp[0], Pp[1*nx+1], Pp[2*nx+2]));
             double[] xpBeforeFilter = xp.clone();
             int info = filter(xp, Pp, H, v, R, nx, nv);
-            LOG.debug(String.format("filter: info=%d nv=%d dxp=(%.6f,%.6f,%.6f) P0=%.4f P1=%.4f P2=%.4f",
-                    info, nv,
-                    xp[0] - xp0, xp[1] - xp1, xp[2] - xp2, Pp[0], Pp[1*nx+1], Pp[2*nx+2]));
             RtkTrace.traceStage4(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                     obs[0].time, info, xp, xpBeforeFilter, rtk.nx, Pp);
             if (info != 0) {
-                LOG.debug("filter error (info={})", info);
+                RtkTrace.traceDiag(rtk.traceControl, rtk.traceCallback, rtk.epoch, obs[0].time, "STAGE4_ERROR", String.format("info=%d", info));
                 stat = Constants.SOLQ_NONE;
                 break;
             }
@@ -423,8 +393,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                         iu, ir, ns, nf, nav, v, null, R, vflg);
                 double maxRes = 0;
                 for (int vi = 0; vi < nv; vi++) maxRes = Math.max(maxRes, Math.abs(v[vi]));
-                LOG.debug(String.format("post-filter residuals: nv=%d max|v|=%.4f", nv, maxRes));
-
                 System.arraycopy(xp, 0, rtk.x, 0, nx);
                 System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
 
@@ -531,11 +499,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                 obs[0].time, rtk.sol, opt.niter);
 
 
-        LOG.debug("relpos done: nv={} stat={} x[0..2]=({},{},{})",
-                nv, stat,
-                String.format("%.4f", rtk.x[0]),
-                String.format("%.4f", rtk.x[1]),
-                String.format("%.4f", rtk.x[2]));
 
         return stat != Constants.SOLQ_NONE ? 1 : 0;
     }
@@ -643,8 +606,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     private static double intpres(GTime time, Obsd[] obs, int nu, int nr, Nav nav, Rtk rtk,
                                   int nf, double[] y) {
         double tt = TimeSystem.timediff(time, obs[nu].time);
-        LOG.debug(String.format("intpres: n=%d tt=%.3f epoch=%d", nr, tt, rtk.epoch));
-
         if (rtk.intpres_nb == 0 || rtk.epoch == 0 || Math.abs(tt) < Constants.DTTOL) {
             rtk.intpres_nb = nr;
             for (int i = 0; i < nr; i++) {
@@ -709,7 +670,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
 
         double rrNorm = RtklibCommon.norm(rr, 3);
         if (rrNorm <= Constants.RE_WGS84 / 2) {
-            LOG.debug("zdres: base={} rr=({},{},{}) norm={} too small", base,
+            LOG.warn("zdres: base={} rr=({},{},{}) norm={} too small", base,
                     String.format("%.1f", rr[0]),
                     String.format("%.1f", rr[1]),
                     String.format("%.1f", rr[2]),
@@ -750,15 +711,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
             r += mapfh * zhd;
 
             if (base == 0) {
-                LOG.debug(String.format("zdres rover: sat=%d rs=(%.3f,%.3f,%.3f) r=%.6f c*dts=%.6f zhd=%.6f map=%.6f trop=%.6f",
-                        obs[idx].sat, rsi[0], rsi[1], rsi[2],
-                        r - mapfh * zhd + Constants.CLIGHT * dts[idx * 2],
-                        -Constants.CLIGHT * dts[idx * 2], zhd, mapfh, mapfh * zhd));
             } else {
-                LOG.debug(String.format("zdres base: sat=%d rs=(%.3f,%.3f,%.3f) r=%.6f c*dts=%.6f zhd=%.6f map=%.6f trop=%.6f",
-                        obs[idx].sat, rsi[0], rsi[1], rsi[2],
-                        r - mapfh * zhd + Constants.CLIGHT * dts[idx * 2],
-                        -Constants.CLIGHT * dts[idx * 2], zhd, mapfh, mapfh * zhd));
             }
 
             e[idx * 3] = ei[0];
@@ -871,9 +824,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         CoordTransform.ecef2pos(rr_f, pos);
 
         double bl = baseline(x, rtk.rb, null);
-        LOG.debug(String.format("ddres: bl=%.1f m rb=(%.1f,%.1f,%.1f) rr_f=(%.1f,%.1f,%.1f)",
-                bl, rtk.rb[0], rtk.rb[1], rtk.rb[2],
-                rtk.rb[0] + x[0], rtk.rb[1] + x[1], rtk.rb[2] + x[2]));
         double[] Ri = new double[ns * nf * 2 + 2];
         double[] Rj = new double[ns * nf * 2 + 2];
 
@@ -911,7 +861,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                     refPrn = tmp[0];
                     int refSys = SatUtils.satsys(sat[refIdx], null);
                     char sysChar = refSys == Constants.SYS_GPS ? 'G' : refSys == Constants.SYS_GLO ? 'R' : refSys == Constants.SYS_GAL ? 'E' : 'C';
-                    LOG.debug(String.format("ddres ref: f=%d ref=%c%02d sat=%d el=%.1f", frq, sysChar, refPrn, sat[refIdx], azel[1 + iu[refIdx] * 2] * 180.0 / Math.PI));
                 }
 
                 for (j = 0; j < ns; j++) {
@@ -937,30 +886,8 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                     v[nv] = (y[f + idx_i * nf * 2] - y[f + idx_ir * nf * 2])
                             - (y[f + idx_j * nf * 2] - y[f + idx_jr * nf * 2]);
                     if (code && frq == 0) {
-                        LOG.debug(String.format("ddres P: ref=%d-%d f=%d y[%d]=%.4f y[%d]=%.4f y[%d]=%.4f y[%d]=%.4f dd=%.4f",
-                                sat[refIdx], sat[j], f,
-                                f + idx_i * nf * 2, y[f + idx_i * nf * 2],
-                                f + idx_ir * nf * 2, y[f + idx_ir * nf * 2],
-                                f + idx_j * nf * 2, y[f + idx_j * nf * 2],
-                                f + idx_jr * nf * 2, y[f + idx_jr * nf * 2], v[nv]));
-                        int fL1 = 0;
-                        LOG.debug(String.format("ddres L: ref=%d-%d y[%d]=%.4f y[%d]=%.4f y[%d]=%.4f y[%d]=%.4f ddL=%.4f",
-                                sat[refIdx], sat[j],
-                                fL1 + idx_i * nf * 2, y[fL1 + idx_i * nf * 2],
-                                fL1 + idx_ir * nf * 2, y[fL1 + idx_ir * nf * 2],
-                                fL1 + idx_j * nf * 2, y[fL1 + idx_j * nf * 2],
-                                fL1 + idx_jr * nf * 2, y[fL1 + idx_jr * nf * 2],
-                                (y[fL1 + idx_i * nf * 2] - y[fL1 + idx_ir * nf * 2]) - (y[fL1 + idx_j * nf * 2] - y[fL1 + idx_jr * nf * 2])));
                     }
                     if (!code && frq == 0 && H != null) {
-                        LOG.debug(String.format("ddres v: ref=%d-%d %s%d y_r=%.4f y_b=%.4f y_r2=%.4f y_b2=%.4f dd=%.4f",
-                                sat[refIdx], sat[j], code ? "P" : "L", frq + 1,
-                                y[f + idx_i * nf * 2], y[f + idx_ir * nf * 2],
-                                y[f + idx_j * nf * 2], y[f + idx_jr * nf * 2], v[nv]));
-                        LOG.debug(String.format("ddres e: e_ref=(%.8f,%.8f,%.8f) e_j=(%.8f,%.8f,%.8f) H_pos=(%.8f,%.8f,%.8f)",
-                                e[idx_i * 3], e[idx_i * 3 + 1], e[idx_i * 3 + 2],
-                                e[idx_j * 3], e[idx_j * 3 + 1], e[idx_j * 3 + 2],
-                                -e[idx_i * 3] + e[idx_j * 3], -e[idx_i * 3 + 1] + e[idx_j * 3 + 1], -e[idx_i * 3 + 2] + e[idx_j * 3 + 2]));
                     }
 
                     if (H != null) {
@@ -1027,7 +954,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                         }
                     }
                     if (Math.abs(v[nv]) > opt.maxinno[code ? 1 : 0] * threshadj) {
-                        LOG.debug(String.format("outlier: sat=%d-%d %s%d v=%.4f thresh=%.1f adj=%.1f", sat[refIdx], sat[j], code ? "P" : "L", frq + 1, v[nv], opt.maxinno[code ? 1 : 0], threshadj));
+                        RtkTrace.traceOutlier(rtk.traceControl, rtk.traceCallback, rtk.epoch, obs[0].time, sat[refIdx], sat[j], code ? "P" : "L", frq + 1, v[nv], opt.maxinno[code ? 1 : 0], threshadj);
                         rtk.ssat[sat[j] - 1].vsat[frq] = 0;
                         rtk.ssat[sat[j] - 1].rejc[frq]++;
                         continue;
@@ -1270,9 +1197,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
 
     private static void udpos(Rtk rtk, double tt) {
         int np = NP(rtk.opt);
-        LOG.debug(String.format("udpos: mode=%d dynamics=%d x[0:2]=(%.6f,%.6f,%.6f) sol.rr[0:2]=(%.3f,%.3f,%.3f)",
-                rtk.opt.mode, rtk.opt.dynamics, rtk.x[0], rtk.x[1], rtk.x[2],
-                rtk.sol.rr[0], rtk.sol.rr[1], rtk.sol.rr[2]));
         if (rtk.opt.mode == Constants.PMODE_FIXED) {
             for (int i = 0; i < 3; i++) {
                 initx(rtk, rtk.opt.ru[i] - rtk.rb[i], VAR_POS_FIX, i);
@@ -1283,8 +1207,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         double[] rr_abs = new double[3];
         for (int i = 0; i < 3; i++) rr_abs[i] = rtk.rb[i] + rtk.x[i];
         double normAbs = RtklibCommon.norm(rr_abs, 3);
-        LOG.debug(String.format("udpos: normAbs=%.1f RE/2=%.1f mode=%d dynamics=%d x[0:2]=(%.4f,%.4f,%.4f)",
-                normAbs, Constants.RE_WGS84 / 2.0, rtk.opt.mode, rtk.opt.dynamics, rtk.x[0], rtk.x[1], rtk.x[2]));
         if (normAbs <= Constants.RE_WGS84 / 2.0) {
             for (int i = 0; i < 3; i++) {
                 initx(rtk, rtk.sol.rr[i] - rtk.rb[i], VAR_POS, i);
@@ -1439,10 +1361,8 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                 int j = IB(i, k, nf, opt);
                 if (j >= rtk.nx) continue;
                 if (opt.modear == Constants.ARMODE_INST && rtk.x[j] != 0.0) {
-                    LOG.debug(String.format("udbias reset INST: sat=%d f=%d idx=%d old=%.4f", i, k, j, rtk.x[j]));
                     initx(rtk, 0.0, 0.0, j);
                 } else if (reset && rtk.x[j] != 0.0) {
-                    LOG.debug(String.format("udbias reset OUTC: sat=%d f=%d idx=%d outc=%d old=%.4f", i, k, j, rtk.ssat[i - 1].outc[k], rtk.x[j]));
                     initx(rtk, 0.0, 0.0, j);
                     rtk.ssat[i - 1].outc[k] = 0;
                 }
@@ -1458,7 +1378,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                 int slip = rtk.ssat[sat[i] - 1].slip[k];
                 int rejc = (int) rtk.ssat[sat[i] - 1].rejc[k];
                 if (opt.modear == Constants.ARMODE_INST || ((slip & Constants.LLI_SLIP) == 0 && rejc < 2)) continue;
-                LOG.debug(String.format("udbias reset SLIP/REJC: sat=%d f=%d idx=%d slip=%d rejc=%d old=%.4f", sat[i], k, j, slip, rejc, rtk.x[j]));
+                RtkTrace.traceDiag(rtk.traceControl, rtk.traceCallback, rtk.epoch, obs[0].time, "STAGE2_RESET_SLIP", String.format("sat=%d f=%d slip=%d rejc=%d old=%.4f", sat[i], k, slip, rejc, rtk.x[j]));
                 rtk.x[j] = 0.0;
                 rtk.ssat[sat[i] - 1].rejc[k] = 0;
                 rtk.ssat[sat[i] - 1].lock[k] = -opt.minlock;
@@ -1484,8 +1404,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                         double pBase = obs[ir[i]].P[k];
                         int codeRover = obs[iu[i]].code[k];
                         int codeBase = obs[ir[i]].code[k];
-                        LOG.debug(String.format("LARGE BIAS: sat=%d f=%d bias=%.4f cp=%.4f pr=%.4f freq=%.4f L_r=%.4f L_b=%.4f P_r=%.4f P_b=%.4f code_r=%d code_b=%d",
-                                sat[i], k, bias[i], cp, pr, freqi, lRover, lBase, pRover, pBase, codeRover, codeBase));
+                        RtkTrace.traceLargeBias(rtk.traceControl, rtk.traceCallback, rtk.epoch, obs[0].time, sat[i], k, bias[i], cp, pr, freqi); // LARGE BIAS
                     }
                 } else {
                     double cp1 = sdobs(obs, iu[i], ir[i], 0);
@@ -1522,7 +1441,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                 if (idx >= rtk.nx) continue;
                 if (rtk.x[idx] != 0.0) continue;
                 initx(rtk, bias[i], opt.std[0] * opt.std[0], idx);
-                LOG.debug(String.format("udbias init: sat=%d f=%d idx=%d bias=%.4f var=%.1f", sat[i], k, idx, bias[i], opt.std[0] * opt.std[0]));
                 if (opt.modear != Constants.ARMODE_INST) {
                     rtk.ssat[sat[i] - 1].lock[k] = -opt.minlock;
                 }
@@ -1883,7 +1801,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         int[] ix = new int[nx * 2];
         int nb = ddidx(rtk, ix, gps, glo, sbs);
         if (nb < opt.minfixsats - 1) {
-            LOG.debug("resamb_LAMBDA: not enough double-diffs (nb={})", nb);
+            RtkTrace.traceDiag(rtk.traceControl, rtk.traceCallback, rtk.epoch, rtk.sol.time, "STAGE5_INSUFF", String.format("nb=%d", nb));
             return -1;
         }
         rtk.nb_ar = nb;
@@ -1895,18 +1813,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         for (int i = 0; i < nb; i++) {
             y[i] = rtk.x[ix[i * 2]] - rtk.x[ix[i * 2 + 1]];
         }
-        if (LOG.isDebugEnabled()) {
-            StringBuilder sb = new StringBuilder();
-            sb.append(String.format("resamb_LAMBDA: na=%d nx=%d nb=%d\n", na, nx, nb));
-            for (int i = 0; i < nb; i++) {
-                int idxA = ix[i * 2];
-                int idxB = ix[i * 2 + 1];
-                sb.append(String.format("  dd[%d]: x[%d]=%.4f - x[%d]=%.4f = %.4f  P_diag=%.6f/%.6f\n",
-                        i, idxA, rtk.x[idxA], idxB, rtk.x[idxB], y[i],
-                        rtk.P[idxA * nx + idxA], rtk.P[idxB * nx + idxB]));
-            }
-            LOG.debug(sb.toString());
-        }
         for (int j = 0; j < nb; j++) {
             for (int i = 0; i < nb; i++) {
                 Qb[i * nb + j] = rtk.P[ix[i * 2] * nx + ix[j * 2]]
@@ -1914,18 +1820,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                         - rtk.P[ix[i * 2 + 1] * nx + ix[j * 2]]
                         + rtk.P[ix[i * 2 + 1] * nx + ix[j * 2 + 1]];
             }
-        }
-        if (LOG.isDebugEnabled() && nb <= 8) {
-            StringBuilder sb = new StringBuilder();
-            sb.append(String.format("Qb matrix (%dx%d):\n", nb, nb));
-            for (int i = 0; i < nb; i++) {
-                sb.append("  [");
-                for (int j = 0; j < nb; j++) {
-                    sb.append(String.format("%.6f ", Qb[i * nb + j]));
-                }
-                sb.append("]\n");
-            }
-            LOG.debug(sb.toString());
         }
         for (int j = 0; j < nb; j++) {
             for (int i = 0; i < na; i++) {
@@ -1938,35 +1832,10 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         int info = Lambda.lambda(nb, 2, y, Qb, b, s);
 
         if (info != 0) {
-            LOG.debug("resamb_LAMBDA: lambda error (info={})", info);
+            RtkTrace.traceDiag(rtk.traceControl, rtk.traceCallback, rtk.epoch, rtk.sol.time, "STAGE5_LAMBDA_ERR", String.format("info=%d", info));
             return 0;
         }
 
-        if (LOG.isDebugEnabled()) {
-            StringBuilder sb = new StringBuilder();
-            sb.append(String.format("LAMBDA: nb=%d na=%d nx=%d s=[%.4f, %.4f] ratio=%.4f\n", nb, na, nx, s[0], s[1], s[1] / (s[0] > 0 ? s[0] : 1e-30)));
-            sb.append("y=[");
-            for (int i = 0; i < nb; i++) sb.append(String.format("%.4f ", y[i]));
-            sb.append("]\n");
-            sb.append("b_best=[");
-            for (int i = 0; i < nb; i++) sb.append(String.format("%.4f ", b[i * 2]));
-            sb.append("]\n");
-            sb.append("b_2nd=[");
-            for (int i = 0; i < nb; i++) sb.append(String.format("%.4f ", b[i * 2 + 1]));
-            sb.append("]\n");
-            sb.append("Qb_diag=[");
-            for (int i = 0; i < nb; i++) sb.append(String.format("%.6f ", Qb[i * nb + i]));
-            sb.append("]\n");
-            sb.append("ix=[");
-            for (int i = 0; i < nb; i++) {
-                int satA = ix[i * 2] >= na ? ix[i * 2] - na + 1 : ix[i * 2];
-                int satB = ix[i * 2 + 1] >= na ? ix[i * 2 + 1] - na + 1 : ix[i * 2 + 1];
-                sb.append(String.format("(%d->sat%d,%d->sat%d) ", ix[i * 2], satA, ix[i * 2 + 1], satB));
-            }
-            sb.append("]\n");
-            sb.append(String.format("NR=%d nf=%d MAXSAT=%d\n", IB(1, 0, opt.nf, opt), opt.nf, Constants.MAXSAT));
-            LOG.debug(sb.toString());
-        }
 
         rtk.sol.ratio = s[0] > 0.0 ? (float) (s[1] / s[0]) : 0.0f;
         if (rtk.sol.ratio > 999.9f) rtk.sol.ratio = 999.9f;
@@ -1991,7 +1860,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         }
 
         if (s[0] <= 0.0 || s[1] / s[0] < rtk.sol.thres) {
-            LOG.debug(String.format("resamb_LAMBDA: validation failed (nb=%d ratio=%.2f thresh=%.2f)", nb, rtk.sol.ratio, rtk.sol.thres));
             return 0;
         }
 
@@ -2030,7 +1898,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
 
         restamb(rtk, bias, nb, xa);
 
-        LOG.debug(String.format("resamb_LAMBDA: validation ok (nb=%d ratio=%.2f thresh=%.2f)", nb, rtk.sol.ratio, rtk.sol.thres));
         return nb;
     }
 
@@ -2068,12 +1935,9 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         for (int i = 0; i < 3; i++) posvar += rtk.P[i * nx + i];
         posvar /= 3.0;
 
-        LOG.debug(String.format("manage_amb_LAMBDA: posvar=%.6f prevRatios=%.3f/%.3f nb_ar=%d",
-                posvar, rtk.sol.prev_ratio1, rtk.sol.prev_ratio2, rtk.nb_ar));
 
         if (opt.mode <= Constants.PMODE_DGPS || opt.modear == Constants.ARMODE_OFF ||
             opt.thresar[0] < 1.0 || posvar > opt.thresar[1]) {
-            LOG.debug("manage_amb_LAMBDA: Skip AR");
             rtk.sol.ratio = 0.0f;
             rtk.sol.prev_ratio1 = 0.0f;
             rtk.sol.prev_ratio2 = 0.0f;
@@ -2113,7 +1977,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                     lockc[f] = rtk.ssat[excsat - 1].lock[f];
                     rtk.ssat[excsat - 1].lock[f] = -rtk.nb_ar;
                 }
-                LOG.debug("manage_amb_LAMBDA: exclude sat {}", excsat);
             }
             rtk.excsat = excsat;
         }
@@ -2132,13 +1995,11 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
             if (rtk.sol.prev_ratio2 >= rtk.sol.thres &&
                 (rtk.sol.ratio < rtk.sol.thres ||
                  (rtk.sol.ratio < opt.thresar[0] * 1.1 && rtk.sol.ratio < rtk.sol.prev_ratio1 / 2.0))) {
-                LOG.debug("manage_amb_LAMBDA: low ratio, check for new sat");
                 int dly = 2;
                 for (int i = 0; i < ns; i++) {
                     for (int f = 0; f < nf; f++) {
                         if (rtk.ssat[sat[i] - 1].fix[f] != 2) continue;
                         if (rtk.ssat[sat[i] - 1].lock[f] == 0) {
-                            LOG.debug("manage_amb_LAMBDA: remove sat {} f={} lock={}", sat[i], f, rtk.ssat[sat[i] - 1].lock[f]);
                             rtk.ssat[sat[i] - 1].lock[f] = -opt.minlock - dly;
                             dly += 2;
                             rerun = true;
@@ -2147,7 +2008,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                 }
             }
             if (rerun) {
-                LOG.debug("manage_amb_LAMBDA: rerun AR with new sats removed");
                 nb = resamb_LAMBDA(rtk, bias, xa, gps1, glo1, sbas1);
             }
         }
@@ -2166,7 +2026,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
             for (int f = 0; f < nf; f++) {
                 rtk.ssat[excsat - 1].lock[f] = lockc[f];
             }
-            LOG.debug("manage_amb_LAMBDA: restore sat {}", excsat);
         }
 
         rtk.sol.prev_ratio1 = ratio1 > 0 ? ratio1 : rtk.sol.ratio;
@@ -2219,7 +2078,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         }
 
         if (opt.modear == Constants.ARMODE_FIXHOLD && nv < opt.minholdsats) {
-            LOG.debug("holdamb: not enough sats to hold ambiguity (nv={})", nv);
+            RtkTrace.traceDiag(rtk.traceControl, rtk.traceCallback, rtk.epoch, rtk.sol.time, "STAGE5_HOLD_INSUFF", String.format("nv=%d", nv));
             return;
         }
 
@@ -2277,8 +2136,6 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
             int sat2 = (vflg[i] >> 8) & 0xFF;
             int type = (vflg[i] >> 4) & 0xF;
             int freq = vflg[i] & 0xF;
-            LOG.debug(String.format("valpos: large residual (sat=%d-%d type=%d f=%d v=%.4f sig=%.4f)",
-                    sat1, sat2, type, freq, v[i], Math.sqrt(R[i * nv + i])));
         }
         return true;
     }

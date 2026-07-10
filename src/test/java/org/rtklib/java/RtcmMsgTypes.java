@@ -29,26 +29,6 @@ public class RtcmMsgTypes {
             }
         }
 
-        System.out.println("Total messages: " + totalMsgs);
-        System.out.println("\nMessage type distribution:");
-        for (Map.Entry<Integer, Integer> e : typeCounts.entrySet()) {
-            String desc;
-            int t = e.getKey();
-            if (t >= 1071 && t <= 1077) desc = "GPS MSM" + (t - 1071);
-            else if (t >= 1081 && t <= 1087) desc = "GLO MSM" + (t - 1081);
-            else if (t >= 1091 && t <= 1097) desc = "GAL MSM" + (t - 1091);
-            else if (t >= 1101 && t <= 1107) desc = "SBS MSM" + (t - 1101);
-            else if (t >= 1111 && t <= 1117) desc = "QZS MSM" + (t - 1111);
-            else if (t >= 1121 && t <= 1127) desc = "BDS MSM" + (t - 1121);
-            else if (t >= 1131 && t <= 1137) desc = "IRN MSM" + (t - 1131);
-            else if (t == 1019) desc = "GPS Eph";
-            else if (t == 1020) desc = "GLO Eph";
-            else if (t == 1042) desc = "BDS Eph";
-            else if (t == 1045 || t == 1046) desc = "GAL Eph";
-            else if (t == 1044) desc = "QZS Eph";
-            else if (t == 1005 || t == 1006) desc = "Station";
-            else desc = "Other";
-            System.out.println(String.format("  Type %4d (%s): %d", e.getKey(), desc, e.getValue()));
-        }
+
     }
 }

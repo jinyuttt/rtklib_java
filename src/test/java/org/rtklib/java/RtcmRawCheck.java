@@ -37,21 +37,6 @@ public class RtcmRawCheck {
             @Override
             public void onObservationEpoch(ObservationEpoch epoch) {
                 epochCount++;
-                if (epochCount == 1) {
-                    System.out.println("=== First Epoch ===");
-                    System.out.println("Num obs: " + epoch.obsList.size());
-                    for (Obsd o : epoch.obsList) {
-                        int[] prnArr = new int[1];
-                        int sys = SatUtils.satsys(o.sat, prnArr);
-                        System.out.print("  C" + String.format("%02d", prnArr[0]) + ":");
-                        for (int j = 0; j < Constants.NFREQ + Constants.NEXOBS; j++) {
-                            if (o.P[j] != 0.0 || o.L[j] != 0.0) {
-                                System.out.print(" [" + j + "]P=" + String.format("%.3f", o.P[j]) + " L=" + String.format("%.3f", o.L[j]) + " c=" + o.code[j]);
-                            }
-                        }
-                        System.out.println();
-                    }
-                }
                 for (Obsd o : epoch.obsList) {
                     satSet.add(o.sat);
                 }
@@ -64,48 +49,5 @@ public class RtcmRawCheck {
 
         decoder.feed(data, 0, data.length);
         decoder.finish();
-
-        System.out.println("=== Observation Satellites ===");
-        for (int sat : satSet) {
-            int[] prnArr = new int[1];
-            int sys = SatUtils.satsys(sat, prnArr);
-            String sysName;
-            switch (sys) {
-                case Constants.SYS_GPS: sysName = "GPS"; break;
-                case Constants.SYS_CMP: sysName = "BDS"; break;
-                case Constants.SYS_GLO: sysName = "GLO"; break;
-                case Constants.SYS_GAL: sysName = "GAL"; break;
-                case Constants.SYS_QZS: sysName = "QZS"; break;
-                default: sysName = "SYS" + sys; break;
-            }
-            System.out.println("  sat=" + sat + " sys=" + sysName + " prn=" + prnArr[0]);
-        }
-
-        System.out.println("\n=== Ephemeris (GPS/BDS/GAL/QZS) ===");
-        for (Eph eph : ephList) {
-            int[] prnArr = new int[1];
-            int sys = SatUtils.satsys(eph.sat, prnArr);
-            String sysName;
-            switch (sys) {
-                case Constants.SYS_GPS: sysName = "GPS"; break;
-                case Constants.SYS_CMP: sysName = "BDS"; break;
-                case Constants.SYS_GAL: sysName = "GAL"; break;
-                case Constants.SYS_QZS: sysName = "QZS"; break;
-                default: sysName = "SYS" + sys; break;
-            }
-            System.out.println("  sat=" + eph.sat + " sys=" + sysName + " prn=" + prnArr[0]);
-        }
-
-        System.out.println("\n=== GLONASS Ephemeris ===");
-        for (Geph geph : gephList) {
-            int[] prnArr = new int[1];
-            SatUtils.satsys(geph.sat, prnArr);
-            System.out.println("  sat=" + geph.sat + " prn=" + prnArr[0]);
-        }
-
-        System.out.println("\n=== Summary ===");
-        System.out.println("Total obs sats: " + satSet.size());
-        System.out.println("Total eph: " + ephList.size());
-        System.out.println("Total geph: " + gephList.size());
     }
 }
