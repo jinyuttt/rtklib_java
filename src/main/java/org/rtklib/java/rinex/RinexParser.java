@@ -132,11 +132,11 @@ public class RinexParser {
                 if (line.startsWith("COMMENT") || line.startsWith("#")) continue;
 
                 if (line.length() > 0 && Character.isLetter(line.charAt(0))) {
-                    log.debug("parseNav: lineNum={}, calling readNavEphV3, line=[{}]",
+                    log.trace("parseNav: lineNum={}, calling readNavEphV3, line=[{}]",
                             lineNum, line.substring(0, Math.min(20, line.length())));
                     readNavEphV3(reader, line);
                 } else {
-                    log.debug("parseNav: lineNum={}, skipping non-header line, firstChar=[{}]",
+                    log.trace("parseNav: lineNum={}, skipping non-header line, firstChar=[{}]",
                             lineNum, line.length() > 0 ? line.charAt(0) : "empty");
                 }
             }
@@ -171,7 +171,7 @@ public class RinexParser {
                 if (line.length() > 40) {
                     this.sys = line.charAt(40);
                 }
-                log.debug("RINEX version: {}, type: {}, system: {}", 
+                log.trace("RINEX version: {}, type: {}, system: {}",
                         this.version, this.fileType, this.sys);
             } else if (label.equals("MARKER NAME")) {
                 this.sta.name = line.substring(0, 60).trim();
@@ -241,7 +241,7 @@ public class RinexParser {
                 this.version = Double.parseDouble(line.substring(0, 9).trim());
                 this.fileType = line.charAt(20);
                 this.sys = line.charAt(40);
-                log.debug("RINEX version: {}, type: {}, system: {}", 
+                log.trace("RINEX version: {}, type: {}, system: {}",
                         this.version, this.fileType, this.sys);
             } else if (label.equals("END OF HEADER")) {
                 endOfHeader = true;
@@ -463,7 +463,7 @@ public class RinexParser {
             for (int j = 0; j < 4; j++) data[i++] = parseDouble(lines[k], 4 + j * 19, 19);
         }
 
-        log.debug("readEphV3: sat={}, sys={}, i={}, data[21]={}, data[3]={}, data[11]={}",
+        log.trace("readEphV3: sat={}, sys={}, i={}, data[21]={}, data[3]={}, data[11]={}",
                 sat, sys, i, data[21], data[3], data[11]);
 
         decodeEph(this.version, sat, toc, data);
@@ -700,7 +700,7 @@ public class RinexParser {
         if (nav.n < nav.nmax) {
             nav.eph[nav.n] = eph;
             nav.n++;
-            log.debug("decodeEph: stored eph sat={}, week={}, toes={}, nav.n={}",
+            log.trace("decodeEph: stored eph sat={}, week={}, toes={}, nav.n={}",
                     sat, eph.week, eph.toes, nav.n);
         } else {
             log.warn("decodeEph: nav buffer full, nav.n={}, nav.nmax={}", nav.n, nav.nmax);

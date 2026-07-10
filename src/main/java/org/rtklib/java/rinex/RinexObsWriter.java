@@ -269,7 +269,7 @@ public class RinexObsWriter {
                 }
             }
         }
-        log.debug("collectObsCodes: {}", obsCodes);
+        log.trace("collectObsCodes: {}", obsCodes);
     }
 
     private String getSysChar(int navsys) {

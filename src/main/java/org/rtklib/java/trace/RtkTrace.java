@@ -438,6 +438,35 @@ public final class RtkTrace {
                 (int) sol.ns, iter));
     }
 
+    public static void traceDiag(TraceControl ctrl, TraceCallback cb, int epoch,
+                                 GTime time, String tag, String message) {
+        if (!shouldTrace(ctrl, TraceControl.STAGE_DDRES, epoch)) return;
+        double gpstVal = gpst(time);
+        safeCallback(cb, String.format(Locale.US,
+                "TRACE|%s|gpst=%.3f|epoch=%d|%s", tag, gpstVal, epoch, message));
+    }
+
+    public static void traceOutlier(TraceControl ctrl, TraceCallback cb, int epoch,
+                                    GTime time, int satRef, int sat, String type,
+                                    int frq, double v, double thresh, double adj) {
+        if (!shouldTrace(ctrl, TraceControl.STAGE_DDRES, epoch)) return;
+        double gpstVal = gpst(time);
+        safeCallback(cb, String.format(Locale.US,
+                "TRACE|STAGE3_OUTLIER|gpst=%.3f|epoch=%d|ref=%s|sat=%s|type=%s|frq=%d|v=%s|thresh=%s|adj=%s",
+                gpstVal, epoch, SatUtils.satno2id(satRef), SatUtils.satno2id(sat),
+                type, frq, f4(v), f3(thresh), f3(adj)));
+    }
+
+    public static void traceLargeBias(TraceControl ctrl, TraceCallback cb, int epoch,
+                                      GTime time, int sat, int frq, double bias,
+                                      double cp, double pr, double freq) {
+        if (!shouldTrace(ctrl, TraceControl.STAGE_UDSTATE, epoch)) return;
+        double gpstVal = gpst(time);
+        safeCallback(cb, String.format(Locale.US,
+                "TRACE|STAGE2_LARGE_BIAS|gpst=%.3f|epoch=%d|sat=%s|frq=%d|bias=%s|cp=%s|pr=%s|freq=%s",
+                gpstVal, epoch, SatUtils.satno2id(sat), frq, f3(bias), f3(cp), f3(pr), f3(freq)));
+    }
+
     private static int IB(int sat, int f, int nf, PrcOpt opt) {
         int nr;
         if (opt != null) {

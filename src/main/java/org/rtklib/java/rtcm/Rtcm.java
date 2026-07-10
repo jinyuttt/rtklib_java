@@ -192,7 +192,7 @@ public class Rtcm {
         int type = (int) BitUtils.getbitu(this.buff, 24, 12);
         this.type = type;
         this.msgtype = String.format("RTCM %4d (%4d)", type, total);
-        log.debug("RTCM3 decoded message type={}, length={}", type, total);
+        log.trace("RTCM3 decoded message type={}, length={}", type, total);
         // Dispatch decoder
         boolean ok = dispatch(type);
         if (!ok) {
@@ -300,7 +300,7 @@ public class Rtcm {
                 case 1137: return decodeType1137();
                 case 1230: return decodeType1230();
                 default:
-                    log.debug("RTCM3 type {} not yet implemented", type);
+                    log.trace("RTCM3 type {} not yet implemented", type);
                     return true;
             }
         } catch (Exception ex) {
@@ -835,7 +835,7 @@ public class Rtcm {
         this.nav.eph[sat - 1] = eph;
         this.ephset = 0;
         this.ephsat = sat;
-        log.debug("RTCM 1042 eph stored: sat={} prn={} week={} toe={} A={}", 
+        log.trace("RTCM 1042 eph stored: sat={} prn={} week={} toe={} A={}",
                 sat, prn, eph.week, eph.toes, String.format("%.1f", eph.A));
         return true;
     }
@@ -919,7 +919,7 @@ public class Rtcm {
         this.nav.eph[sat - 1] = eph;
         this.ephsat = sat;
         this.ephset = 0;
-        log.debug("RTCM 1044 QZSS eph stored: sat={} prn={}", sat, prn);
+        log.trace("RTCM 1044 QZSS eph stored: sat={} prn={}", sat, prn);
         return true;
     }
     private boolean decodeType1021() { return true; }  // Helmert (not supported)
@@ -1247,9 +1247,9 @@ public class Rtcm {
                 long towRaw = BitUtils.getbitu(buff, i, 30);
                 tow = towRaw * 0.001; i += 30;
                 tow += 14.0;
-                log.debug("MSM BDS TOW: raw={}, tow={}", towRaw, tow);
+                log.trace("MSM BDS TOW: raw={}, tow={}", towRaw, tow);
                 adjweek(tow);
-                log.debug("MSM BDS after adjweek: time.time={}, time.sec={}", this.time.time, this.time.sec);
+                log.trace("MSM BDS after adjweek: time.time={}, time.sec={}", this.time.time, this.time.sec);
             } else {
                 tow = BitUtils.getbitu(buff, i, 30) * 0.001; i += 30;
                 adjweek(tow);
@@ -1292,21 +1292,8 @@ public class Rtcm {
         }
         hsize[0] = i;
 
-        log.debug("decode_msm_head: sys={} staid={} nsat={} nsig={} sync={} iod={} ncell={}",
+        log.trace("decode_msm_head: sys={} staid={} nsat={} nsig={} sync={} iod={} ncell={}",
                 sys, staid, h.nsat, h.nsig, sync[0], iod[0], ncell);
-
-        if (sys == Constants.SYS_CMP && ncell > 0) {
-            StringBuilder sigStr = new StringBuilder();
-            for (int si = 0; si < h.nsig; si++) sigStr.append(h.sigs[si]).append(",");
-            StringBuilder cmStr = new StringBuilder();
-            for (int si = 0; si < h.nsig; si++) {
-                cmStr.append(String.format(" sig%d(id%d):", si, h.sigs[si]));
-                for (int sj = 0; sj < Math.min(h.nsat, 3); sj++) {
-                    cmStr.append(h.cellmask[si + sj * h.nsig]);
-                }
-            }
-            log.info("BDS MSM: nsig={} nsat={} ncell={} sigs=[{}] {}", h.nsig, h.nsat, ncell, sigStr, cmStr);
-        }
 
         return ncell;
     }
@@ -1665,14 +1652,9 @@ public class Rtcm {
             }
             code[i] = ObsCode.obs2code(sig[i]);
             idx[i] = ObsCode.code2idx(sys, code[i]);
-            log.info("MSM sig[{}] sigid={} sigstr={} code={} idx={}", i, h.sigs[i], sig[i], code[i], idx[i]);
         }
 
         ObsCode.sigindex(sys, code, h.nsig, idx);
-
-        for (i = 0; i < h.nsig; i++) {
-            log.info("MSM after sigindex: sig[{}] code={} idx={}", i, code[i], idx[i]);
-        }
 
         for (i = j = 0; i < h.nsat; i++) {
             prn = h.sats[i];
@@ -1709,12 +1691,6 @@ public class Rtcm {
                without j++. DO NOT change to {j++; continue;} */
             for (k = 0; k < h.nsig; k++) {
                 if (h.cellmask[k + i * h.nsig] == 0) continue;
-
-                if (sat != 0 && index >= 0 && idx[k] >= 0 && i < 2 && k < 3) {
-                    log.info("saveMsmObs: sat={} i={} k={} sig={} code={} idx={} cellmask={} pr={}",
-                            sat, i, k, sig[k], code[k], idx[k], h.cellmask[k + i * h.nsig],
-                            pr[j] > -1E12 ? String.format("%.1f", pr[j]) : "INVALID");
-                }
 
                 if (sat != 0 && index >= 0 && idx[k] >= 0) {
                     freq = fcn < -7 ? 0.0 : ObsCode.code2freq(sys, code[k], fcn);

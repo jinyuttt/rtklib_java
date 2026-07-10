@@ -27,7 +27,6 @@ public class RtcmCallbackDecoder {
 
     public void feed(byte[] data, int offset, int length) {
         if (length <= 0 || finished) return;
-
         ensureCapacity(pendingLen + length);
         System.arraycopy(data, offset, pending, pendingLen, length);
         pendingLen += length;
@@ -63,7 +62,8 @@ public class RtcmCallbackDecoder {
 
     private void extractAndCallback() {
         int type = rtcm.type;
-
+        int length = rtcm.len;
+        handler.onRtcmMessageType(type, length);
         if (isStationType(type)) {
             handler.onStation(copySta(rtcm.sta));
         }

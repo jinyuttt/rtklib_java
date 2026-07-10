@@ -336,7 +336,7 @@ public final class SppCore {
             }
             v[nv] = P - (r + dtr - Constants.CLIGHT * dts[i * 2] + dion + dtrp);
             if (iter <= 1) {
-                LOG.debug(String.format("SPP sat=%2d sys=%d P=%.3f r=%.3f dtr=%.6f dts=%.6f dion=%.3f dtrp=%.3f v=%.3f", sat, sys, P, r, dtr, dts[i * 2], dion, dtrp, v[nv]));
+                LOG.trace(String.format("SPP sat=%2d sys=%d P=%.3f r=%.3f dtr=%.6f dts=%.6f dion=%.3f dtrp=%.3f v=%.3f", sat, sys, P, r, dtr, dts[i * 2], dion, dtrp, v[nv]));
             }
             for (int j = 0; j < NX; j++) {
                 H[nv * NX + j] = (j < 3) ? -e[j] : (j == 3 ? 1.0 : 0.0);
@@ -409,7 +409,7 @@ public final class SppCore {
             }
             for (int j = 0; j < NX; j++) x[j] += dx[j];
             double normDx = RtklibCommon.norm(dx, NX);
-            LOG.debug(String.format("SPP iter=%d dx_norm=%.6f x=(%.3f,%.3f,%.3f) clk=%.6f",
+            LOG.trace(String.format("SPP iter=%d dx_norm=%.6f x=(%.3f,%.3f,%.3f) clk=%.6f",
                 it, normDx, x[0], x[1], x[2], x[3]));
             if (normDx < 1E-4) {
                 sol.type = 0;
