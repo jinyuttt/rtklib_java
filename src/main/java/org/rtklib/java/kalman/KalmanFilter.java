@@ -193,7 +193,7 @@ public final class KalmanFilter {
 
             return 0;
         } catch (Exception e) {
-            LOG.warn("Kalman filter update failed: n={} m={} msg={}", n, m, e.getMessage());
+            LOG.warn("Kalman filter update failed: n={} m={} type={} msg={}", n, m, e.getClass().getSimpleName(), e.getMessage());
             return -1;
         }
     }

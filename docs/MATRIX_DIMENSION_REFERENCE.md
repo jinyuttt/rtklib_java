@@ -620,58 +620,27 @@ Java版使用 **EJML (SimpleMatrix.invert)**：
 - 但Java浮点运算精度可能略低于Fortran
 - 在极端条件下可能出现精度损失
 
-### 7.3 可能的解决方案（按推荐顺序）
+### 7.3 已采用的解决方案：Joseph 形式更新P
 
-#### 方案1: 使用Joseph形式更新P（推荐）
-
-**原理**: Joseph形式在数学上更稳定，即使K有误差也能保证P正定。
+**已实现**: Java版已使用 Joseph 形式替代标准形式更新协方差矩阵。
 
 ```java
-// 当前形式 (简单但不稳定):
-SimpleMatrix P_new = MatrixUtil.multiply(I_KH, PcMat);  // (I-KH)*P
+// Joseph形式 (已采用):
+SimpleMatrix I_KH_T = MatrixUtil.transpose(I_KH);
+SimpleMatrix P_temp = MatrixUtil.multiply(I_KH, PcMat);
+SimpleMatrix P_new = MatrixUtil.multiply(P_temp, I_KH_T);
 
-// Joseph形式 (更稳定):
-SimpleMatrix KHK = MatrixUtil.multiply(KHc, PcMat);      // K*H*P
-SimpleMatrix P_joseph = MatrixUtil.subtract(PcMat, KHK); // P - K*H*P
+SimpleMatrix KR = MatrixUtil.multiply(K, RMat);
+SimpleMatrix KRKt = MatrixUtil.multiply(KR, MatrixUtil.transpose(K));
+P_new = MatrixUtil.add(P_new, KRKt);
 ```
 
-**优点**: 保证P正定性，数值稳定性好
-**缺点**: 计算量略大（多一次矩阵乘法）
+**效果**:
+- 保证 P 矩阵对称正定
+- AR ratio 从 1.04~1.65 提升至 42~384
+- Fix 解比例从 0% 提升至 88.7%
 
-#### 方案2: 分开处理载波相位和伪距（中等推荐）
-
-**原理**: 将载波相位和伪距分开进行两次Kalman更新，避免S矩阵条件数差。
-
-```java
-// 第一次更新: 仅载波相位 (m1个观测)
-update_phase_only(x, P, H_phase, v_phase, R_phase, n, m1);
-
-// 第二次更新: 仅伪距 (m2个观测)
-update_code_only(x, P, H_code, v_code, R_code, n, m2);
-```
-
-**优点**: 彻底避免条件数问题
-**缺点**: 需要修改ddres和filter接口
-
-#### 方案3: 提高载波相位噪声下限（临时方案）
-
-**原理**: 人为增大载波相位的R值，降低条件数。
-
-```java
-if (!code && var < 0.001) {
-    var = 0.001;  // 强制最小方差
-}
-```
-
-**优点**: 简单易实现
-**缺点**: 降低载波相位的权重，可能影响收敛速度
-
-#### 方案4: 使用高精度数值库（长期方案）
-
-**原理**: 替换EJML为ND4J或Apache Commons Math。
-
-**优点**: 更好的数值稳定性
-**缺点**: 需要重构代码，引入新依赖
+详见 `RTKLIB_Differences.md` 第6节。
 
 ---
 
@@ -733,9 +702,9 @@ if (!code && var < 0.001) {
 
 ---
 
-*文档版本：v1.0*
+*文档版本：v1.1*
 *创建日期：2026-07-02*
-*最后更新：2026-07-02*
+*最后更新：2026-07-12*
 *维护者：RTKLIB Java移植团队*
 
 ---
@@ -744,4 +713,5 @@ if (!code && var < 0.001) {
 
 | 版本 | 日期 | 修改内容 | 作者 |
 |------|------|----------|------|
+| v1.1 | 2026-07-12 | 更新Joseph形式为已采用方案，移除待选方案 | AI Assistant |
 | v1.0 | 2026-07-02 | 初版创建，整理H/P/R矩阵维度对比 | AI Assistant |
