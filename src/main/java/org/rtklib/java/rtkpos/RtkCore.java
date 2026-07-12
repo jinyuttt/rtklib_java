@@ -2087,9 +2087,41 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         double[] R = new double[nv * nv];
         for (int i = 0; i < nv; i++) R[i * nv + i] = opt.varholdamb;
 
+        if (LOG.isDebugEnabled()) {
+            StringBuilder sb = new StringBuilder();
+            sb.append(String.format("holdamb: nx=%d na=%d nb=%d nv=%d nf=%d\n", nx, rtk.na, nb, nv, nf));
+            sb.append("v=[");
+            for (int i = 0; i < nv; i++) sb.append(String.format("%.6f ", v[i]));
+            sb.append("]\n");
+            sb.append("H_nonzero=[\n");
+            for (int i = 0; i < nv; i++) {
+                sb.append(String.format("  obs%d:", i));
+                for (int j = 0; j < nx; j++) {
+                    if (H[i * nx + j] != 0.0) sb.append(String.format(" [%d]=%.1f", j, H[i * nx + j]));
+                }
+                sb.append("\n");
+            }
+            sb.append("]\n");
+            sb.append("x_amb=[");
+            for (int i = rtk.na; i < nx; i++) sb.append(String.format("%.4f ", rtk.x[i]));
+            sb.append("]\n");
+            sb.append("P_amb_diag=[");
+            for (int i = rtk.na; i < nx; i++) sb.append(String.format("%.6f ", rtk.P[i * nx + i]));
+            sb.append("]\n");
+            boolean hasNaN = false;
+            for (int i = 0; i < nx; i++) {
+                if (Double.isNaN(rtk.x[i]) || Double.isInfinite(rtk.x[i])) { hasNaN = true; break; }
+            }
+            for (int i = 0; i < nx * nx; i++) {
+                if (Double.isNaN(rtk.P[i]) || Double.isInfinite(rtk.P[i])) { hasNaN = true; break; }
+            }
+            if (hasNaN) sb.append("WARNING: NaN/Inf in x or P!\n");
+            LOG.debug(sb.toString());
+        }
+
         int info = filter(rtk.x, rtk.P, H, v, R, nx, nv);
         if (info != 0) {
-            LOG.warn("holdamb filter error (info={})", info);
+            LOG.warn("holdamb filter error (info={}) nx={} na={} nb={} nv={}", info, nx, rtk.na, nb, nv);
         }
 
         if (opt.glomodear != Constants.GLO_ARMODE_FIXHOLD) return;

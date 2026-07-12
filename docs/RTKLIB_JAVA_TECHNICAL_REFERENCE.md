@@ -281,29 +281,41 @@ private static int resamb_LAMBDA(Rtk rtk, double[] v, double[] H, double[] R,
 ### 4.4 holdamb 函数关键逻辑
 
 ```java
-private static void holdamb(Rtk rtk, Obsd[] obs, int[] sat, int[] iu, int[] ir,
-                             int ns, Nav nav) {
-
+private static void holdamb(Rtk rtk, double[] xa) {
     // Fix-and-Hold模式: 通过Kalman滤波将固定模糊度约束写回
 
+    int nx = rtk.nx;
+    int nb = nx - rtk.na;  // 模糊度状态数
     int nv = 0;
-    double[] v = new double[MAXOBS * rtk.nf * 2];
-    double[] H = new double[MAXOBS * rtk.nf * 2 * rtk.nx];
-    double[] R = new double[MAXOBS * rtk.nf * 2];
+    double[] v = new double[nb];       // 伪观测残差（最多nb个）
+    double[] H = new double[nb * nx];  // 设计矩阵（最多nb行，每行nx列）
 
-    // 为每个固定的双差模糊度构建伪观测
-    for (int i = 0; i < ns; i++) {
-        if (rtk.ssat[sat[i]-1].fix[frq] != 2 && ...) continue;
-
-        int ii = IB(sat[i], frq, nf, opt);
-        v[nv] = rtk.xa[ii] - rtk.x[ii];  // 残差 = 固定值 - 浮点值
-        H[nv * rtk.nx + ii] = 1.0;        // 设计矩阵
-        R[nv] = varholdamb;                // 观测噪声 (默认0.001)
-        nv++;
+    // 按系统组(m)和频率(f)遍历，构建双差伪观测
+    for (int m = 0; m < 6; m++) {
+        for (int f = 0; f < nf; f++) {
+            // 收集该组中 fix[f]==2 的卫星索引
+            int n = 0;
+            int[] index = new int[MAXSAT];
+            for (int i = 0; i < MAXSAT; i++) {
+                if (testSys(sys, m) && fix[f] == 2 && azel > elmask) {
+                    index[n++] = IB(sat, f, nf, opt);
+                    fix[f] = 3;  // 标记为hold
+                }
+            }
+            // 双差伪观测: v[nv] = (xa[ref] - xa[i]) - (x[ref] - x[i])
+            for (int i = 1; i < n; i++) {
+                v[nv] = (xa[index[0]] - xa[index[i]]) - (rtk.x[index[0]] - rtk.x[index[i]]);
+                H[nv * nx + index[0]] =  1.0;  // 参考星
+                H[nv * nx + index[i]] = -1.0;  // 流动星
+                nv++;
+            }
+        }
     }
 
-    // Kalman滤波更新
-    filter(rtk.x, rtk.P, H, v, R, rtk.nx, nv);
+    // Kalman滤波更新（nv ≤ nb，H矩阵分配nb*nx但只用nv*nx）
+    double[] R = new double[nv * nv];
+    for (int i = 0; i < nv; i++) R[i * nv + i] = varholdamb;
+    filter(rtk.x, rtk.P, H, v, R, nx, nv);
 
     rtk.holdambFlag = 1;
 }
@@ -311,54 +323,34 @@ private static void holdamb(Rtk rtk, Obsd[] obs, int[] sat, int[] iu, int[] ir,
 
 ---
 
-## 5. 当前问题诊断
+## 5. 当前状态
 
-### 5.1 核心症状
+### 5.1 RTK 定位性能（多系统短基线）
 
 | 指标 | 当前值 | 目标值 | 状态 |
 |------|--------|--------|------|
-| Fix解比例 | **0%** (0/41) | >80% | ❌ |
-| AR ratio | **1.04~1.65** | ≥3.0 | ❌ |
-| 位置方差 posvar | 0.03~0.04 | <0.25 | ✅ |
+| Fix解比例 | **88.7%** (86/97) | >80% | ✅ |
+| AR ratio | **42~384** | ≥3.0 | ✅ |
+| 位置方差 posvar | 0.00015~0.00017 | <0.25 | ✅ |
 | 载波相位残差 | <0.03m | <0.05m | ✅ |
-| 模糊度方差 (30历元后) | **48~53** | <0.1 | ❌ |
 
-### 5.2 问题根因分析
+### 5.2 关键修复：Joseph 形式协方差更新
 
-**矛盾现象**：
-- 载波相位残差已经很小（<0.03m），说明模糊度估计值接近真值
-- 但模糊度方差仍然很大（48~53周²），说明Kalman滤波没有有效约束模糊度
-- 导致LAMBDA无法区分最优解和次优解（ratio低）
+早期版本使用标准形式 `P = (I-KH)*P` 更新协方差，在 H 矩阵病态条件下
+（载波相位与伪距方差相差 4~5 个数量级，S 条件数 >39 万）导致 P 矩阵
+失去正定性，AR ratio 极低（1.04~1.65），Fix 解比例为 0%。
 
-**可能原因排序**（按可能性）：
+改用 Joseph 形式 `P = (I-KH)*P*(I-KH)' + K*R*K'` 后：
+- 保证 P 矩阵对称正定
+- AR ratio 从 1.04~1.65 提升至 42~384
+- Fix 解比例从 0% 提升至 88.7%
 
-1. **Kalman增益分配不合理**
-   - 症状：`I_KH_diag` 出现负值（数值不稳定）
-   - 排查：添加K矩阵调试输出，验证模糊度状态的增益是否合理
+详见 `RTKLIB_Differences.md` 第6节。
 
-2. **H矩阵压缩过程丢失信息**
-   - 症状：`ddres` 构建的H矩阵正确，但 `KalmanFilter.update` 压缩后可能出错
-   - 排查：对比压缩前后H矩阵的非零元素
+### 5.3 已知限制
 
-3. **观测数量不足**
-   - 当前：5颗BDS卫星 × 2频率 = 10个载波观测（含伪距共20个）
-   - 状态数：12个活跃状态（3位置+2GLO bias+7模糊度）
-   - 信息量勉强够用，但不如C版收敛快
-
-4. **模糊度初始值过大**
-   - C30初始值89.95周，双差达-107.58周
-   - 大模糊度本身不是问题，但会降低ratio
-
-### 5.3 已排除的原因
-
-| 可能原因 | 排除依据 |
-|----------|----------|
-| `IB`函数索引错误 | ✅ 已验证 `IB(s,f,opt)=NR+MAXSAT*f+(s-1)` 与C版一致 |
-| `ddidx`星座分组错误 | ✅ 已按GPS/GLO/GAL/CMP分组 |
-| `udpos`Static模式处理 | ✅ 直接返回不添加过程噪声，与C版一致 |
-| `udbias`初始化错误 | ✅ 使用sdobs计算单差，与C版一致 |
-| `GLONASS IC bias未处理 | ✅ 已添加IL函数和补偿逻辑 |
-| 半周期标志LLI_HALFC | ✅ 已添加Ri/Rj方差补偿0.01 |
+- **BDS-only 短基线数据质量差时无法 Fix**：C 版 RTKLIB 同样无法 Fix，属于数据质量问题
+- **holdamb 偶发 filter error 警告**：与 C 版行为一致，C 版同样使用 `nb*nx` 分配 H 矩阵、实际使用 `nv*nx`（`nv ≤ nb`），LAPACK/EJML 求逆失败时均返回错误码
 
 ---
 
@@ -428,17 +420,19 @@ udbias init: sat=115 f=0 idx=119 bias=-86.3637 var=900.0  # ⚠️ 异常大
 
 | 文件 | 关键内容 | 行号范围 |
 |------|----------|----------|
-| `RtkCore.java` | RTK核心算法 | 全文 |
-| ├─ | 状态索引宏(NP/NI/NT/NL/NR/IB/II/IL) | 68~110 |
-| ├─ | ddres(双差残差/H矩阵) | 870~1100 |
-| ├─ | ddidx(双差索引选择) | 1746~1805 |
-| ├─ | resamb_LAMBDA(LAMBDA固定) | 2000~2120 |
-| ├─ | manage_amb_LAMBDA(AR管理) | 2120~2220 |
-| ├─ | holdamb(Fix-and-Hold) | 2230~2270 |
-| ├─ | udbias(模糊度时间更新) | 1430~1520 |
-| ├─ | udstate/udpos/udion/udtrop/udrcvbias | 1195~1320 |
-| └─ | relpos(主定位函数) | 1900~2000 |
-| `KalmanFilter.java` | EKF测量更新 | 1~200 |
+| `RtkCore.java` | RTK核心算法 | 全文（2142行） |
+| ├─ | 状态索引宏(NP/NI/NT/NL/NR/IB/II/IL) | 74~110 |
+| ├─ | rtkpos(外层入口) | 125~230 |
+| ├─ | relpos(相对定位主函数) | 232~505 |
+| ├─ | zdres(零差残差) | 660~810 |
+| ├─ | ddres(双差残差/H矩阵) | 812~1125 |
+| ├─ | udstate/udpos/udion/udtrop/udrcvbias/udbias | 1128~1460 |
+| ├─ | detslpLl/detslpGf/detslpCode/detslpDop(周跳检测) | 1460~1560 |
+| ├─ | ddidx(双差索引选择) | 1664~1780 |
+| ├─ | resamb_LAMBDA(LAMBDA固定) | 1781~1913 |
+| ├─ | manage_amb_LAMBDA(AR管理) | 1930~2040 |
+| └─ | holdamb(Fix-and-Hold) | 2049~2140 |
+| `KalmanFilter.java` | EKF测量更新(Joseph形式) | 全文（227行） |
 | `Constants.java` | 常量定义 | 63~240 |
 | `PrcOpt.java` | 处理选项 | 全文 |
 | `Rtk.java` | RTK状态变量 | 全文 |
@@ -506,27 +500,19 @@ BASE_PATH  = "<base_rtcm3_file_path>";
 | 10 | 半周期标志LLI_HALFC | 2026-07-02 | ✅ 完成 |
 | 11 | udstate缺少udion/udtrop/udrcvbias | 2026-07-02 | ✅ 完成 |
 | 12 | udpos Kinematic模式重置逻辑 | 2026-07-02 | ✅ 完成 |
+| 13 | SPP dtr数组动态索引→固定索引 | 2026-07-12 | ✅ 完成 |
 
 ---
 
-## 10. 待解决问题
+## 10. 待完善项
 
-### 10.1 高优先级
+### 10.1 中优先级
+- [ ] **基准站位置自动获取**：部分已实现（RINEX头 `APPROX POSITION XYZ` 自动读取、MOVEB模式SPP平均），缺失 `POSOPT_SINGLE`（非MOVEB模式SPP取平均）和 `POSOPT_FILE`（位置文件读取）
 
-- [ ] **模糊度方差收敛慢**：30历元后仍为48~53，目标<0.1
-- [ ] **AR ratio低**：当前1.04~1.65，目标≥3.0
-- [ ] **Fix解比例为0%**：需要先解决上述两个问题
+### 10.2 低优先级
 
-### 10.2 中优先级
-
-- [ ] **I_KH_diag负值**：数值稳定性问题，可能导致长期运行发散
-- [ ] **NFREQ=6影响评估**：Obsd数组大小为6但实际只用2，内存浪费
-- [ ] **C版编译运行**：用于结果对比验证
-
-### 10.3 低优先级
-
-- [ ] **调试日志优化**：减少生产环境输出
-- [ ] **性能优化**：EJML矩阵运算可考虑并行化
+- [ ] **Static Start长延迟恢复**：边界场景，`tt>300`时重置状态
+- [ ] **多系统PPP验证**：GPS+BDS联合PPP，需多系统精密星历
 
 ---
 
@@ -539,11 +525,12 @@ BASE_PATH  = "<base_rtcm3_file_path>";
 3. **检查posvar**：是否满足 `< thresar[1]=0.25`？如果不满足，检查`udpos`。
 4. **检查模糊度方差**：`P_diag` 中模糊度项是否在收敛？如果不变，检查`ddres`中H矩阵。
 5. **检查ratio**：如果ratio始终<2，检查`Qb`矩阵（双差协方差）是否合理。
-6. **检查I_KH_diag**：如果有负值，说明数值不稳定，需改用Joseph形式更新P。
+6. **检查Kalman滤波**：确认使用Joseph形式更新P（`KalmanFilter.java`），标准形式在病态条件下不稳定。
 7. **检查IB函数**：确认返回的索引与预期一致（特别是多频情况下的`f`参数）。
+8. **检查数据质量**：C版RTKLIB是否同样无法Fix？如果C版也无法Fix，可能是数据质量问题。
 
 ---
 
-*文档版本：v1.0*
-*最后更新：2026-07-02*
+*文档版本：v1.1*
+*最后更新：2026-07-12*
 *维护者：RTKLIB Java移植团队*

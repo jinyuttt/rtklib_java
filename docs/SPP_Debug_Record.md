@@ -133,7 +133,7 @@ CPU时间可能与数据时间相差很远（超过半周），导致周数调�
 修复cell索引后，240个历元全部匹配，差异仅在小数第9位。
 ---
 
-## Bug #5（待修复）：dtr数组使用动态索引而非固定索引
+## Bug #5（✅ 已修复）：dtr数组使用动态索引而非固定索引
 
 ### 文件
 `src/main/java/org/rtklib/java/pntpos/SppCore.java` — SPP结果输出
@@ -141,39 +141,19 @@ CPU时间可能与数据时间相差很远（超过半周），导致周数调�
 ### 问题
 SPP输出钟差`dtr[]`时使用动态索引`dtrIdx++`，仅对启用的系统分配槽位。C版使用固定索引，每个系统对应固定的dtr位置。
 
-### 当前代码（动态索引）
-`java
+### 修复方案（已实施）
+改为固定索引，与C版一致。使用 `sysIdx()` 获取状态向量中的位置，未启用系统 `dtr[i]=0`：
+```java
 sol.dtr[0] = x[3] / CLIGHT;
-int dtrIdx = 1;
-if ((opt.navsys & SYS_GLO) != 0) sol.dtr[dtrIdx++] = x[4] / CLIGHT;
-if ((opt.navsys & SYS_GAL) != 0) sol.dtr[dtrIdx++] = x[sysIdx(SYS_GAL, opt)] / CLIGHT;
-if ((opt.navsys & SYS_CMP) != 0) sol.dtr[dtrIdx++] = x[sysIdx(SYS_CMP, opt)] / CLIGHT;
-if ((opt.navsys & SYS_IRN) != 0) sol.dtr[dtrIdx++] = x[sysIdx(SYS_IRN, opt)] / CLIGHT;
-`
-
-### C版代码（固定索引）
-`c
-sol->dtr[0] = x[3] / CLIGHT;
-sol->dtr[1] = (sys & SYS_GLO) ? x[4] / CLIGHT : 0.0;
-sol->dtr[2] = (sys & SYS_GAL) ? x[...] / CLIGHT : 0.0;
-sol->dtr[3] = (sys & SYS_CMP) ? x[...] / CLIGHT : 0.0;
-sol->dtr[4] = (sys & SYS_IRN) ? x[...] / CLIGHT : 0.0;
-`
-
-### 影响
-- **SPP定位结果**：无影响（SPP内部直接用状态向量x计算，dtr[]仅是输出字段）
-- **BDS-only场景**：BDS钟差写入dtr[1]而非dtr[3]，PPP的udclk_ppp按固定索引读dtr[3]取BDS钟差时读到0，导致PPP钟差初始化为0而非SPP结果，收敛变慢但最终结果正确
-- **多系统场景**：系统间偏差可能写入错误位置，影响下游消费者（PPP/RTK）的钟差初始化
-
-### 修复方案
-改为固定索引，与C版一致：
-`java
-sol.dtr[0] = x[3] / CLIGHT;
-sol.dtr[1] = (opt.navsys & SYS_GLO) != 0 ? x[4] / CLIGHT : 0.0;
-sol.dtr[2] = (opt.navsys & SYS_GAL) != 0 ? x[sysIdx(SYS_GAL, opt)] / CLIGHT : 0.0;
-sol.dtr[3] = (opt.navsys & SYS_CMP) != 0 ? x[sysIdx(SYS_CMP, opt)] / CLIGHT : 0.0;
-sol.dtr[4] = (opt.navsys & SYS_IRN) != 0 ? x[sysIdx(SYS_IRN, opt)] / CLIGHT : 0.0;
-`
+int gloIdx = sysIdx(Constants.SYS_GLO, opt);
+int galIdx = sysIdx(Constants.SYS_GAL, opt);
+int cmpIdx = sysIdx(Constants.SYS_CMP, opt);
+int irnIdx = sysIdx(Constants.SYS_IRN, opt);
+sol.dtr[1] = gloIdx >= 0 ? x[gloIdx] / CLIGHT : 0.0;
+sol.dtr[2] = galIdx >= 0 ? x[galIdx] / CLIGHT : 0.0;
+sol.dtr[3] = cmpIdx >= 0 ? x[cmpIdx] / CLIGHT : 0.0;
+sol.dtr[4] = irnIdx >= 0 ? x[irnIdx] / CLIGHT : 0.0;
+```
 
 ### 状态
-⏳ 待修复（非blocking，当前BDS-only PPP测试通过，多系统场景需验证）
+✅ 已修复（2026-07-12）
