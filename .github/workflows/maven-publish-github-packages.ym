@@ -1,1 +1,49 @@
 
+# Publish to GitHub Packages when a tag like v1.2.3 is pushed
+name: Publish to GitHub Packages (Maven)
+
+# Need write permission for packages to allow publishing
+permissions:
+  contents: read
+  packages: write
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Configure Maven settings for GitHub Packages
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml <<'EOF'
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+            <servers>
+              <server>
+                <id>github</id>
+                <username>${{ github.actor }}</username>
+                <password>${{ secrets.GITHUB_TOKEN }}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+
+      - name: Build and deploy to GitHub Packages
+        run: |
+          # Use altDeploymentRepository so pom.xml doesn't need distributionManagement entry
+          mvn -B clean deploy --settings ~/.m2/settings.xml -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/${{ github.repository }} -DskipTests
