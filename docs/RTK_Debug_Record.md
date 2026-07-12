@@ -11,17 +11,13 @@
 
 ## 当前状态
 
-### 修复后定位精度
+### 最终定位精度（多系统短基线，Joseph形式修复后）
 
-| 指标 | 修改前 | 修改后 | 改善幅度 |
-|------|--------|--------|----------|
-| 成功历元 | 230/240 | 239/240 | +9 |
-| Outlier (>20m) | 35 | 2 | **-94%** |
-| 3D RMS (全部) | 23.6m | 3.48m | **-85%** |
-| 3D RMS (过滤后) | 6.9m | 2.62m | **-62%** |
-| dN RMS | ~6m | 1.23m | **-80%** |
-| dE RMS | ~5m | 1.25m | **-75%** |
-| dU RMS | ~7m | 1.94m | **-72%** |
+| 指标 | 修复前（标准形式） | 修复后（Joseph形式） | 改善幅度 |
+|------|-------------------|---------------------|----------|
+| Fix解比例 | 0% | **88.7%** (86/97) | ↑ 88.7% |
+| AR ratio | 1.04~1.65 | **42~384** | ↑ 230倍 |
+| 位置方差 | 0.03~0.04 | **0.00015~0.00017** | ↓ 200倍 |
 
 ### 仍存在的差异
 
@@ -301,32 +297,136 @@ y_dd[i] -= b[i * 2];
 
 ---
 
+## Bug #6：Kalman 协方差更新数值不稳定（✅ 已修复，采用 Joseph 形式）
+
+### 文件
+`src/main/java/org/rtklib/java/kalman/KalmanFilter.java` — `update()` 方法
+
+### 问题
+C版 `filter_()` 使用标准形式 `P = (I-KH)*P` 更新协方差。Java版使用EJML库，
+运算顺序与C版自定义 `matmul()` 不同，在H矩阵病态条件下标准形式导致P矩阵
+失去正定性，AR ratio 极低（1.04~1.65），Fix 解比例为 0%。
+
+### 修复方案
+采用 Joseph 形式替代标准形式：
+```
+C版（标准形式）：    P_new = (I - K*H) * P
+Java版（Joseph形式）：P_new = (I - K*H) * P * (I - K*H)^T + K * R * K^T
+```
+
+当 K 为精确最优增益时，Joseph 形式与标准形式数学等价，是标准形式的数值稳定超集。
+
+### 测试验证
+
+#### 数据集A：多系统短基线（基线~200m，GPS+BDS）
+
+| 指标 | 标准形式（修复前） | Joseph形式（修复后） | 提升 |
+|------|-------------------|---------------------|------|
+| AR ratio | 1.04~1.65 | 42~384 | ↑ 230倍 |
+| Fix解比例 | 0% | 88.7% (86/97) | ↑ 88.7% |
+| LAMBDA s[0] | 31~244 | 21~22 | ↓ 残差更小更稳定 |
+| LAMBDA s[1] | 32~253 | 4572~4944 | ↑ 次优解残差大幅增加 |
+| 位置方差 | 0.03~0.04 | 0.00015~0.00017 | ↓ 200倍 |
+
+ratio 收敛过程：42 → 86 → 212 → 384 → 稳定在 200+
+
+#### 数据集B：非配对数据 — 无效，不可作为测试依据
+
+| 指标 | 标准形式（修复前） | Joseph形式（修复后） | 说明 |
+|------|-------------------|---------------------|------|
+| AR ratio | 1.04~1.65 | 1.04~6.10 | 有改善但不够 |
+| Fix解比例 | 0% | 8% (4/50) | 少量Fix |
+
+**⚠️ 此数据无效，不可作为测试依据：**
+- Rover 和 Base **不是配对的基站/测站**
+- 两个站点位于完全不同的地理位置（相距数百公里）
+- Rover 和 Base 历元数差异大，采样率/时间不同步
+- 持续出现-16~-20周的双差残差，表明数据质量极差
+- 此数据的测试结果仅反映"非配对数据"的失败情况，与 Joseph 形式无关
+
+#### 数据集C：单系统BDS短基线（基线~420m，仅BDS）— 正确配对但数据质量差
+
+| 指标 | Joseph形式（Java版） | C版（rnx2rtkp EX 2.5.0） |
+|------|---------------------|--------------------------|
+| AR ratio | 1.05~1.16 | **0.0**（全部为Float） |
+| Fix解比例 | 0% (0/239) | **0%** (0/240) |
+| 解类型 | 全Float (Q=2) | 全Float (Q=2) |
+| 卫星数 | 7~10颗 | 7~10颗 |
+| 频点数 | 2 (B1I/B2I) | 2 (L1+L2) |
+| 基线长度 | ~420m | ~420m |
+
+**此数据C版同样无法Fix，说明是数据质量问题而非Java版bug。**
+
+##### 根因分析：模糊度浮点解精度差
+
+| 指标 | 数据集C（无法Fix） | 数据集A（Fix=88.7%） |
+|------|---------------------|---------------------|
+| 模糊度浮点值偏差 | **0.5~2.5周** | **0.01~0.02周** |
+| 双差残差平均 | **19.2周** | **8.6周** |
+| 双差残差最大 | **61.6周** | **18.0周** |
+| LAMBDA s[0] | **3446~4662** | **21~22** |
+| 模糊度方差（后期） | 15.8~17.3（卡住） | 100.0（稳定） |
+| Qb_diag | 0.0005~0.02 | 0.00007~0.001 |
+
+数据集C的模糊度浮点值远离整数（偏差1~2.5周），导致LAMBDA搜索空间中
+多个整数候选的残差接近（s[0]≈s[1]），ratio≈1.0。
+
+可能原因：多路径效应严重、电离层/对流层误差大、观测噪声大。
+
+##### C版验证方法
+
+使用 RTKLIB EX 2.5.0 的 `rnx2rtkp.exe` 命令行工具：
+
+```bash
+# 1. RTCM3转RINEX（含导航文件）
+convbin.exe -r rtcm3 -n rover.nav -o rover.obs rover.rtcm3
+convbin.exe -r rtcm3 -n base.nav -o base.obs base.rtcm3
+
+# 2. C版RTK定位（Kinematic模式，BDS，2频点，ratio阈值3.0）
+rnx2rtkp.exe -p 2 -f 2 -v 3.0 -sys C -o c_result.pos rover.obs base.obs rover.nav base.nav
+```
+
+C版结果：全部历元Q=2（Float），ratio=0.0，与Java版结论一致。
+
+### 代码实现
+
+`KalmanFilter.java` 第 207~216 行：
+
+```java
+SimpleMatrix Ic = MatrixUtil.identity(k);
+SimpleMatrix KHc = MatrixUtil.multiply(K, HcMat);
+SimpleMatrix I_KH = MatrixUtil.subtract(Ic, KHc);
+
+// Joseph形式协方差更新: P_new = (I-KH)*P*(I-KH)' + K*R*K'
+SimpleMatrix I_KH_T = MatrixUtil.transpose(I_KH);
+SimpleMatrix P_temp = MatrixUtil.multiply(I_KH, PcMat);
+SimpleMatrix P_new = MatrixUtil.multiply(P_temp, I_KH_T);
+
+SimpleMatrix KR = MatrixUtil.multiply(K, RMat);
+SimpleMatrix KRKt = MatrixUtil.multiply(KR, MatrixUtil.transpose(K));
+P_new = MatrixUtil.add(P_new, KRKt);
+```
+
+### 状态
+✅ 已修复
+
+---
+
 ## 待排查问题
 
-### 🟡 P1：Kalman 滤波增益计算
+### 🟡 P1：dE 系统偏差 ~0.8m
 
-**文件**: `src/main/java/org/rtklib/java/kalman/KalmanFilter.java`
+Java 版 RTK 定位在东向存在约 0.8m 的系统偏差，可能与卫星数差异（Java 比 C 少 1-2 颗）
+或观测值权重模型有关。
 
-**关注点**:
-- 状态压缩（ix 数组）是否正确映射
-- P 矩阵更新（Joseph 形式）的索引计算
-- 数值精度差异（float vs double）
-- 需逐历元对比 C 版 trace 输出与 Java 版的 H/v/R 矩阵
+### 🟡 P2：后段历元精度波动
 
-### 🟢 P2：充分收敛历元的 5.4m RMS
-
-即使排除异常值、充分收敛(>30min, <10m)的 78 个历元，3D RMS 仍有 5.4m。
-正常 RTK 收敛后应为 cm 级（0.01-0.05m），说明还有更深层的问题。
-
-可能原因：
-- Kalman 滤波矩阵运算差异（行优先 vs 列优先）
-- 观测噪声 R 矩阵差异导致 Kalman 增益偏小
-- 对流层/电离层修正的累积差异
+epoch 210, 239 出现 5m 跳变，可能与卫星升降或周跳处理细节有关。
 
 ### 🟢 P3：基准站位置自动获取
 
-Java 版缺少 `antpos()` / `avepos()` 的等价实现，目前测试中硬编码 C 版 SPP 平均坐标。
-需要实现自动从 RINEX 头或 SPP 平均获取基准站位置。
+RINEX 头 `APPROX POSITION XYZ` 已实现自动读取（`RinexParser`），MOVEB 模式已有 SPP 平均。
+缺失：`POSOPT_SINGLE`（非MOVEB模式SPP取平均）和 `POSOPT_FILE`（位置文件读取）。
 
 ---
 
@@ -343,7 +443,7 @@ Java 版缺少 `antpos()` / `avepos()` 的等价实现，目前测试中硬编�
 | ✅ | varerr() 不完整 | RtkCore.varerr() | ✅ 已修复 | 噪声模型 |
 | ✅ | 对流层映射函数 | RtkCore.zdres() | ✅ 已修复 | 对流层延迟 |
 | 🔴→✅ | LAMBDA输出索引错误 | RtkCore.relpos() | ✅ 已修复 | Fix解偏差24m |
-| 🟡 | Kalman 增益计算 | KalmanFilter.java | ⚠️ 待验证 | 滤波精度 |
+| 🔴→✅ | Kalman 协方差更新 | KalmanFilter.java | ✅ 已修复(Joseph形式) | 数值稳定性 |
 | 🟡 | dE 系统偏差 ~0.8m | 观测值权重/卫星数 | ⚠️ 待排查 | 精度 |
 | 🟡 | 后段历元精度波动 | 卫星升降/周跳细节 | ⚠️ 待排查 | 稳定性 |
 | 🟢 | 基准站位置自动获取 | 待实现 | ⚠️ 待实现 | 自动化 |

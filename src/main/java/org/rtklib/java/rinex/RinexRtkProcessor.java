@@ -167,9 +167,11 @@ public class RinexRtkProcessor {
 
             if (baseParser.sta != null && baseParser.sta.pos != null
                     && (baseParser.sta.pos[0] != 0.0 || baseParser.sta.pos[1] != 0.0 || baseParser.sta.pos[2] != 0.0)) {
-                System.arraycopy(baseParser.sta.pos, 0, rtk.rb, 0, 3);
-                log.info("Using base station position from RINEX header: ({}, {}, {})",
-                        rtk.rb[0], rtk.rb[1], rtk.rb[2]);
+                if (rtk.rb[0] == 0.0 && rtk.rb[1] == 0.0 && rtk.rb[2] == 0.0) {
+                    System.arraycopy(baseParser.sta.pos, 0, rtk.rb, 0, 3);
+                    log.info("Using base station position from RINEX header: ({}, {}, {})",
+                            rtk.rb[0], rtk.rb[1], rtk.rb[2]);
+                }
             }
 
             if (baseParser.obs.n > 0) {

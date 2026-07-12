@@ -330,11 +330,12 @@ sol.ratio     → 模糊度固定 ratio
 obs.time      → 观测时刻
 obs.sat       → 卫星 PRN
 obs.rcv       → 接收机编号 (1=流动站, 2=基准站)
-obs.P[2]      → 伪距观测值 (L1, L2)
-obs.L[2]      → 载波相位观测值 (L1, L2)
-obs.D[2]      → 多普勒观测值
-obs.lli[2]    → 周跳标记
-obs.code[2]   → 观测值类型 (C1C, L1C, etc.)
+obs.P[NFREQ]  → 伪距观测值 (NFREQ=6, 支持BDS全6频点)
+obs.L[NFREQ]  → 载波相位观测值
+obs.D[NFREQ]  → 多普勒观测值
+obs.lli[NFREQ]→ 周跳标记
+obs.code[NFREQ]→ 观测值类型 (C1C, L1C, etc.)
+obs.SNR[NFREQ]→ 信噪比
 ```
 
 ---
@@ -351,7 +352,10 @@ obs.code[2]   → 观测值类型 (C1C, L1C, etc.)
 | 6 | `intpres()` | 基准站观测值内插缺失 | 不影响 (intpref=0) | **已修复** |
 | 7 | `rtkpos()` | SPP 仅首历元执行 | **可能有影响** | 待修复 |
 | 8 | `rtkpos()` | MOVEB 模式 SPP 数据错误 | 不影响 (非 MOVEB) | 待修复 |
-| 9 | `relpos()` | 待进一步排查 | 剩余偏差根因 | 排查中 |
+| 9 | `KalmanFilter` | 使用Joseph形式替代标准形式 | 改善数值稳定性 | ✅ 设计选择 |
+| 10 | `RtkCore` | 状态向量存储基线向量而非绝对位置 | 数学等价 | ✅ 设计选择 |
+| 11 | `SppCore` | dtr数组使用固定索引（与C版一致） | 修复PPP钟差初始化 | ✅ 已修复 |
+| 12 | `SppCore` | NX动态计算（C版固定4+4/4+5） | 更高效，需sysIdx一致 | ✅ 设计选择 |
 
 ---
 
