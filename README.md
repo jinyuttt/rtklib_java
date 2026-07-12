@@ -37,7 +37,6 @@ org.rtklib.java
 ├── common/        通用工具（矩阵运算、卫星工具、观测值编码）
 ├── constants/     常量定义（物理常数、模式常量、卡方分布表）
 ├── coord/         坐标变换（ECEF↔LLH、ENU变换）
-├── cycle/         周跳检测
 ├── data/          数据结构（观测值、星历、导航、解算结果等）
 ├── ephemeris/     星历计算（卫星位置与钟差）
 ├── ionosphere/    电离层延迟模型
@@ -46,9 +45,9 @@ org.rtklib.java
 ├── ppp/           精密单点定位（PPP动态、静态、固定坐标）
 ├── rinex/         RINEX 文件读写与处理
 ├── rtcm/          RTCM 数据解码
-├── rtkpos/        RTK 相对定位核心
+├── rtkpos/        RTK 相对定位核心（含周跳检测）
 ├── time/          时间系统（GPS时、UTC转换）
-├── trace/         追踪日志系统（LogTrace）
+├── trace/         追踪日志系统（RtkTrace/PppTrace）
 └── troposphere/   对流层延迟模型
 ```
 
@@ -105,7 +104,7 @@ mvn test
 
 ### SPP 单点定位
 
-``java
+```java
 PrcOpt opt = new PrcOpt();
 opt.mode = Constants.PMODE_SINGLE;
 
@@ -118,11 +117,11 @@ if (rtk.sol.stat == Constants.SOLQ_SINGLE) {
     CoordTransform.ecef2pos(rtk.sol.rr, pos);
     System.out.printf("Lat=%.8f Lon=%.8f H=%.3f%n", pos[0], pos[1], pos[2]);
 }
-``
+```
 
 ### RTK 相对定位
 
-``java
+```java
 PrcOpt opt = new PrcOpt();
 opt.mode = Constants.PMODE_KINEMA;
 opt.procmode = Constants.PROCMODE_POST;
@@ -142,7 +141,7 @@ if (rtk.sol.stat == Constants.SOLQ_FIX) {
     CoordTransform.ecef2pos(rtk.sol.rr, pos);
     System.out.printf("FIX: Lat=%.8f Lon=%.8f H=%.3f%n", pos[0], pos[1], pos[2]);
 }
-``
+```
 
 ### PPP 精密单点定位
 
@@ -160,7 +159,7 @@ for (Sol sol : processor.getResults()) {
     if (sol.stat == Constants.SOLQ_PPP_FLOAT) {
         double[] pos = new double[3];
         CoordTransform.ecef2pos(sol.rr, pos);
-        System.out.printf(`PPP FLOAT: Lat=%.8f Lon=%.8f H=%.3f%n`,
+        System.out.printf("PPP FLOAT: Lat=%.8f Lon=%.8f H=%.3f%n",
             pos[0], pos[1], pos[2]);
     }
 }
@@ -168,17 +167,17 @@ for (Sol sol : processor.getResults()) {
 
 ### RINEX 文件处理
 
-``java
+```java
 RinexParser parser = new RinexParser();
 Obs obs = parser.parse(obsFilePath, navFilePath);
 
 RinexSppProcessor spp = new RinexSppProcessor(obs, opt);
 spp.process();
-``
+```
 
 ### RTCM 数据解码
 
-``java
+```java
 Rtcm rtcm = new Rtcm();
 byte[] data = Files.readAllBytes(Paths.get(rtcmFilePath));
 
@@ -190,7 +189,7 @@ for (int i = 0; i < data.length; i++) {
         int n = rtcm.obs.n;
     }
 }
-``
+```
 
 ## 与 C 版 RTKLIB 的对齐状态
 
@@ -208,14 +207,14 @@ for (int i = 0; i < data.length; i++) {
 | 卫星位置 | `satposs()` | `EphModel.satposs()` | ✅ |
 | 坐标变换 | `ecef2pos()`/`xyz2enu()` | `CoordTransform` | ✅ |
 | LAMBDA | `lambda()` | `Lambda` | ✅ |
-| 周跳检测 | `detslp_*()` | `CycleDetect` | ✅ |
+| 周跳检测 | `detslp_*()` | `RtkCore.detslpLl/Gf/Code/Dop()` | ✅ |
 | RINEX读写 | `readrnx()`/`outrnx()` | `RinexParser`/`RinexObsWriter` | ✅ |
 | RTCM解码 | `decode_*()` | `Rtcm` | ✅ |
 | PPP入口 | `pppos()` | `PppCore.pppos()` | ✅ 基本对齐 |
 | PPP状态更新 | `udstate_ppp()` | `PppCore.udstate()` | ✅ |
 | PPP观测修正 | `corrMeas()` | `PppCore.corrMeas()` | ✅ |
 | PPP RINEX处理 | - | `PppProcessor`/`RinexPppProcessor` | ✅ |
-| 追踪日志 | `trace*()` | `LogTrace` | ✅ |
+| 追踪日志 | `trace*()` | `RtkTrace`/`PppTrace` | ✅ |
 
 ### 已对齐的 rtkpos() 流程细节
 
@@ -235,7 +234,6 @@ for (int i = 0; i < data.length; i++) {
 | 功能 | 优先级 | 原因 |
 |------|--------|------|
 | Static Start长延迟恢复 | 低 | 边界场景，`tt>300`时重置状态 |
-| PPP模糊度固定 | 中 | 需整数模糊度解算，当前仅浮点解 |
 | 多系统PPP验证 | 中 | GPS+BDS联合PPP，需多系统精密星历 |
 
 ## 方法命名规则
@@ -258,19 +256,19 @@ Java版方法名遵循以下规则，在保持Java驼峰命名的同时保留C�
 
 ## 测试验证状态
 
-当前测试以**北斗（BDS）单系统**为主，SPP和RTK已通过BDS数据与C版RTKLIB对比验证。PPP已实现基本功能，IFLC模式下BDS浮点解可正常输出。
+当前测试以**北斗（BDS）单系统**和**多系统（GPS+BDS）**短基线数据为主。SPP 已通过 BDS 数据与 C 版 RTKLIB 亚毫米级对比验证；RTK 已通过多系统短基线数据验证，Fix 解比例达 88.7%。PPP 已实现基本功能，IFLC 模式下 BDS 浮点解可正常输出。
 
-多系统（GPS+BDS、GPS+GLONASS等）联合定位尚未充分验证。如有**多系统真实观测数据**条件，欢迎测试验证并反馈结果。
+多系统（GPS+GLONASS 等）联合定位尚未充分验证。如有**多系统真实观测数据**条件，欢迎测试验证并反馈结果。
 
 ### 已验证场景
 
 | 场景 | 数据源 | 状态 |
 |------|--------|------|
 | SPP（BDS-only） | RTCM MSM4 | ✅ 240历元与C版亚毫米级匹配 |
-| RTK（BDS-only） | RTCM MSM4 | ✅ 浮点解收敛稳定 |
+| RTK（GPS+BDS 短基线） | RTCM MSM4 | ✅ Fix解比例88.7%，ratio 42~384 |
+| RTK（BDS-only 短基线） | RTCM MSM4 | ✅ 浮点解收敛稳定（数据质量限制，C版同样无法Fix） |
 | PPP（BDS-only IFLC） | RINEX + SP3/CLK | ✅ 240历元浮点解输出 |
 | SPP（GPS+BDS） | - | ⏳ 待验证 |
-| RTK（GPS+BDS） | - | ⏳ 待验证 |
 | PPP（GPS+BDS） | - | ⏳ 待验证 |
 
 ## License

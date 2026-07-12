@@ -187,6 +187,10 @@ public class RinexParser {
                 this.sta.del[5] = parseDouble(line, 28, 14); // Z
             } else if (label.equals("ANTENNA TYPE")) {
                 this.sta.antdes = line.substring(0, 20).trim();
+            } else if (label.equals("APPROX POSITION XYZ")) {
+                this.sta.pos[0] = parseDouble(line, 0, 14);
+                this.sta.pos[1] = parseDouble(line, 14, 14);
+                this.sta.pos[2] = parseDouble(line, 28, 14);
             } else if (label.equals("SYS / # / OBS TYPES")) {
                 int p = SYSCODES.indexOf(line.charAt(0));
                 int n = parseInteger(line, 3, 3);
