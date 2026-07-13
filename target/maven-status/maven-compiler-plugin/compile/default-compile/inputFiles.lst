@@ -6,6 +6,7 @@ D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\common\MatrixUtil.java
 D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\common\ObsCode.java
 D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\common\RtklibCommon.java
 D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\common\SatUtils.java
+D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\config\RtkConfig.java
 D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\constants\ChiSqr.java
 D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\constants\Constants.java
 D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\coord\CoordTransform.java
@@ -68,6 +69,7 @@ D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\rtcm\Rtcm.java
 D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\rtcm\RtcmCallbackDecoder.java
 D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\rtcm\RtcmDataHandler.java
 D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkCore.java
+D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkOptimizations.java
 D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkPos.java
 D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkProcessor.java
 D:\rtklib\rtklib_java\src\main\java\org\rtklib\java\rtkpos\Tides.java

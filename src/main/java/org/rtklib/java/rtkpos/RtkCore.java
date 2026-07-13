@@ -5,6 +5,7 @@ import org.rtklib.java.ambiguity.Lambda;
 import org.rtklib.java.common.MatrixUtil;
 import org.rtklib.java.common.RtklibCommon;
 import org.rtklib.java.common.SatUtils;
+import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
@@ -13,6 +14,7 @@ import org.rtklib.java.kalman.KalmanFilter;
 import org.rtklib.java.pntpos.PntPos;
 import org.rtklib.java.pntpos.SppCore;
 import org.rtklib.java.time.TimeSystem;
+import org.rtklib.java.ionosphere.IonosphereModel;
 import org.rtklib.java.troposphere.TroposphereModel;
 import org.rtklib.java.trace.RtkTrace;
 import org.rtklib.java.trace.TraceControl;
@@ -23,35 +25,35 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * RTK相对定位核心算法。
+ * RTK相对定位核心算法�?
  *
- * <p>对应RTKLIB C源码 rtkpos.c 中的 relpos / zdres / ddres 等函数。</p>
+ * <p>对应RTKLIB C源码 rtkpos.c 中的 relpos / zdres / ddres 等函数�?/p>
  *
- * <h3>与RTKLIB C版本的关键差异</h3>
+ * <h3>与RTKLIB C版本的关键差�?/h3>
  * <ul>
- *   <li><b>状态向量定义不同</b>：C版本 rtk->x[0..2] 存储流动站绝对ECEF坐标；
- *       Java版本 rtk.x[0..2] 存储基线向量（流动站坐标 - 基准站坐标）。
- *       因此调用 zdres 时需要 rtk.rb + xp 计算流动站绝对坐标。</li>
+ *   <li><b>状态向量定义不�?/b>：C版本 rtk->x[0..2] 存储流动站绝对ECEF坐标�?
+ *       Java版本 rtk.x[0..2] 存储基线向量（流动站坐标 - 基准站坐标）�?
+ *       因此调用 zdres 时需�?rtk.rb + xp 计算流动站绝对坐标�?/li>
  *   <li><b>矩阵存储顺序不同</b>：C版本使用列优先（Fortran风格），
- *       Java版本统一使用行优先（row-major），即 M[row * cols + col]。
- *       所有矩阵（P, H, R）均按行优先存储，通过 MatrixUtil 转为 EJML SimpleMatrix。</li>
- *   <li><b>矩阵运算</b>：全部使用 EJML 库，不直接手撸数组运算，
- *       避免行优先/列优先混淆和矩阵乘法顺序错误。</li>
+ *       Java版本统一使用行优先（row-major），�?M[row * cols + col]�?
+ *       所有矩阵（P, H, R）均按行优先存储，通过 MatrixUtil 转为 EJML SimpleMatrix�?/li>
+ *   <li><b>矩阵运算</b>：全部使�?EJML 库，不直接手撸数组运算，
+ *       避免行优�?列优先混淆和矩阵乘法顺序错误�?/li>
  * </ul>
  *
- * <h3>矩阵存储约定（行优先）</h3>
+ * <h3>矩阵存储约定（行优先�?/h3>
  * <ul>
- *   <li>P[nx*nx]：协方差矩阵，P[i*nx+j] = 第i行第j列</li>
- *   <li>H[ny*nx]：设计矩阵，H[obs*nx+state] = 第obs行第state列</li>
- *   <li>R[ny*ny]：观测噪声协方差，R[i*ny+j] = 第i行第j列</li>
+ *   <li>P[nx*nx]：协方差矩阵，P[i*nx+j] = 第i行第j�?/li>
+ *   <li>H[ny*nx]：设计矩阵，H[obs*nx+state] = 第obs行第state�?/li>
+ *   <li>R[ny*ny]：观测噪声协方差，R[i*ny+j] = 第i行第j�?/li>
  * </ul>
  *
  * <h3>致命陷阱规避</h3>
  * <ul>
  *   <li>载波相位单位：L * λ（cycle→米），不可省略波长转换</li>
  *   <li>时间系统：GPST/BDT/UTC 严格区分，BDT = GPST - 14s</li>
- *   <li>矩阵乘法不满足交换律：P*H^T ≠ H^T*P</li>
- *   <li>卫星位置迭代：必须用信号传播时间迭代，不可省略</li>
+ *   <li>矩阵乘法不满足交换律：P*H^T �?H^T*P</li>
+ *   <li>卫星位置迭代：必须用信号传播时间迭代，不可省�?/li>
  *   <li>地球自转修正：Sagnac效应必须包含在卫星位置计算中</li>
  * </ul>
  */
@@ -67,6 +69,8 @@ public final class RtkCore {
     private static final double VAR_VEL = 10.0 * 10.0;
     private static final double VAR_ACC = 10.0 * 10.0;
     private static final double VAR_AMB = 30.0 * 30.0;
+    private static final double INIT_ZWD = 0.15;
+    private static final double VAR_GRA = 0.001 * 0.001;
     private static final double VAR_IONO_OFF = 1E4;
     private static final double VAR_GLO_IFB = 1E4;
     private static final double STD_PREC_VAR_THRESH = 0.0;
@@ -76,7 +80,8 @@ public final class RtkCore {
     }
 
     private static int NI(PrcOpt opt) {
-        return opt.ionoopt != Constants.IONOOPT_EST ? 0 : Constants.MAXSAT;
+        if (opt.ionoopt != Constants.IONOOPT_EST) return 0;
+        return opt.ionoGradient ? Constants.MAXSAT * 3 : Constants.MAXSAT;
     }
 
     private static int NT(PrcOpt opt) {
@@ -102,6 +107,7 @@ public final class RtkCore {
     }
 
     private static int II(int sat, PrcOpt opt) {
+        if (opt.ionoGradient) return NP(opt) + (sat - 1) * 3;
         return NP(opt) + sat - 1;
     }
 
@@ -112,11 +118,11 @@ public final class RtkCore {
     private static final double MIN_ARC_GAP = 300.0;
 
     /**
-     * RTK定位入口函数。
+     * RTK定位入口函数�?
      *
-     * <p>对应RTKLIB rtkpos()。处理单点定位(SPP)和相对定位(RTK/DGPS)。</p>
+     * <p>对应RTKLIB rtkpos()。处理单点定�?SPP)和相对定�?RTK/DGPS)�?/p>
      *
-     * @param rtk RTK解算状态
+     * @param rtk RTK解算状�?
      * @param obs 观测数据数组，rcv=1为流动站，rcv=2为基准站
      * @param n   观测数据总数
      * @param nav 导航数据
@@ -202,27 +208,27 @@ GTime prevTime = new GTime(rtk.sol.time);
     }
 
     /**
-     * 相对定位核心函数。
+     * 相对定位核心函数�?
      *
      * <p>对应RTKLIB relpos()。实现RTK/DGPS相对定位的完整流程：</p>
      * <ol>
      *   <li>计算卫星位置（含传播时间迭代和地球自转修正）</li>
-     *   <li>计算基准站零差残差 zdres(1,...)</li>
+     *   <li>计算基准站零差残�?zdres(1,...)</li>
      *   <li>选择共视卫星 selsat()</li>
-     *   <li>初始化/更新状态向量（基线向量 + 模糊度）</li>
-     *   <li>迭代求解：零差残差 → 双差残差 → Kalman滤波</li>
+     *   <li>初始�?更新状态向量（基线向量 + 模糊度）</li>
+     *   <li>迭代求解：零差残�?�?双差残差 �?Kalman滤波</li>
      *   <li>LAMBDA模糊度固定（可选）</li>
      *   <li>输出解算结果</li>
      * </ol>
      *
-     * <p><b>状态向量定义</b>（与C版本不同）：</p>
+     * <p><b>状态向量定�?/b>（与C版本不同）：</p>
      * <ul>
      *   <li>x[0..2]: 基线向量（流动站ECEF - 基准站ECEF），单位：米</li>
-     *   <li>x[3..5]: 速度分量（预留，当前置零）</li>
+     *   <li>x[3..5]: 速度分量（预留，当前置零�?/li>
      *   <li>x[6..6+ns*nf-1]: 载波相位模糊度，单位：cycle</li>
      * </ul>
      *
-     * @param rtk RTK解算状态
+     * @param rtk RTK解算状�?
      * @param obs 观测数据数组
      * @param nu  流动站观测数
      * @param nr  基准站观测数
@@ -285,6 +291,9 @@ GTime prevTime = new GTime(rtk.sol.time);
                 obs[0].time, sat, ns, nf, rs, dts, nav, rtk.rb, iu);
         if (ns <= 0) return 0;
 
+        opt.ionoGradient = rtk.rtkConfig.enableIonoTropGradient
+                && opt.ionoopt == Constants.IONOOPT_EST;
+
         int nState = NR(opt);
         int nx = nState + Constants.MAXSAT * nf;
         boolean reinit = (rtk.nx != nx);
@@ -301,6 +310,10 @@ GTime prevTime = new GTime(rtk.sol.time);
                 for (i = 6; i < 9; i++) initx(rtk, 1E-6, VAR_ACC, i);
             }
 
+        }
+
+        if (rtk.rtkConfig.enableSnrMedian) {
+            RtkOptimizations.computeSnrMedian(rtk, obs, nu, nr, sat, ns, nf, nav);
         }
 
         udstate(rtk, obs, sat, iu, ir, ns, nav, nf);
@@ -373,6 +386,10 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
             RtkTrace.traceStage3(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                     obs[0].time, refSatForTrace, sat, ns, nf, v, nv, R, H, rtk.nx, opt);
 
+            if (rtk.rtkConfig.enableIggiii) {
+                RtkOptimizations.applyIggiii(rtk, v, H, R, vflg, nv, nx, sat, ns, obs, iu, azel, nf);
+            }
+
             double xp0 = xp[0], xp1 = xp[1], xp2 = xp[2];
             double[] xpBeforeFilter = xp.clone();
             int info = filter(xp, Pp, H, v, R, nx, nv);
@@ -415,7 +432,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
 
         if (stat == Constants.SOLQ_FLOAT) {
             double[] bias = new double[nx];
-            int nb = manage_amb_LAMBDA(rtk, bias, xa, sat, nf, ns);
+            int nb = manage_amb_LAMBDA(rtk, bias, xa, sat, nf, ns, azel, iu, y);
             if (nb > 1) {
                 double[] rr_fix = new double[3];
                 for (j = 0; j < 3; j++) rr_fix[j] = rtk.rb[j] + xa[j];
@@ -495,6 +512,11 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         }
 
         rtk.sol.stat = (byte) stat;
+
+        if (rtk.rtkConfig.enableAdaptiveQ) {
+            RtkOptimizations.computeQScale(rtk, sat, ns);
+        }
+
         RtkTrace.traceStage6(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                 obs[0].time, rtk.sol, opt.niter);
 
@@ -504,35 +526,35 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     }
 
     /**
-     * 计算零差残差（Zero-Difference Residuals）。
+     * 计算零差残差（Zero-Difference Residuals）�?
      *
-     * <p>对应RTKLIB zdres()。计算每个卫星的观测值与几何距离之差：</p>
+     * <p>对应RTKLIB zdres()。计算每个卫星的观测值与几何距离之差�?/p>
      * <ul>
      *   <li>载波相位残差: y = L * λ - r （注意：L是cycle，必须乘波长λ转为米）</li>
      *   <li>伪距残差: y = P - r</li>
      * </ul>
      *
-     * <p>同时计算视线单位向量e、方位角/高度角azel、频率freq。</p>
+     * <p>同时计算视线单位向量e、方位角/高度角azel、频率freq�?/p>
      *
-     * <p><b>与C版本的差异</b>：C版本 obs 偏移由调用方处理（obs+nu），
-      * Java版本通过 off 参数在函数内部处理偏移。</p>
+     * <p><b>与C版本的差�?/b>：C版本 obs 偏移由调用方处理（obs+nu），
+      * Java版本通过 off 参数在函数内部处理偏移�?/p>
      *
-     * @param base  0=流动站 1=基准站
+     * @param base  0=流动�?1=基准�?
      * @param obs   观测数据数组（流动站+基准站连续存储）
      * @param nu    流动站观测数
      * @param nr    基准站观测数
-     * @param rs    卫星位置/速度数组 [n*6]，每颗卫星 (x,y,z,vx,vy,vz)
-     * @param dts   卫星钟差/钟漂数组 [n*2]，每颗卫星 (bias,drift)
+     * @param rs    卫星位置/速度数组 [n*6]，每颗卫�?(x,y,z,vx,vy,vz)
+     * @param dts   卫星钟差/钟漂数组 [n*2]，每颗卫�?(bias,drift)
      * @param vare  卫星位置方差 [n]
      * @param svh   卫星健康标志 [n]
      * @param nav   导航数据
      * @param rr    接收机绝对ECEF坐标 [3]（注意：不是基线向量！）
      * @param opt   处理选项
-     * @param y     输出：零差残差 [nf*2*n]，行优先，每颗卫星 nf*2 个值（相位+伪距）
-     * @param e     输出：视线单位向量 [3*n]
-     * @param azel  输出：方位角/高度角 [2*n]
-     * @param freq  输出：频率 [nf*n]
-     * @return true=成功 false=接收机位置无效
+     * @param y     输出：零差残�?[nf*2*n]，行优先，每颗卫�?nf*2 个值（相位+伪距�?
+     * @param e     输出：视线单位向�?[3*n]
+     * @param azel  输出：方位角/高度�?[2*n]
+     * @param freq  输出：频�?[nf*n]
+     * @return true=成功 false=接收机位置无�?
      */
     private static void tidedisp(GTime tutc, double[] rr, int opt, Erp erp,
                                   double[][][] odisp, double[] dr) {
@@ -581,25 +603,25 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     }
 
     /**
-     * 基准站观测值时间插值（Interpolation of Base Station Residuals）。
+     * 基准站观测值时间插值（Interpolation of Base Station Residuals）�?
      *
      * <p>对应RTKLIB intpres()。当基准站和流动站观测时刻不同步时，
-     * 通过对前后两个基准站历元的零差残差进行线性插值来修正时间差引起的偏差。</p>
+     * 通过对前后两个基准站历元的零差残差进行线性插值来修正时间差引起的偏差�?/p>
      *
-     * <p>工作原理：</p>
+     * <p>工作原理�?/p>
      * <ol>
      *   <li>首次调用或时间差极小时，保存当前基准站观测值作为\"前一历元\"</li>
-     *   <li>后续调用时，用前一历元和当前历元的基准站零差残差进行线性插值</li>
-     *   <li>对于有周跳或某历元无效的观测值，将插值结果置零</li>
+     *   <li>后续调用时，用前一历元和当前历元的基准站零差残差进行线性插�?/li>
+     *   <li>对于有周跳或某历元无效的观测值，将插值结果置�?/li>
      * </ol>
      *
-     * @param time 流动站观测时间
+     * @param time 流动站观测时�?
      * @param obs  观测数据数组（流动站+基准站连续存储）
      * @param nu   流动站观测数
      * @param nr   基准站观测数
      * @param nav  导航数据
-     * @param rtk  RTK解算状态（含intpres_nb和intpres_obsb）
-     * @param nf   频率数
+     * @param rtk  RTK解算状态（含intpres_nb和intpres_obsb�?
+     * @param nf   频率�?
      * @param y    零差残差数组（基准站部分将被插值修正）
      * @return 基准站和流动站之间的有效时间差（秒）
      */
@@ -767,48 +789,72 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     }
 
     /**
-     * 计算双差残差及设计矩阵。
+     * 计算双差残差及设计矩阵�?
      *
      * <p>对应RTKLIB ddres()。核心步骤：</p>
      * <ol>
-     *   <li>按卫星系统（GPS/GLO/GAL/BDS/QZS/IRN）和频率/码类型分组</li>
+     *   <li>按卫星系统（GPS/GLO/GAL/BDS/QZS/IRN）和频率/码类型分�?/li>
      *   <li>每组选择高度角最高的卫星作为参考星</li>
      *   <li>计算双差残差: v = (y_rover_ref - y_base_ref) - (y_rover_j - y_base_j)</li>
-     *   <li>构建设计矩阵H（行优先存储 H[obs*nx+state]）</li>
-     *   <li>位置偏导数: H[obs, 0..2] = -e_ref + e_j</li>
+     *   <li>构建设计矩阵H（行优先存储 H[obs*nx+state]�?/li>
+     *   <li>位置偏导�? H[obs, 0..2] = -e_ref + e_j</li>
      *   <li>模糊度偏导数: H[obs, ii] = λ_ref, H[obs, jj] = -λ_j</li>
      *   <li>计算观测噪声方差 varerr()</li>
-     *   <li>构建双差协方差矩阵 ddcov()</li>
+     *   <li>构建双差协方差矩�?ddcov()</li>
      * </ol>
      *
-     * <p><b>行优先存储约定</b>（与C版本列优先不同）：</p>
+     * <p><b>行优先存储约�?/b>（与C版本列优先不同）�?/p>
      * <ul>
-     *   <li>H[ny*nx]：H[obs*nx + state]，即第obs个观测对第state个状态的偏导数</li>
-     *   <li>R[ny*ny]：R[i*ny + j]，即第i行第j列</li>
-     *   <li>P[nx*nx]：P[i*nx + j]，即第i行第j列</li>
+     *   <li>H[ny*nx]：H[obs*nx + state]，即第obs个观测对第state个状态的偏导�?/li>
+     *   <li>R[ny*ny]：R[i*ny + j]，即第i行第j�?/li>
+     *   <li>P[nx*nx]：P[i*nx + j]，即第i行第j�?/li>
      * </ul>
      *
-     * @param rtk  RTK解算状态
+     * @param rtk  RTK解算状�?
      * @param obs  观测数据数组
-     * @param dt   流动站与基准站时间差（秒）
-     * @param x    状态向量（基线向量+模糊度），nx维
+     * @param dt   流动站与基准站时间差（秒�?
+     * @param x    状态向量（基线向量+模糊度），nx�?
      * @param P    协方差矩阵，nx*nx，行优先
-     * @param sat  共视卫星号数组
-     * @param y    零差残差（来自zdres）
+     * @param sat  共视卫星号数�?
+     * @param y    零差残差（来自zdres�?
      * @param e    视线单位向量
-     * @param azel 方位角/高度角
+     * @param azel 方位�?高度�?
      * @param freq 频率数组
-     * @param iu   流动站卫星索引
-     * @param ir   基准站卫星索引
-     * @param ns   共视卫星数
-     * @param nf   频率数
+     * @param iu   流动站卫星索�?
+     * @param ir   基准站卫星索�?
+     * @param ns   共视卫星�?
+     * @param nf   频率�?
      * @param nav  导航数据
-     * @param v    输出：双差残差向量 [ny]
-     * @param H    输出：设计矩阵 [ny*nx]，行优先；null则不计算
+     * @param v    输出：双差残差向�?[ny]
+     * @param H    输出：设计矩�?[ny*nx]，行优先；null则不计算
      * @param R    输出：双差协方差矩阵 [ny*ny]，行优先
-     * @param vflg 输出：残差标志 [ny]
-     * @return 有效双差残差数
+     * @param vflg 输出：残差标�?[ny]
+     * @return 有效双差残差�?
      */
+    private static double prectrop(GTime time, double[] pos, int r,
+                                    double[] azel, PrcOpt opt, double[] x,
+                                    double[] dtdx, int dtdxOff) {
+        double[] mw = new double[1];
+        TroposphereModel.tropmapf(time, pos, azel, mw);
+
+        int i = IT(r, opt);
+        double m_w = mw[0];
+
+        if (opt.tropopt >= Constants.TROPOPT_ESTG && azel[1] > 0.0) {
+            double cotz = 1.0 / Math.tan(azel[1]);
+            double grad_n = m_w * cotz * Math.cos(azel[0]);
+            double grad_e = m_w * cotz * Math.sin(azel[0]);
+            m_w += grad_n * x[i + 1] + grad_e * x[i + 2];
+            dtdx[dtdxOff + 1] = grad_n * x[i];
+            dtdx[dtdxOff + 2] = grad_e * x[i];
+        } else {
+            dtdx[dtdxOff + 1] = 0.0;
+            dtdx[dtdxOff + 2] = 0.0;
+        }
+        dtdx[dtdxOff + 0] = m_w;
+        return m_w * x[i];
+    }
+
     private static int ddres(Rtk rtk, Obsd[] obs, double dt, double[] x, double[] P,
                              int[] sat, double[] y, double[] e, double[] azel, double[] freq,
                              int[] iu, int[] ir, int ns, int nf, Nav nav,
@@ -823,9 +869,37 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         double[] pos = new double[3];
         CoordTransform.ecef2pos(rr_f, pos);
 
+        double[] rr_r = new double[3];
+        for (i = 0; i < 3; i++) rr_r[i] = rtk.rb[i];
+        double[] posr = new double[3];
+        CoordTransform.ecef2pos(rr_r, posr);
+
         double bl = baseline(x, rtk.rb, null);
         double[] Ri = new double[ns * nf * 2 + 2];
         double[] Rj = new double[ns * nf * 2 + 2];
+
+        double[] tropu = null, tropr = null, dtdxu = null, dtdxr = null;
+        double[] im = null;
+        if (opt.ionoopt == Constants.IONOOPT_EST) {
+            im = new double[ns];
+            for (i = 0; i < ns; i++) {
+                double[] azelU = new double[]{azel[iu[i] * 2], azel[1 + iu[i] * 2]};
+                double[] azelR = new double[]{azel[ir[i] * 2], azel[1 + ir[i] * 2]};
+                im[i] = (IonosphereModel.ionmapf(pos, azelU) + IonosphereModel.ionmapf(posr, azelR)) / 2.0;
+            }
+        }
+        if (opt.tropopt >= Constants.TROPOPT_EST) {
+            tropu = new double[ns];
+            tropr = new double[ns];
+            dtdxu = new double[ns * 3];
+            dtdxr = new double[ns * 3];
+            for (i = 0; i < ns; i++) {
+                double[] azelU = new double[]{azel[iu[i] * 2], azel[1 + iu[i] * 2]};
+                double[] azelR = new double[]{azel[ir[i] * 2], azel[1 + ir[i] * 2]};
+                tropu[i] = prectrop(rtk.sol.time, pos, 0, azelU, opt, x, dtdxu, i * 3);
+                tropr[i] = prectrop(rtk.sol.time, posr, 1, azelR, opt, x, dtdxr, i * 3);
+            }
+        }
 
         for (i = 0; i < Constants.MAXSAT; i++) {
             for (j = 0; j < Constants.NFREQ; j++) {
@@ -885,14 +959,54 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
 
                     v[nv] = (y[f + idx_i * nf * 2] - y[f + idx_ir * nf * 2])
                             - (y[f + idx_j * nf * 2] - y[f + idx_jr * nf * 2]);
-                    if (code && frq == 0) {
-                    }
-                    if (!code && frq == 0 && H != null) {
-                    }
 
                     if (H != null) {
                         for (k = 0; k < 3; k++) {
                             H[nv * rtk.nx + k] = -e[k + idx_i * 3] + e[k + idx_j * 3];
+                        }
+                    }
+
+                    if (opt.ionoopt == Constants.IONOOPT_EST) {
+                        double didxi = (code ? -1.0 : 1.0) * im[refIdx] * SQR(Constants.FREQL1 / freqi);
+                        double didxj = (code ? -1.0 : 1.0) * im[j] * SQR(Constants.FREQL1 / freqj);
+                        int iiRef = II(sat[refIdx], opt);
+                        int iiJ = II(sat[j], opt);
+                        v[nv] -= didxi * x[iiRef] - didxj * x[iiJ];
+                        double gradNRef = 0.0, gradERef = 0.0, gradNJ = 0.0, gradEJ = 0.0;
+                        if (opt.ionoGradient) {
+                            double elRef = azel[1 + iu[refIdx] * 2];
+                            double azRef = azel[iu[refIdx] * 2];
+                            double cotzRef = 1.0 / Math.tan(elRef);
+                            gradNRef = didxi * cotzRef * Math.cos(azRef);
+                            gradERef = didxi * cotzRef * Math.sin(azRef);
+                            double elJ = azel[1 + iu[j] * 2];
+                            double azJ = azel[iu[j] * 2];
+                            double cotzJ = 1.0 / Math.tan(elJ);
+                            gradNJ = didxj * cotzJ * Math.cos(azJ);
+                            gradEJ = didxj * cotzJ * Math.sin(azJ);
+                            v[nv] -= gradNRef * x[iiRef + 1] + gradERef * x[iiRef + 2]
+                                   - gradNJ * x[iiJ + 1] - gradEJ * x[iiJ + 2];
+                        }
+                        if (H != null) {
+                            H[nv * rtk.nx + iiRef] = didxi;
+                            H[nv * rtk.nx + iiJ] = -didxj;
+                            if (opt.ionoGradient) {
+                                H[nv * rtk.nx + iiRef + 1] = gradNRef;
+                                H[nv * rtk.nx + iiRef + 2] = gradERef;
+                                H[nv * rtk.nx + iiJ + 1] = -gradNJ;
+                                H[nv * rtk.nx + iiJ + 2] = -gradEJ;
+                            }
+                        }
+                    }
+
+                    if (opt.tropopt >= Constants.TROPOPT_EST) {
+                        v[nv] -= (tropu[refIdx] - tropu[j]) - (tropr[refIdx] - tropr[j]);
+                        if (H != null) {
+                            int tropK = opt.tropopt < Constants.TROPOPT_ESTG ? 1 : 3;
+                            for (k = 0; k < tropK; k++) {
+                                H[nv * rtk.nx + IT(0, opt) + k] = dtdxu[k + refIdx * 3] - dtdxu[k + j * 3];
+                                H[nv * rtk.nx + IT(1, opt) + k] = -(dtdxr[k + refIdx * 3] - dtdxr[k + j * 3]);
+                            }
                         }
                     }
 
@@ -964,8 +1078,8 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                     double elj = azel[1 + iu[j] * 2];
                     int sysRef = SatUtils.satsys(sat[refIdx], null);
                     int sysJ = SatUtils.satsys(sat[j], null);
-                    Ri[nv] = varerr(sat[refIdx], sysRef, eli, rtk.ssat[sat[refIdx]-1].snrRover[frq], rtk.ssat[sat[refIdx]-1].snrBase[frq], bl, dt, f, opt, obs[iu[refIdx]]);
-                    Rj[nv] = varerr(sat[j], sysJ, elj, rtk.ssat[sat[j]-1].snrRover[frq], rtk.ssat[sat[j]-1].snrBase[frq], bl, dt, f, opt, obs[iu[j]]);
+                    Ri[nv] = varerr(sat[refIdx], sysRef, eli, rtk.ssat[sat[refIdx]-1].snrRover[frq], rtk.ssat[sat[refIdx]-1].snrBase[frq], bl, dt, f, opt, obs[iu[refIdx]], rtk);
+                    Rj[nv] = varerr(sat[j], sysJ, elj, rtk.ssat[sat[j]-1].snrRover[frq], rtk.ssat[sat[j]-1].snrBase[frq], bl, dt, f, opt, obs[iu[j]], rtk);
 
                     if (!code && (obs[iu[refIdx]].LLI[frq] & Constants.LLI_HALFC) != 0) Ri[nv] += 0.01;
                     if (!code && (obs[iu[j]].LLI[frq] & Constants.LLI_HALFC) != 0) Rj[nv] += 0.01;
@@ -994,22 +1108,22 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     }
 
     /**
-     * 计算观测值误差方差。
+     * 计算观测值误差方差�?
      *
-     * <p>对应RTKLIB varerr()。根据高度角、基线长度、时间差等计算
-     * 单差观测值的误差方差，用于构建双差协方差矩阵。</p>
+     * <p>对应RTKLIB varerr()。根据高度角、基线长度、时间差等计�?
+     * 单差观测值的误差方差，用于构建双差协方差矩阵�?/p>
      *
-     * @param sat 卫星号
+     * @param sat 卫星�?
      * @param sys 卫星系统
-     * @param el  高度角（弧度）
-     * @param bl  基线长度（米）
+     * @param el  高度角（弧度�?
+     * @param bl  基线长度（米�?
      * @param dt  时间差（秒）
      * @param f   频率/码索引（0..nf-1为相位，nf..2*nf-1为伪距）
      * @param opt 处理选项
-     * @return 观测误差方差（平方米）
+     * @return 观测误差方差（平方米�?
      */
     private static double varerr(int sat, int sys, double el, double snr_rover, double snr_base,
-                                 double bl, double dt, int f, PrcOpt opt, Obsd obs) {
+                                 double bl, double dt, int f, PrcOpt opt, Obsd obs, Rtk rtk) {
         double a, b, c, d;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
         int frq = f % nf;
@@ -1042,7 +1156,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
 
         double var = 2.0 * (SQR(a) + SQR(b / s_el) + SQR(c)) + SQR(d);
 
-        if (opt.err[6] > 0.0) {
+        if (opt.err[6] > 0.0 && !rtk.rtkConfig.enableSnrMedian) {
             double e = fact * opt.err[6];
             var += SQR(e) * (Math.pow(10, 0.1 * Math.max(opt.err[5] - snr_rover, 0.0)) +
                              Math.pow(10, 0.1 * Math.max(opt.err[5] - snr_base, 0.0)));
@@ -1056,6 +1170,10 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
             var *= SQR(3.0);
         }
 
+        if (rtk.rtkConfig.enableSnrMedian) {
+            var = RtkOptimizations.varerrWithSnrMedian(var, sat, sys, el, snr_rover, snr_base, f, opt, rtk);
+        }
+
         return var;
     }
 
@@ -1064,16 +1182,16 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     }
 
     /**
-     * 构建双差协方差矩阵。
+     * 构建双差协方差矩阵�?
      *
-     * <p>对应RTKLIB ddcov()。将单差方差Ri和Rj组合为双差协方差矩阵R。</p>
+     * <p>对应RTKLIB ddcov()。将单差方差Ri和Rj组合为双差协方差矩阵R�?/p>
      *
-     * <p>双差协方差矩阵的分块结构：同一组（同系统同频率）内的观测值
-     * 共享参考星，因此协方差非零。不同组之间协方差为零。</p>
+     * <p>双差协方差矩阵的分块结构：同一组（同系统同频率）内的观测�?
+     * 共享参考星，因此协方差非零。不同组之间协方差为零�?/p>
      *
-     * <p><b>行优先存储</b>：R[i*ny + j] = 第i行第j列</p>
+     * <p><b>行优先存�?/b>：R[i*ny + j] = 第i行第j�?/p>
      *
-     * @param nb  每组观测数数组
+     * @param nb  每组观测数数�?
      * @param b   组数
      * @param Ri  参考星单差方差
      * @param Rj  非参考星单差方差
@@ -1095,12 +1213,12 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     }
 
     /**
-     * 检查流动站和基准站是否都有有效观测值。
+     * 检查流动站和基准站是否都有有效观测值�?
      *
-     * @param iu  流动站索引
-     * @param ir  基准站索引
-     * @param f   频率/码索引
-     * @param nf  频率数
+     * @param iu  流动站索�?
+     * @param ir  基准站索�?
+     * @param f   频率/码索�?
+     * @param nf  频率�?
      * @param y   零差残差数组
      * @return true=两站都有有效观测
      */
@@ -1109,14 +1227,14 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     }
 
     /**
-     * 计算基线长度。
+     * 计算基线长度�?
      *
-     * <p>基线 = x[0..2] - rb[0..2]，其中x是基线向量状态，rb是基准站坐标。</p>
+     * <p>基线 = x[0..2] - rb[0..2]，其中x是基线向量状态，rb是基准站坐标�?/p>
      *
      * @param x   状态向量（基线向量在前3个元素）
      * @param rb  基准站ECEF坐标
-     * @param dr  输出：基线分量（可为null）
-     * @return 基线长度（米）
+     * @param dr  输出：基线分量（可为null�?
+     * @return 基线长度（米�?
      */
     private static double baseline(double[] x, double[] rb, double[] dr) {
         if (dr != null) {
@@ -1152,32 +1270,64 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     }
 
     private static void udion(Rtk rtk, double tt, double bl, int[] sat, int ns) {
+        PrcOpt opt = rtk.opt;
+        RtkConfig cfg = rtk.rtkConfig;
+        boolean grad = opt.ionoGradient;
+
         for (int i = 1; i <= Constants.MAXSAT; i++) {
-            int j = II(i, rtk.opt);
+            int j = II(i, opt);
             if (rtk.x[j] != 0.0 &&
                 rtk.ssat[i - 1].outc[0] > Constants.GAP_RESION &&
                 rtk.ssat[i - 1].outc[1] > Constants.GAP_RESION) {
                 rtk.x[j] = 0.0;
+                if (grad) {
+                    rtk.x[j + 1] = 0.0;
+                    rtk.x[j + 2] = 0.0;
+                }
             }
         }
         for (int i = 0; i < ns; i++) {
-            int j = II(sat[i], rtk.opt);
+            int j = II(sat[i], opt);
             if (rtk.x[j] == 0.0) {
-                initx(rtk, 1E-6, SQR(rtk.opt.std[1] * bl / 1E4), j);
+                initx(rtk, 1E-6, SQR(opt.std[1] * bl / 1E4), j);
+                if (grad) {
+                    initx(rtk, 1E-6, cfg.gradientIonoInitVar, j + 1);
+                    initx(rtk, 1E-6, cfg.gradientIonoInitVar, j + 2);
+                }
             } else {
                 double el = rtk.ssat[sat[i] - 1].azel[1];
                 double fact = Math.cos(el);
-                rtk.P[j * rtk.nx + j] += SQR(rtk.opt.prn[1] * bl / 1E4 * fact) * Math.abs(tt);
+                rtk.P[j * rtk.nx + j] += SQR(opt.prn[1] * bl / 1E4 * fact) * Math.abs(tt);
+                if (grad) {
+                    double gradPrn = cfg.gradientIonoPrn;
+                    rtk.P[(j + 1) * rtk.nx + (j + 1)] += SQR(gradPrn * bl / 1E4 * fact) * Math.abs(tt);
+                    rtk.P[(j + 2) * rtk.nx + (j + 2)] += SQR(gradPrn * bl / 1E4 * fact) * Math.abs(tt);
+                }
             }
         }
     }
 
     private static void udtrop(Rtk rtk, double tt, double bl) {
         for (int i = 0; i < 2; i++) {
-            int idx = IT(i, rtk.opt);
-            if (idx < 0) continue;
-            if (rtk.x[idx] != 0.0 && Math.abs(tt) > 0.0) {
-                rtk.P[idx * rtk.nx + idx] += SQR(rtk.opt.prn[2] * Math.abs(tt));
+            int j = IT(i, rtk.opt);
+
+            if (rtk.x[j] == 0.0) {
+                initx(rtk, INIT_ZWD, SQR(rtk.opt.std[2]), j);
+
+                if (rtk.opt.tropopt >= Constants.TROPOPT_ESTG) {
+                    for (int k = 0; k < 2; k++) {
+                        initx(rtk, 1E-6, VAR_GRA, ++j);
+                    }
+                }
+            } else {
+                rtk.P[j * rtk.nx + j] += SQR(rtk.opt.prn[2]) * Math.abs(tt);
+
+                if (rtk.opt.tropopt >= Constants.TROPOPT_ESTG) {
+                    for (int k = 0; k < 2; k++) {
+                        j++;
+                        rtk.P[j * rtk.nx + j] += SQR(rtk.opt.prn[2] * 0.3) * Math.abs(tt);
+                    }
+                }
             }
         }
     }
@@ -1309,9 +1459,10 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         }
 
         double[] Q = new double[9];
-        Q[0] = rtk.opt.prn[3] * rtk.opt.prn[3] * Math.abs(tt);
-        Q[4] = rtk.opt.prn[3] * rtk.opt.prn[3] * Math.abs(tt);
-        Q[8] = rtk.opt.prn[4] * rtk.opt.prn[4] * Math.abs(tt);
+        double qScaleFactor = rtk.rtkConfig.enableAdaptiveQ ? rtk.qScale : 1.0;
+        Q[0] = rtk.opt.prn[3] * rtk.opt.prn[3] * Math.abs(tt) * qScaleFactor;
+        Q[4] = rtk.opt.prn[3] * rtk.opt.prn[3] * Math.abs(tt) * qScaleFactor;
+        Q[8] = rtk.opt.prn[4] * rtk.opt.prn[4] * Math.abs(tt) * qScaleFactor;
 
         double[] pos = new double[3];
         double[] rrAbs = new double[3];
@@ -1567,17 +1718,17 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     private static final double VAR_POS_FIX = 1E-8;
 
     /**
-     * 初始化状态向量中的一个元素及其协方差。
+     * 初始化状态向量中的一个元素及其协方差�?
      *
-     * <p>将 x[i] 设为 val，P 矩阵第 i 行和第 i 列清零，
-     * 对角线 P[i*nx+i] 设为 var。</p>
+     * <p>�?x[i] 设为 val，P 矩阵�?i 行和�?i 列清零，
+     * 对角�?P[i*nx+i] 设为 var�?/p>
      *
-     * <p><b>行优先存储</b>：P[i*nx + j] = 第i行第j列</p>
+     * <p><b>行优先存�?/b>：P[i*nx + j] = 第i行第j�?/p>
      *
-     * @param rtk RTK解算状态
-     * @param val 状态值
-     * @param var 状态方差
-     * @param i   状态索引
+     * @param rtk RTK解算状�?
+     * @param val 状态�?
+     * @param var 状态方�?
+     * @param i   状态索�?
      */
     private static void initx(Rtk rtk, double val, double var, int i) {
         rtk.x[i] = val;
@@ -1589,9 +1740,9 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     }
 
     /**
-     * 选择流动站和基准站的共视卫星。
+     * 选择流动站和基准站的共视卫星�?
      *
-     * <p>遍历流动站和基准站的观测数据，找出两站都观测到的卫星。</p>
+     * <p>遍历流动站和基准站的观测数据，找出两站都观测到的卫星�?/p>
      *
      * @param obs 观测数据数组
      * @param nu  流动站观测数
@@ -1600,7 +1751,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
      * @param sat 输出：共视卫星号数组
      * @param iu  输出：流动站卫星索引
      * @param ir  输出：基准站卫星索引
-     * @return 共视卫星数
+     * @return 共视卫星�?
      */
     private static int selsat(Obsd[] obs, double[] azel, int nu, int nr, PrcOpt opt,
                               int[] sat, int[] iu, int[] ir) {
@@ -1626,17 +1777,17 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     }
 
     /**
-     * Kalman滤波测量更新。
+     * Kalman滤波测量更新�?
      *
      * <p>封装 KalmanFilter.update()，所有矩阵按行优先存储，
-     * 内部通过 MatrixUtil 转为 EJML SimpleMatrix 进行运算。</p>
+     * 内部通过 MatrixUtil 转为 EJML SimpleMatrix 进行运算�?/p>
      *
-     * @param x 状态向量 [n]，输入：预测值，输出：更新值
-     * @param P 协方差矩阵 [n*n]，行优先，输入：预测值，输出：更新值
+     * @param x 状态向�?[n]，输入：预测值，输出：更新�?
+     * @param P 协方差矩�?[n*n]，行优先，输入：预测值，输出：更新�?
      * @param H 设计矩阵 [m*n]，行优先
      * @param v 残差向量 [m]
-     * @param R 观测协方差矩阵 [m*m]，行优先
-     * @param n 状态维数
+     * @param R 观测协方差矩�?[m*m]，行优先
+     * @param n 状态维�?
      * @param m 观测维数
      * @return 0:成功 -1:失败
      */
@@ -1645,21 +1796,21 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     }
 
     /**
-     * 构建双差变换索引。
+     * 构建双差变换索引�?
      *
-     * <p>对应RTKLIB ddidx()。生成单差模糊度到双差模糊度的变换索引。</p>
+     * <p>对应RTKLIB ddidx()。生成单差模糊度到双差模糊度的变换索引�?/p>
      *
-     * <p>对每个频率，选择第一颗满足条件的卫星作为参考星，
-     * 其余满足条件的卫星与参考星形成双差对。</p>
+     * <p>对每个频率，选择第一颗满足条件的卫星作为参考星�?
+     * 其余满足条件的卫星与参考星形成双差对�?/p>
      *
-     * <p>ix[i*2] = 参考星状态索引，ix[i*2+1] = 目标星状态索引</p>
+     * <p>ix[i*2] = 参考星状态索引，ix[i*2+1] = 目标星状态索�?/p>
      *
-     * @param rtk RTK解算状态
+     * @param rtk RTK解算状�?
       * @param ix  输出：双差索引对 [nx*2]
-     * @param gps GPS AR开关（0=关, 1=开, -1=默认使用opt设置）
-     * @param glo GLO AR开关
-     * @param sbs SBS AR开关（0=排除SBS, 1=允许SBS参与AR）
-     * @return 双差对数（nb）
+     * @param gps GPS AR开关（0=�? 1=开, -1=默认使用opt设置�?
+     * @param glo GLO AR开�?
+     * @param sbs SBS AR开关（0=排除SBS, 1=允许SBS参与AR�?
+     * @return 双差对数（nb�?
      */
     private static int ddidx(Rtk rtk, int[] ix, int gps, int glo, int sbs) {
         int nb = 0;
@@ -1722,7 +1873,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         return nb;
     }
 
-    private static boolean testSys(int sys, int m) {
+    static boolean testSys(int sys, int m) {
         switch (sys) {
             case Constants.SYS_GPS: return m == 0;
             case Constants.SYS_SBS: return m == 0;
@@ -1736,18 +1887,18 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     }
 
     /**
-     * 将双差固定模糊度还原为单差固定模糊度。
+     * 将双差固定模糊度还原为单差固定模糊度�?
      *
      * <p>对应RTKLIB restamb()。LAMBDA输出的是双差模糊度的固定值，
-     * 需要转换回单差模糊度才能更新状态向量。</p>
+     * 需要转换回单差模糊度才能更新状态向量�?/p>
      *
      * <p>转换规则：参考星单差模糊度保持浮点值不变，
-     * 其他卫星单差模糊度 = 参考星单差 - 双差固定值。</p>
+     * 其他卫星单差模糊�?= 参考星单差 - 双差固定值�?/p>
      *
-     * @param rtk  RTK解算状态
-     * @param bias 双差固定模糊度 [nb]
+     * @param rtk  RTK解算状�?
+     * @param bias 双差固定模糊�?[nb]
      * @param nb   双差对数
-      * @param xa   输出：固定解状态向量（单差）
+      * @param xa   输出：固定解状态向量（单差�?
      */
     private static void restamb(Rtk rtk, double[] bias, int nb, double[] xa) {
         int nv = 0;
@@ -1776,30 +1927,38 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     }
 
     /**
-     * LAMBDA模糊度固定。
+     * LAMBDA模糊度固定�?
      *
      * <p>对应RTKLIB resamb_LAMBDA()。执行LAMBDA整数最小二乘搜索，
-     * 固定双差模糊度，更新固定解状态向量xa和协方差Pa。</p>
+     * 固定双差模糊度，更新固定解状态向量xa和协方差Pa�?/p>
      *
-     * @param rtk  RTK解算状态
+     * @param rtk  RTK解算状�?
      * @param bias 输出：双差固定模糊度 [nb]
-     * @param xa   输出：固定解状态向量
-     * @param gps  GPS AR开关
-     * @param glo  GLO AR开关
-     * @param sbs  SBS AR开关
-     * @return 双差对数（>1=成功, 0=验证失败, -1=双差对不足）
+     * @param xa   输出：固定解状态向�?
+     * @param gps  GPS AR开�?
+     * @param glo  GLO AR开�?
+     * @param sbs  SBS AR开�?
+     * @return 双差对数�?1=成功, 0=验证失败, -1=双差对不足）
      */
-    private static int resamb_LAMBDA(Rtk rtk, double[] bias, double[] xa, int gps, int glo, int sbs) {
+    private static int resamb_LAMBDA(Rtk rtk, double[] bias, double[] xa, int gps, int glo, int sbs,
+                                      int[] sat, int ns, double[] azel, int[] iu, double[] y_zd, int nf) {
         PrcOpt opt = rtk.opt;
         int nx = rtk.nx;
         int na = rtk.na;
-        int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
 
         rtk.sol.ratio = 0.0f;
         rtk.nb_ar = 0;
 
         int[] ix = new int[nx * 2];
-        int nb = ddidx(rtk, ix, gps, glo, sbs);
+        int nb;
+
+        if (rtk.rtkConfig.enableParRefReselect) {
+            RtkOptimizations.buildParIndex(rtk, sat, ns, nf, azel, iu, y_zd);
+            nb = RtkOptimizations.ddidxPar(rtk, ix, gps, glo, sbs, sat, ns, nf, azel, iu, y_zd);
+        } else {
+            nb = ddidx(rtk, ix, gps, glo, sbs);
+        }
+
         if (nb < opt.minfixsats - 1) {
             RtkTrace.traceDiag(rtk.traceControl, rtk.traceCallback, rtk.epoch, rtk.sol.time, "STAGE5_INSUFF", String.format("nb=%d", nb));
             return -1;
@@ -1901,7 +2060,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         return nb;
     }
 
-    /** AR ratio多项式系数（来自RTKLIB ar_poly_coeffs） */
+    /** AR ratio多项式系数（来自RTKLIB ar_poly_coeffs�?*/
     private static final double[][] AR_POLY_COEFFS = {
         {19.8000, -8.0400,  0.8400, -0.0320, 0.0004},
         {-8.0400,  4.8600, -0.6000, 0.0260, -0.0004},
@@ -1909,25 +2068,26 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     };
 
     /**
-     * LAMBDA模糊度管理（含多次重试策略）。
+     * LAMBDA模糊度管理（含多次重试策略）�?
      *
      * <p>对应RTKLIB manage_amb_LAMBDA()。在resamb_LAMBDA基础上增加：</p>
      * <ul>
      *   <li>位置方差检查：var > thresar[1] 时跳过AR</li>
-     *   <li>排除卫星重试：ratio不够时排除一颗卫星重新计算</li>
-     *   <li>AR过滤：新卫星导致ratio下降时延迟使用</li>
+     *   <li>排除卫星重试：ratio不够时排除一颗卫星重新计�?/li>
+     *   <li>AR过滤：新卫星导致ratio下降时延迟使�?/li>
      *   <li>多次尝试：调整GLO/GPS AR模式重试</li>
      * </ul>
      *
-     * @param rtk  RTK解算状态
+     * @param rtk  RTK解算状�?
      * @param bias 输出：双差固定模糊度
-     * @param xa   输出：固定解状态向量
-     * @param sat  共视卫星号数组
-     * @param nf   频率数
-     * @param ns   共视卫星数
-     * @return 双差对数（>1=成功, 0=跳过, -1=失败）
+     * @param xa   输出：固定解状态向�?
+     * @param sat  共视卫星号数�?
+     * @param nf   频率�?
+     * @param ns   共视卫星�?
+     * @return 双差对数�?1=成功, 0=跳过, -1=失败�?
      */
-    private static int manage_amb_LAMBDA(Rtk rtk, double[] bias, double[] xa, int[] sat, int nf, int ns) {
+    private static int manage_amb_LAMBDA(Rtk rtk, double[] bias, double[] xa, int[] sat, int nf, int ns,
+                                          double[] azel, int[] iu, double[] y_zd) {
         PrcOpt opt = rtk.opt;
         int nx = rtk.nx;
 
@@ -1987,7 +2147,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
         int sbas1 = (opt.navsys & Constants.SYS_GLO) != 0 ? glo1 :
                 ((opt.navsys & Constants.SYS_SBS) != 0 ? 1 : 0);
 
-        int nb = resamb_LAMBDA(rtk, bias, xa, gps1, glo1, sbas1);
+        int nb = resamb_LAMBDA(rtk, bias, xa, gps1, glo1, sbas1, sat, ns, azel, iu, y_zd, nf);
         float ratio1 = rtk.sol.ratio;
 
         if (opt.arfilter != 0 && nb >= 0) {
@@ -2008,7 +2168,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
                 }
             }
             if (rerun) {
-                nb = resamb_LAMBDA(rtk, bias, xa, gps1, glo1, sbas1);
+                nb = resamb_LAMBDA(rtk, bias, xa, gps1, glo1, sbas1, sat, ns, azel, iu, y_zd, nf);
             }
         }
 
@@ -2017,7 +2177,7 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
             int glo2 = 0, sbas2 = 0;
             int gps2 = opt.gpsmodear == 0 && rtk.sol.ratio >= rtk.sol.thres ? 0 : 1;
             if (glo1 != glo2 || gps1 != gps2) {
-                nb = resamb_LAMBDA(rtk, bias, xa, gps2, glo2, sbas2);
+                nb = resamb_LAMBDA(rtk, bias, xa, gps2, glo2, sbas2, sat, ns, azel, iu, y_zd, nf);
             }
         }
 
@@ -2035,16 +2195,16 @@ RtkTrace.traceStage2(rtk.traceControl, rtk.traceCallback, rtk.epoch,
     }
 
     /**
-     * 固定模糊度保持（Fix-and-Hold）。
+     * 固定模糊度保持（Fix-and-Hold）�?
      *
-     * <p>对应RTKLIB holdamb()。当LAMBDA固定解连续达到minfix个历元后，
-     * 使用Kalman滤波将固定模糊度约束写回状态向量和协方差矩阵。</p>
+     * <p>对应RTKLIB holdamb()。当LAMBDA固定解连续达到minfix个历元后�?
+     * 使用Kalman滤波将固定模糊度约束写回状态向量和协方差矩阵�?/p>
      *
-     * <p>与简单赋值不同，此函数构建设计矩阵H和伪观测v，
-     * 通过Kalman滤波更新来约束模糊度，避免突变。</p>
+     * <p>与简单赋值不同，此函数构建设计矩阵H和伪观测v�?
+     * 通过Kalman滤波更新来约束模糊度，避免突变�?/p>
      *
-     * @param rtk RTK解算状态
-     * @param xa  固定解状态向量
+     * @param rtk RTK解算状�?
+     * @param xa  固定解状态向�?
      */
     private static void holdamb(Rtk rtk, double[] xa) {
         PrcOpt opt = rtk.opt;

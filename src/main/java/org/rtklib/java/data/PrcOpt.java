@@ -134,6 +134,9 @@ public class PrcOpt {
     /** Output throttle sleep time (ms) */
     public int outputThrottleSleepMs;
 
+    /** Ionosphere gradient estimation (false:VTEC only, true:VTEC+Gn+Ge per sat) */
+    public boolean ionoGradient = false;
+
     /**
      * Default constructor with RTKLIB default values.
      */
@@ -300,5 +303,6 @@ public class PrcOpt {
         this.pppopt = other.pppopt;
         this.outputThrottleInterval = other.outputThrottleInterval;
         this.outputThrottleSleepMs = other.outputThrottleSleepMs;
+        this.ionoGradient = other.ionoGradient;
     }
 }
