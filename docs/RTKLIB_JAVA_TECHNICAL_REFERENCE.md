@@ -11,12 +11,12 @@
 | 宏/函数 | Java实现 | C版定义 | 说明 |
 |---------|----------|---------|------|
 | `NP(opt)` | `opt.dynamics==0 ? 3 : 9` | `(opt)->dynamics==0?3:9` | 位置状态数：Static=3, Kinematic=9(含速度+加速度) |
-| `NI(opt)` | `ionoopt!=IONOOPT_EST ? 0 : MAXSAT` | 同左 | 电离层参数数 |
+| `NI(opt)` | `ionoopt!=IONOOPT_EST ? 0 : (opt.ionoGradient ? MAXSAT*3 : MAXSAT)` | `ionoopt!=IONOOPT_EST ? 0 : MAXSAT` | 电离层参数数（梯度模式每星3个） |
 | `NT(opt)` | 三级判断：0/2/6 | 同左 | 对流层参数数 |
 | `NL(opt)` | `glomodear!=GLO_ARMODE_AUTOCAL ? 0 : NFREQGLO` | 同左 | GLONASS IC bias数 |
 | **`NR(opt)`** | `NP+NI+NT+NL` | 同左 | **非模糊度状态总数 = na** |
 | **`IB(sat,f,opt)`** | `NR(opt) + MAXSAT*f + (sat-1)` | 同左 | **模糊度状态索引** |
-| `II(sat,opt)` | `NP(opt) + (sat-1)` | 同左 | 电离层参数索引 |
+| `II(sat,opt)` | `opt.ionoGradient ? NP+(sat-1)*3 : NP+(sat-1)` | `NP(opt) + (sat-1)` | 电离层参数索引（梯度模式+1=Gn,+2=Ge） |
 | `IL(f,opt)` | `NP+NI+NT+f` | 同左 | GLONASS IC bias索引 |
 
 ### 1.2 当前测试配置的状态布局
@@ -531,6 +531,181 @@ BASE_PATH  = "<base_rtcm3_file_path>";
 
 ---
 
-*文档版本：v1.1*
-*最后更新：2026-07-12*
+## 12. RTK引擎优化模块技术说明
+
+> 五项核心优化均通过 `RtkConfig` 开关控制，默认全部关闭，不影响现有功能。
+
+### 12.1 优化开关与执行时序
+
+| 开关 | 优化项 | 默认值 |
+|------|--------|--------|
+| `enableParRefReselect` | 部分模糊度固定（PAR）与基准星动态重选 | `false` |
+| `enableAdaptiveQ` | 自适应过程噪声与零速检测门控 | `false` |
+| `enableIggiii` | 抗差M估计（IGG-III）等价权修正 | `false` |
+| `enableSnrMedian` | SNR随机模型（动态中位数基准） | `false` |
+| `enableIonoTropGradient` | 电离层/对流层梯度增强 | `false` |
+
+执行时序（`relpos()` 内部）：
+```
+① computeSnrMedian()           → SNR中位数计算
+② udstate() → udpos()          → Q缩放应用于时间更新
+③ ddres() → varerr()           → SNR中位数权重修正
+④ applyIggiii()                → 抗差修正R
+⑤ filter()                     → Kalman滤波
+⑥ computeQScale()              → 为下一历元Q做准备
+⑦ resamb_LAMBDA() → ddidxPar() → PAR基准星重选+固定
+```
+
+### 12.2 HPHt对角线计算：EJML版本与Native版本
+
+IGG-III需要计算新息协方差 `S = R + HPHᵀ` 的对角线元素，用于标准化新息。
+
+**当前使用EJML版本** `computeHPHtDiag()`：
+```java
+// EJML实现：完整矩阵乘法后提取对角线
+SimpleMatrix Hmat = MatrixUtil.createMatrix(H, nv, nx);
+SimpleMatrix Pmat = MatrixUtil.createMatrix(P, nx, nx);
+SimpleMatrix HPHt = Hmat.mult(Pmat).mult(Hmat.transpose());
+for (int i = 0; i < nv; i++) diag[i] = HPHt.get(i, i);
+```
+
+**保留的Native版本** `computeHPHtDiagNative()`：
+```java
+// 手写数组运算：只算对角线，跳过非对角线元素
+// Step1: PH[i,j] = Σ_k P[i,k] * H[j,k]
+// Step2: diag[i] = Σ_k H[i,k] * PH[k,i]
+```
+
+| 版本 | 复杂度 | 优点 | 缺点 |
+|------|--------|------|------|
+| EJML（当前） | O(nx²×nv + nx×nv²) | 代码简洁，与项目风格一致 | 计算了nv²-nv个无用元素 |
+| Native | O(nx²×nv + nx×nv) | 无冗余计算 | 手写循环，与项目EJML风格不一致 |
+
+**性能差异**：典型RTK场景（nx=60, nv=60），FLOP浪费约49%，但绝对耗时在微秒级，1Hz RTK可忽略。
+若需10~20Hz或嵌入式场景，可切换到Native版本。
+
+### 12.3 PAR基准星动态重选与连续重选保护
+
+**参考星跟踪**：`rtk.parPrevRefSat[f]` 记录每个频率上一历元的参考星卫星ID（1-based）。
+
+**重选检测**：`ddidxPar()` 中比较 `parPrevRefSat[f]` 与当前排除列表，若上一历元参考星被排除则标记 `anyRefReselect=true`。
+
+**连续重选保护**：
+```
+if (anyRefReselect) {
+    parConsecutiveReselectCount++;
+    if (parConsecutiveReselectCount > parMaxConsecutiveReselect) {
+        // 清空排除列表，退回全模糊度固定
+        parExcludedSatCount = 0;
+        parConsecutiveReselectCount = 0;
+        return ddidxFallback(rtk, ix, gps, glo, sbs);
+    }
+} else {
+    parConsecutiveReselectCount = 0;
+}
+```
+
+**退回策略**：`ddidxFallback()` 与原始 `ddidx()` 逻辑一致（不排除任何卫星），确保连续重选时PAR退化为全模糊度固定。
+
+### 12.4 对流层梯度估计（TROPOPT_ESTG）
+
+Java版已补全C版RTKLIB的 `TROPOPT_ESTG` 支持，包括：
+
+| 组件 | 修改 | 说明 |
+|------|------|------|
+| `udtrop()` | 补全梯度初始化和过程噪声 | ZWD初始化 `INIT_ZWD=0.15`，梯度初始化 `1E-6`/`VAR_GRA` |
+| `prectrop()` | 新增方法 | 精确对流层延迟计算，含梯度项 |
+| `ddres()` | 添加对流层残差修正和H矩阵梯度项 | `TROPOPT_EST`: 1项(ZWD), `TROPOPT_ESTG`: 3项(ZWD+Gn+Ge) |
+| `zdres()` | 无需修改 | 仅加干分量，湿分量由状态估计 |
+
+**状态布局变化**（`TROPOPT_ESTG` 时）：
+```
+NT = 6 (每站3个: ZWD + Gn + Ge, 共2站)
+IT(0,opt) = NP + NI          // 流动站: ZWD, Gn, Ge
+IT(1,opt) = NP + NI + 3      // 基准站: ZWD, Gn, Ge
+```
+
+**注意**：当前测试配置 `tropopt=TROPOPT_SAAS`（不估计对流层），上述代码路径未被测试。
+需设置 `tropopt=TROPOPT_ESTG` 并使用长基线数据（>30km）验证。
+
+### 12.5 电离层延迟估计（IONOOPT_EST）
+
+Java版已补全C版RTKLIB的 `IONOOPT_EST` 支持，包括：
+
+| 组件 | 修改 | 说明 |
+|------|------|------|
+| `IonosphereModel.ionmapf()` | 新增方法 | 电离层映射函数，`1/cos(asin(...))`，对应C版 `rtkcmn.c:ionmapf()` |
+| `ddres()` | 添加电离层映射因子计算 | `im[i] = (ionmapf(posu,azel)+ionmapf(posr,azel))/2.0` |
+| `ddres()` | 添加电离层残差修正和H矩阵项 | 位置偏导数之后、对流层之前插入 |
+
+**ddres中的IONOOPT_EST处理**（对应C版 rtkpos.c:1289-1298）：
+```java
+if (opt.ionoopt == IONOOPT_EST) {
+    double didxi = (code ? -1.0 : 1.0) * im[refIdx] * SQR(FREQL1/freqi);
+    double didxj = (code ? -1.0 : 1.0) * im[j] * SQR(FREQL1/freqj);
+    int iiRef = II(sat[refIdx], opt);
+    int iiJ = II(sat[j], opt);
+    v[nv] -= didxi * x[iiRef] - didxj * x[iiJ];
+    // 梯度模式：额外残差修正和H矩阵偏导数
+    if (opt.ionoGradient) {
+        double cotzRef = 1.0 / tan(elRef);
+        double gradNRef = didxi * cotzRef * cos(azRef);
+        double gradERef = didxi * cotzRef * sin(azRef);
+        double cotzJ = 1.0 / tan(elJ);
+        double gradNJ = didxj * cotzJ * cos(azJ);
+        double gradEJ = didxj * cotzJ * sin(azJ);
+        v[nv] -= gradNRef*x[iiRef+1] + gradERef*x[iiRef+2]
+               - gradNJ*x[iiJ+1] - gradEJ*x[iiJ+2];
+        H[nv*nx + iiRef+1] = gradNRef;
+        H[nv*nx + iiRef+2] = gradERef;
+        H[nv*nx + iiJ+1] = -gradNJ;
+        H[nv*nx + iiJ+2] = -gradEJ;
+    }
+}
+```
+
+**梯度偏导数公式**（与对流层梯度类似，使用方向因子）：
+```
+∂I/∂VTEC = im * SQR(FREQL1/freq) * sign
+∂I/∂Gn = ∂I/∂VTEC * cot(el) * cos(az)
+∂I/∂Ge = ∂I/∂VTEC * cot(el) * sin(az)
+```
+
+**关键差异**：C版 `didxi/didxj` 使用 `sat[i]/sat[j]` 索引，Java版使用 `refIdx/j` 索引（`refIdx` 是参考星在 `sat[]` 数组中的下标）。
+
+### 12.6 电离层梯度增强（enableIonoTropGradient）
+
+当 `RtkConfig.enableIonoTropGradient=true` 且 `ionoopt=IONOOPT_EST` 时，每颗卫星的电离层状态从1个扩展为3个（VTEC + Gn + Ge），通过 `PrcOpt.ionoGradient` 标志控制。
+
+| 组件 | 修改 | 说明 |
+|------|------|------|
+| `PrcOpt.ionoGradient` | 新增字段 | 由 `RtkConfig.enableIonoTropGradient` 同步，`relpos()` 每历元设置 |
+| `NI(opt)` | 修改 | `ionoGradient ? MAXSAT*3 : MAXSAT` |
+| `II(sat,opt)` | 修改 | `ionoGradient ? NP+(sat-1)*3 : NP+(sat-1)` |
+| `udion()` | 添加梯度初始化和过程噪声 | VTEC初始化同原版，Gn/Ge初始化 `1E-6`/`gradientIonoInitVar`，过程噪声 `gradientIonoPrn` |
+| `ddres()` | 添加梯度残差修正和H矩阵项 | VTEC项同原版，Gn/Ge项含方向因子 `cot(el)*cos(az)`/`cot(el)*sin(az)` |
+
+**状态布局变化**（`ionoGradient=true` 时）：
+```
+NI = MAXSAT * 3 (每星3个: VTEC + Gn + Ge)
+II(sat,opt) = NP + (sat-1)*3    // VTEC
+II(sat,opt)+1 = NP + (sat-1)*3+1  // Gn (南北梯度)
+II(sat,opt)+2 = NP + (sat-1)*3+2  // Ge (东西梯度)
+```
+
+**风险控制**：默认 `ionoGradient=false`，不影响现有状态布局和功能。需 `enableIonoTropGradient=true` + `ionoopt=IONOOPT_EST` + 长基线数据才激活。
+
+### 12.7 关键文件索引
+
+| 文件 | 职责 |
+|------|------|
+| `config/RtkConfig.java` | 优化开关与参数配置 |
+| `rtkpos/RtkOptimizations.java` | 所有优化算法实现 |
+| `rtkpos/RtkCore.java` | RTK核心，集成优化调用点 |
+| `data/Rtk.java` | RTK状态结构体，新增优化状态字段 |
+
+---
+
+*文档版本：v1.4*
+*最后更新：2026-07-13*
 *维护者：RTKLIB Java移植团队*

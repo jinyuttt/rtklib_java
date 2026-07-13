@@ -1,5 +1,6 @@
 package org.rtklib.java.data;
 
+import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.trace.TraceControl;
 import org.rtklib.java.trace.TraceCallback;
@@ -99,6 +100,28 @@ public class Rtk {
     /** Fix-and-Hold是否已执行标志 */
     public int holdambFlag;
 
+    public RtkConfig rtkConfig;
+
+    public double qScale;
+
+    public double[] snrMedian;
+
+    public double[][] snrMedianHistory;
+
+    public int snrMedianHistoryCount;
+
+    public int consecutiveZeroVelEpochs;
+
+    public double[] prevPosForZeroVel;
+
+    public int parConsecutiveReselectCount;
+
+    public int[] parExcludedSats;
+
+    public int parExcludedSatCount;
+
+    public int[] parPrevRefSat;
+
     /**
      * 默认构造函数，初始化所有字段。
      */
@@ -128,5 +151,17 @@ public class Rtk {
         this.holdambFlag = 0;
         this.traceControl = null;
         this.traceCallback = null;
+        this.rtkConfig = new RtkConfig();
+        this.qScale = 1.0;
+        this.snrMedian = new double[Constants.NFREQ];
+        this.snrMedianHistory = new double[Constants.NFREQ][20];
+        this.snrMedianHistoryCount = 0;
+        this.consecutiveZeroVelEpochs = 0;
+        this.prevPosForZeroVel = new double[3];
+        this.parConsecutiveReselectCount = 0;
+        this.parExcludedSats = new int[Constants.MAXSAT];
+        this.parExcludedSatCount = 0;
+        this.parPrevRefSat = new int[Constants.NFREQ];
+        for (int i = 0; i < Constants.NFREQ; i++) this.parPrevRefSat[i] = -1;
     }
 }

@@ -159,4 +159,10 @@ public final class IonosphereModel {
         
         return a * P1 + b * P2 + (1.0 - a - b) * P5;
     }
+
+    public static double ionmapf(double[] pos, double[] azel) {
+        if (pos[2] >= Constants.HION) return 1.0;
+        return 1.0 / Math.cos(Math.asin((Constants.RE_WGS84 + pos[2]) /
+                (Constants.RE_WGS84 + Constants.HION) * Math.sin(Math.PI / 2.0 - azel[1])));
+    }
 }

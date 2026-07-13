@@ -42,6 +42,7 @@ org\rtklib\java\data\SbsFCorr.class
 org\rtklib\java\data\SbsIgp.class
 org\rtklib\java\constants\Constants.class
 org\rtklib\java\ephemeris\EphModel.class
+org\rtklib\java\rtkpos\RtkOptimizations.class
 org\rtklib\java\ambiguity\Lambda.class
 org\rtklib\java\data\Erp.class
 org\rtklib\java\data\Dgps.class
@@ -53,6 +54,7 @@ org\rtklib\java\data\Sta.class
 org\rtklib\java\common\CompatFileIO.class
 org\rtklib\java\rtcm\MsmSig.class
 org\rtklib\java\data\Nav.class
+org\rtklib\java\config\RtkConfig.class
 org\rtklib\java\ephemeris\ClkReader.class
 org\rtklib\java\rtcm\ObservationEpoch.class
 org\rtklib\java\troposphere\TroposphereModel.class
