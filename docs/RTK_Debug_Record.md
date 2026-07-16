@@ -488,7 +488,7 @@ RINEX 头 `APPROX POSITION XYZ` 已实现自动读取（`RinexParser`），MOVEB
 
 #### KalmanFilter.java
 - 路径：src/main/java/org/rtklib/java/kalman/KalmanFilter.java
-- 实现 EKF 测量更新：x = x + K*v, P = (I-KH)*P
+- 实现 EKF 测量更新 (Joseph形式)：x = x + K*v, P = (I-KH)*P*(I-KH)^T + K*R*K^T
 - 使用 EJML SimpleMatrix 进行矩阵运算，行优先存储
 
 #### RtkCore.java 核心方法
@@ -549,3 +549,131 @@ s * nf * 2 分配。
 | 🟡 | 位置偏差大 | 平均 3D 偏差约 6373999m，输出的是流动站绝对坐标而非基线向量 |
 | 🟡 | dE 系统偏差 ~0.8m | 历史遗留，可能与卫星数/权重模型有关 |
 | 🟡 | 后段历元精度波动 | 可能与卫星升降/周跳细节有关 |
+## 阶段7：三项RTK优化实现 (2026-07-16)
+
+### 背景
+基于滑坡监测场景需求，实现了三项核心优化，所有优化通过`RtkConfig`独立开关控制，默认关闭，保持向后兼容。
+
+### 7.1 滑动窗自适应Q矩阵（enableAdaptiveQ）
+
+#### 设计目标
+传统Q矩阵使用固定过程噪声，无法区分静态/蠕变/滑动状态。静态时Q应极小以压制观测噪声，动态时需增大Q以避免滞后。
+
+#### 新增字段
+| 文件 | 字段 | 类型 | 说明 |
+|------|------|------|------|
+| Rtk.java | `xOld[3]` | double[] | 上一历元绝对ECEF位置 |
+| Rtk.java | `posWin[100]` | double[] | 位置增量环形滑动窗缓冲区 |
+| Rtk.java | `winIdx` | int | 滑动窗当前写入位置 |
+| Rtk.java | `winCnt` | int | 滑动窗有效元素计数 |
+
+#### 新增配置
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `adaptiveQWinSize` | 50 | 滑动窗大小（历元） |
+| `adaptiveQStaticThresh` | 0.001 m | 静态阈值 |
+| `adaptiveQDynamicThresh` | 0.05 m | 动态阈值 |
+| `adaptiveQScaleMinStatic` | 0.01 | 静态最小缩放因子 |
+| `adaptiveQScaleMaxDynamic` | 5.0 | 动态最大缩放因子 |
+
+#### 核心算法
+```
+1. 计算当前历元绝对位置 curPos = x[0:2] + rb[0:2]
+2. 若 xOld 非零，计算位置增量 posInc = ||curPos - xOld||
+3. 存入环形滑动窗 posWin[winIdx]，winIdx = (winIdx+1) % winSize
+4. 更新 xOld = curPos
+5. 计算滑动窗内位置增量的 RMS：σ_pos = sqrt(∑(x-μ)²/validCount)
+6. Sigmoid 映射：
+   - σ_pos ≤ 0.001m → α = 0.01（静态，极度信任模型）
+   - σ_pos ≥ 0.05m  → α = 5.0（动态，快速响应）
+   - 中间值 → S型过渡：α = 0.01 + sigmoid(t) * 4.99
+   - sigmoid(t) = 1/(1 + exp(-10*(t-0.5)))
+7. 最终缩放 = α × nsFactor × pdopFactor × clamp(min, max)
+8. udpos() 中 qh/qv *= qScale²
+```
+
+#### 实现位置
+- `RtkOptimizations.computeQScale()`：完整重写，原简化版（nsFactor×pdopFactor）替换为滑动窗方案
+- `RtkCore.udpos()`：已有 `qScale` 乘法逻辑，无需修改
+
+### 7.2 模糊度子集锚固（enableAmbAnchor）
+
+#### 设计目标
+标准Fix-and-Hold在LAMBDA失败时重置所有模糊度。对于滑坡监测，老卫星几何关系稳定，模糊度已收敛，不应轻易丢弃。锚固机制将长期固定（≥100历元）的模糊度协方差压制到1e-9，数学上等价于"已知常数"。
+
+#### 新增字段
+| 文件 | 字段 | 类型 | 说明 |
+|------|------|------|------|
+| Rtk.java | `ambAnchored[MAXSAT*NF]` | boolean[] | 模糊度锚固标记 |
+| Rtk.java | `ambAnchorCount[MAXSAT*NF]` | int[] | 连续固定历元计数 |
+
+#### 新增配置
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `enableAmbAnchor` | false | 锚固开关 |
+| `ambAnchorMinFixCount` | 100 | 锚固所需连续固定历元数 |
+| `ambAnchorVar` | 1e-9 | 锚固后的协方差值 |
+
+#### 核心算法
+
+**holdamb() 修改**：
+```
+1. SOLQ_FIX 时，对所有 fix[f]>0 的模糊度 ambAnchorCount[globalIdx]++
+2. 连续固定 ≥100 历元 → ambAnchored[globalIdx] = true
+3. 已锚固的模糊度，holdamb中 Rh 使用 ambAnchorVar(1e-9) 而非 varholdamb
+4. 非 SOLQ_FIX 时，仅重置未固定卫星的 ambAnchorCount，不清空锚固标记
+```
+
+**resamb_LAMBDA() 修改**：
+```
+1. 分离已锚固和未锚固的模糊度（freeMap[] / anchoredMap[]）
+2. 若全部锚固（freeCount==0）→ 直接返回 SOLQ_FIX（ratio=999.9）
+3. 仅对未锚固子集提取 a/Qa 子矩阵
+4. 对子集执行 LAMBDA 搜索
+5. 固定成功后，已锚固值保持原值，未锚固值用 LAMBDA 结果
+```
+
+#### 实现位置
+- `RtkCore.holdamb()`：锚固计数、协方差压制、失败不清空
+- `RtkCore.resamb_LAMBDA()`：子集分离、子矩阵提取、子集LAMBDA
+
+### 7.3 大气参数自适应冻结（atmFrozenNsThresh）
+
+#### 设计目标
+卫星数少（<7颗）时，强行估计大气参数会导致法方程病态，滤波器将大气误差"吸收"进坐标分量，造成虚假位移。冻结机制在少星时跳过电离层/对流层状态更新。
+
+#### 新增配置
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `atmFrozenNsThresh` | 7 | 卫星数阈值，0=禁用 |
+
+#### 核心算法
+```
+udion(): if (ns < atmFrozenNsThresh) return;  // 冻结电离层过程噪声更新
+udtrop(): if (ns < atmFrozenNsThresh) return;  // 冻结对流层过程噪声更新
+```
+
+#### 实现位置
+- `RtkCore.udion()`：第277行，return前检查
+- `RtkCore.udtrop()`：第297行，return前检查
+
+### 7.4 修改文件清单
+
+| 文件 | 修改类型 | 说明 |
+|------|---------|------|
+| `config/RtkConfig.java` | 新增7个字段 | 3项优化的全部配置 |
+| `data/Rtk.java` | 新增6个字段 | xOld、posWin、winIdx、winCnt、ambAnchored、ambAnchorCount |
+| `rtkpos/RtkOptimizations.java` | 重写computeQScale | 滑动窗+RMS+sigmoid完整实现 |
+| `rtkpos/RtkCore.java` | 修改4个方法 | udion/udtrop/resamb_LAMBDA/holdamb |
+
+### 7.5 测试结果
+
+| 指标 | 结果 |
+|------|------|
+| 测试命令 | `mvn test` |
+| 编译 | ✅ BUILD SUCCESS |
+| 测试用例 | RtkRinexCompareTest |
+| Tests run | 1, Failures: 0, Errors: 0 |
+| Q 匹配率 | 100% (240/240) |
+| 解类型匹配率 | 100% |
+| 优化状态 | 默认关闭，向后兼容，按需开启 |

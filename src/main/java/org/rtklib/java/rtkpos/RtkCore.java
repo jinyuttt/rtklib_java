@@ -16,9 +16,6 @@ import org.rtklib.java.coord.CoordTransform;
 
 import java.util.Arrays;
 
-/**
- * RTK relative positioning core algorithms aligned with RTKLIB rtkpos.c.
- */
 public final class RtkCore {
     private RtkCore() {
     }
@@ -28,10 +25,6 @@ public final class RtkCore {
     private static final double TTOL_MOVEB = 1.05;
     private static final int MIN_ND = 4;
     private static final double RNX2CLK = 299792458.0;
-
-    // ========================================================================
-    // Main entry point: rtkpos
-    // ========================================================================
 
     public static int rtkpos(Rtk rtk, Obsd[] obs, int n, Nav nav) {
         PrcOpt opt = rtk.opt;
@@ -82,10 +75,6 @@ public final class RtkCore {
         return relpos(rtk, obs, nu, nr, nav);
     }
 
-    // ========================================================================
-    // relpos: complete RTK relative positioning pipeline
-    // ========================================================================
-
     private static int relpos(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav) {
         PrcOpt opt = rtk.opt;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
@@ -115,27 +104,15 @@ public final class RtkCore {
         int stat = (opt.mode <= Constants.PMODE_DGPS) ? Constants.SOLQ_DGPS : Constants.SOLQ_FLOAT;
 
         if (stat != Constants.SOLQ_NONE) {
-            // ============================================================
-            // Step 1: SNR median computation (existing optimization)
-            // ============================================================
             RtkOptimizations.computeSnrMedian(rtk, obs, nu, nr, sat, ns, nf, nav);
 
-            // ============================================================
-            // Step 2: Time update (udstate)
-            // ============================================================
             udstate(rtk, obs, nu, nr, nav, sat, ns, iu, ir);
 
-            // ============================================================
-            // Step 3: Zero-difference residuals
-            // ============================================================
             int[] vflg = new int[ns * nf * 2];
             double[] azel = new double[ns * 2];
             int nv = zdres(rtk, obs, nu, nr, nav, sat, ns, iu, ir, azel, vflg, nf);
 
             if (nv >= 4) {
-                // ============================================================
-                // Step 4: Double-difference residuals
-                // ============================================================
                 double[] H = new double[nx * ns * nf * 2];
                 double[] v = new double[ns * nf * 2];
                 double[] R = new double[ns * nf * 2 * ns * nf * 2];
@@ -143,29 +120,17 @@ public final class RtkCore {
                         vflg, nf, H, v, R);
 
                 if (nvOut >= 3) {
-                    // ============================================================
-                    // Step 5: Adaptive Q scale (existing optimization)
-                    // ============================================================
                     RtkOptimizations.computeQScale(rtk, sat, ns);
 
-                    // ============================================================
-                    // Step 6: IGG-III robust estimation (existing optimization)
-                    // ============================================================
                     RtkOptimizations.applyIggiii(rtk, v, H, R, vflg, nvOut, nx, sat, ns,
                             obs, iu, azel, nf);
 
-                    // ============================================================
-                    // Step 7: Kalman filter update
-                    // ============================================================
                     int info = filter(rtk, xp, Pp, H, v, R, nx, nvOut);
 
                     if (info == 0) {
                         System.arraycopy(xp, 0, rtk.x, 0, nx);
                         System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
 
-                        // ============================================================
-                        // Step 8: Ambiguity resolution
-                        // ============================================================
                         if (opt.modear == Constants.ARMODE_CONT ||
                             opt.modear == Constants.ARMODE_INST ||
                             opt.modear == Constants.ARMODE_FIXHOLD) {
@@ -175,9 +140,6 @@ public final class RtkCore {
                             }
                         }
 
-                        // ============================================================
-                        // Step 9: Fix-and-Hold constraint
-                        // ============================================================
                         holdamb(rtk, xp, Pp, nx);
                     }
                 }
@@ -199,19 +161,22 @@ public final class RtkCore {
         }
 
         rtk.sol.stat = (byte) stat;
-        for (int i = 0; i < 6; i++) rtk.sol.rr[i] = (i < 3) ? rtk.x[i] : 0.0;
+
+        for (int i = 0; i < Math.min(3, nx); i++) {
+            rtk.sol.rr[i] = rtk.rb[i] + rtk.x[i];
+        }
+        for (int i = 0; i < Math.min(3, nx); i++) {
+            rtk.sol.qr[i] = (float) rtk.P[i * nx + i];
+        }
+
         return 1;
     }
-
-    // ========================================================================
-    // Satellite selection
-    // ========================================================================
 
     private static int selsat(Obsd[] obs, int nu, int nr, PrcOpt opt,
                               int[] sat, int[] iu, int[] ir) {
         int ns = 0;
-        for (int i = 0; i < nu && i < Constants.MAXSAT; i++) {
-            for (int j = 0; j < nr; j++) {
+        for (int i = 0; i < nu && ns < Constants.MAXSAT; i++) {
+            for (int j = 0; j < nr && ns < Constants.MAXSAT; j++) {
                 if (obs[i].sat == obs[nu + j].sat) {
                     sat[ns] = obs[i].sat;
                     iu[ns] = i;
@@ -224,16 +189,19 @@ public final class RtkCore {
         return ns;
     }
 
-    // ========================================================================
-    // === State dimension helpers
-    // ========================================================================
-
     private static int NP(Rtk rtk) {
-        return rtk.opt.dynamics != 0 ? 6 : 3;
+        return (rtk.opt.dynamics != 0) ? 6 : 3;
     }
 
     private static int NI(Rtk rtk) {
-        return rtk.opt.ionoopt == Constants.IONOOPT_EST ? Constants.MAXSAT : 0;
+        if (rtk.opt.ionoopt == Constants.IONOOPT_EST) {
+            int ns = 0;
+            for (int i = 0; i < Constants.MAXSAT; i++) {
+                if (rtk.x[i] != 0.0) ns++;
+            }
+            return Math.max(ns, 1);
+        }
+        return 0;
     }
 
     private static int NT(Rtk rtk) {
@@ -245,10 +213,6 @@ public final class RtkCore {
     private static int NA(Rtk rtk, int ns) {
         return ns * rtk.opt.nf;
     }
-
-    // ========================================================================
-    // udstate: Time update (state propagation)
-    // ========================================================================
 
     private static void udstate(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav,
                                 int[] sat, int ns, int[] iu, int[] ir) {
@@ -266,10 +230,6 @@ public final class RtkCore {
 
         udbias(rtk, obs, nu, nr, nav, sat, ns, iu, ir);
     }
-
-    // ========================================================================
-    // udpos: Position state propagation
-    // ========================================================================
 
     private static void udpos(Rtk rtk) {
         PrcOpt opt = rtk.opt;
@@ -305,10 +265,6 @@ public final class RtkCore {
         }
     }
 
-    // ========================================================================
-    // udion: Ionosphere parameter update
-    // ========================================================================
-
     private static void udion(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav,
                               int[] sat, int ns) {
         PrcOpt opt = rtk.opt;
@@ -318,6 +274,10 @@ public final class RtkCore {
         int ni = NI(rtk);
         int np = NP(rtk);
 
+        if (rtk.rtkConfig.atmFrozenNsThresh > 0 && ns < rtk.rtkConfig.atmFrozenNsThresh) {
+            return;
+        }
+
         for (int i = 0; i < ns; i++) {
             int s = sat[i] - 1;
             int idx = np + s;
@@ -326,10 +286,6 @@ public final class RtkCore {
         }
     }
 
-    // ========================================================================
-    // udtrop: Troposphere parameter update
-    // ========================================================================
-
     private static void udtrop(Rtk rtk, int ns) {
         PrcOpt opt = rtk.opt;
         double[] P = rtk.P;
@@ -337,6 +293,10 @@ public final class RtkCore {
         int nt = NT(rtk);
         int np = NP(rtk);
         int ni = NI(rtk);
+
+        if (rtk.rtkConfig.atmFrozenNsThresh > 0 && ns < rtk.rtkConfig.atmFrozenNsThresh) {
+            return;
+        }
 
         int idx = np + ni;
         P[idx * nx + idx] += SQR(opt.prn[2]) * Math.abs(rtk.tt);
@@ -347,10 +307,6 @@ public final class RtkCore {
             }
         }
     }
-
-    // ========================================================================
-    // udbias: Ambiguity bias update (cycle slip detection and initialization)
-    // ========================================================================
 
     private static void udbias(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav,
                                 int[] sat, int ns, int[] iu, int[] ir) {
@@ -403,10 +359,6 @@ public final class RtkCore {
             }
         }
     }
-
-    // ========================================================================
-    // zdres: Zero-difference residuals
-    // ========================================================================
 
     private static int zdres(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav,
                              int[] sat, int ns, int[] iu, int[] ir,
@@ -500,10 +452,6 @@ public final class RtkCore {
         return nv;
     }
 
-    // ========================================================================
-    // ddres: Double-difference residuals
-    // ========================================================================
-
     private static int ddres(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav,
                              int[] sat, int ns, int[] iu, int[] ir,
                              double[] azel, int[] vflg, int nf,
@@ -513,90 +461,90 @@ public final class RtkCore {
         int ni = NI(rtk);
         int nt = NT(rtk);
         int nx = rtk.nx;
-        int na = NA(rtk, ns);
-
-        double[] rrRov = new double[3];
-        double[] rrBas = new double[3];
-        for (int i = 0; i < 3; i++) {
-            rrBas[i] = rtk.rb[i];
-            rrRov[i] = rtk.rb[i] + rtk.x[i];
-        }
-
-        double[] rs = new double[ns * 6];
-        double[] dts = new double[ns * 2];
-        double[] var = new double[ns];
-        int[] svh = new int[ns];
-
-        Obsd[] satObs = new Obsd[ns];
-        for (int i = 0; i < ns; i++) {
-            satObs[i] = obs[iu[i]];
-        }
-        EphModel.satposs(obs[0].time, satObs, ns, nav, rs, dts, var, svh, opt.sateph);
-
-        double[] e = new double[3];
-        double[] H0 = new double[ns * 3];
-        for (int i = 0; i < ns; i++) {
-            RtklibCommon.geodist(
-                    new double[]{rs[i * 6], rs[i * 6 + 1], rs[i * 6 + 2]},
-                    rrRov, e);
-            H0[i * 3] = -e[0];
-            H0[i * 3 + 1] = -e[1];
-            H0[i * 3 + 2] = -e[2];
-        }
-
-        int refIdx = 0;
-        double refEl = -1.0;
-        for (int i = 0; i < ns; i++) {
-            int s = sat[i] - 1;
-            if (rtk.ssat[s].vsat[0] != 0 && azel[i * 2 + 1] > refEl) {
-                refEl = azel[i * 2 + 1];
-                refIdx = i;
-            }
-        }
-
         int naOff = np + ni + nt;
-        int nvOut = 0;
-        int nv = vflg.length;
 
-        for (int i = 0; i < nv; i++) {
-            int sat2 = (vflg[i] >> 8) & 0xFF;
-            int type = (vflg[i] >> 4) & 0xF;
-            int frq = vflg[i] & 0xF;
-            int satIdx = -1;
-            for (int j = 0; j < ns; j++) {
-                if (sat[j] == sat2) {
-                    satIdx = j;
-                    break;
+        int nvIn = 0;
+        for (int i = 0; i < ns * nf * 2; i++) {
+            if (vflg[i] != 0) nvIn++;
+        }
+
+        int[] refIdx = new int[nf * 2];
+        for (int i = 0; i < nf * 2; i++) refIdx[i] = -1;
+
+        for (int f = 0; f < nf * 2; f++) {
+            double maxEl = 0.0;
+            for (int i = 0; i < nvIn; i++) {
+                int satIdx = (vflg[i] >> 8) & 0xFF;
+                int type = (vflg[i] >> 4) & 0xF;
+                int frq = vflg[i] & 0xF;
+                int ft = frq + (type >= 1 ? nf : 0);
+                if (ft == f && satIdx > 0 && satIdx <= Constants.MAXSAT) {
+                    double el = rtk.ssat[satIdx - 1].azel[1];
+                    if (el > maxEl) {
+                        maxEl = el;
+                        refIdx[f] = i;
+                    }
                 }
             }
-            if (satIdx < 0) continue;
+        }
 
-            if (satIdx == refIdx) continue;
+        int nvOut = 0;
+        double[] refY = new double[nf * 2];
+        double[] refV = new double[nf * 2];
+        int[] refSat = new int[nf * 2];
 
-            for (int j = 0; j < 3; j++) {
-                H[nvOut * nx + j] = H0[satIdx * 3 + j] - H0[refIdx * 3 + j];
+        for (int f = 0; f < nf * 2; f++) {
+            if (refIdx[f] < 0) continue;
+            int satIdx = (vflg[refIdx[f]] >> 8) & 0xFF;
+            refSat[f] = satIdx;
+        }
+
+        for (int i = 0; i < nvIn; i++) {
+            int satIdx = (vflg[i] >> 8) & 0xFF;
+            int type = (vflg[i] >> 4) & 0xF;
+            int frq = vflg[i] & 0xF;
+            int ft = frq + (type >= 1 ? nf : 0);
+
+            if (refIdx[ft] < 0 || refIdx[ft] == i) continue;
+
+            int refI = refIdx[ft];
+
+            for (int k = 0; k < nx; k++) {
+                H[nvOut * nx + k] = 0.0;
             }
-            for (int j = 3; j < naOff; j++) {
-                H[nvOut * nx + j] = 0.0;
+
+            int satIdxR = satIdx - 1;
+            int refSatIdx = refSat[ft] - 1;
+
+            double[] e = new double[3];
+            double[] rrRov = new double[3];
+            for (int k = 0; k < 3; k++) rrRov[k] = rtk.rb[k] + rtk.x[k];
+
+            double rRov = RtklibCommon.geodist(
+                    new double[]{0, 0, 0}, rrRov, e);
+
+            for (int k = 0; k < 3; k++) {
+                H[nvOut * nx + k] = -(e[k] - e[k]);
             }
 
-            if (na > 0 && type == 1) {
-                int ambIdx = naOff + satIdx * nf + frq;
-                int refAmbIdx = naOff + refIdx * nf + frq;
-                if (ambIdx < nx) H[nvOut * nx + ambIdx] = 1.0;
-                if (refAmbIdx < nx) H[nvOut * nx + refAmbIdx] = -1.0;
+            int freqIdx = type >= 1 ? (naOff + satIdxR * nf + frq) : 0;
+            int refFreqIdx = type >= 1 ? (naOff + refSatIdx * nf + frq) : 0;
+
+            if (freqIdx > 0 && freqIdx < nx) {
+                H[nvOut * nx + freqIdx] = 1.0;
+            }
+            if (refFreqIdx > 0 && refFreqIdx < nx) {
+                H[nvOut * nx + refFreqIdx] = -1.0;
             }
 
-            v[nvOut] = 0.0;
-
-            double el = azel[satIdx * 2 + 1];
-            double varFact = 1.0;
-            if (el > 0.0) {
-                varFact = 1.0 / Math.pow(Math.sin(el), 2);
+            for (int k = 0; k < nvOut; k++) {
+                R[nvOut * nvIn + k] = 0.0;
+                R[k * nvIn + nvOut] = 0.0;
             }
 
+            double varFact = (type == 0) ? 1.0 : 0.01;
             double baseVar = (type == 0) ? SQR(opt.prn[4]) : SQR(opt.prn[3]);
-            R[nvOut * nvOut + nvOut * nvOut] = 2.0 * baseVar * varFact;
+            R[nvOut * nvIn + nvOut] = 2.0 * baseVar * varFact;
 
             nvOut++;
         }
@@ -604,19 +552,11 @@ public final class RtkCore {
         return nvOut;
     }
 
-    // ========================================================================
-    // filter: Kalman filter wrapper
-    // ========================================================================
-
     private static int filter(Rtk rtk, double[] xp, double[] Pp,
                               double[] H, double[] v, double[] R,
                               int nx, int nv) {
         return KalmanFilter.update(xp, Pp, H, v, R, nx, nv);
     }
-
-    // ========================================================================
-    // resamb_LAMBDA: LAMBDA ambiguity resolution
-    // ========================================================================
 
     private static int resamb_LAMBDA(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav,
                                      int[] sat, int ns, int[] iu, int[] ir, double[] azel) {
@@ -630,24 +570,62 @@ public final class RtkCore {
 
         int naOff = np + ni + nt;
 
-        double[] a = new double[na];
-        double[] Qa = new double[na * na];
-        for (int i = 0; i < na; i++) {
-            a[i] = rtk.x[naOff + i];
-            for (int j = 0; j < na; j++) {
-                Qa[i * na + j] = rtk.P[(naOff + i) * nx + (naOff + j)];
+        int anchoredCount = 0;
+        int[] anchoredMap = new int[na];
+        int[] freeMap = new int[na];
+        int freeCount = 0;
+
+        if (rtk.rtkConfig.enableAmbAnchor) {
+            for (int i = 0; i < ns; i++) {
+                int s = sat[i] - 1;
+                for (int f = 0; f < nf; f++) {
+                    int ambIdx = i * nf + f;
+                    int globalIdx = s * nf + f;
+                    if (rtk.ambAnchored[globalIdx]) {
+                        anchoredMap[anchoredCount++] = ambIdx;
+                    } else {
+                        freeMap[freeCount++] = ambIdx;
+                    }
+                }
             }
         }
 
-        double[] F = new double[na * 2];
+        if (freeCount == 0 && anchoredCount > 0) {
+            for (int i = 0; i < na; i++) {
+                rtk.xa[naOff + i] = rtk.x[naOff + i];
+            }
+            rtk.sol.ratio = (float) 999.9;
+            return Constants.SOLQ_FIX;
+        }
+
+        int arNa = (freeCount > 0) ? freeCount : na;
+
+        double[] a = new double[arNa];
+        double[] Qa = new double[arNa * arNa];
+
+        for (int i = 0; i < arNa; i++) {
+            int srcIdx = (freeCount > 0) ? freeMap[i] : i;
+            a[i] = rtk.x[naOff + srcIdx];
+            for (int j = 0; j < arNa; j++) {
+                int srcJ = (freeCount > 0) ? freeMap[j] : j;
+                Qa[i * arNa + j] = rtk.P[(naOff + srcIdx) * nx + (naOff + srcJ)];
+            }
+        }
+
+        double[] F = new double[arNa * 2];
         double[] s = new double[2];
-        int info = Lambda.lambda(na, 2, a, Qa, F, s);
+        int info = Lambda.lambda(arNa, 2, a, Qa, F, s);
 
         if (info == 0) {
             double ratio = s[0] > 0 ? s[1] / s[0] : 0.0;
             if (ratio > opt.thresar[0]) {
-                for (int i = 0; i < na; i++) {
-                    rtk.xa[naOff + i] = F[i];
+                for (int i = 0; i < arNa; i++) {
+                    int dstIdx = (freeCount > 0) ? freeMap[i] : i;
+                    rtk.xa[naOff + dstIdx] = F[i];
+                }
+                for (int i = 0; i < anchoredCount; i++) {
+                    int dstIdx = anchoredMap[i];
+                    rtk.xa[naOff + dstIdx] = rtk.x[naOff + dstIdx];
                 }
 
                 rtk.sol.ratio = (float) ratio;
@@ -657,10 +635,6 @@ public final class RtkCore {
 
         return Constants.SOLQ_FLOAT;
     }
-
-    // ========================================================================
-    // holdamb: Fix-and-Hold constraint
-    // ========================================================================
 
     private static void holdamb(Rtk rtk, double[] xp, double[] Pp, int nx) {
         PrcOpt opt = rtk.opt;
@@ -681,6 +655,20 @@ public final class RtkCore {
         int ni = NI(rtk);
         int nt = NT(rtk);
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
+
+        if (rtk.rtkConfig.enableAmbAnchor && rtk.sol.stat == Constants.SOLQ_FIX) {
+            for (int i = 0; i < Constants.MAXSAT; i++) {
+                for (int f = 0; f < nf; f++) {
+                    int globalIdx = i * nf + f;
+                    if (rtk.ssat[i].fix[f] > 0) {
+                        rtk.ambAnchorCount[globalIdx]++;
+                        if (rtk.ambAnchorCount[globalIdx] >= rtk.rtkConfig.ambAnchorMinFixCount) {
+                            rtk.ambAnchored[globalIdx] = true;
+                        }
+                    }
+                }
+            }
+        }
 
         int nsEst = 0;
         for (int i = 0; i < Constants.MAXSAT; i++) {
@@ -706,7 +694,13 @@ public final class RtkCore {
                     if (idx < nx) {
                         Hh[nh * nx + idx] = 1.0;
                         vh[nh] = rtk.xa[idx] - xp[idx];
-                        Rh[nh * nsEst + nh] = opt.varholdamb;
+
+                        int globalIdx = i * nf + f;
+                        if (rtk.rtkConfig.enableAmbAnchor && rtk.ambAnchored[globalIdx]) {
+                            Rh[nh * nsEst + nh] = rtk.rtkConfig.ambAnchorVar;
+                        } else {
+                            Rh[nh * nsEst + nh] = opt.varholdamb;
+                        }
                         nh++;
                     }
                 }
@@ -716,11 +710,18 @@ public final class RtkCore {
         if (nh > 0) {
             KalmanFilter.update(xp, Pp, Hh, vh, Rh, nx, nh);
         }
-    }
 
-    // ========================================================================
-    // Helper: initialize state element
-    // ========================================================================
+        if (rtk.rtkConfig.enableAmbAnchor && rtk.sol.stat != Constants.SOLQ_FIX) {
+            for (int i = 0; i < Constants.MAXSAT; i++) {
+                for (int f = 0; f < nf; f++) {
+                    if (rtk.ssat[i].fix[f] <= 0) {
+                        int globalIdx = i * nf + f;
+                        rtk.ambAnchorCount[globalIdx] = 0;
+                    }
+                }
+            }
+        }
+    }
 
     private static void initx(double[] x, double[] P, int nx, double xi, double var, int i) {
         x[i] = xi;
@@ -734,6 +735,7 @@ public final class RtkCore {
     private static double SQR(double x) {
         return x * x;
     }
+
     static boolean testSys(int sys, int m) {
         switch (sys) {
             case Constants.SYS_GPS: return m == 0;
@@ -746,5 +748,4 @@ public final class RtkCore {
             default: return false;
         }
     }
-
 }

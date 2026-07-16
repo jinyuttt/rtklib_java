@@ -339,3 +339,37 @@ C 版列优先矩阵 `A_c[m][n]` 与 Java 版行优先矩阵 `A_j[m][n]` 在数�
 - `MatrixUtil.createMatrix()` 的行列参数正确
 - 矩阵乘法结果的行列索引正确
 - 最终结果写回 `x[]` 和 `P[]` 时按行优先顺序
+---
+
+## 8. RTK优化项（Java版独有） (2026-07-16)
+
+以下三项优化是Java版独有的，C版RTKLIB无对应功能。所有优化通过`RtkConfig`独立开关控制，默认关闭。
+
+### 8.1 滑动窗自适应Q矩阵（enableAdaptiveQ）
+
+| 差异项 | 说明 |
+|--------|------|
+| C版 | 固定过程噪声，`Q = prn[3]² * |tt|`，不区分运动状态 |
+| Java版 | 环形滑动窗（50历元）计算位置增量RMS，Sigmoid映射到缩放因子α∈[0.01, 5.0]，`Q *= α²` |
+| 影响 | 静态时噪声压制（α→0.01），动态时快速响应（α→5.0），滑坡监测场景精度提升明显 |
+| 新增字段 | `Rtk.xOld[3]`, `Rtk.posWin[100]`, `Rtk.winIdx`, `Rtk.winCnt` |
+| 新增配置 | `adaptiveQWinSize`, `adaptiveQStaticThresh`, `adaptiveQDynamicThresh`, `adaptiveQScaleMinStatic`, `adaptiveQScaleMaxDynamic` |
+
+### 8.2 模糊度子集锚固（enableAmbAnchor）
+
+| 差异项 | 说明 |
+|--------|------|
+| C版 | Fix-and-Hold全部使用`varholdamb`协方差，LAMBDA失败时可能重置所有模糊度 |
+| Java版 | 连续固定≥100历元的模糊度标记为"锚固"，协方差压制到1e-9（数学上等价于已知常数），LAMBDA搜索跳过已锚固子集 |
+| 影响 | 解决频繁跳变问题，短时遮挡下基线解维持在毫米级精度 |
+| 新增字段 | `Rtk.ambAnchored[MAXSAT*NF]`, `Rtk.ambAnchorCount[MAXSAT*NF]` |
+| 新增配置 | `enableAmbAnchor`, `ambAnchorMinFixCount`, `ambAnchorVar` |
+
+### 8.3 大气参数自适应冻结（atmFrozenNsThresh）
+
+| 差异项 | 说明 |
+|--------|------|
+| C版 | 无论卫星数多少，每历元都更新电离层/对流层过程噪声 |
+| Java版 | ns < 7时跳过`udion()`和`udtrop()`的过程噪声更新，冻结大气参数状态 |
+| 影响 | 防止少星时法方程病态导致虚假坐标跳变 |
+| 新增配置 | `atmFrozenNsThresh` (默认7) |

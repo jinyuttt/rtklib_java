@@ -584,7 +584,7 @@ for (int i = 0; i < nv; i++) diag[i] = HPHt.get(i, i);
 **性能差异**：典型RTK场景（nx=60, nv=60），FLOP浪费约49%，但绝对耗时在微秒级，1Hz RTK可忽略。
 若需10~20Hz或嵌入式场景，可切换到Native版本。
 
-### 12.3 PAR基准星动态重选与连续重选保护
+### 12.3 PAR基准星动态重选与连续重选保护 ⚠️ 未实现
 
 **参考星跟踪**：`rtk.parPrevRefSat[f]` 记录每个频率上一历元的参考星卫星ID（1-based）。
 
@@ -607,7 +607,7 @@ if (anyRefReselect) {
 
 **退回策略**：`ddidxFallback()` 与原始 `ddidx()` 逻辑一致（不排除任何卫星），确保连续重选时PAR退化为全模糊度固定。
 
-### 12.4 对流层梯度估计（TROPOPT_ESTG）
+### 12.4 对流层梯度估计（TROPOPT_ESTG） ⚠️ 未实现
 
 Java版已补全C版RTKLIB的 `TROPOPT_ESTG` 支持，包括：
 
@@ -628,7 +628,7 @@ IT(1,opt) = NP + NI + 3      // 基准站: ZWD, Gn, Ge
 **注意**：当前测试配置 `tropopt=TROPOPT_SAAS`（不估计对流层），上述代码路径未被测试。
 需设置 `tropopt=TROPOPT_ESTG` 并使用长基线数据（>30km）验证。
 
-### 12.5 电离层延迟估计（IONOOPT_EST）
+### 12.5 电离层延迟估计（IONOOPT_EST） ⚠️ 未实现
 
 Java版已补全C版RTKLIB的 `IONOOPT_EST` 支持，包括：
 
@@ -673,7 +673,7 @@ if (opt.ionoopt == IONOOPT_EST) {
 
 **关键差异**：C版 `didxi/didxj` 使用 `sat[i]/sat[j]` 索引，Java版使用 `refIdx/j` 索引（`refIdx` 是参考星在 `sat[]` 数组中的下标）。
 
-### 12.6 电离层梯度增强（enableIonoTropGradient）
+### 12.6 电离层梯度增强（enableIonoTropGradient） ⚠️ 未实现
 
 当 `RtkConfig.enableIonoTropGradient=true` 且 `ionoopt=IONOOPT_EST` 时，每颗卫星的电离层状态从1个扩展为3个（VTEC + Gn + Ge），通过 `PrcOpt.ionoGradient` 标志控制。
 
@@ -704,8 +704,110 @@ II(sat,opt)+2 = NP + (sat-1)*3+2  // Ge (东西梯度)
 | `rtkpos/RtkCore.java` | RTK核心，集成优化调用点 |
 | `data/Rtk.java` | RTK状态结构体，新增优化状态字段 |
 
+### 12.8 滑动窗自适应Q矩阵（enableAdaptiveQ） ✅ 已实现 (2026-07-16)
+
+#### 设计目标
+传统Q矩阵使用固定过程噪声，无法区分静态/蠕变/滑动状态。静态时Q应极小以压制观测噪声，动态时需增大Q以避免滞后。
+
+#### 新增字段
+| 文件 | 字段 | 类型 | 说明 |
+|------|------|------|------|
+| Rtk.java | `xOld[3]` | double[] | 上一历元绝对ECEF位置 |
+| Rtk.java | `posWin[100]` | double[] | 位置增量环形滑动窗缓冲区 |
+| Rtk.java | `winIdx` | int | 滑动窗当前写入位置 |
+| Rtk.java | `winCnt` | int | 滑动窗有效元素计数 |
+
+#### 新增配置
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `adaptiveQWinSize` | 50 | 滑动窗大小（历元） |
+| `adaptiveQStaticThresh` | 0.001 m | 静态阈值 |
+| `adaptiveQDynamicThresh` | 0.05 m | 动态阈值 |
+| `adaptiveQScaleMinStatic` | 0.01 | 静态最小缩放因子 |
+| `adaptiveQScaleMaxDynamic` | 5.0 | 动态最大缩放因子 |
+
+#### 核心算法
+```
+1. 计算当前历元绝对位置 curPos = x[0:2] + rb[0:2]
+2. 若 xOld 非零，计算位置增量 posInc = ||curPos - xOld||
+3. 存入环形滑动窗 posWin[winIdx]，winIdx = (winIdx+1) % winSize
+4. 更新 xOld = curPos
+5. 计算滑动窗内位置增量的 RMS：σ_pos = sqrt(∑(x-μ)²/validCount)
+6. Sigmoid 映射：
+   - σ_pos ≤ 0.001m → α = 0.01（静态）
+   - σ_pos ≥ 0.05m  → α = 5.0（动态）
+   - 中间值 → S型过渡：sigmoid(t) = 1/(1+exp(-10*(t-0.5)))
+7. 最终缩放 = α × nsFactor × pdopFactor × clamp(min, max)
+8. udpos() 中 qh/qv *= qScale²
+```
+
+#### 实现位置
+- `RtkOptimizations.computeQScale()`：完整滑动窗实现
+- `RtkCore.udpos()`：已有 qScale 乘法逻辑
+
+### 12.9 模糊度子集锚固（enableAmbAnchor） ✅ 已实现 (2026-07-16)
+
+#### 设计目标
+标准Fix-and-Hold在LAMBDA失败时重置所有模糊度。锚固机制将长期固定（≥100历元）的模糊度协方差压制到1e-9，数学上等价于"已知常数"。
+
+#### 新增字段
+| 文件 | 字段 | 类型 | 说明 |
+|------|------|------|------|
+| Rtk.java | `ambAnchored[MAXSAT*NF]` | boolean[] | 模糊度锚固标记 |
+| Rtk.java | `ambAnchorCount[MAXSAT*NF]` | int[] | 连续固定历元计数 |
+
+#### 新增配置
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `enableAmbAnchor` | false | 锚固开关 |
+| `ambAnchorMinFixCount` | 100 | 锚固所需连续固定历元数 |
+| `ambAnchorVar` | 1e-9 | 锚固后的协方差值 |
+
+#### 核心算法
+
+**holdamb() 修改**：
+```
+1. SOLQ_FIX 时，对所有 fix[f]>0 的模糊度 ambAnchorCount[globalIdx]++
+2. 连续固定 ≥100 历元 → ambAnchored[globalIdx] = true
+3. 已锚固的模糊度，holdamb中 Rh 使用 ambAnchorVar(1e-9) 而非 varholdamb
+4. 非 SOLQ_FIX 时，仅重置未固定卫星的 ambAnchorCount，不清空锚固标记
+```
+
+**resamb_LAMBDA() 修改**：
+```
+1. 分离已锚固和未锚固的模糊度（freeMap[] / anchoredMap[]）
+2. 若全部锚固 → 直接返回 SOLQ_FIX（ratio=999.9）
+3. 仅对未锚固子集提取 a/Qa 子矩阵
+4. 对子集执行 LAMBDA 搜索
+5. 固定成功后，已锚固值保持原值，未锚固值用 LAMBDA 结果
+```
+
+#### 实现位置
+- `RtkCore.holdamb()`：锚固计数、协方差压制、失败不清空
+- `RtkCore.resamb_LAMBDA()`：子集分离、子矩阵提取、子集LAMBDA
+
+### 12.10 大气参数自适应冻结（atmFrozenNsThresh） ✅ 已实现 (2026-07-16)
+
+#### 设计目标
+卫星数少（<7颗）时，强行估计大气参数会导致法方程病态，滤波器将大气误差"吸收"进坐标分量，造成虚假位移。
+
+#### 新增配置
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `atmFrozenNsThresh` | 7 | 卫星数阈值，0=禁用 |
+
+#### 核心算法
+```
+udion(): if (ns < atmFrozenNsThresh) return;  // 冻结电离层过程噪声更新
+udtrop(): if (ns < atmFrozenNsThresh) return;  // 冻结对流层过程噪声更新
+```
+
+#### 实现位置
+- `RtkCore.udion()`：第277行，RtkCore.java
+- `RtkCore.udtrop()`：第297行，RtkCore.java
+
 ---
 
-*文档版本：v1.4*
-*最后更新：2026-07-13*
+*文档版本：v1.5*
+*最后更新：2026-07-16*
 *维护者：RTKLIB Java移植团队*
