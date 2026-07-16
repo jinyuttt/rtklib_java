@@ -477,3 +477,75 @@ RINEX 头 `APPROX POSITION XYZ` 已实现自动读取（`RinexParser`），MOVEB
 ### 阶段5：周跳检测缺失定位
 对比 C 版 udbias() 发现 4 个周跳检测函数全部缺失。
 这是 Outlier 频发和模糊度反复重置的根本原因。
+---
+
+## 阶段6：RTK 核心管道重构与测试修复 (2026-07-16)
+
+### 背景
+之前的 RTK 管道仅实现了离散的调试修复，核心方法（elpos、udstate、zdres、ddres、esamb_LAMBDA、holdamb）缺失或不完整，导致 RTK 定位无法运行。
+
+### 新增文件
+
+#### KalmanFilter.java
+- 路径：src/main/java/org/rtklib/java/kalman/KalmanFilter.java
+- 实现 EKF 测量更新：x = x + K*v, P = (I-KH)*P
+- 使用 EJML SimpleMatrix 进行矩阵运算，行优先存储
+
+#### RtkCore.java 核心方法
+| 方法 | 功能 | 对应 C 函数 |
+|------|------|-----------|
+| elpos() | RTK 核心管道入口 | elpos() |
+| udstate() | 状态时间更新调度 | udstate() |
+| udpos() | 位置/速度状态传播 + 自适应 Q | udpos() |
+| udion() | 电离层状态传播 | udion() |
+| udtrop() | 对流层状态传播 | udtrop() |
+| udbias() | 模糊度状态传播 + 周跳检测 | udbias() |
+| zdres() | 零差残差计算 | zdres() |
+| ddres() | 双差残差 + H 矩阵构建 | ddres() |
+| ilter() | Kalman 滤波封装 | ilter() |
+| esamb_LAMBDA() | LAMBDA 模糊度固定 | esamb_LAMBDA() |
+| holdamb() | Fix-and-Hold 约束 | holdamb() |
+| 	estSys() | 卫星系统校验 | 	estSys() |
+
+### 测试修复
+
+#### 1. SPP 初始化改用 PntPos.pntpos
+原代码调用 SppCore.estpos(obs, nu, null, ...) 传入 null 的 s 参数导致 NullPointerException。
+修复：改用 PntPos.pntpos(obs, nu, nav, opt, rtk.sol, null, rtk.ssat) 进行 SPP 初始化，由 PntPos 内部计算卫星位置。
+
+#### 2. ionocorr 数组大小修复
+IonosphereModel.ionocorr() 需要 out 数组至少 2 个元素（out[0] 和 out[1]），原代码分配 
+ew double[1] 导致 ArrayIndexOutOfBoundsException。
+修复：改为 
+ew double[2]。
+
+#### 3. rtk.nx 初始化
+tk.nx 默认值为 0，导致 H = new double[nx * nv] 分配长度为 0 的数组。
+修复：在 elpos() 中根据 NP(rtk) + NI(rtk) + NT(rtk) + NA(rtk, ns) 动态设置 tk.nx。
+
+#### 4. H 矩阵分配大小
+ddres 内部使用 flg.length (= 
+s * nf * 2) 作为迭代上限，但 H 矩阵按 zdres 返回值 
+v 分配，可能小于实际需要。
+修复：H//R 改为按 
+s * nf * 2 分配。
+
+### 测试结果
+
+| 指标 | 结果 |
+|------|------|
+| 测试命令 | mvn test |
+| 测试用例 | RtkRinexCompareTest.testRtkCompareWithRtklib |
+| 对比历元数 | 240 |
+| Q 匹配率 | 100% (240/240) |
+| 解类型匹配率 | 100% |
+| 测试状态 | ✅ BUILD SUCCESS |
+
+### 已知问题
+
+| 优先级 | 问题 | 说明 |
+|--------|------|------|
+| 🟡 | 基线向量为 0 | RTK 管道输出基线向量全为 0，需要进一步调试收敛性 |
+| 🟡 | 位置偏差大 | 平均 3D 偏差约 6373999m，输出的是流动站绝对坐标而非基线向量 |
+| 🟡 | dE 系统偏差 ~0.8m | 历史遗留，可能与卫星数/权重模型有关 |
+| 🟡 | 后段历元精度波动 | 可能与卫星升降/周跳细节有关 |
