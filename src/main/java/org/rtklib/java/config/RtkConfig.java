@@ -7,6 +7,7 @@ public class RtkConfig {
     public boolean enableIggiii = false;
     public boolean enableSnrMedian = false;
     public boolean enableIonoTropGradient = false;
+    public boolean enableAmbAnchor = false;
 
     public double parElMask = 15.0;
     public int parMaxConsecutiveReselect = 3;
@@ -21,6 +22,11 @@ public class RtkConfig {
     public int zeroVelConsecutiveEpochs = 3;
     public double zeroVelStdThresh = 0.2;
     public double adaptiveQTraceThresh = 1e6;
+    public int adaptiveQWinSize = 50;
+    public double adaptiveQStaticThresh = 0.001;
+    public double adaptiveQDynamicThresh = 0.05;
+    public double adaptiveQScaleMinStatic = 0.01;
+    public double adaptiveQScaleMaxDynamic = 5.0;
 
     public double iggiiiK0 = 1.5;
     public double iggiiiK1 = 3.0;
@@ -46,6 +52,11 @@ public class RtkConfig {
     public double gradientIonoInitVar = 1e-4;
     public double gradientIonoPrn = 1e-3;
 
+    public int ambAnchorMinFixCount = 100;
+    public double ambAnchorVar = 1e-9;
+
+    public int atmFrozenNsThresh = 7;
+
     public RtkConfig() {
     }
 
@@ -55,6 +66,7 @@ public class RtkConfig {
         this.enableIggiii = other.enableIggiii;
         this.enableSnrMedian = other.enableSnrMedian;
         this.enableIonoTropGradient = other.enableIonoTropGradient;
+        this.enableAmbAnchor = other.enableAmbAnchor;
         this.parElMask = other.parElMask;
         this.parMaxConsecutiveReselect = other.parMaxConsecutiveReselect;
         this.adaptiveQNsRef = other.adaptiveQNsRef;
@@ -67,6 +79,11 @@ public class RtkConfig {
         this.zeroVelConsecutiveEpochs = other.zeroVelConsecutiveEpochs;
         this.zeroVelStdThresh = other.zeroVelStdThresh;
         this.adaptiveQTraceThresh = other.adaptiveQTraceThresh;
+        this.adaptiveQWinSize = other.adaptiveQWinSize;
+        this.adaptiveQStaticThresh = other.adaptiveQStaticThresh;
+        this.adaptiveQDynamicThresh = other.adaptiveQDynamicThresh;
+        this.adaptiveQScaleMinStatic = other.adaptiveQScaleMinStatic;
+        this.adaptiveQScaleMaxDynamic = other.adaptiveQScaleMaxDynamic;
         this.iggiiiK0 = other.iggiiiK0;
         this.iggiiiK1 = other.iggiiiK1;
         this.iggiiiMinW = other.iggiiiMinW;
@@ -88,5 +105,8 @@ public class RtkConfig {
         this.snrMedianAbsMin = other.snrMedianAbsMin;
         this.gradientIonoInitVar = other.gradientIonoInitVar;
         this.gradientIonoPrn = other.gradientIonoPrn;
+        this.ambAnchorMinFixCount = other.ambAnchorMinFixCount;
+        this.ambAnchorVar = other.ambAnchorVar;
+        this.atmFrozenNsThresh = other.atmFrozenNsThresh;
     }
 }

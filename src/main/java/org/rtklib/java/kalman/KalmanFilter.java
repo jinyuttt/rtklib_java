@@ -7,12 +7,13 @@ import org.rtklib.java.common.MatrixUtil;
  * Kalman filter measurement update.
  *
  * <p>Corresponds to RTKLIB filter() in rtkcmn.c.
- * Implements standard EKF measurement update with row-major storage.</p>
+ * Uses Joseph form for numerical stability, as EJML matrix operation order differs
+ * from C's custom matmul(), causing P to lose positive-definiteness under ill-conditioned H.</p>
  *
  * <pre>
  *   K = P * H' * inv(H * P * H' + R)
  *   x = x + K * v
- *   P = (I - K * H) * P
+ *   P = (I - K*H) * P * (I - K*H)^T + K * R * K^T   (Joseph form)
  * </pre>
  */
 public final class KalmanFilter {
@@ -56,10 +57,19 @@ public final class KalmanFilter {
             SimpleMatrix KV = MatrixUtil.multiply(K, V);
             SimpleMatrix XNew = MatrixUtil.add(X, KV);
 
+            // Joseph form: P_new = (I-KH)*P*(I-KH)^T + K*R*K^T
             SimpleMatrix KH = MatrixUtil.multiply(K, HMat);
             SimpleMatrix I = SimpleMatrix.identity(nx);
             SimpleMatrix IKH = MatrixUtil.subtract(I, KH);
-            SimpleMatrix PNew = MatrixUtil.multiply(IKH, PMat);
+            SimpleMatrix IKH_T = MatrixUtil.transpose(IKH);
+            SimpleMatrix P_temp = MatrixUtil.multiply(IKH, PMat);
+            SimpleMatrix P_IKH = MatrixUtil.multiply(P_temp, IKH_T);
+
+            SimpleMatrix Kt = MatrixUtil.transpose(K);
+            SimpleMatrix KR = MatrixUtil.multiply(K, RMat);
+            SimpleMatrix KRKt = MatrixUtil.multiply(KR, Kt);
+
+            SimpleMatrix PNew = MatrixUtil.add(P_IKH, KRKt);
 
             MatrixUtil.copyMatrix(XNew, x);
             MatrixUtil.copyMatrix(PNew, P);
