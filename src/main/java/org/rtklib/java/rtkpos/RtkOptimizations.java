@@ -380,7 +380,7 @@ public final class RtkOptimizations {
         return nb;
     }
 
-    private static int ddidxFallback(Rtk rtk, int[] ix, int gps, int glo, int sbs) {
+    static int ddidxFallback(Rtk rtk, int[] ix, int gps, int glo, int sbs) {
         int nb = 0;
         PrcOpt opt = rtk.opt;
         int na = rtk.na;

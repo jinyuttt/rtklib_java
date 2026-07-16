@@ -13,6 +13,7 @@ import org.rtklib.java.pntpos.PntPos;
 import org.rtklib.java.pntpos.SppCore;
 import org.rtklib.java.time.TimeSystem;
 import org.rtklib.java.coord.CoordTransform;
+import org.rtklib.java.troposphere.TroposphereModel;
 
 import java.util.Arrays;
 
@@ -110,14 +111,15 @@ public final class RtkCore {
 
             int[] vflg = new int[ns * nf * 2];
             double[] azel = new double[ns * 2];
-            int nv = zdres(rtk, obs, nu, nr, nav, sat, ns, iu, ir, azel, vflg, nf);
+            double[] y = new double[ns * nf * 2];
+            int nv = zdres(rtk, obs, nu, nr, nav, sat, ns, iu, ir, azel, vflg, nf, y);
 
             if (nv >= 4) {
                 double[] H = new double[nx * ns * nf * 2];
                 double[] v = new double[ns * nf * 2];
                 double[] R = new double[ns * nf * 2 * ns * nf * 2];
                 int nvOut = ddres(rtk, obs, nu, nr, nav, sat, ns, iu, ir, azel,
-                        vflg, nf, H, v, R);
+                        vflg, nf, H, v, R, y);
 
                 if (nvOut >= 3) {
                     RtkOptimizations.computeQScale(rtk, sat, ns);
@@ -213,6 +215,14 @@ public final class RtkCore {
     private static int NA(Rtk rtk, int ns) {
         return ns * rtk.opt.nf;
     }
+    private static int II(int sat, PrcOpt opt) {
+        int np = (opt.dynamics != 0) ? 6 : 3;
+        if (opt.ionoGradient) {
+            return np + (sat - 1) * 3;
+        }
+        return np + (sat - 1);
+    }
+
 
     private static void udstate(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav,
                                 int[] sat, int ns, int[] iu, int[] ir) {
@@ -362,7 +372,7 @@ public final class RtkCore {
 
     private static int zdres(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav,
                              int[] sat, int ns, int[] iu, int[] ir,
-                             double[] azel, int[] vflg, int nf) {
+                             double[] azel, int[] vflg, int nf, double[] y) {
         PrcOpt opt = rtk.opt;
         double[] pos = new double[3];
         double[] rrRov = new double[3];
@@ -386,7 +396,7 @@ public final class RtkCore {
         EphModel.satposs(obs[0].time, satObs, ns, nav, rs, dts, var, svh, opt.sateph);
 
         int nv = 0;
-        double[] y = new double[ns * nf * 2];
+    
         double[] e = new double[3];
 
         for (int f = 0; f < nf; f++) {
@@ -452,10 +462,27 @@ public final class RtkCore {
         return nv;
     }
 
+    private static void prectrop(Rtk rtk, double[] rr, double[] azel, int i,
+                                 double[] dtdx, int nx) {
+        PrcOpt opt = rtk.opt;
+        double[] pos = new double[3];
+        CoordTransform.ecef2pos(rr, pos);
+
+        double[] mapWet = new double[1];
+        TroposphereModel.tropmapf(rtk.sol.time, pos, azel, mapWet);
+
+        for (int k = 0; k < nx; k++) dtdx[k] = 0.0;
+        int it = NT(rtk);
+        if (it > 0) {
+            int idx = NP(rtk) + NI(rtk);
+            if (idx < nx) dtdx[idx] = mapWet[0];
+        }
+    }
+
     private static int ddres(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav,
                              int[] sat, int ns, int[] iu, int[] ir,
                              double[] azel, int[] vflg, int nf,
-                             double[] H, double[] v, double[] R) {
+                             double[] H, double[] v, double[] R, double[] y) {
         PrcOpt opt = rtk.opt;
         int np = NP(rtk);
         int ni = NI(rtk);
@@ -524,7 +551,7 @@ public final class RtkCore {
                     new double[]{0, 0, 0}, rrRov, e);
 
             for (int k = 0; k < 3; k++) {
-                H[nvOut * nx + k] = -(e[k] - e[k]);
+                H[nvOut * nx + k] = -e[k];
             }
 
             int freqIdx = type >= 1 ? (naOff + satIdxR * nf + frq) : 0;
@@ -535,6 +562,73 @@ public final class RtkCore {
             }
             if (refFreqIdx > 0 && refFreqIdx < nx) {
                 H[nvOut * nx + refFreqIdx] = -1.0;
+
+                v[nvOut] = y[i] - y[refI];
+
+                if (opt.ionoopt == Constants.IONOOPT_EST) {
+                    double[] ionMapI = new double[1];
+                    double[] ionMapJ = new double[1];
+                    double[] posI = new double[3];
+                    double[] posJ = new double[3];
+                    CoordTransform.ecef2pos(rrRov, posI);
+                    CoordTransform.ecef2pos(rrRov, posJ);
+                    double imI = IonosphereModel.ionmapf(posI, new double[]{azel[i * 2], azel[i * 2 + 1]});
+                    double imJ = IonosphereModel.ionmapf(posJ, new double[]{azel[refI * 2], azel[refI * 2 + 1]});
+                    double freqI = SatUtils.sat2freq(satIdx, obs[0].code[frq], nav);
+                    double freqJ = SatUtils.sat2freq(refSat[ft], obs[0].code[frq], nav);
+                    if (freqI > 0.0 && freqJ > 0.0) {
+                        double sign = (type == 0) ? -1.0 : 1.0;
+                        double didxI = sign * imI * SQR(Constants.FREQL1 / freqI);
+                        double didxJ = sign * imJ * SQR(Constants.FREQL1 / freqJ);
+                        int iiI = II(satIdx, opt);
+                        int iiJ = II(refSat[ft], opt);
+                        if (iiI >= 0 && iiI < nx && iiJ >= 0 && iiJ < nx) {
+                            v[nvOut] -= didxI * rtk.x[iiI] - didxJ * rtk.x[iiJ];
+                            H[nvOut * nx + iiI] += didxI;
+                            H[nvOut * nx + iiJ] -= didxJ;
+                        }
+                    }
+                }
+
+                if (opt.tropopt == Constants.TROPOPT_EST || opt.tropopt == Constants.TROPOPT_ESTG) {
+                    double[] dtdxI = new double[nx];
+                    double[] dtdxJ = new double[nx];
+                    prectrop(rtk, rrRov, new double[]{azel[i * 2], azel[i * 2 + 1]}, i, dtdxI, nx);
+                    prectrop(rtk, rrRov, new double[]{azel[refI * 2], azel[refI * 2 + 1]}, refI, dtdxJ, nx);
+                    for (int k = 0; k < nx; k++) {
+                        H[nvOut * nx + k] += dtdxI[k] - dtdxJ[k];
+                    }
+                }
+
+                if (opt.ionoopt == Constants.IONOOPT_EST && opt.ionoGradient) {
+                    double[] posI = new double[3];
+                    CoordTransform.ecef2pos(rrRov, posI);
+                    double elI = azel[i * 2 + 1];
+                    double elJ = azel[refI * 2 + 1];
+                    double azI = azel[i * 2];
+                    double azJ = azel[refI * 2];
+                    double cotElI = 1.0 / Math.tan(elI);
+                    double cotElJ = 1.0 / Math.tan(elJ);
+                    double freqI = SatUtils.sat2freq(satIdx, obs[0].code[frq], nav);
+                    double freqJ = SatUtils.sat2freq(refSat[ft], obs[0].code[frq], nav);
+                    if (freqI > 0.0 && freqJ > 0.0) {
+                        double sign = (type == 0) ? -1.0 : 1.0;
+                        double scaleI = sign * SQR(Constants.FREQL1 / freqI);
+                        double scaleJ = sign * SQR(Constants.FREQL1 / freqJ);
+                        int iiI = II(satIdx, opt);
+                        int iiJ = II(refSat[ft], opt);
+                        if (iiI + 2 < nx && iiJ + 2 < nx) {
+                            v[nvOut] -= scaleI * cotElI * Math.cos(azI) * rtk.x[iiI + 1]
+                                      + scaleJ * cotElJ * Math.cos(azJ) * rtk.x[iiJ + 1];
+                            v[nvOut] -= scaleI * cotElI * Math.sin(azI) * rtk.x[iiI + 2]
+                                      + scaleJ * cotElJ * Math.sin(azJ) * rtk.x[iiJ + 2];
+                            H[nvOut * nx + iiI + 1] += scaleI * cotElI * Math.cos(azI);
+                            H[nvOut * nx + iiI + 2] += scaleI * cotElI * Math.sin(azI);
+                            H[nvOut * nx + iiJ + 1] -= scaleJ * cotElJ * Math.cos(azJ);
+                            H[nvOut * nx + iiJ + 2] -= scaleJ * cotElJ * Math.sin(azJ);
+                        }
+                    }
+                }
             }
 
             for (int k = 0; k < nvOut; k++) {
@@ -556,6 +650,13 @@ public final class RtkCore {
                               double[] H, double[] v, double[] R,
                               int nx, int nv) {
         return KalmanFilter.update(xp, Pp, H, v, R, nx, nv);
+    }
+
+    private static int ddidx(Rtk rtk, int[] sat, int ns, int[] ix, int nf) {
+        if (rtk.rtkConfig.enableParRefReselect) {
+            return RtkOptimizations.buildParIndex(rtk, sat, ns, nf, ix, -1, -1, 0);
+        }
+        return RtkOptimizations.ddidxFallback(rtk, ix, -1, -1, 0);
     }
 
     private static int resamb_LAMBDA(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav,
