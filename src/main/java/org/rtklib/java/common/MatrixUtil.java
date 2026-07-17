@@ -138,6 +138,23 @@ public final class MatrixUtil {
     }
 
     /**
+     * 矩阵求逆（安全版本）。
+     *
+     * <p>矩阵奇异时返回 Optional.empty()，不抛异常。
+     * 与 C 版 matinv() 返回 0 的行为对齐。</p>
+     *
+     * @param A 输入矩阵
+     * @return 逆矩阵，若矩阵奇异则返回 Optional.empty()
+     */
+    public static java.util.Optional<SimpleMatrix> invertSafe(SimpleMatrix A) {
+        try {
+            return java.util.Optional.of(A.invert());
+        } catch (org.ejml.data.SingularMatrixException e) {
+            return java.util.Optional.empty();
+        }
+    }
+
+    /**
      * 将 SimpleMatrix 转为行优先数组。
      *
      * @param m 输入矩阵

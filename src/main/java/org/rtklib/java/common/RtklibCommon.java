@@ -153,8 +153,11 @@ public final class RtklibCommon {
 
         SimpleMatrix HMat = MatrixUtil.createMatrix(H, 4, n);
         SimpleMatrix QMat = MatrixUtil.multiply(HMat, MatrixUtil.transpose(HMat));
-        SimpleMatrix QInv = MatrixUtil.invert(QMat);
-        double[] Q = MatrixUtil.toArray(QInv);
+        java.util.Optional<SimpleMatrix> qInvOpt = MatrixUtil.invertSafe(QMat);
+        if (!qInvOpt.isPresent()) {
+            return;
+        }
+        double[] Q = MatrixUtil.toArray(qInvOpt.get());
 
         dop[0] = Math.sqrt(Q[0 * 4 + 0] + Q[1 * 4 + 1] + Q[2 * 4 + 2] + Q[3 * 4 + 3]);
         dop[1] = Math.sqrt(Q[0 * 4 + 0] + Q[1 * 4 + 1] + Q[2 * 4 + 2]);

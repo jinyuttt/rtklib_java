@@ -118,8 +118,10 @@ public final class RtkOptimizations {
             azelCopy[i * 2 + 1] = rtk.ssat[sat[i] - 1].azel[1];
         }
         org.rtklib.java.common.RtklibCommon.dops(ns, azelCopy, rtk.opt.elmin, dop);
-        double pdop = dop[1];
-        double pdopFactor = Math.min(cfg.adaptiveQPdopRef / Math.max(pdop, 1.0), 2.0);
+        double pdopFactor = 1.0;
+        if (dop[1] > 0) {
+            pdopFactor = Math.min(cfg.adaptiveQPdopRef / dop[1], 2.0);
+        }
 
         double rawScale = scale * nsFactor * pdopFactor;
 
