@@ -584,7 +584,7 @@ for (int i = 0; i < nv; i++) diag[i] = HPHt.get(i, i);
 **性能差异**：典型RTK场景（nx=60, nv=60），FLOP浪费约49%，但绝对耗时在微秒级，1Hz RTK可忽略。
 若需10~20Hz或嵌入式场景，可切换到Native版本。
 
-### 12.3 PAR基准星动态重选与连续重选保护 ⚠️ 未实现
+### 12.3 PAR基准星动态重选与连续重选保护 ✅ 已实现 (2026-07-17) → 详见 12.11
 
 **参考星跟踪**：`rtk.parPrevRefSat[f]` 记录每个频率上一历元的参考星卫星ID（1-based）。
 
@@ -607,7 +607,7 @@ if (anyRefReselect) {
 
 **退回策略**：`ddidxFallback()` 与原始 `ddidx()` 逻辑一致（不排除任何卫星），确保连续重选时PAR退化为全模糊度固定。
 
-### 12.4 对流层梯度估计（TROPOPT_ESTG） ⚠️ 未实现
+### 12.4 对流层梯度估计（TROPOPT_ESTG） ✅ 已实现 (2026-07-17) → 详见 12.11
 
 Java版已补全C版RTKLIB的 `TROPOPT_ESTG` 支持，包括：
 
@@ -628,7 +628,7 @@ IT(1,opt) = NP + NI + 3      // 基准站: ZWD, Gn, Ge
 **注意**：当前测试配置 `tropopt=TROPOPT_SAAS`（不估计对流层），上述代码路径未被测试。
 需设置 `tropopt=TROPOPT_ESTG` 并使用长基线数据（>30km）验证。
 
-### 12.5 电离层延迟估计（IONOOPT_EST） ⚠️ 未实现
+### 12.5 电离层延迟估计（IONOOPT_EST） ✅ 已实现 (2026-07-17) → 详见 12.11
 
 Java版已补全C版RTKLIB的 `IONOOPT_EST` 支持，包括：
 
@@ -673,7 +673,7 @@ if (opt.ionoopt == IONOOPT_EST) {
 
 **关键差异**：C版 `didxi/didxj` 使用 `sat[i]/sat[j]` 索引，Java版使用 `refIdx/j` 索引（`refIdx` 是参考星在 `sat[]` 数组中的下标）。
 
-### 12.6 电离层梯度增强（enableIonoTropGradient） ⚠️ 未实现
+### 12.6 电离层梯度增强（enableIonoTropGradient） ✅ 已实现 (2026-07-17) → 详见 12.11
 
 当 `RtkConfig.enableIonoTropGradient=true` 且 `ionoopt=IONOOPT_EST` 时，每颗卫星的电离层状态从1个扩展为3个（VTEC + Gn + Ge），通过 `PrcOpt.ionoGradient` 标志控制。
 
@@ -806,8 +806,85 @@ udtrop(): if (ns < atmFrozenNsThresh) return;  // 冻结对流层过程噪声更
 - `RtkCore.udion()`：第277行，RtkCore.java
 - `RtkCore.udtrop()`：第297行，RtkCore.java
 
+### 12.11 PAR重选、TROPOPT_ESTG、IONOOPT_EST、电离层梯度 ✅ 已实现 (2026-07-17)
+
+#### 设计目标
+四项优化通过配置控制，默认关闭，不影响已调试功能。扩展RTK观测模型，支持电离层/对流层参数估计及梯度项，提升复杂环境下的定位精度。
+
+#### 新增配置
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `enableParRefReselect` | false | PAR参考星动态重选 |
+| `ionoGradient` | false | 电离层梯度项启用 |
+| `ionoopt` | IONOOPT_OFF | 电离层估计模式 |
+| `tropopt` | TROPOPT_SAAS | 对流层估计模式 |
+
+#### 核心算法
+
+**PAR重选**：
+```
+ddidx(): if (enableParRefReselect) → buildParIndex() else → ddidxFallback()
+```
+- 动态参考星：基于高度角、信号质量、锁相状态
+- 回退保护：`parMaxConsecutiveReselect` 超限时清空排除列表
+
+**电离层估计（ddres）**：
+```
+if (ionoopt == IONOOPT_EST):
+  imI = ionmapf(posI, azelI); imJ = ionmapf(posJ, azelJ)
+  H[ionoI] += imI; H[ionoJ] -= imJ
+  if (ionoGradient): H[+] = cotEl * cosAz/sinAz
+```
+
+**对流层梯度估计（prectrop + ddres）**：
+```
+prectrop():
+  TROPOPT_EST:  dtdx[IT] = mw
+  TROPOPT_ESTG: dtdx[IT/GN/GE] = mw; mw*cotEl*cosAz; mw*cotEl*sinAz
+
+ddres(): H[k] += dtdxI[k] - dtdxJ[k]
+```
+
+#### 实现位置
+- `RtkCore.ddidx()`、`II()`、`prectrop()`、`zdres()`、`ddres()`
+- `RtkOptimizations.buildParIndex()`、`ddidxFallback()`
+
+### 12.12 SingularMatrixException 安全修复 ✅ 已实现 (2026-07-17)
+
+#### 问题分析
+
+**错误链路**：
+```
+relpos() → computeQScale() → dops() → invert() → SingularMatrixException
+```
+
+**根因**：`dops()` 中 4×4 Q 矩阵可能奇异（卫星扎堆、共面、几何退化），C版 `matinv()` 返回 0，Java版 EJML 抛异常。此外 `computeQScale()` 中 `pdop=0` 时 `pdopFactor=2.0`，逻辑反转。
+
+#### 修复方案：三层防护
+
+| 层 | 文件 | 修改 | 作用 |
+|----|------|------|------|
+| 底层工具 | `MatrixUtil.java` | 新增 `invertSafe()` | 通用安全求逆，返回 `Optional<SimpleMatrix>` |
+| 源头修复 | `RtklibCommon.dops()` | `invert()` → `invertSafe()` | 矩阵奇异时静默返回，DOP=0，对齐C版 |
+| 调用方兜底 | `RtkOptimizations.computeQScale()` | `dop[1]==0` 检查 | 几何退化时 `pdopFactor=1.0`，保守策略 |
+
+**invertSafe()**：
+```java
+public static Optional<SimpleMatrix> invertSafe(SimpleMatrix A) {
+    try { return Optional.of(A.invert()); }
+    catch (SingularMatrixException e) { return Optional.empty(); }
+}
+```
+
+**dops()**：`invert()` → `invertSafe()`，失败时 DOP=0 静默返回
+
+**computeQScale()**：`if (dop[1] > 0) pdopFactor = min(ref/dop[1], 2.0)` else `pdopFactor=1.0`
+
+#### 实现位置
+- `MatrixUtil.invertSafe()`、`RtklibCommon.dops()`、`RtkOptimizations.computeQScale()`
+
 ---
 
-*文档版本：v1.5*
-*最后更新：2026-07-16*
+*文档版本：v1.6*
+*最后更新：2026-07-17*
 *维护者：RTKLIB Java移植团队*
