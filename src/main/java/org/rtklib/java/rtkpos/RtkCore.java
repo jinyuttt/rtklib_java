@@ -95,12 +95,9 @@ public final class RtkCore {
         int ns = selsat(obs, nu, nr, opt, sat, iu, ir);
         if (ns <= 0) return 0;
 
-        rtk.nx = NP(rtk) + NI(rtk) + NT(rtk) + NA(rtk, ns);
+        rtk.nx = NR(rtk) + NB(rtk);
+        rtk.na = NR(rtk);
         int nx = rtk.nx;
-        double[] xp = new double[nx];
-        double[] Pp = new double[nx * nx];
-        System.arraycopy(rtk.x, 0, xp, 0, nx);
-        System.arraycopy(rtk.P, 0, Pp, 0, nx * nx);
 
         int stat = (opt.mode <= Constants.PMODE_DGPS) ? Constants.SOLQ_DGPS : Constants.SOLQ_FLOAT;
 
@@ -108,6 +105,11 @@ public final class RtkCore {
             RtkOptimizations.computeSnrMedian(rtk, obs, nu, nr, sat, ns, nf, nav);
 
             udstate(rtk, obs, nu, nr, nav, sat, ns, iu, ir);
+
+            double[] xp = new double[nx];
+            double[] Pp = new double[nx * nx];
+            System.arraycopy(rtk.x, 0, xp, 0, nx);
+            System.arraycopy(rtk.P, 0, Pp, 0, nx * nx);
 
             int[] vflg = new int[ns * nf * 2];
             double[] azel = new double[ns * 2];
@@ -197,23 +199,31 @@ public final class RtkCore {
 
     private static int NI(Rtk rtk) {
         if (rtk.opt.ionoopt == Constants.IONOOPT_EST) {
-            int ns = 0;
-            for (int i = 0; i < Constants.MAXSAT; i++) {
-                if (rtk.x[i] != 0.0) ns++;
+            if (rtk.opt.ionoGradient) {
+                return Constants.MAXSAT * 3;
             }
-            return Math.max(ns, 1);
+            return Constants.MAXSAT;
         }
         return 0;
     }
 
     private static int NT(Rtk rtk) {
         if (rtk.opt.tropopt < Constants.TROPOPT_EST) return 0;
-        if (rtk.opt.tropopt == Constants.TROPOPT_EST) return 1;
-        return 3;
+        if (rtk.opt.tropopt < Constants.TROPOPT_ESTG) return 2;
+        return 6;
     }
 
-    private static int NA(Rtk rtk, int ns) {
-        return ns * rtk.opt.nf;
+    private static int NB(Rtk rtk) {
+        int nf = (rtk.opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : rtk.opt.nf;
+        if (rtk.opt.mode <= Constants.PMODE_DGPS) return 0;
+        return Constants.MAXSAT * nf;
+    }
+    private static int NL(Rtk rtk) {
+        if (rtk.opt.glomodear != Constants.GLO_ARMODE_AUTOCAL) return 0;
+        return Constants.NFREQGLO;
+    }
+    private static int NR(Rtk rtk) {
+        return NP(rtk) + NI(rtk) + NT(rtk) + NL(rtk);
     }
     private static int II(int sat, PrcOpt opt) {
         int np = (opt.dynamics != 0) ? 6 : 3;
@@ -221,6 +231,32 @@ public final class RtkCore {
             return np + (sat - 1) * 3;
         }
         return np + (sat - 1);
+    }
+    private static int IT(int r, PrcOpt opt) {
+        int np = (opt.dynamics != 0) ? 6 : 3;
+        int ni = (opt.ionoopt == Constants.IONOOPT_EST) ?
+                 (opt.ionoGradient ? Constants.MAXSAT * 3 : Constants.MAXSAT) : 0;
+        int nt = (opt.tropopt < Constants.TROPOPT_EST) ? 0 :
+                 (opt.tropopt < Constants.TROPOPT_ESTG) ? 2 : 6;
+        return np + ni + (nt / 2) * r;
+    }
+    private static int IL(int f, PrcOpt opt) {
+        int np = (opt.dynamics != 0) ? 6 : 3;
+        int ni = (opt.ionoopt == Constants.IONOOPT_EST) ?
+                 (opt.ionoGradient ? Constants.MAXSAT * 3 : Constants.MAXSAT) : 0;
+        int nt = (opt.tropopt < Constants.TROPOPT_EST) ? 0 :
+                 (opt.tropopt < Constants.TROPOPT_ESTG) ? 2 : 6;
+        return np + ni + nt + f;
+    }
+    private static int IB(int sat, int f, PrcOpt opt) {
+        int np = (opt.dynamics != 0) ? 6 : 3;
+        int ni = (opt.ionoopt == Constants.IONOOPT_EST) ?
+                 (opt.ionoGradient ? Constants.MAXSAT * 3 : Constants.MAXSAT) : 0;
+        int nt = (opt.tropopt < Constants.TROPOPT_EST) ? 0 :
+                 (opt.tropopt < Constants.TROPOPT_ESTG) ? 2 : 6;
+        int nl = (opt.glomodear != Constants.GLO_ARMODE_AUTOCAL) ? 0 : Constants.NFREQGLO;
+        int nr = np + ni + nt + nl;
+        return nr + Constants.MAXSAT * f + (sat - 1);
     }
 
 
@@ -247,6 +283,41 @@ public final class RtkCore {
         double[] P = rtk.P;
         int nx = rtk.nx;
         double tt = rtk.tt;
+
+        if (opt.mode == Constants.PMODE_FIXED) {
+            for (int i = 0; i < 3; i++) initx(x, P, nx, opt.ru[i], Constants.VAR_POS_FIX, i);
+            return;
+        }
+
+        double normPos = Math.sqrt(x[0] * x[0] + x[1] * x[1] + x[2] * x[2]);
+        if (normPos <= Constants.RE_WGS84 / 2.0) {
+            for (int i = 0; i < 3; i++) initx(x, P, nx, rtk.sol.rr[i], Constants.VAR_POS, i);
+            if (opt.dynamics != 0) {
+                for (int i = 3; i < 6; i++) initx(x, P, nx, rtk.sol.rr[i], Constants.VAR_VEL, i);
+                for (int i = 6; i < 9; i++) initx(x, P, nx, 1E-6, Constants.VAR_ACC, i);
+            }
+            return;
+        }
+
+        if (opt.mode == Constants.PMODE_STATIC || opt.mode == Constants.PMODE_STATIC_START) {
+            return;
+        }
+
+        if (opt.dynamics == 0) {
+            for (int i = 0; i < 3; i++) initx(x, P, nx, rtk.sol.rr[i], Constants.VAR_POS, i);
+            return;
+        }
+
+        double var = 0.0;
+        for (int i = 0; i < 3; i++) var += P[i * nx + i];
+        var /= 3.0;
+
+        if (var > Constants.VAR_POS) {
+            for (int i = 0; i < 3; i++) initx(x, P, nx, rtk.sol.rr[i], Constants.VAR_POS, i);
+            for (int i = 3; i < 6; i++) initx(x, P, nx, rtk.sol.rr[i], Constants.VAR_VEL, i);
+            for (int i = 6; i < 9; i++) initx(x, P, nx, 1E-6, Constants.VAR_ACC, i);
+            return;
+        }
 
         if (opt.dynamics != 0) {
             for (int i = 0; i < 3; i++) {
@@ -324,12 +395,7 @@ public final class RtkCore {
         double[] x = rtk.x;
         double[] P = rtk.P;
         int nx = rtk.nx;
-        int np = NP(rtk);
-        int ni = NI(rtk);
-        int nt = NT(rtk);
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
-
-        int naOff = np + ni + nt;
 
         for (int i = 0; i < ns; i++) {
             int s = sat[i] - 1;
@@ -342,7 +408,7 @@ public final class RtkCore {
             for (int i = 0; i < ns; i++) {
                 int s = sat[i] - 1;
                 if (++rtk.ssat[s].outc[f] > opt.maxout) {
-                    int idx = naOff + i * nf + f;
+                    int idx = IB(sat[i], f, opt);
                     initx(x, P, nx, 0.0, 0.0, idx);
                 }
             }
@@ -362,7 +428,7 @@ public final class RtkCore {
                 double bias = (obsR.L[f] - obsB.L[f]) * lam -
                              (obsR.P[f] - obsB.P[f]);
 
-                int idx = naOff + i * nf + f;
+                int idx = IB(sat[i], f, opt);
                 if (x[idx] == 0.0) {
                     initx(x, P, nx, bias, SQR(opt.prn[0]), idx);
                 }
@@ -484,11 +550,7 @@ public final class RtkCore {
                              double[] azel, int[] vflg, int nf,
                              double[] H, double[] v, double[] R, double[] y) {
         PrcOpt opt = rtk.opt;
-        int np = NP(rtk);
-        int ni = NI(rtk);
-        int nt = NT(rtk);
         int nx = rtk.nx;
-        int naOff = np + ni + nt;
 
         int nvIn = 0;
         for (int i = 0; i < ns * nf * 2; i++) {
@@ -540,9 +602,6 @@ public final class RtkCore {
                 H[nvOut * nx + k] = 0.0;
             }
 
-            int satIdxR = satIdx - 1;
-            int refSatIdx = refSat[ft] - 1;
-
             double[] e = new double[3];
             double[] rrRov = new double[3];
             for (int k = 0; k < 3; k++) rrRov[k] = rtk.rb[k] + rtk.x[k];
@@ -554,8 +613,8 @@ public final class RtkCore {
                 H[nvOut * nx + k] = -e[k];
             }
 
-            int freqIdx = type >= 1 ? (naOff + satIdxR * nf + frq) : 0;
-            int refFreqIdx = type >= 1 ? (naOff + refSatIdx * nf + frq) : 0;
+            int freqIdx = type >= 1 ? IB(satIdx, frq, opt) : 0;
+            int refFreqIdx = type >= 1 ? IB(refSat[ft], frq, opt) : 0;
 
             if (freqIdx > 0 && freqIdx < nx) {
                 H[nvOut * nx + freqIdx] = 1.0;
@@ -663,13 +722,15 @@ public final class RtkCore {
                                      int[] sat, int ns, int[] iu, int[] ir, double[] azel) {
         PrcOpt opt = rtk.opt;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
-        int np = NP(rtk);
-        int ni = NI(rtk);
-        int nt = NT(rtk);
         int nx = rtk.nx;
         int na = ns * nf;
 
-        int naOff = np + ni + nt;
+        int[] ambIdx = new int[na];
+        for (int i = 0; i < ns; i++) {
+            for (int f = 0; f < nf; f++) {
+                ambIdx[i * nf + f] = IB(sat[i], f, opt);
+            }
+        }
 
         int anchoredCount = 0;
         int[] anchoredMap = new int[na];
@@ -680,12 +741,12 @@ public final class RtkCore {
             for (int i = 0; i < ns; i++) {
                 int s = sat[i] - 1;
                 for (int f = 0; f < nf; f++) {
-                    int ambIdx = i * nf + f;
+                    int localIdx = i * nf + f;
                     int globalIdx = s * nf + f;
                     if (rtk.ambAnchored[globalIdx]) {
-                        anchoredMap[anchoredCount++] = ambIdx;
+                        anchoredMap[anchoredCount++] = localIdx;
                     } else {
-                        freeMap[freeCount++] = ambIdx;
+                        freeMap[freeCount++] = localIdx;
                     }
                 }
             }
@@ -693,7 +754,7 @@ public final class RtkCore {
 
         if (freeCount == 0 && anchoredCount > 0) {
             for (int i = 0; i < na; i++) {
-                rtk.xa[naOff + i] = rtk.x[naOff + i];
+                rtk.xa[ambIdx[i]] = rtk.x[ambIdx[i]];
             }
             rtk.sol.ratio = (float) 999.9;
             return Constants.SOLQ_FIX;
@@ -705,11 +766,13 @@ public final class RtkCore {
         double[] Qa = new double[arNa * arNa];
 
         for (int i = 0; i < arNa; i++) {
-            int srcIdx = (freeCount > 0) ? freeMap[i] : i;
-            a[i] = rtk.x[naOff + srcIdx];
+            int srcLocal = (freeCount > 0) ? freeMap[i] : i;
+            int srcIdx = ambIdx[srcLocal];
+            a[i] = rtk.x[srcIdx];
             for (int j = 0; j < arNa; j++) {
-                int srcJ = (freeCount > 0) ? freeMap[j] : j;
-                Qa[i * arNa + j] = rtk.P[(naOff + srcIdx) * nx + (naOff + srcJ)];
+                int srcJLocal = (freeCount > 0) ? freeMap[j] : j;
+                int srcJ = ambIdx[srcJLocal];
+                Qa[i * arNa + j] = rtk.P[srcIdx * nx + srcJ];
             }
         }
 
@@ -721,12 +784,12 @@ public final class RtkCore {
             double ratio = s[0] > 0 ? s[1] / s[0] : 0.0;
             if (ratio > opt.thresar[0]) {
                 for (int i = 0; i < arNa; i++) {
-                    int dstIdx = (freeCount > 0) ? freeMap[i] : i;
-                    rtk.xa[naOff + dstIdx] = F[i];
+                    int dstLocal = (freeCount > 0) ? freeMap[i] : i;
+                    rtk.xa[ambIdx[dstLocal]] = F[i * 2];
                 }
                 for (int i = 0; i < anchoredCount; i++) {
-                    int dstIdx = anchoredMap[i];
-                    rtk.xa[naOff + dstIdx] = rtk.x[naOff + dstIdx];
+                    int dstLocal = anchoredMap[i];
+                    rtk.xa[ambIdx[dstLocal]] = rtk.x[ambIdx[dstLocal]];
                 }
 
                 rtk.sol.ratio = (float) ratio;
@@ -752,9 +815,6 @@ public final class RtkCore {
 
         if (rtk.holdambFlag == 0) return;
 
-        int np = NP(rtk);
-        int ni = NI(rtk);
-        int nt = NT(rtk);
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
 
         if (rtk.rtkConfig.enableAmbAnchor && rtk.sol.stat == Constants.SOLQ_FIX) {
@@ -785,13 +845,12 @@ public final class RtkCore {
         double[] Hh = new double[nx * nsEst];
         double[] vh = new double[nsEst];
         double[] Rh = new double[nsEst * nsEst];
-        int naOff = np + ni + nt;
         int nh = 0;
 
         for (int i = 0; i < Constants.MAXSAT; i++) {
             for (int f = 0; f < nf; f++) {
                 if (rtk.ssat[i].fix[f] > 0) {
-                    int idx = naOff + i * nf + f;
+                    int idx = IB(i + 1, f, opt);
                     if (idx < nx) {
                         Hh[nh * nx + idx] = 1.0;
                         vh[nh] = rtk.xa[idx] - xp[idx];

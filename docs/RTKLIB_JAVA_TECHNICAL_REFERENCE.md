@@ -24,31 +24,33 @@
 ```
 na = NR(opt) = NP + NI + NT + NL = 3 + 0 + 0 + 2 = 5
 
-状态向量 x[433] 布局：
+状态向量 x[461] 布局（使用 IB(sat,f,opt) 按卫星号索引）：
 ┌─────────────────────────────────────────────────────────────┐
-│ 索引范围    │ 状态类型          │ 数量 │ 说明               │
-├─────────────┼──────────────────┼──────┼─────────────────────┤
-│ [0..2]      │ 位置 (X,Y,Z)      │ 3    │ Static模式无速度   │
-│ [3..4]      │ GLO IC bias L1/L2 │ 2    │ NL=NFREQGLO=2     │
-│ [5..214]    │ 模糊度 L1         │ 210  │ na + 0*MAXSAT      │
-│ [215..424]  │ 模糊度 L2         │ 210  │ na + 1*MAXSAT      │
-│ [425..432]  │ (未使用)           │ 8    │ nf=2, 仅2个频率    │
-└─────────────┴──────────────────┴──────┴─────────────────────┘
+│ 索引范围      │ 状态类型          │ 数量 │ 说明             │
+├───────────────┼──────────────────┼──────┼───────────────────┤
+│ [0..2]        │ 位置 (X,Y,Z)      │ 3    │ Static模式无速度 │
+│ [3..4]        │ GLO IC bias L1/L2 │ 2    │ NL=NFREQGLO=2   │
+│ [5..232]      │ 模糊度 L1         │ 228  │ na + 0*MAXSAT    │
+│ [233..460]    │ 模糊度 L2         │ 228  │ na + 1*MAXSAT    │
+└───────────────┴──────────────────┴──────┴───────────────────┘
 
-nx = NR(opt) + MAXSAT * NF(opt) = 5 + 210 * 2 = 425 (实际分配433)
+nx = NR(opt) + NB(opt) = 5 + 228 * 2 = 461
+
+⚠️ 模糊度使用 IB(sat,f,opt) = NR + MAXSAT*f + (sat-1) 按卫星号索引，
+同一卫星在不同历元的模糊度索引固定不变。
 ```
 
 ### 1.3 模糊度索引示例
 
 ```java
 // BDS C02 (sat=107) 的L1模糊度索引:
-IB(107, 0, 2, opt) = 5 + 210 * 0 + (107 - 1) = 111
+IB(107, 0, opt) = 5 + 228 * 0 + (107 - 1) = 111
 
 // BDS C08 (sat=113) 的L1模糊度索引:
-IB(113, 0, 2, opt) = 5 + 210 * 0 + (113 - 1) = 117
+IB(113, 0, opt) = 5 + 228 * 0 + (113 - 1) = 117
 
 // BDS C10 (sat=115) 的L2模糊度索引:
-IB(115, 1, 2, opt) = 5 + 210 * 1 + (115 - 1) = 333
+IB(115, 1, opt) = 5 + 228 * 1 + (115 - 1) = 348
 ```
 
 ---
@@ -90,6 +92,28 @@ MAXSAT = NSATGPS + NSATGLO + NSATGAL + NSATQZS + NSATCMP + NSATIRN + NSATSBS + N
 | `VAR_VEL` | 100 (10² m²/s²) | 初始速度方差 |
 | `VAR_ACC` | 100 (10² m²/s⁴) | 初始加速度方差 |
 | `VAR_AMB` | 900 (30² 周²) | 初始模糊度方差 |
+
+### 2.4 状态向量分配大小
+
+| 常量 | 值 | 说明 |
+|------|-----|------|
+| `NX_RTK` | 1385 | 状态向量数组最大分配大小 |
+
+```
+NX_RTK = NP_max + NI_max + NT_max + NL_max + NB_max
+       = 9       + 684      + 6      + 2       + 684
+       = 1385
+
+其中:
+- NP_max = 9 (dynamics模式: 3位置 + 3速度 + 3加速度)
+- NI_max = MAXSAT * 3 = 228 * 3 = 684 (ionoGradient模式: 每星3个电离层参数)
+- NT_max = 6 (TROPOPT_ESTG模式: 流动站3 + 基准站3)
+- NL_max = NFREQGLO = 2 (GLONASS IC bias)
+- NB_max = MAXSAT * 3 = 684 (3频点模糊度)
+
+⚠️ NX_RTK 定义必须在 MAXSAT 之后（Java static final 前向引用限制）
+实际使用的 nx = NR(rtk) + NB(rtk)，通常远小于 NX_RTK
+```
 
 ---
 
@@ -584,7 +608,7 @@ for (int i = 0; i < nv; i++) diag[i] = HPHt.get(i, i);
 **性能差异**：典型RTK场景（nx=60, nv=60），FLOP浪费约49%，但绝对耗时在微秒级，1Hz RTK可忽略。
 若需10~20Hz或嵌入式场景，可切换到Native版本。
 
-### 12.3 PAR基准星动态重选与连续重选保护 ⚠️ 未实现
+### 12.3 PAR基准星动态重选与连续重选保护 ✅ 已实现 (2026-07-17) → 详见 12.11
 
 **参考星跟踪**：`rtk.parPrevRefSat[f]` 记录每个频率上一历元的参考星卫星ID（1-based）。
 
@@ -607,7 +631,7 @@ if (anyRefReselect) {
 
 **退回策略**：`ddidxFallback()` 与原始 `ddidx()` 逻辑一致（不排除任何卫星），确保连续重选时PAR退化为全模糊度固定。
 
-### 12.4 对流层梯度估计（TROPOPT_ESTG） ⚠️ 未实现
+### 12.4 对流层梯度估计（TROPOPT_ESTG） ✅ 已实现 (2026-07-17) → 详见 12.11
 
 Java版已补全C版RTKLIB的 `TROPOPT_ESTG` 支持，包括：
 
@@ -628,7 +652,7 @@ IT(1,opt) = NP + NI + 3      // 基准站: ZWD, Gn, Ge
 **注意**：当前测试配置 `tropopt=TROPOPT_SAAS`（不估计对流层），上述代码路径未被测试。
 需设置 `tropopt=TROPOPT_ESTG` 并使用长基线数据（>30km）验证。
 
-### 12.5 电离层延迟估计（IONOOPT_EST） ⚠️ 未实现
+### 12.5 电离层延迟估计（IONOOPT_EST） ✅ 已实现 (2026-07-17) → 详见 12.11
 
 Java版已补全C版RTKLIB的 `IONOOPT_EST` 支持，包括：
 
@@ -673,7 +697,7 @@ if (opt.ionoopt == IONOOPT_EST) {
 
 **关键差异**：C版 `didxi/didxj` 使用 `sat[i]/sat[j]` 索引，Java版使用 `refIdx/j` 索引（`refIdx` 是参考星在 `sat[]` 数组中的下标）。
 
-### 12.6 电离层梯度增强（enableIonoTropGradient） ⚠️ 未实现
+### 12.6 电离层梯度增强（enableIonoTropGradient） ✅ 已实现 (2026-07-17) → 详见 12.11
 
 当 `RtkConfig.enableIonoTropGradient=true` 且 `ionoopt=IONOOPT_EST` 时，每颗卫星的电离层状态从1个扩展为3个（VTEC + Gn + Ge），通过 `PrcOpt.ionoGradient` 标志控制。
 
@@ -806,8 +830,85 @@ udtrop(): if (ns < atmFrozenNsThresh) return;  // 冻结对流层过程噪声更
 - `RtkCore.udion()`：第277行，RtkCore.java
 - `RtkCore.udtrop()`：第297行，RtkCore.java
 
+### 12.11 PAR重选、TROPOPT_ESTG、IONOOPT_EST、电离层梯度 ✅ 已实现 (2026-07-17)
+
+#### 设计目标
+四项优化通过配置控制，默认关闭，不影响已调试功能。扩展RTK观测模型，支持电离层/对流层参数估计及梯度项，提升复杂环境下的定位精度。
+
+#### 新增配置
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `enableParRefReselect` | false | PAR参考星动态重选 |
+| `ionoGradient` | false | 电离层梯度项启用 |
+| `ionoopt` | IONOOPT_OFF | 电离层估计模式 |
+| `tropopt` | TROPOPT_SAAS | 对流层估计模式 |
+
+#### 核心算法
+
+**PAR重选**：
+```
+ddidx(): if (enableParRefReselect) → buildParIndex() else → ddidxFallback()
+```
+- 动态参考星：基于高度角、信号质量、锁相状态
+- 回退保护：`parMaxConsecutiveReselect` 超限时清空排除列表
+
+**电离层估计（ddres）**：
+```
+if (ionoopt == IONOOPT_EST):
+  imI = ionmapf(posI, azelI); imJ = ionmapf(posJ, azelJ)
+  H[ionoI] += imI; H[ionoJ] -= imJ
+  if (ionoGradient): H[+] = cotEl * cosAz/sinAz
+```
+
+**对流层梯度估计（prectrop + ddres）**：
+```
+prectrop():
+  TROPOPT_EST:  dtdx[IT] = mw
+  TROPOPT_ESTG: dtdx[IT/GN/GE] = mw; mw*cotEl*cosAz; mw*cotEl*sinAz
+
+ddres(): H[k] += dtdxI[k] - dtdxJ[k]
+```
+
+#### 实现位置
+- `RtkCore.ddidx()`、`II()`、`prectrop()`、`zdres()`、`ddres()`
+- `RtkOptimizations.buildParIndex()`、`ddidxFallback()`
+
+### 12.12 SingularMatrixException 安全修复 ✅ 已实现 (2026-07-17)
+
+#### 问题分析
+
+**错误链路**：
+```
+relpos() → computeQScale() → dops() → invert() → SingularMatrixException
+```
+
+**根因**：`dops()` 中 4×4 Q 矩阵可能奇异（卫星扎堆、共面、几何退化），C版 `matinv()` 返回 0，Java版 EJML 抛异常。此外 `computeQScale()` 中 `pdop=0` 时 `pdopFactor=2.0`，逻辑反转。
+
+#### 修复方案：三层防护
+
+| 层 | 文件 | 修改 | 作用 |
+|----|------|------|------|
+| 底层工具 | `MatrixUtil.java` | 新增 `invertSafe()` | 通用安全求逆，返回 `Optional<SimpleMatrix>` |
+| 源头修复 | `RtklibCommon.dops()` | `invert()` → `invertSafe()` | 矩阵奇异时静默返回，DOP=0，对齐C版 |
+| 调用方兜底 | `RtkOptimizations.computeQScale()` | `dop[1]==0` 检查 | 几何退化时 `pdopFactor=1.0`，保守策略 |
+
+**invertSafe()**：
+```java
+public static Optional<SimpleMatrix> invertSafe(SimpleMatrix A) {
+    try { return Optional.of(A.invert()); }
+    catch (SingularMatrixException e) { return Optional.empty(); }
+}
+```
+
+**dops()**：`invert()` → `invertSafe()`，失败时 DOP=0 静默返回
+
+**computeQScale()**：`if (dop[1] > 0) pdopFactor = min(ref/dop[1], 2.0)` else `pdopFactor=1.0`
+
+#### 实现位置
+- `MatrixUtil.invertSafe()`、`RtklibCommon.dops()`、`RtkOptimizations.computeQScale()`
+
 ---
 
-*文档版本：v1.5*
-*最后更新：2026-07-16*
+*文档版本：v1.6*
+*最后更新：2026-07-17*
 *维护者：RTKLIB Java移植团队*

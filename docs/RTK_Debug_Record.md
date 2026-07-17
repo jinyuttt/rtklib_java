@@ -482,7 +482,7 @@ RINEX 头 `APPROX POSITION XYZ` 已实现自动读取（`RinexParser`），MOVEB
 ## 阶段6：RTK 核心管道重构与测试修复 (2026-07-16)
 
 ### 背景
-之前的 RTK 管道仅实现了离散的调试修复，核心方法（elpos、udstate、zdres、ddres、esamb_LAMBDA、holdamb）缺失或不完整，导致 RTK 定位无法运行。
+之前的 RTK 管道仅实现了离散的调试修复，核心方法（elpos、udstate、zdres、ddres、esamb_LAMBDA、holdamb）缺失或不完整，导致 RTK 定位无法运行。
 
 ### 新增文件
 
@@ -494,7 +494,7 @@ RINEX 头 `APPROX POSITION XYZ` 已实现自动读取（`RinexParser`），MOVEB
 #### RtkCore.java 核心方法
 | 方法 | 功能 | 对应 C 函数 |
 |------|------|-----------|
-| elpos() | RTK 核心管道入口 | elpos() |
+| elpos() | RTK 核心管道入口 | elpos() |
 | udstate() | 状态时间更新调度 | udstate() |
 | udpos() | 位置/速度状态传播 + 自适应 Q | udpos() |
 | udion() | 电离层状态传播 | udion() |
@@ -503,14 +503,14 @@ RINEX 头 `APPROX POSITION XYZ` 已实现自动读取（`RinexParser`），MOVEB
 | zdres() | 零差残差计算 | zdres() |
 | ddres() | 双差残差 + H 矩阵构建 | ddres() |
 | ilter() | Kalman 滤波封装 | ilter() |
-| esamb_LAMBDA() | LAMBDA 模糊度固定 | esamb_LAMBDA() |
+| esamb_LAMBDA() | LAMBDA 模糊度固定 | esamb_LAMBDA() |
 | holdamb() | Fix-and-Hold 约束 | holdamb() |
 | 	estSys() | 卫星系统校验 | 	estSys() |
 
 ### 测试修复
 
 #### 1. SPP 初始化改用 PntPos.pntpos
-原代码调用 SppCore.estpos(obs, nu, null, ...) 传入 null 的 s 参数导致 NullPointerException。
+原代码调用 SppCore.estpos(obs, nu, null, ...) 传入 null 的 s 参数导致 NullPointerException。
 修复：改用 PntPos.pntpos(obs, nu, nav, opt, rtk.sol, null, rtk.ssat) 进行 SPP 初始化，由 PntPos 内部计算卫星位置。
 
 #### 2. ionocorr 数组大小修复
@@ -520,8 +520,8 @@ ew double[1] 导致 ArrayIndexOutOfBoundsException。
 ew double[2]。
 
 #### 3. rtk.nx 初始化
-tk.nx 默认值为 0，导致 H = new double[nx * nv] 分配长度为 0 的数组。
-修复：在 elpos() 中根据 NP(rtk) + NI(rtk) + NT(rtk) + NA(rtk, ns) 动态设置 tk.nx。
+tk.nx 默认值为 0，导致 H = new double[nx * nv] 分配长度为 0 的数组。
+修复：在 elpos() 中根据 NP(rtk) + NI(rtk) + NT(rtk) + NA(rtk, ns) 动态设置 tk.nx。
 
 #### 4. H 矩阵分配大小
 ddres 内部使用 flg.length (= 
@@ -657,16 +657,161 @@ udtrop(): if (ns < atmFrozenNsThresh) return;  // 冻结对流层过程噪声更
 - `RtkCore.udion()`：第277行，return前检查
 - `RtkCore.udtrop()`：第297行，return前检查
 
-### 7.4 修改文件清单
+### 7.4 PAR重选、TROPOPT_ESTG、IONOOPT_EST、电离层梯度 (2026-07-17)
+
+#### 设计目标
+四项优化通过配置控制，默认关闭，不影响已调试功能。扩展RTK观测模型，支持电离层/对流层参数估计及梯度项，提升复杂环境下的定位精度。
+
+#### 新增配置
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `enableParRefReselect` | false | PAR参考星动态重选 |
+| `ionoGradient` | false | 电离层梯度项启用 |
+| `ionoopt` | IONOOPT_OFF | 电离层估计模式（EST=估计） |
+| `tropopt` | TROPOPT_SAAS | 对流层估计模式（ESTG=含梯度） |
+
+#### 核心实现
+
+**4.1 PAR重选（ddidx）**：
+
+```
+RtkCore.ddidx():
+  if (enableParRefReselect) → buildParIndex()  // 动态选择参考星
+  else → ddidxFallback()  // 默认逻辑，按高度角选最高星
+```
+- 动态参考星选择：基于高度角、信号质量、锁相状态
+- 回退保护：`parMaxConsecutiveReselect` 超过限制时清空排除列表
+
+**4.2 电离层状态索引（II）**：
+
+```
+RtkCore.II(sat, opt):
+  if (ionoGradient) → np + (sat-1)*3   // 3参数/卫星：iono + 梯度x + 梯度y
+  else → np + (sat-1)                   // 1参数/卫星：仅iono
+```
+
+**4.3 双差残差中的电离层项（ddres）**：
+
+```
+if (ionoopt == IONOOPT_EST):
+  imI = ionmapf(posI, azelI)  // 电离层映射函数（站I）
+  imJ = ionmapf(posJ, azelJ)  // 电离层映射函数（站J）
+  H[ionoI] += imI; H[ionoJ] -= imJ  // 设计矩阵
+  v -= imI*xi + imJ*xj  // 残差修正
+
+  if (ionoGradient):
+    // 梯度项：cot(El) * cos(Az) / sin(Az)
+    H[ionoI+1] += cotElI * cosAzI; H[ionoJ+1] -= cotElJ * cosAzJ
+    H[ionoI+2] += cotElI * sinAzI; H[ionoJ+2] -= cotElJ * sinAzJ
+```
+
+**4.4 双差残差中的对流层项（ddres + prectrop）**：
+
+```
+if (tropopt == TROPOPT_EST || tropopt == TROPOPT_ESTG):
+  prectrop(rtk, rr, azel, i, dtdx, nx)  // 计算对流层延迟对状态向量的偏导
+  H[k] += dtdxI[k] - dtdxJ[k]  // 设计矩阵累加
+
+prectrop() 内部：
+  TROPOPT_EST:  dtdx[IT] = mw  // 湿延迟映射函数
+  TROPOPT_ESTG: dtdx[IT] = mw; dtdx[IT+1] = mw*cotEl*cosAz; dtdx[IT+2] = mw*cotEl*sinAz
+```
+
+**4.5 测量残差计算**：
+
+```
+zdres(): 签名修改为 zdres(..., double[] y)
+  // 无几何距离组合残差存储在 y 中
+
+ddres():
+  v[nv] = y[i] - y[refI]  // 双差残差 = 非差残差差分
+  H[nv*nx + k] = -e[k]  // 修复：(e[k] - e[k]) → e[k]
+```
+
+#### 实现位置
+- `RtkCore.ddidx()`：PAR重选入口，配置开关
+- `RtkCore.II()`：电离层状态索引计算
+- `RtkCore.prectrop()`：对流层梯度偏导计算
+- `RtkCore.zdres()`：签名修改，传递y数组
+- `RtkCore.ddres()`：电离层/对流层梯度项、残差计算、H矩阵修复
+- `RtkOptimizations.buildParIndex()`：动态参考星选择
+- `RtkOptimizations.ddidxFallback()`：默认回退逻辑
+
+### 7.5 SingularMatrixException 安全修复 (2026-07-17)
+
+#### 问题分析
+
+**错误链路**：
+```
+RtkCore.relpos() → RtkOptimizations.computeQScale() → dops() → invert() → SingularMatrixException
+```
+
+**根因**：`dops()` 中构建的 4×4 Q 矩阵可能奇异（卫星扎堆、共面、几何退化），即使 n≥4。C版 `matinv()` 调用 LAPACK `dgetrf_`，奇异时返回 0，流程继续。Java版 EJML `invert()` 直接抛异常。
+
+**额外问题**：即使修复 dops() 不抛异常，`computeQScale()` 中 `pdop=dop[1]=0` 时，`pdopFactor = ref/1.0 = 2.0`，几何退化反而放大Q缩放，逻辑反转。
+
+#### 修复方案：三层防护
+
+| 层 | 文件 | 修改 | 作用 |
+|----|------|------|------|
+| 底层工具 | `MatrixUtil.java` | 新增 `invertSafe()` | 通用安全求逆，返回 `Optional<SimpleMatrix>` |
+| 源头修复 | `RtklibCommon.dops()` | `invert()` → `invertSafe()` | 矩阵奇异时静默返回，DOP=0，对齐C版 |
+| 调用方兜底 | `RtkOptimizations.computeQScale()` | `dop[1]==0` 检查 | 几何退化时 `pdopFactor=1.0`，保守策略 |
+
+**invertSafe() 实现**：
+```java
+public static Optional<SimpleMatrix> invertSafe(SimpleMatrix A) {
+    try {
+        return Optional.of(A.invert());
+    } catch (SingularMatrixException e) {
+        return Optional.empty();
+    }
+}
+```
+
+**dops() 修改**：
+```java
+// 修复前
+SimpleMatrix QInv = MatrixUtil.invert(QMat);  // 可能抛异常
+
+// 修复后
+Optional<SimpleMatrix> qInvOpt = MatrixUtil.invertSafe(QMat);
+if (!qInvOpt.isPresent()) return;  // DOP全为0，与C版一致
+```
+
+**computeQScale() 修改**：
+```java
+// 修复前
+double pdop = dop[1];
+double pdopFactor = Math.min(ref / Math.max(pdop, 1.0), 2.0);
+// → pdop=0 时 pdopFactor = ref/1.0 = 2.0（逻辑反转！）
+
+// 修复后
+double pdopFactor = 1.0;
+if (dop[1] > 0) {
+    pdopFactor = Math.min(ref / dop[1], 2.0);
+}
+// → pdop=0 时 pdopFactor=1.0（不做缩放，保守策略）
+```
+
+#### 实现位置
+- `MatrixUtil.invertSafe()`：通用工具方法
+- `RtklibCommon.dops()`：求逆失败静默返回
+- `RtkOptimizations.computeQScale()`：DOP=0 保守处理
+
+### 7.6 修改文件清单
 
 | 文件 | 修改类型 | 说明 |
 |------|---------|------|
 | `config/RtkConfig.java` | 新增7个字段 | 3项优化的全部配置 |
 | `data/Rtk.java` | 新增6个字段 | xOld、posWin、winIdx、winCnt、ambAnchored、ambAnchorCount |
-| `rtkpos/RtkOptimizations.java` | 重写computeQScale | 滑动窗+RMS+sigmoid完整实现 |
+| `rtkpos/RtkOptimizations.java` | 重写computeQScale | 滑动窗+RMS+sigmoid+pdopFactor安全处理 |
 | `rtkpos/RtkCore.java` | 修改4个方法 | udion/udtrop/resamb_LAMBDA/holdamb |
+| `rtkpos/RtkCore.java` | 新增4个方法 | ddidx/II/prectrop/zdres签名修改 |
+| `common/MatrixUtil.java` | 新增1个方法 | invertSafe |
+| `common/RtklibCommon.java` | 修改dops | invert→invertSafe |
 
-### 7.5 测试结果
+### 7.7 测试结果
 
 | 指标 | 结果 |
 |------|------|

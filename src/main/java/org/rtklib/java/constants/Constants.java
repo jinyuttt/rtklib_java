@@ -225,9 +225,6 @@ public final class Constants {
     public static final int NSATIRN = (MAXPRNIRN - MINPRNIRN + 1);
     public static final int NSYSIRN = 1;
 
-    /** State index offsets for RTK */
-    public static final int NX_RTK = 3 + 3 + NSATGPS + NSATGLO + NSATGAL + NSATCMP + NSATQZS + NSATIRN + 1 + NSATGPS + NSATGLO + NSATGAL + NSATCMP + NSATQZS + NSATIRN;
-
     public static final int MINPRNLEO = 1;
     public static final int MAXPRNLEO = 10;
     public static final int NSATLEO = (MAXPRNLEO - MINPRNLEO + 1);
@@ -240,6 +237,8 @@ public final class Constants {
     public static final int NSATSBS = (MAXPRNSBS - MINPRNSBS + 1);
 
     public static final int MAXSAT = (NSATGPS + NSATGLO + NSATGAL + NSATQZS + NSATCMP + NSATIRN + NSATSBS + NSATLEO);
+
+    public static final int NX_RTK = 9 + MAXSAT * 3 + 6 + NFREQGLO + MAXSAT * 3;
     public static final int GAP_RESION = 120;
     public static final int MAXSTA = 255;
     public static final int MAXOBS = 96;
@@ -284,6 +283,15 @@ public final class Constants {
 
     /** max variance eph to reject satellite (m^2) = SQR(300.0) */
     public static final double MAX_VAR_EPH = 90000.0;
+
+    /** initial variance of receiver pos (m^2) = SQR(30.0) */
+    public static final double VAR_POS = 900.0;
+    /** initial variance of fixed receiver pos (m^2) = SQR(1e-4) */
+    public static final double VAR_POS_FIX = 1E-8;
+    /** initial variance of receiver vel ((m/s)^2) = SQR(10.0) */
+    public static final double VAR_VEL = 100.0;
+    /** initial variance of receiver acc ((m/ss)^2) = SQR(10.0) */
+    public static final double VAR_ACC = 100.0;
     public static final int MAXNRPOS = 16;
     public static final int MAXLEAPS = 64;
     public static final int MAXGISLAYER = 32;
