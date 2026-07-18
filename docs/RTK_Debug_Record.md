@@ -23,8 +23,8 @@
 
 | 问题 | 描述 | 优先级 |
 |------|------|--------|
-| dE 系统偏差 ~0.8m | 可能与卫星数差异（Java 比 C 少 1-2 颗）或观测值权重模型有关 | 🟡 |
-| 后段历元精度波动 | epoch 210, 239 出现 5m 跳变，可能与卫星升降或周跳处理细节有关 | 🟡 |
+| dE 系统偏差 ~0.8m | 可能与卫星数差异（Java 比 C 少 1-2 颗）或观测值权重模型有关；ddres()残差剔除修复后待验证 | 🟡 |
+| 后段历元精度波动 | epoch 210, 239 出现 5m 跳变；udbias() rejc重置逻辑修复后待验证 | 🟡 |
 | Java 卫星数少 1-2 颗 | 可能影响可用观测值数量和几何结构 | 🟢 |
 
 ---
@@ -547,8 +547,8 @@ s * nf * 2 分配。
 |--------|------|------|
 | 🟡 | 基线向量为 0 | RTK 管道输出基线向量全为 0，需要进一步调试收敛性 |
 | 🟡 | 位置偏差大 | 平均 3D 偏差约 6373999m，输出的是流动站绝对坐标而非基线向量 |
-| 🟡 | dE 系统偏差 ~0.8m | 历史遗留，可能与卫星数/权重模型有关 |
-| 🟡 | 后段历元精度波动 | 可能与卫星升降/周跳细节有关 |
+| 🟡 | dE 系统偏差 ~0.8m | 历史遗留，可能与卫星数/权重模型有关；ddres()残差剔除修复后待验证 |
+| 🟡 | 后段历元精度波动 | 可能与卫星升降/周跳细节有关；udbias() rejc重置逻辑修复后待验证 |
 ## 阶段7：三项RTK优化实现 (2026-07-16)
 
 ### 背景
@@ -1034,3 +1034,69 @@ RtkConfig.enableIonoTropGradient 是死开关，从未同步到 PrcOpt.ionoGradi
 
 - 创建 [RTK_Extra_Optimizations.md](RTK_Extra_Optimizations.md)：记录7项Java版独有优化的完整算法、配置参数和实现位置
 - RTKLIB_Differences.md §9/§10 移至本调试记录和 RTK_Extra_Optimizations.md
+
+---
+
+## 阶段10：观测值质量控制修复 (2026-07-19)
+
+### 10.1 valpos() 逻辑不完整（🔴 高优先级）
+
+| 项目 | 说明 |
+|------|------|
+| C版 | `valpos()` 遍历后验残差，超过阈值的输出日志，始终返回1（不做剔除） |
+| Java版(修复前) | `valpos()` 遍历后验残差，超过阈值的只 `continue`，无日志无剔除，永远返回true |
+| 影响 | 异常观测无法被检测和标记，可能影响解的稳定性 |
+
+### 10.2 ddres() 缺少残差剔除逻辑（🔴 高优先级，C版原始移植遗漏）
+
+| 项目 | 说明 |
+|------|------|
+| C版 | `ddres()` 中检查 `fabs(v[nv]) > opt->maxinno[code] * threshadj`，超过则 `vsat=0, rejc++, continue` |
+| Java版(修复前) | `ddres()` 中无任何残差剔除，所有观测无条件进入Kalman滤波 |
+| 影响 | 粗差观测直接进入滤波，可能导致模糊度重置和坐标跳变 |
+
+C版 `ddres()` 中的关键逻辑：
+```c
+/* if residual too large, flag as outlier */
+if (fabs(v[nv]) > opt->maxinno[code] * threshadj) {
+    rtk->ssat[sat[j]-1].vsat[frq] = 0;
+    rtk->ssat[sat[j]-1].rejc[frq]++;
+    errmsg(rtk, "outlier rejected (sat=%3d-%3d %s%d v=%.3f)\n",
+            sat[i], sat[j], code?"P":"L", frq+1, v[nv]);
+    continue;
+}
+```
+
+其中 `threshadj` 在模糊度刚初始化时放大10倍，避免误剔除。
+
+### 10.3 udbias() 缺少 rejc 周跳/粗差重置逻辑（🔴 C版原始移植遗漏）
+
+| 项目 | 说明 |
+|------|------|
+| C版 | `udbias()` 中检查 `rejc >= 2` 或有周跳时重置模糊度：`x[j]=0, rejc=0, lock=-minlock` |
+| Java版(修复前) | `udbias()` 中无 rejc 检查，粗差卫星的模糊度不会被重置 |
+| 影响 | 持续粗差卫星的模糊度无法被自动重置，影响后续历元 |
+
+C版 `udbias()` 中的关键逻辑：
+```c
+rejc = rtk->ssat[sat[i]-1].rejc[k];
+if (opt->modear == ARMODE_INST || (!(slip & LLI_SLIP) && rejc < 2)) continue;
+rtk->x[j] = 0.0;
+rtk->ssat[sat[i]-1].rejc[k] = 0;
+rtk->ssat[sat[i]-1].lock[k] = -rtk->opt.minlock;
+if (rtk->ssat[sat[i]-1].sys != SYS_GLO) rtk->ssat[sat[i]-1].icbias[k] = 0;
+```
+
+### 10.4 修复内容
+
+1. **valpos()**: 添加大残差检测，增加 `rejc` 计数；超过半数观测异常时返回 false 丢弃历元
+2. **ddres()**: 添加 `maxinno` 残差检查，超过阈值则 `vsat=0, rejc++, continue`
+3. **udbias()**: 添加 `rejc >= 2` 或周跳时的模糊度重置逻辑
+4. **relpos()**: `valpos()` 通过后，有 `rejc` 的卫星不重置 `outc`（保留异常标记）
+
+### 10.5 与问题2/3的关联
+
+| 问题 | 可能原因 | 本次修复的影响 |
+|------|---------|---------------|
+| dE 系统偏差 ~0.8m | 粗差观测未被剔除，持续污染滤波 | ddres() 剔除粗差后可能改善 |
+| 后段历元精度波动 | 粗差/周跳卫星模糊度未被重置 | udbias() rejc 重置逻辑可自动恢复 |
