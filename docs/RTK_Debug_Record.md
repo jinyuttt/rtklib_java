@@ -1039,13 +1039,16 @@ RtkConfig.enableIonoTropGradient 是死开关，从未同步到 PrcOpt.ionoGradi
 
 ## 阶段10：观测值质量控制修复 (2026-07-19)
 
-### 10.1 valpos() 逻辑不完整（🔴 高优先级）
+### 10.1 valpos() 空循环（🟡 诊断工具，非质量控制）
 
 | 项目 | 说明 |
 |------|------|
-| C版 | `valpos()` 遍历后验残差，超过阈值的输出日志，始终返回1（不做剔除） |
-| Java版(修复前) | `valpos()` 遍历后验残差，超过阈值的只 `continue`，无日志无剔除，永远返回true |
-| 影响 | 异常观测无法被检测和标记，可能影响解的稳定性 |
+| C版 | `valpos()` 遍历后验残差，超过阈值的输出 `errmsg` 日志，**始终返回1** |
+| Java版(修复前) | `valpos()` 遍历后验残差，超过阈值的只 `continue`，**无日志，始终返回true** |
+| 结论 | `valpos()` 是**后端诊断工具**，不是质量控制。C版也始终返回1，不会因后验残差丢弃历元 |
+
+**C版的设计意图**：`valpos()` 是事后检查——Kalman滤波已经完成，观测已被吸收。
+此时再剔除观测没有意义。真正的质量控制在前端 `ddres()` 的 `maxinno` 检查中。
 
 ### 10.2 ddres() 缺少残差剔除逻辑（🔴 高优先级，C版原始移植遗漏）
 
@@ -1053,9 +1056,9 @@ RtkConfig.enableIonoTropGradient 是死开关，从未同步到 PrcOpt.ionoGradi
 |------|------|
 | C版 | `ddres()` 中检查 `fabs(v[nv]) > opt->maxinno[code] * threshadj`，超过则 `vsat=0, rejc++, continue` |
 | Java版(修复前) | `ddres()` 中无任何残差剔除，所有观测无条件进入Kalman滤波 |
-| 影响 | 粗差观测直接进入滤波，可能导致模糊度重置和坐标跳变 |
+| 影响 | **这是真正的质量控制缺失**。粗差观测直接进入滤波，可能导致模糊度重置和坐标跳变 |
 
-C版 `ddres()` 中的关键逻辑：
+C版 `ddres()` 中的关键逻辑（前端剔除）：
 ```c
 /* if residual too large, flag as outlier */
 if (fabs(v[nv]) > opt->maxinno[code] * threshadj) {
@@ -1063,7 +1066,7 @@ if (fabs(v[nv]) > opt->maxinno[code] * threshadj) {
     rtk->ssat[sat[j]-1].rejc[frq]++;
     errmsg(rtk, "outlier rejected (sat=%3d-%3d %s%d v=%.3f)\n",
             sat[i], sat[j], code?"P":"L", frq+1, v[nv]);
-    continue;
+    continue;   // ← 不进入Kalman滤波
 }
 ```
 
@@ -1077,26 +1080,29 @@ if (fabs(v[nv]) > opt->maxinno[code] * threshadj) {
 | Java版(修复前) | `udbias()` 中无 rejc 检查，粗差卫星的模糊度不会被重置 |
 | 影响 | 持续粗差卫星的模糊度无法被自动重置，影响后续历元 |
 
-C版 `udbias()` 中的关键逻辑：
-```c
-rejc = rtk->ssat[sat[i]-1].rejc[k];
-if (opt->modear == ARMODE_INST || (!(slip & LLI_SLIP) && rejc < 2)) continue;
-rtk->x[j] = 0.0;
-rtk->ssat[sat[i]-1].rejc[k] = 0;
-rtk->ssat[sat[i]-1].lock[k] = -rtk->opt.minlock;
-if (rtk->ssat[sat[i]-1].sys != SYS_GLO) rtk->ssat[sat[i]-1].icbias[k] = 0;
+### 10.4 C版质量控制链完整梳理
+
+```
+前端剔除（ddres）:  观测 → maxinno检查 → 通过/剔除（vsat=0, rejc++）
+                                                    ↓ 通过
+                                              Kalman filter
+                                                    ↓
+后端诊断（valpos）: 后验残差 → 4σ检查 → 输出日志（始终通过）
+                                                    ↓
+模糊度管理（udbias）: rejc≥2 或周跳 → 重置模糊度（x=0, rejc=0, lock=-minlock）
 ```
 
-### 10.4 修复内容
+`valpos()` 不参与质量控制链，它只是事后记录。
 
-1. **valpos()**: 添加大残差检测，增加 `rejc` 计数；超过半数观测异常时返回 false 丢弃历元
-2. **ddres()**: 添加 `maxinno` 残差检查，超过阈值则 `vsat=0, rejc++, continue`
-3. **udbias()**: 添加 `rejc >= 2` 或周跳时的模糊度重置逻辑
-4. **relpos()**: `valpos()` 通过后，有 `rejc` 的卫星不重置 `outc`（保留异常标记）
+### 10.5 修复内容
 
-### 10.5 与问题2/3的关联
+1. **ddres()**: 添加 `maxinno` 残差检查，超过阈值则 `vsat=0, rejc++, continue`（前端剔除）
+2. **udbias()**: 添加 `rejc >= 2` 或周跳时的模糊度重置逻辑
+3. **valpos()**: 保持与C版一致——始终返回true（后端诊断，不做剔除）
+
+### 10.6 与问题2/3的关联
 
 | 问题 | 可能原因 | 本次修复的影响 |
 |------|---------|---------------|
-| dE 系统偏差 ~0.8m | 粗差观测未被剔除，持续污染滤波 | ddres() 剔除粗差后可能改善 |
+| dE 系统偏差 ~0.8m | 粗差观测未被前端剔除，持续污染滤波 | ddres() maxinno 剔除后可能改善 |
 | 后段历元精度波动 | 粗差/周跳卫星模糊度未被重置 | udbias() rejc 重置逻辑可自动恢复 |
