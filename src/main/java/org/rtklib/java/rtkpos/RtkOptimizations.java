@@ -292,11 +292,11 @@ public final class RtkOptimizations {
         return diag;
     }
 
-    static int buildParIndex(Rtk rtk, int[] sat, int ns, int nf,
-                             int[] ix, int gps, int glo, int sbs) {
+    static int buildParIndex(Rtk rtk, int[] ix, int gps, int glo, int sbs) {
         RtkConfig cfg = rtk.rtkConfig;
         PrcOpt opt = rtk.opt;
         int na = rtk.na;
+        int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
         int nb = 0;
         boolean anyRefReselect = false;
 
@@ -328,8 +328,13 @@ public final class RtkOptimizations {
                 }
 
                 if (refI < 0) continue;
+
+                int newRefSat = (refI - k) + 1;
+                if (rtk.parPrevRefSat[f] > 0 && rtk.parPrevRefSat[f] != newRefSat) {
+                    anyRefReselect = true;
+                }
                 rtk.ssat[refI - k].fix[f] = 2;
-                rtk.parPrevRefSat[f] = (refI - k) + 1;
+                rtk.parPrevRefSat[f] = newRefSat;
 
                 int n = 0;
                 for (int j = k; j < k + Constants.MAXSAT; j++) {
