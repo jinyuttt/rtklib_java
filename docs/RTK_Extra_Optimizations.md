@@ -654,34 +654,35 @@ H矩阵对应偏导数:
 | `ddres()` | RtkCore.java | 梯度残差和H矩阵 |
 | `udion()` | RtkCore.java | 梯度参数过程噪声 |
 
-### 7.7 ⚠️ 已知代码问题：梯度参数未初始化/未更新
+### 7.7 ⚠️ 已知代码问题：梯度参数未初始化/未更新（已修复 2026-07-19）
 
 当 `ionoGradient=true` 时，每颗卫星有3个电离层参数（VTEC + Gn + Ge），
-但 `udion()` 只初始化和更新 VTEC（`II(sat)+0`），梯度参数 Gn（`II(sat)+1`）
+原先 `udion()` 只初始化和更新 VTEC（`II(sat)+0`），梯度参数 Gn（`II(sat)+1`）
 和 Ge（`II(sat)+2`）从未被初始化或更新过程噪声。
 
+**修复**: 在 `udion()` 中添加梯度参数的初始化和过程噪声更新：
+
 ```java
-// 当前 udion() 代码:
-int j = II(sat[i], opt);        // j = NP + (sat-1)*3，指向 VTEC
-if (x[j] == 0.0) {
-    initx(x, P, nx, 1E-6, SQR(opt.std[1] * bl / 1E4), j);  // 只初始化 VTEC
-    // 缺失: initx(x, P, nx, 0.0, gradientIonoInitVar, j+1);  // Gn
-    // 缺失: initx(x, P, nx, 0.0, gradientIonoInitVar, j+2);  // Ge
-} else {
-    P[j * nx + j] += SQR(opt.prn[1] * bl / 1E4 * fact) * Math.abs(rtk.tt);
-    // 缺失: P[(j+1)*nx + (j+1)] += SQR(gradientIonoPrn) * Math.abs(rtk.tt);  // Gn
-    // 缺失: P[(j+2)*nx + (j+2)] += SQR(gradientIonoPrn) * Math.abs(rtk.tt);  // Ge
+// GAP_RESION 重置时同时重置梯度参数
+if (ionoGrad) {
+    x[j + 1] = 0.0;
+    x[j + 2] = 0.0;
+}
+
+// 新卫星初始化时同时初始化梯度参数
+if (ionoGrad) {
+    initx(x, P, nx, 0.0, gradInitVar, j + 1);  // Gn
+    initx(x, P, nx, 0.0, gradInitVar, j + 2);  // Ge
+}
+
+// 过程噪声更新时同时更新梯度参数
+if (ionoGrad) {
+    P[(j + 1) * nx + (j + 1)] += SQR(gradPrn) * Math.abs(rtk.tt);  // Gn
+    P[(j + 2) * nx + (j + 2)] += SQR(gradPrn) * Math.abs(rtk.tt);  // Ge
 }
 ```
 
-**影响**: 启用 `ionoGradient` 后，Gn 和 Ge 参数始终为0，协方差为0，
-ddres() 中的梯度残差贡献恒为0，梯度估计功能实际不生效。
-
-**配置参数未使用**: `gradientIonoInitVar`(1e-4) 和 `gradientIonoPrn`(1e-3)
-已定义在 `RtkConfig` 中但从未在代码中引用。
-
-**修复方案**: 在 `udion()` 中添加梯度参数的初始化和过程噪声更新，
-使用 `gradientIonoInitVar` 和 `gradientIonoPrn` 配置参数。
+使用 `gradientIonoInitVar`(1e-4) 和 `gradientIonoPrn`(1e-3) 配置参数。
 
 ---
 

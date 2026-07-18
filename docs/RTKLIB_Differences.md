@@ -361,11 +361,10 @@ Java版包含7项C版RTKLIB没有的额外优化，通过`RtkConfig`独立开关
 | 3 | 大气参数自适应冻结 🔭 | `atmFrozenNsThresh` | 少星时冻结电离层/对流层参数（长基线） |
 | 4 | IGGIII抗差估计 | `enableIggiii` | 标准化残差三段降权，抑制粗差 |
 | 5 | SNR中值参考星选择 | `enableSnrMedian` | SNR中值辅助参考星选择 |
-| 6 | PAR参考星重选 | `enableParRefReselect` | ratio不足时排除差星重选参考星（⚠️重选逻辑未生效） |
-| 7 | 电离层/对流层梯度 🔭 | `enableIonoTropGradient` | 每星VTEC+Gn+Ge三参数（长基线，⚠️梯度参数未初始化） |
+| 6 | PAR参考星重选 | `enableParRefReselect` | ratio不足时排除差星重选参考星 |
+| 7 | 电离层/对流层梯度 🔭 | `enableIonoTropGradient` | 每星VTEC+Gn+Ge三参数（长基线） |
 
 🔭 = 长基线优化项（>10km），短基线无效果
-⚠️ = 存在已知代码问题，详见 [RTK_Extra_Optimizations.md](RTK_Extra_Optimizations.md)
 
 ---
 

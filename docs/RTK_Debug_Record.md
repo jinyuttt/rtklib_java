@@ -947,14 +947,14 @@ if (dop[1] > 0) {
 | 影响 | 当前默认配置 `tropopt=SAAS`（不估计对流层），NT=0，不影响。启用 TROPOPT_EST/ESTG 时基准站对流层参数不会更新 |
 | 修复 | ✅ 已修复：`udtrop()` 已包含 `for (int i = 0; i < 2; i++)` 循环，i=0流动站、i=1基准站，使用 `IT(i, opt)` 计算索引 |
 
-### 9.10 udion 缺少初始化和重置逻辑（原始移植遗漏 → ✅ 部分修复）
+### 9.10 udion 缺少初始化和重置逻辑（原始移植遗漏 → ✅ 已修复）
 
 | 项目 | 说明 |
 |------|------|
 | C版 | `udion()` 包含：1) GAP_RESION重置长时间中断卫星；2) initx初始化新卫星；3) 过程噪声 |
 | Java版(修复前) | `udion()` 只有过程噪声更新，缺少初始化和重置 |
 | 影响 | 当前默认配置 `ionoopt!=IONOOPT_EST`，NI=0，不影响。启用电离层估计时新卫星不会被初始化 |
-| 修复 | ✅ VTEC初始化和GAP_RESION重置已修复。⚠️ **梯度参数未修复**：当 `ionoGradient=true` 时，Gn(II+1)和Ge(II+2)未被初始化或更新过程噪声，`gradientIonoInitVar`和`gradientIonoPrn`配置参数未使用。详见 [RTK_Extra_Optimizations.md §7.7](RTK_Extra_Optimizations.md) |
+| 修复 | ✅ 已修复：1) GAP_RESION重置已实现；2) VTEC初始化已实现；3) 梯度参数Gn/Ge初始化和过程噪声已实现，使用 `gradientIonoInitVar`(1e-4) 和 `gradientIonoPrn`(1e-3) 配置参数 |
 
 ### 9.11 新增辅助函数
 
