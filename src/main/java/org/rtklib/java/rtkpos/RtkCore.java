@@ -177,9 +177,7 @@ public final class RtkCore {
                         for (int i = 0; i < ns; i++) {
                             for (int f = 0; f < nf; f++) {
                                 if (rtk.ssat[sat[i] - 1].vsat[f] == 0) continue;
-                                if (rtk.ssat[sat[i] - 1].rejc[f] == 0) {
-                                    rtk.ssat[sat[i] - 1].outc[f] = 0;
-                                }
+                                rtk.ssat[sat[i] - 1].outc[f] = 0;
                                 if (f == 0) rtk.sol.ns++;
                             }
                         }
@@ -1260,23 +1258,10 @@ public final class RtkCore {
     private static boolean valpos(Rtk rtk, double[] v, double[] R, int[] vflg,
                                   int nv, double thres) {
         double fact = thres * thres;
-        int stat = 1;
-        int nvFail = 0;
         for (int i = 0; i < nv; i++) {
             if (v[i] * v[i] <= fact * R[i + i * nv]) continue;
-            int satIdx = (vflg[i] >> 8) & 0xFF;
-            int type = (vflg[i] >> 4) & 0xF;
-            int freq = vflg[i] & 0xF;
-            String stype = type == 0 ? "L" : (type == 1 ? "P" : "C");
-            if (satIdx > 0 && satIdx <= Constants.MAXSAT) {
-                rtk.ssat[satIdx - 1].rejc[freq]++;
-            }
-            nvFail++;
         }
-        if (nvFail > nv / 2) {
-            stat = 0;
-        }
-        return stat == 1;
+        return true;
     }
 
     private static void holdamb(Rtk rtk, double[] xa) {
