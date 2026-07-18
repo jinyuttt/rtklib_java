@@ -370,8 +370,23 @@ Java版包含7项C版RTKLIB没有的额外优化，通过`RtkConfig`独立开关
 
 ## 9. Bug修复记录
 
-已移至 [RTK_Debug_Record.md](RTK_Debug_Record.md) "阶段7：索引体系Bug修复 (2026-07-18/19)" 章节。
+已移至 [RTK_Debug_Record.md](RTK_Debug_Record.md) "阶段7：索引体系Bug修复 (2026-07-18/19)" 及 "阶段10：观测值质量控制修复 (2026-07-19)" 章节。
 
 ## 10. 额外优化详细说明
 
 已移至 [RTK_Extra_Optimizations.md](RTK_Extra_Optimizations.md)，包含每项优化的完整算法、配置参数和实现位置。
+
+## 11. 观测值质量控制差异（2026-07-19 修复）
+
+C版RTKLIB在 `ddres()` 和 `udbias()` 中有完整的观测值质量控制机制，
+Java版原始移植时遗漏了以下关键逻辑：
+
+| 功能 | C版 | Java版(修复前) | Java版(修复后) |
+|------|-----|---------------|---------------|
+| ddres() 残差剔除 | `maxinno` 阈值检查，超限则 `vsat=0, rejc++, continue` | 无 | ✅ 已添加 |
+| ddres() 阈值调整 | 模糊度刚初始化时 `threshadj=10` | 无 | ✅ 已添加 |
+| udbias() rejc重置 | `rejc>=2` 或周跳时重置模糊度 | 无 | ✅ 已添加 |
+| udbias() lock设置 | 重置时 `lock=-minlock` | 无 | ✅ 已添加 |
+| udbias() icbias | 非GLONASS卫星重置时清零 | 无 | ✅ 已添加 |
+| valpos() 日志 | 大残差输出 `errmsg` | 无输出 | ✅ 已添加 rejc 计数 |
+| valpos() 剔除 | 始终返回1 | 始终返回true | ✅ 超半数异常返回false |

@@ -177,7 +177,9 @@ public final class RtkCore {
                         for (int i = 0; i < ns; i++) {
                             for (int f = 0; f < nf; f++) {
                                 if (rtk.ssat[sat[i] - 1].vsat[f] == 0) continue;
-                                rtk.ssat[sat[i] - 1].outc[f] = 0;
+                                if (rtk.ssat[sat[i] - 1].rejc[f] == 0) {
+                                    rtk.ssat[sat[i] - 1].outc[f] = 0;
+                                }
                                 if (f == 0) rtk.sol.ns++;
                             }
                         }
@@ -588,6 +590,29 @@ public final class RtkCore {
 
             for (int i = 0; i < ns; i++) {
                 int s = sat[i] - 1;
+                int idx = IB(sat[i], f, opt);
+                int slip = rtk.ssat[s].slip[f];
+                int rejc = (int) rtk.ssat[s].rejc[f];
+                if (opt.ionoopt == Constants.IONOOPT_IFLC && nf > 1) {
+                    int f2 = RtklibCommon.seliflc(opt.nf, rtk.ssat[s].sys);
+                    if (f2 >= 0 && f2 < Constants.NFREQ) {
+                        slip |= rtk.ssat[s].slip[f2];
+                    }
+                }
+                if (opt.modear != Constants.ARMODE_INST &&
+                    (slip & Constants.LLI_SLIP) == 0 && rejc < 2) continue;
+                if (x[idx] != 0.0) {
+                    x[idx] = 0.0;
+                    rtk.ssat[s].rejc[f] = 0;
+                    rtk.ssat[s].lock[f] = -opt.minlock;
+                    if (rtk.ssat[s].sys != Constants.SYS_GLO) {
+                        rtk.ssat[s].icbias[f] = 0;
+                    }
+                }
+            }
+
+            for (int i = 0; i < ns; i++) {
+                int s = sat[i] - 1;
                 Obsd obsR = obs[iu[i]];
                 Obsd obsB = obs[ir[i]];
 
@@ -862,6 +887,27 @@ public final class RtkCore {
                             H[nvOut * nx + iiJ + 2] -= scaleJ * cotElJ * Math.sin(azJ);
                         }
                     }
+                }
+            }
+
+            if (opt.maxinno != null && opt.maxinno.length > type
+                    && opt.maxinno[type] > 0.0) {
+                double threshAdj = 1.0;
+                if (opt.mode > Constants.PMODE_DGPS && type == 0) {
+                    int ii = IB(satIdx, frq, opt);
+                    int jj = IB(refSat[ft], frq, opt);
+                    if (ii > 0 && ii < nx && jj > 0 && jj < nx) {
+                        double[] Pp = rtk.P;
+                        if (Pp[ii + ii * nx] == SQR(opt.std[0]) ||
+                            Pp[jj + jj * nx] == SQR(opt.std[0])) {
+                            threshAdj = 10.0;
+                        }
+                    }
+                }
+                if (Math.abs(v[nvOut]) > opt.maxinno[type] * threshAdj) {
+                    rtk.ssat[satIdx - 1].vsat[frq] = 0;
+                    rtk.ssat[satIdx - 1].rejc[frq]++;
+                    continue;
                 }
             }
 
@@ -1214,10 +1260,23 @@ public final class RtkCore {
     private static boolean valpos(Rtk rtk, double[] v, double[] R, int[] vflg,
                                   int nv, double thres) {
         double fact = thres * thres;
+        int stat = 1;
+        int nvFail = 0;
         for (int i = 0; i < nv; i++) {
             if (v[i] * v[i] <= fact * R[i + i * nv]) continue;
+            int satIdx = (vflg[i] >> 8) & 0xFF;
+            int type = (vflg[i] >> 4) & 0xF;
+            int freq = vflg[i] & 0xF;
+            String stype = type == 0 ? "L" : (type == 1 ? "P" : "C");
+            if (satIdx > 0 && satIdx <= Constants.MAXSAT) {
+                rtk.ssat[satIdx - 1].rejc[freq]++;
+            }
+            nvFail++;
         }
-        return true;
+        if (nvFail > nv / 2) {
+            stat = 0;
+        }
+        return stat == 1;
     }
 
     private static void holdamb(Rtk rtk, double[] xa) {
