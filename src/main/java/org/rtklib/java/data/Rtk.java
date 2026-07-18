@@ -53,6 +53,8 @@ public class Rtk {
 
     public int holdambFlag;
 
+    public int initialMode;
+
     public RtkConfig rtkConfig;
 
     public double qScale;

@@ -822,3 +822,215 @@ if (dop[1] > 0) {
 | Q 匹配率 | 100% (240/240) |
 | 解类型匹配率 | 100% |
 | 优化状态 | 默认关闭，向后兼容，按需开启 |
+
+---
+
+## 阶段7：索引体系Bug修复 (2026-07-18/19)
+
+共发现10个Bug，其中6个是优化过程中引入的，4个是原始移植遗漏。
+优化引入的Bug根因：阶段6（07-16）RTK核心管道重构时使用了 `NA(rtk, ns)` 动态索引 +
+`naOff + i*nf + f` 相对索引方案，该方案内部自洽，阶段6测试通过（Q匹配率100%）。
+阶段7（07-16/17）添加优化时引入了C版风格的 `buildParIndex()`/`ddidxFallback()`
+（需要 `rtk.na` + MAXSAT遍历），与阶段6的动态索引方案不兼容，导致Bug。
+修复方案是统一回C版的固定索引方案。
+
+原始移植遗漏的Bug（9.3/9.8/9.9/9.10）在当前默认配置下不影响结果，
+但在启用对应功能（dynamics/TROPOPT_EST/IONOOPT_EST）时会暴露。
+
+| Bug# | 问题 | 来源 | 引入阶段 |
+|------|------|------|----------|
+| 9.1 | NI() 返回动态值 | 优化引入：添加 ionoGradient 时修改 | 阶段7.4 |
+| 9.2 | NT() 返回 1/3 | 优化引入：添加 TROPOPT_ESTG 时错误理解 | 阶段7.4 |
+| 9.3 | 缺少状态向量初始化 | 原始移植遗漏 | 阶段6 |
+| 9.4 | udstate 在 xp/Pp 复制之后执行 | 优化引入：重构时执行顺序错误 | 阶段6 |
+| 9.5 | 状态向量大小随 ns 动态变化 | 优化引入：NA(rtk,ns) 替代 NB(opt) | 阶段6 |
+| 9.6 | 模糊度索引用相对位置 | 优化引入：naOff+i*nf+f 替代 IB() | 阶段6 |
+| 9.6a | rtk.na 未设置 | 优化引入：buildParIndex需要但未设置 | 阶段7 |
+| 9.7 | NP() dynamics时返回6而非9 | 优化引入：遗漏加速度3个状态 | 阶段6 |
+| 9.8 | ssat.lock 未更新 | 原始移植遗漏：lock始终为0，缺少延迟机制 | - |
+| 9.9 | udtrop 缺少基准站参数更新 | 原始移植遗漏：只更新流动站 | - |
+| 9.10 | udion 缺少初始化和重置逻辑 | 原始移植遗漏：缺少initx和GAP_RESION重置 | - |
+
+### 9.1 NI() 返回动态值而非 MAXSAT（优化引入）
+
+| 项目 | 说明 |
+|------|------|
+| C版 | `#define NI(opt) ((opt)->ionoopt!=IONOOPT_EST?0:MAXSAT)` — 固定返回 MAXSAT(228) |
+| Java版(修复前) | 遍历 `rtk.x[]` 数非零元素，返回动态值 |
+| 引入原因 | 阶段7.4添加 `ionoGradient` 支持时，将NI()改为动态计数以适配每星3参数模式，但破坏了基本模式的固定大小语义 |
+| 影响 | NI 决定状态向量大小，动态值导致 nx 随历元变化，后续所有索引（NT、NA、IB等）全部错乱 |
+| 修复 | 改为 `ionoopt==IONOOPT_EST ? (ionoGradient ? MAXSAT*3 : MAXSAT) : 0` |
+
+### 9.2 NT() 返回 1/3 而非 2/6（优化引入）
+
+| 项目 | 说明 |
+|------|------|
+| C版 | `#define NT(opt) ((opt)->tropopt<TROPOPT_EST?0:((opt)->tropopt<TROPOPT_ESTG?2:6))` |
+| Java版(修复前) | `tropopt==TROPOPT_EST → 1; tropopt==TROPOPT_ESTG → 3` |
+| 引入原因 | 阶段7.4添加 `TROPOPT_ESTG` 支持时，错误理解为每站1/3个参数，实际C版是每站1/3个参数×2站=2/6 |
+| 影响 | 对流层参数数错误：C版2/6对应流动站+基准站各1/3个参数，Java版只算了流动站 |
+| 修复 | 改为 `tropopt<EST → 0; tropopt<ESTG → 2; else → 6` |
+
+### 9.3 缺少状态向量初始化（原始移植遗漏）
+
+| 项目 | 说明 |
+|------|------|
+| C版 | `udpos()` 中 `norm(rtk->x,3) <= RE_WGS84/2` 时用 SPP 结果初始化 `x[0..2]` |
+| Java版(修复前) | `udpos()` 完全缺失此初始化逻辑，x[0..2] 始终为 0 |
+| 影响 | 首历元位置状态未初始化，Kalman滤波从零开始收敛，导致初始历元定位偏差巨大 |
+| 修复 | 在 `udpos()` 开头添加完整初始化逻辑：PMODE_FIXED、norm检查、STATIC/KINEMATIC模式、方差过大重置 |
+
+### 9.4 udstate 在 xp/Pp 复制之后执行（优化引入）
+
+| 项目 | 说明 |
+|------|------|
+| C版 | 先 `udstate()`（时间更新），再 `matcpy(xp, rtk->x)` / `matcpy(Pp, rtk->P)` |
+| Java版(修复前) | 先 `System.arraycopy(rtk.x→xp)`，再 `udstate()` |
+| 影响 | 过程噪声写入 rtk.x/P，但 xp/Pp 是旧副本，Kalman滤波测量更新使用的是不含过程噪声的状态 |
+| 修复 | 将 `udstate()` 调用移到 `arraycopy` 之前 |
+
+### 9.5 状态向量大小随 ns 动态变化（优化引入）
+
+| 项目 | 说明 |
+|------|------|
+| C版 | `nx = NR(opt) + NB(opt)`，其中 `NB(opt) = MAXSAT * NF(opt)` — 固定大小 |
+| Java版(修复前) | `rtk.nx = NP + NI + NT + NA(rtk, ns)`，其中 `NA = ns * nf` — 随 ns 变化 |
+| 引入原因 | 阶段6重构时用 `NA(rtk, ns)` 替代C版 `NB(opt) = MAXSAT*NF`，意图节省内存。阶段6内部自洽但与阶段7的 `buildParIndex()`（需要MAXSAT遍历）不兼容 |
+| 影响 | 不同历元卫星数不同时 nx 变化，导致状态向量大小不一致，模糊度状态在历元间漂移 |
+| 修复 | 新增 `NB(rtk) = MAXSAT * nf`，`rtk.nx = NR(rtk) + NB(rtk)` |
+
+### 9.6 模糊度索引用相对位置而非卫星号（优化引入）
+
+| 项目 | 说明 |
+|------|------|
+| C版 | `IB(sat, f, opt) = NR(opt) + MAXSAT*f + (sat-1)` — 按卫星号索引，固定位置 |
+| Java版(修复前) | `naOff + i * nf + f` — 按相对位置 i 索引，随 sat[] 排列变化 |
+| 引入原因 | 阶段6重构时用 `naOff + i*nf + f` 替代C版 `IB()`，与 `NA(rtk, ns)` 动态方案配套。阶段7的 `buildParIndex()`/`ddidxFallback()` 使用C版风格的 `rtk.na + MAXSAT*f + (sat-1)` 遍历，两套索引体系冲突 |
+| 影响 | 同一卫星在不同历元的模糊度索引不同，导致状态无法正确继承；ddres 与 udbias 索引不一致 |
+| 修复 | 新增 `IB(sat, f, opt)` 函数，所有模糊度索引统一使用卫星号计算 |
+
+### 9.6a rtk.na 未设置（优化引入）
+
+| 项目 | 说明 |
+|------|------|
+| C版 | `rtk->na = NR(opt)` 在 `rtkinit()` 中设置，`ddidx()` 中 `na = rtk->na` 作为模糊度区域起始索引 |
+| Java版(修复前) | `rtk.na` 在 `RtkProcessor` 初始化时设为 0，`relpos()` 中未更新 |
+| 引入原因 | 阶段7的 `buildParIndex()`/`ddidxFallback()` 从C版移植，使用 `rtk.na` + MAXSAT遍历模糊度。但阶段6的动态方案不需要 `rtk.na`，从未设置 |
+| 影响 | `buildParIndex()` 中 `k = na = 0`，模糊度区域起始索引错误，参考星选择和双差索引完全错乱 |
+| 修复 | 在 `relpos()` 中添加 `rtk.na = NR(rtk)` |
+
+### 9.7 NP() dynamics 时返回 6 而非 9（优化引入）
+
+| 项目 | 说明 |
+|------|------|
+| C版 | `#define NP(opt) ((opt)->dynamics==0?3:9)` — dynamics时9（3位置+3速度+3加速度） |
+| Java版(修复前) | `NP(rtk) = (rtk.opt.dynamics!=0)?6:3` — dynamics时6，缺少3个加速度状态 |
+| 引入原因 | 阶段6重构时遗漏加速度3个状态，导致所有索引函数（II/IT/IL/IB）在dynamics模式下偏移3 |
+| 影响 | 当前默认配置 dynamics=0（Static模式），NP=3，不受影响。启用dynamics模式后所有索引错位 |
+| 修复 | 改为 `(rtk.opt.dynamics==0)?3:9`，同步修复 II/IT/IL/IB 中的 np 计算 |
+
+### 9.8 ssat.lock 未更新（原始移植遗漏）
+
+| 项目 | 说明 |
+|------|------|
+| C版 | `lock[f]` 初始为0，首次使用设为 `-minlock`，每历元 `lock[f]++`，`lock>=0` 时才允许模糊度固定 |
+| Java版 | `lock[f]` 始终为0（从未更新），`lock>=0` 条件始终满足 |
+| 影响 | 缺少新卫星模糊度固定的延迟保护机制，可能导致锁定不够稳定时就尝试固定 |
+| 修复 | 待补充：在 `relpos()` 中添加 `lock[f]++`，在 `udbias()` 中添加首次使用时设为 `-minlock` |
+
+### 9.9 udtrop 缺少基准站参数更新（原始移植遗漏）
+
+| 项目 | 说明 |
+|------|------|
+| C版 | `udtrop()` 循环 `i=0..1`（流动站+基准站），每站初始化和过程噪声 |
+| Java版 | `udtrop()` 只更新流动站（idx = NP+NI），缺少基准站（idx = NP+NI+NT/2） |
+| 影响 | 当前默认配置 `tropopt=SAAS`（不估计对流层），NT=0，不影响。启用 TROPOPT_EST/ESTG 时基准站对流层参数不会更新 |
+| 修复 | 待补充：添加基准站对流层参数的初始化和过程噪声更新 |
+
+### 9.10 udion 缺少初始化和重置逻辑（原始移植遗漏）
+
+| 项目 | 说明 |
+|------|------|
+| C版 | `udion()` 包含：1) GAP_RESION重置长时间中断卫星；2) initx初始化新卫星；3) 过程噪声 |
+| Java版 | `udion()` 只有过程噪声更新，缺少初始化和重置 |
+| 影响 | 当前默认配置 `ionoopt!=IONOOPT_EST`，NI=0，不影响。启用电离层估计时新卫星不会被初始化 |
+| 修复 | 待补充：添加 GAP_RESION 重置和 initx 初始化 |
+
+### 9.11 新增辅助函数
+
+为配合上述修复，新增以下与C版对应的辅助函数：
+
+| 函数 | 定义 | 说明 |
+|------|------|------|
+| `NB(rtk)` | `MAXSAT * nf` (DGPS模式=0) | 模糊度状态数（固定大小） |
+| `NL(rtk)` | `glomodear==AUTOCAL ? NFREQGLO : 0` | GLONASS IC bias数 |
+| `NR(rtk)` | `NP + NI + NT + NL` | 非模糊度状态总数 |
+| `IT(r, opt)` | `NP + NI + (nt/2)*r` | 对流层参数索引（r=0流动站, r=1基准站） |
+| `IL(f, opt)` | `NP + NI + NT + f` | GLONASS IC bias索引 |
+| `IB(sat, f, opt)` | `NR + MAXSAT*f + (sat-1)` | 模糊度状态索引（按卫星号） |
+
+### 9.12 新增常量
+
+| 常量 | 值 | 说明 |
+|------|-----|------|
+| `VAR_POS` | 900.0 (30²) | 初始位置方差 (m²) |
+| `VAR_POS_FIX` | 1E-8 | 固定解位置方差 (m²) |
+| `VAR_VEL` | 100.0 (10²) | 初始速度方差 ((m/s)²) |
+| `VAR_ACC` | 100.0 (10²) | 初始加速度方差 ((m/s²)²) |
+
+### 9.13 修改文件清单
+
+| 文件 | 修改类型 | 说明 |
+|------|---------|------|
+| `RtkCore.java` | 修复 NI() | 返回 MAXSAT 而非动态计数 |
+| `RtkCore.java` | 修复 NT() | 返回 2/6 而非 1/3 |
+| `RtkCore.java` | 修复 udpos() | 添加完整初始化逻辑（C版对齐） |
+| `RtkCore.java` | 修复 relpos() | udstate 移到 arraycopy 之前 |
+| `RtkCore.java` | 修复 rtk.nx | 使用 NR+NB 固定大小 |
+| `RtkCore.java` | 修复 udbias() | 模糊度索引改用 IB() |
+| `RtkCore.java` | 修复 ddres() | 模糊度索引改用 IB() |
+| `RtkCore.java` | 修复 resamb_LAMBDA() | 模糊度索引改用 IB() |
+| `RtkCore.java` | 修复 holdamb() | 模糊度索引改用 IB() |
+| `RtkCore.java` | 新增 7 个函数 | NB, NL, NR, IT, IL, IB, initx |
+| `RtkCore.java` | 新增 rtk.na 设置 | relpos() 中设置 rtk.na = NR(rtk) |
+| `Constants.java` | 新增 4 个常量 | VAR_POS, VAR_POS_FIX, VAR_VEL, VAR_ACC |
+| `Constants.java` | 更新 NX_RTK | 移至 MAXSAT 定义之后，值 = 9 + MAXSAT*3 + 6 + NFREQGLO + MAXSAT*3 = 1385 |
+
+---
+
+## 阶段8：固定解验证管道修复 (2026-07-19)
+
+### 问题
+
+zdres() 和 ddres() 在固定解验证时始终使用 rtk.x（浮点解状态向量），
+而非 xa（固定解状态向量），导致固定解残差计算错误。
+
+### 修复
+
+1. zdres() 和 ddres() 添加 xState 参数，替代内部对 rtk.x 的引用
+2. relpos() 中 Kalman 迭代时传入 xp（浮点解），固定解验证时传入 xa（固定解）
+3. ddres() 中电离层梯度计算也使用 xState 替代 rtk.x
+
+### ssat.vsat 类型修复
+
+`ssat.vsat[f]` 是 int 类型，在条件判断中直接使用 `&&` 导致编译错误。
+修复：`rtk.ssat[sat[i] - 1].vsat[f] != 0 && ...`
+
+---
+
+## 阶段9：锚固优化修复与额外优化文档化 (2026-07-19)
+
+### 锚固优化修复
+
+resamb_LAMBDA() 和 holdamb() 在C风格重构后锚固逻辑完全丢失。
+修复：在 resamb_LAMBDA() 中添加锚固/自由组分离，在 holdamb() 中添加锚固计数管理。
+
+### 电离层梯度开关同步
+
+RtkConfig.enableIonoTropGradient 是死开关，从未同步到 PrcOpt.ionoGradient。
+修复：在 relpos() 入口处同步。
+
+### 文档整理
+
+- 创建 [RTK_Extra_Optimizations.md](RTK_Extra_Optimizations.md)：记录7项Java版独有优化的完整算法、配置参数和实现位置
+- RTKLIB_Differences.md §9/§10 移至本调试记录和 RTK_Extra_Optimizations.md

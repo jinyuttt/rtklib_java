@@ -292,6 +292,10 @@ public final class Constants {
     public static final double VAR_VEL = 100.0;
     /** initial variance of receiver acc ((m/ss)^2) = SQR(10.0) */
     public static final double VAR_ACC = 100.0;
+    /** initial variance of gradient (m^2) = SQR(0.001) */
+    public static final double VAR_GRA = 1E-6;
+    /** initial zenith wet delay (m) */
+    public static final double INIT_ZWD = 0.15;
     public static final int MAXNRPOS = 16;
     public static final int MAXLEAPS = 64;
     public static final int MAXGISLAYER = 32;
