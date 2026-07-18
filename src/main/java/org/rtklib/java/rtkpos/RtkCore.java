@@ -194,7 +194,7 @@ public final class RtkCore {
     }
 
     private static int NP(Rtk rtk) {
-        return (rtk.opt.dynamics != 0) ? 6 : 3;
+        return (rtk.opt.dynamics == 0) ? 3 : 9;
     }
 
     private static int NI(Rtk rtk) {
@@ -226,14 +226,14 @@ public final class RtkCore {
         return NP(rtk) + NI(rtk) + NT(rtk) + NL(rtk);
     }
     private static int II(int sat, PrcOpt opt) {
-        int np = (opt.dynamics != 0) ? 6 : 3;
+        int np = (opt.dynamics == 0) ? 3 : 9;
         if (opt.ionoGradient) {
             return np + (sat - 1) * 3;
         }
         return np + (sat - 1);
     }
     private static int IT(int r, PrcOpt opt) {
-        int np = (opt.dynamics != 0) ? 6 : 3;
+        int np = (opt.dynamics == 0) ? 3 : 9;
         int ni = (opt.ionoopt == Constants.IONOOPT_EST) ?
                  (opt.ionoGradient ? Constants.MAXSAT * 3 : Constants.MAXSAT) : 0;
         int nt = (opt.tropopt < Constants.TROPOPT_EST) ? 0 :
@@ -241,7 +241,7 @@ public final class RtkCore {
         return np + ni + (nt / 2) * r;
     }
     private static int IL(int f, PrcOpt opt) {
-        int np = (opt.dynamics != 0) ? 6 : 3;
+        int np = (opt.dynamics == 0) ? 3 : 9;
         int ni = (opt.ionoopt == Constants.IONOOPT_EST) ?
                  (opt.ionoGradient ? Constants.MAXSAT * 3 : Constants.MAXSAT) : 0;
         int nt = (opt.tropopt < Constants.TROPOPT_EST) ? 0 :
@@ -249,7 +249,7 @@ public final class RtkCore {
         return np + ni + nt + f;
     }
     private static int IB(int sat, int f, PrcOpt opt) {
-        int np = (opt.dynamics != 0) ? 6 : 3;
+        int np = (opt.dynamics == 0) ? 3 : 9;
         int ni = (opt.ionoopt == Constants.IONOOPT_EST) ?
                  (opt.ionoGradient ? Constants.MAXSAT * 3 : Constants.MAXSAT) : 0;
         int nt = (opt.tropopt < Constants.TROPOPT_EST) ? 0 :
