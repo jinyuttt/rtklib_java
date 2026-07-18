@@ -281,7 +281,10 @@ C版Fix-and-Hold策略的核心缺陷：LAMBDA搜索失败时，所有模糊度
 
 ---
 
-## 3. 大气参数自适应冻结（atmFrozenNsThresh）
+## 3. 大气参数自适应冻结（atmFrozenNsThresh） 🔭长基线
+
+> **适用场景**: 长基线（>10km），启用电离层/对流层估计时。
+> 短基线不估计大气参数，此优化无效果。
 
 ### 3.1 问题背景
 
@@ -301,8 +304,8 @@ udion() 入口:
   if atmFrozenNsThresh > 0 && ns < atmFrozenNsThresh:
       return    // 跳过整个udion，不更新电离层参数
 
-udtrop() 未实现冻结（待补充）:
-  当前仅 udion() 有冻结逻辑
+udtrop() 冻结:
+  当前仅 udion() 有冻结逻辑，udtrop() 尚未实现冻结
 ```
 
 ### 3.4 配置参数
@@ -559,9 +562,29 @@ buildParIndex() 替代 ddidx():
 | `ddidx()` | RtkCore.java | 根据开关选择调用 |
 | `manage_amb_LAMBDA()` | RtkCore.java | PAR重选触发逻辑 |
 
+### 6.8 ⚠️ 已知代码问题：`anyRefReselect` 死代码（已修复 2026-07-19）
+
+`buildParIndex()` 中 `anyRefReselect` 变量原先始终为 `false`，PAR重选机制从未触发。
+
+**修复**: 在参考星与上一历元不同时设置 `anyRefReselect = true`：
+```java
+int newRefSat = (refI - k) + 1;
+if (rtk.parPrevRefSat[f] > 0 && rtk.parPrevRefSat[f] != newRefSat) {
+    anyRefReselect = true;
+}
+rtk.parPrevRefSat[f] = newRefSat;
+```
+
+同时简化了 `buildParIndex()` 的参数签名，移除未使用的 `sat`, `ns`, `nf` 参数，
+`ddidx()` 调用从 `buildParIndex(rtk, null, 0, 0, ix, gps, glo, sbs)` 改为
+`buildParIndex(rtk, ix, gps, glo, sbs)`。
+
 ---
 
-## 7. 电离层/对流层梯度参数估计（enableIonoTropGradient）
+## 7. 电离层/对流层梯度参数估计（enableIonoTropGradient） 🔭长基线
+
+> **适用场景**: 长基线（>20km），电离层空间不均匀性显著时。
+> 短基线（<10km）电离层误差高度相关，双差可消除，梯度参数无意义。
 
 ### 7.1 问题背景
 
@@ -630,6 +653,35 @@ H矩阵对应偏导数:
 | `NI()/II()` | RtkCore.java | 维度和索引计算 |
 | `ddres()` | RtkCore.java | 梯度残差和H矩阵 |
 | `udion()` | RtkCore.java | 梯度参数过程噪声 |
+
+### 7.7 ⚠️ 已知代码问题：梯度参数未初始化/未更新
+
+当 `ionoGradient=true` 时，每颗卫星有3个电离层参数（VTEC + Gn + Ge），
+但 `udion()` 只初始化和更新 VTEC（`II(sat)+0`），梯度参数 Gn（`II(sat)+1`）
+和 Ge（`II(sat)+2`）从未被初始化或更新过程噪声。
+
+```java
+// 当前 udion() 代码:
+int j = II(sat[i], opt);        // j = NP + (sat-1)*3，指向 VTEC
+if (x[j] == 0.0) {
+    initx(x, P, nx, 1E-6, SQR(opt.std[1] * bl / 1E4), j);  // 只初始化 VTEC
+    // 缺失: initx(x, P, nx, 0.0, gradientIonoInitVar, j+1);  // Gn
+    // 缺失: initx(x, P, nx, 0.0, gradientIonoInitVar, j+2);  // Ge
+} else {
+    P[j * nx + j] += SQR(opt.prn[1] * bl / 1E4 * fact) * Math.abs(rtk.tt);
+    // 缺失: P[(j+1)*nx + (j+1)] += SQR(gradientIonoPrn) * Math.abs(rtk.tt);  // Gn
+    // 缺失: P[(j+2)*nx + (j+2)] += SQR(gradientIonoPrn) * Math.abs(rtk.tt);  // Ge
+}
+```
+
+**影响**: 启用 `ionoGradient` 后，Gn 和 Ge 参数始终为0，协方差为0，
+ddres() 中的梯度残差贡献恒为0，梯度估计功能实际不生效。
+
+**配置参数未使用**: `gradientIonoInitVar`(1e-4) 和 `gradientIonoPrn`(1e-3)
+已定义在 `RtkConfig` 中但从未在代码中引用。
+
+**修复方案**: 在 `udion()` 中添加梯度参数的初始化和过程噪声更新，
+使用 `gradientIonoInitVar` 和 `gradientIonoPrn` 配置参数。
 
 ---
 

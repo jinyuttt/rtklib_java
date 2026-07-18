@@ -468,6 +468,7 @@ public final class RtkCore {
         double[] x = rtk.x;
         double[] P = rtk.P;
         int nx = rtk.nx;
+        boolean ionoGrad = opt.ionoGradient;
 
         if (rtk.rtkConfig.atmFrozenNsThresh > 0 && ns < rtk.rtkConfig.atmFrozenNsThresh) {
             return;
@@ -479,17 +480,32 @@ public final class RtkCore {
                 rtk.ssat[i - 1].outc[0] > Constants.GAP_RESION &&
                 rtk.ssat[i - 1].outc[1] > Constants.GAP_RESION) {
                 x[j] = 0.0;
+                if (ionoGrad) {
+                    x[j + 1] = 0.0;
+                    x[j + 2] = 0.0;
+                }
             }
         }
+
+        double gradInitVar = rtk.rtkConfig.gradientIonoInitVar;
+        double gradPrn = rtk.rtkConfig.gradientIonoPrn;
 
         for (int i = 0; i < ns; i++) {
             int j = II(sat[i], opt);
             if (x[j] == 0.0) {
                 initx(x, P, nx, 1E-6, SQR(opt.std[1] * bl / 1E4), j);
+                if (ionoGrad) {
+                    initx(x, P, nx, 0.0, gradInitVar, j + 1);
+                    initx(x, P, nx, 0.0, gradInitVar, j + 2);
+                }
             } else {
                 double el = rtk.ssat[sat[i] - 1].azel[1];
                 double fact = Math.cos(el);
                 P[j * nx + j] += SQR(opt.prn[1] * bl / 1E4 * fact) * Math.abs(rtk.tt);
+                if (ionoGrad) {
+                    P[(j + 1) * nx + (j + 1)] += SQR(gradPrn) * Math.abs(rtk.tt);
+                    P[(j + 2) * nx + (j + 2)] += SQR(gradPrn) * Math.abs(rtk.tt);
+                }
             }
         }
     }
@@ -872,7 +888,7 @@ public final class RtkCore {
 
     private static int ddidx(Rtk rtk, int[] ix, int gps, int glo, int sbs) {
         if (rtk.rtkConfig.enableParRefReselect) {
-            return RtkOptimizations.buildParIndex(rtk, null, 0, 0, ix, gps, glo, sbs);
+            return RtkOptimizations.buildParIndex(rtk, ix, gps, glo, sbs);
         }
         return RtkOptimizations.ddidxFallback(rtk, ix, gps, glo, sbs);
     }
