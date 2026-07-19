@@ -11,6 +11,7 @@ import org.rtklib.java.ionosphere.SbasCorrection;
 import org.rtklib.java.kalman.KalmanFilter;
 import org.rtklib.java.pntpos.PntPos;
 import org.rtklib.java.pntpos.SppCore;
+import org.rtklib.java.rtkpos.Tides;
 import org.rtklib.java.time.TimeSystem;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.troposphere.TroposphereModel;
@@ -87,141 +88,180 @@ public final class RtkCore {
     private static int relpos(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav) {
         PrcOpt opt = rtk.opt;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
+        int i, j, f, ns, nv = 0;
+        int n = nu + nr;
 
         if (rtk.rtkConfig.enableIonoTropGradient && !opt.ionoGradient) {
             opt.ionoGradient = true;
         }
 
-        for (int i = 0; i < Constants.MAXSAT; i++) {
+        for (i = 0; i < Constants.MAXSAT; i++) {
             rtk.ssat[i].sys = SatUtils.satsys(i + 1, null);
-            for (int j = 0; j < Constants.NFREQ; j++) {
+            for (j = 0; j < Constants.NFREQ; j++) {
                 rtk.ssat[i].vsat[j] = 0;
                 rtk.ssat[i].snrRover[j] = 0;
                 rtk.ssat[i].snrBase[j] = 0;
             }
         }
 
+        double[] rs = new double[n * 6];
+        double[] dts = new double[n * 2];
+        double[] vare = new double[n];
+        int[] svh = new int[n];
+        double[] azel = new double[Constants.MAXSAT * 2];
+
+        EphModel.satposs(obs[0].time, obs, n, nav, rs, dts, vare, svh, opt.sateph);
+
+        double[] y = new double[nf * 2 * n];
+        double[] e = new double[3 * n];
+        double[] freq = new double[nf * n];
+
+        if (!zdres(1, obs, nu, nr, rs, dts, vare, svh, nav, rtk.rb, opt,
+                y, e, azel, freq)) {
+            return 0;
+        }
+
+        double dt = TimeSystem.timediff(obs[0].time, obs[nu].time);
+        rtk.sol.age = (float) dt;
+        if (Math.abs(rtk.sol.age) > opt.maxtdiff) {
+            return 1;
+        }
+
         int[] sat = new int[Constants.MAXSAT];
         int[] iu = new int[Constants.MAXSAT];
         int[] ir = new int[Constants.MAXSAT];
-        int ns = selsat(obs, nu, nr, opt, sat, iu, ir);
+        ns = selsat(obs, azel, nu, nr, opt, sat, iu, ir);
         if (ns <= 0) return 0;
 
-        rtk.nx = NR(rtk) + NB(rtk);
+        int nx_new = NR(rtk) + NB(rtk);
         rtk.na = NR(rtk);
+        if (rtk.nx != nx_new) {
+            rtk.nx = nx_new;
+            rtk.x = new double[nx_new];
+            rtk.P = new double[nx_new * nx_new];
+            initx(rtk.x, rtk.P, nx_new, rtk.sol.rr[0] - rtk.rb[0], Constants.VAR_POS, 0);
+            initx(rtk.x, rtk.P, nx_new, rtk.sol.rr[1] - rtk.rb[1], Constants.VAR_POS, 1);
+            initx(rtk.x, rtk.P, nx_new, rtk.sol.rr[2] - rtk.rb[2], Constants.VAR_POS, 2);
+            if (rtk.opt.dynamics != 0) {
+                for (i = 3; i < 6; i++) initx(rtk.x, rtk.P, nx_new, 0.0, Constants.VAR_VEL, i);
+                for (i = 6; i < 9; i++) initx(rtk.x, rtk.P, nx_new, 1E-6, Constants.VAR_ACC, i);
+            }
+        }
         int nx = rtk.nx;
 
-        int stat = (opt.mode <= Constants.PMODE_DGPS) ? Constants.SOLQ_DGPS : Constants.SOLQ_FLOAT;
+        udstate(rtk, obs, nu, nr, nav, sat, ns, iu, ir);
 
-        if (stat != Constants.SOLQ_NONE) {
-            RtkOptimizations.computeSnrMedian(rtk, obs, nu, nr, sat, ns, nf, nav);
-
-            udstate(rtk, obs, nu, nr, nav, sat, ns, iu, ir);
-
-            for (int i = 0; i < ns; i++) {
-                for (int j = 0; j < nf; j++) {
-                    rtk.ssat[sat[i] - 1].snrRover[j] = obs[iu[i]].SNR[j];
-                    rtk.ssat[sat[i] - 1].snrBase[j] = obs[ir[i]].SNR[j];
-                }
-            }
-
-            double[] xp = new double[nx];
-            double[] Pp = new double[nx * nx];
-            System.arraycopy(rtk.x, 0, xp, 0, nx);
-            System.arraycopy(rtk.P, 0, Pp, 0, nx * nx);
-
-            int ny = ns * nf * 2 + 2;
-            double[] v = new double[ny];
-            double[] H = new double[nx * ny];
-            double[] R = new double[ny * ny];
-            int[] vflg = new int[ny];
-            double[] azel = new double[ns * 2];
-            double[] y = new double[ns * nf * 2];
-
-            for (int iter = 0; iter < opt.niter; iter++) {
-                int nv = zdres(rtk, obs, nu, nr, nav, sat, ns, iu, ir, azel, vflg, nf, y, xp);
-                if (nv < 4) {
-                    stat = Constants.SOLQ_NONE;
-                    break;
-                }
-                int nvOut = ddres(rtk, obs, nu, nr, nav, sat, ns, iu, ir, azel,
-                        vflg, nf, H, v, R, y, xp);
-                if (nvOut < 4) {
-                    stat = Constants.SOLQ_NONE;
-                    break;
-                }
-
-                RtkOptimizations.computeQScale(rtk, sat, ns);
-
-                RtkOptimizations.applyIggiii(rtk, v, H, R, vflg, nvOut, nx, sat, ns,
-                        obs, iu, azel, nf);
-
-                int info = filter(rtk, xp, Pp, H, v, R, nx, nvOut);
-                if (info != 0) {
-                    stat = Constants.SOLQ_NONE;
-                    break;
-                }
-            }
-
-            if (stat != Constants.SOLQ_NONE) {
-                int nv = zdres(rtk, obs, nu, nr, nav, sat, ns, iu, ir, azel, vflg, nf, y, xp);
-                if (nv > 0) {
-                    int nvOut = ddres(rtk, obs, nu, nr, nav, sat, ns, iu, ir, azel,
-                            vflg, nf, H, v, R, y, xp);
-
-                    if (valpos(rtk, v, R, vflg, nvOut, 4.0)) {
-                        System.arraycopy(xp, 0, rtk.x, 0, nx);
-                        System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
-
-                        rtk.sol.ns = 0;
-                        for (int i = 0; i < ns; i++) {
-                            for (int f = 0; f < nf; f++) {
-                                if (rtk.ssat[sat[i] - 1].vsat[f] == 0) continue;
-                                rtk.ssat[sat[i] - 1].outc[f] = 0;
-                                if (f == 0) rtk.sol.ns++;
-                            }
-                        }
-                        if (rtk.sol.ns < 4) stat = Constants.SOLQ_DGPS;
-                    } else {
-                        stat = Constants.SOLQ_NONE;
-                    }
-                }
-            }
-
-            if (stat == Constants.SOLQ_FLOAT) {
-                double[] bias = new double[nx];
-                double[] xa = new double[nx];
-                int nb = manage_amb_LAMBDA(rtk, bias, xa, sat, nf, ns);
-                if (nb > 1) {
-                    int nv = zdres(rtk, obs, nu, nr, nav, sat, ns, iu, ir, azel, vflg, nf, y, xa);
-                    if (nv > 0) {
-                        int nvOut = ddres(rtk, obs, nu, nr, nav, sat, ns, iu, ir, azel,
-                                vflg, nf, H, v, R, y, xa);
-
-                        if (valpos(rtk, v, R, vflg, nvOut, 4.0)) {
-                            if (++rtk.nfix >= opt.minfix) {
-                                if (opt.modear == Constants.ARMODE_FIXHOLD) {
-                                    holdamb(rtk, xa);
-                                }
-                                if (opt.mode == Constants.PMODE_STATIC_START) {
-                                    opt.mode = Constants.PMODE_KINEMA;
-                                }
-                            }
-                            stat = Constants.SOLQ_FIX;
-                        }
-                    }
-                }
-            }
-
-            if (stat == Constants.SOLQ_NONE) {
-                System.arraycopy(xp, 0, rtk.x, 0, nx);
-                System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
+        for (i = 0; i < ns; i++) {
+            for (f = 0; f < nf; f++) {
+                rtk.ssat[sat[i] - 1].snrRover[f] = obs[iu[i]].SNR[f];
+                rtk.ssat[sat[i] - 1].snrBase[f] = obs[ir[i]].SNR[f];
             }
         }
 
+        double[] xp = new double[nx];
+        double[] Pp = new double[nx * nx];
+        System.arraycopy(rtk.x, 0, xp, 0, nx);
+        System.arraycopy(rtk.P, 0, Pp, 0, nx * nx);
+
+        int ny = ns * nf * 2 + 2;
+        double[] v = new double[ny];
+        double[] H = new double[nx * ny];
+        double[] R = new double[ny * ny];
+        int[] vflg = new int[ny];
+        double[] xa = new double[nx];
+        double[] bias = new double[nx];
+
+        int stat = opt.mode <= Constants.PMODE_DGPS ? Constants.SOLQ_DGPS : Constants.SOLQ_FLOAT;
+
+        double[] rr_rover = new double[3];
+
+        for (i = 0; i < opt.niter; i++) {
+            for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xp[j];
+            if (!zdres(0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
+                    y, e, azel, freq)) {
+                stat = Constants.SOLQ_NONE;
+                break;
+            }
+            if ((nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
+                    iu, ir, ns, nf, nav, v, H, R, vflg)) < 4) {
+                stat = Constants.SOLQ_NONE;
+                break;
+            }
+
+            RtkOptimizations.computeQScale(rtk, sat, ns);
+
+            RtkOptimizations.applyIggiii(rtk, v, H, R, vflg, nv, nx, sat, ns,
+                    obs, iu, azel, nf);
+
+            int info = filter(rtk, xp, Pp, H, v, R, nx, nv);
+            if (info != 0) {
+                stat = Constants.SOLQ_NONE;
+                break;
+            }
+        }
+
+        if (stat != Constants.SOLQ_NONE) {
+            for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xp[j];
+            if (zdres(0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
+                    y, e, azel, freq)) {
+                nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
+                        iu, ir, ns, nf, nav, v, null, R, vflg);
+
+                if (valpos(rtk, v, R, vflg, nv, 4.0)) {
+                    System.arraycopy(xp, 0, rtk.x, 0, nx);
+                    System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
+
+                    rtk.sol.ns = 0;
+                    for (i = 0; i < ns; i++) {
+                        for (f = 0; f < nf; f++) {
+                            if (rtk.ssat[sat[i] - 1].vsat[f] == 0) continue;
+                            rtk.ssat[sat[i] - 1].outc[f] = 0;
+                            if (f == 0) rtk.sol.ns++;
+                        }
+                    }
+                    if (rtk.sol.ns < 4) stat = Constants.SOLQ_DGPS;
+                } else {
+                    stat = Constants.SOLQ_NONE;
+                }
+            } else {
+                stat = Constants.SOLQ_NONE;
+            }
+        }
+
+        if (stat == Constants.SOLQ_FLOAT) {
+            double[] bias_arr = new double[nx];
+            double[] xa_arr = new double[nx];
+            int nb = manage_amb_LAMBDA(rtk, bias_arr, xa_arr, sat, nf, ns);
+            if (nb > 1) {
+                for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xa_arr[j];
+                if (zdres(0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
+                        y, e, azel, freq)) {
+                    nv = ddres(rtk, obs, dt, xa_arr, rtk.P, sat, y, e, azel, freq,
+                            iu, ir, ns, nf, nav, v, null, R, vflg);
+                    if (nv > 0 && valpos(rtk, v, R, vflg, nv, 4.0)) {
+                        if (++rtk.nfix >= opt.minfix) {
+                            if (opt.modear == Constants.ARMODE_FIXHOLD) {
+                                holdamb(rtk, xa_arr);
+                            }
+                            if (opt.mode == Constants.PMODE_STATIC_START) {
+                                opt.mode = Constants.PMODE_KINEMA;
+                            }
+                        }
+                        stat = Constants.SOLQ_FIX;
+                        System.arraycopy(xa_arr, 0, xa, 0, nx);
+                    }
+                }
+            }
+        }
+
+        if (stat == Constants.SOLQ_NONE) {
+            System.arraycopy(xp, 0, rtk.x, 0, nx);
+            System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
+        }
+
         if (stat == Constants.SOLQ_FIX) {
-            for (int i = 0; i < 3; i++) {
-                rtk.sol.rr[i] = rtk.rb[i] + rtk.xa[i];
+            for (i = 0; i < 3; i++) {
+                rtk.sol.rr[i] = rtk.rb[i] + xa[i];
                 rtk.sol.qr[i] = (float) rtk.Pa[i + i * rtk.na];
             }
             rtk.sol.qr[3] = (float) rtk.Pa[1];
@@ -229,8 +269,8 @@ public final class RtkCore {
             rtk.sol.qr[5] = (float) rtk.Pa[2];
 
             if (opt.dynamics != 0) {
-                for (int i = 3; i < 6; i++) {
-                    rtk.sol.rr[i] = rtk.xa[i];
+                for (i = 3; i < 6; i++) {
+                    rtk.sol.rr[i] = xa[i];
                     rtk.sol.qv[i - 3] = (float) rtk.Pa[i + i * rtk.na];
                 }
                 rtk.sol.qv[3] = (float) rtk.Pa[4 + 3 * rtk.na];
@@ -238,7 +278,7 @@ public final class RtkCore {
                 rtk.sol.qv[5] = (float) rtk.Pa[5 + 3 * rtk.na];
             }
         } else {
-            for (int i = 0; i < 3; i++) {
+            for (i = 0; i < 3; i++) {
                 rtk.sol.rr[i] = rtk.rb[i] + rtk.x[i];
                 rtk.sol.qr[i] = (float) rtk.P[i * nx + i];
             }
@@ -247,7 +287,7 @@ public final class RtkCore {
             rtk.sol.qr[5] = (float) rtk.P[2];
 
             if (opt.dynamics != 0) {
-                for (int i = 3; i < 6; i++) {
+                for (i = 3; i < 6; i++) {
                     rtk.sol.rr[i] = rtk.x[i];
                     rtk.sol.qv[i - 3] = (float) rtk.P[i + i * nx];
                 }
@@ -260,17 +300,16 @@ public final class RtkCore {
 
         rtk.sol.stat = (byte) stat;
 
-        int n = nu + nr;
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < nf; j++) {
+        for (i = 0; i < n; i++) {
+            for (j = 0; j < nf; j++) {
                 if (obs[i].L[j] == 0.0) continue;
                 int s = obs[i].sat - 1;
                 rtk.ssat[s].pt[obs[i].rcv - 1][j] = obs[i].time;
                 rtk.ssat[s].ph[obs[i].rcv - 1][j] = obs[i].L[j];
             }
         }
-        for (int i = 0; i < Constants.MAXSAT; i++) {
-            for (int j = 0; j < nf; j++) {
+        for (i = 0; i < Constants.MAXSAT; i++) {
+            for (j = 0; j < nf; j++) {
                 if ((rtk.ssat[i].slip[j] & Constants.LLI_SLIP) != 0) {
                     rtk.ssat[i].slipc[j]++;
                 }
@@ -284,18 +323,24 @@ public final class RtkCore {
         return stat != Constants.SOLQ_NONE ? 1 : 0;
     }
 
-    private static int selsat(Obsd[] obs, int nu, int nr, PrcOpt opt,
+    private static int selsat(Obsd[] obs, double[] azel, int nu, int nr, PrcOpt opt,
                               int[] sat, int[] iu, int[] ir) {
         int ns = 0;
-        for (int i = 0; i < nu && ns < Constants.MAXSAT; i++) {
-            for (int j = 0; j < nr && ns < Constants.MAXSAT; j++) {
-                if (obs[i].sat == obs[nu + j].sat) {
+        int i = 0, j = nu;
+        while (i < nu && j < nu + nr) {
+            if (obs[i].sat < obs[j].sat) {
+                i++;
+            } else if (obs[i].sat > obs[j].sat) {
+                j++;
+            } else {
+                if (azel[1 + j * 2] >= opt.elmin) {
                     sat[ns] = obs[i].sat;
                     iu[ns] = i;
-                    ir[ns] = nu + j;
+                    ir[ns] = j;
                     ns++;
-                    break;
                 }
+                i++;
+                j++;
             }
         }
         return ns;
@@ -402,13 +447,15 @@ public final class RtkCore {
         double tt = rtk.tt;
 
         if (opt.mode == Constants.PMODE_FIXED) {
-            for (int i = 0; i < 3; i++) initx(x, P, nx, opt.ru[i], Constants.VAR_POS_FIX, i);
+            for (int i = 0; i < 3; i++) initx(x, P, nx, opt.ru[i] - rtk.rb[i], Constants.VAR_POS_FIX, i);
             return;
         }
 
-        double normPos = Math.sqrt(x[0] * x[0] + x[1] * x[1] + x[2] * x[2]);
-        if (normPos <= Constants.RE_WGS84 / 2.0) {
-            for (int i = 0; i < 3; i++) initx(x, P, nx, rtk.sol.rr[i], Constants.VAR_POS, i);
+        double[] rr_abs = new double[3];
+        for (int i = 0; i < 3; i++) rr_abs[i] = rtk.rb[i] + x[i];
+        double normAbs = RtklibCommon.norm(rr_abs, 3);
+        if (normAbs <= Constants.RE_WGS84 / 2.0) {
+            for (int i = 0; i < 3; i++) initx(x, P, nx, rtk.sol.rr[i] - rtk.rb[i], Constants.VAR_POS, i);
             if (opt.dynamics != 0) {
                 for (int i = 3; i < 6; i++) initx(x, P, nx, rtk.sol.rr[i], Constants.VAR_VEL, i);
                 for (int i = 6; i < 9; i++) initx(x, P, nx, 1E-6, Constants.VAR_ACC, i);
@@ -421,7 +468,7 @@ public final class RtkCore {
         }
 
         if (opt.dynamics == 0) {
-            for (int i = 0; i < 3; i++) initx(x, P, nx, rtk.sol.rr[i], Constants.VAR_POS, i);
+            for (int i = 0; i < 3; i++) initx(x, P, nx, rtk.sol.rr[i] - rtk.rb[i], Constants.VAR_POS, i);
             return;
         }
 
@@ -430,7 +477,7 @@ public final class RtkCore {
         var /= 3.0;
 
         if (var > Constants.VAR_POS) {
-            for (int i = 0; i < 3; i++) initx(x, P, nx, rtk.sol.rr[i], Constants.VAR_POS, i);
+            for (int i = 0; i < 3; i++) initx(x, P, nx, rtk.sol.rr[i] - rtk.rb[i], Constants.VAR_POS, i);
             for (int i = 3; i < 6; i++) initx(x, P, nx, rtk.sol.rr[i], Constants.VAR_VEL, i);
             for (int i = 6; i < 9; i++) initx(x, P, nx, 1E-6, Constants.VAR_ACC, i);
             return;
@@ -557,9 +604,56 @@ public final class RtkCore {
         }
     }
 
-    private static double baseline(double[] ru, double[] rb, double[] dr) {
-        for (int i = 0; i < 3; i++) dr[i] = ru[i] - rb[i];
-        return Math.sqrt(dr[0] * dr[0] + dr[1] * dr[1] + dr[2] * dr[2]);
+    private static double baseline(double[] x, double[] rb, double[] dr) {
+        if (dr == null) dr = new double[3];
+        return Math.sqrt(x[0] * x[0] + x[1] * x[1] + x[2] * x[2]);
+    }
+
+    private static void tidedisp(GTime tutc, double[] rr, int opt, Erp erp,
+                                  double[][][] odisp, double[] dr) {
+        dr[0] = dr[1] = dr[2] = 0.0;
+        if (RtklibCommon.norm(rr, 3) <= 0.0) return;
+
+        if ((opt & 1) != 0) {
+            double[] erpv = new double[4];
+            if (Tides.geterp(erp, tutc, erpv) == 0) {
+                erpv[0] = erpv[1] = erpv[2] = erpv[3] = 0.0;
+            }
+            double[] rsun = new double[3], rmoon = new double[3];
+            Tides.sunmoonpos(tutc, erpv, rsun, rmoon, null);
+            double[] drt = new double[3];
+            Tides.dehanttideinel(tutc, rr, rsun, rmoon, drt);
+            for (int i = 0; i < 3; i++) dr[i] += drt[i];
+        }
+    }
+
+    private static void antmodel(Pcv pcv, double[] del, double[] azel, int opt, double[] dant) {
+        double cosel = Math.cos(azel[1]);
+        double sinel = Math.sin(azel[1]);
+        double[] e = new double[]{Math.sin(azel[0]) * cosel, Math.cos(azel[0]) * cosel, sinel};
+
+        for (int i = 0; i < Constants.NFREQ; i++) {
+            double[] off = new double[3];
+            for (int j = 0; j < 3; j++) off[j] = pcv.off[i][j] + del[j];
+
+            double dot = off[0] * e[0] + off[1] * e[1] + off[2] * e[2];
+            double pcvar = 0.0;
+            if (opt != 0) {
+                double eldeg = 90.0 - azel[1] * Constants.R2D;
+                pcvar = interpvar(eldeg, pcv.var[i]);
+            }
+            dant[i] = -dot + pcvar;
+        }
+    }
+
+    private static double interpvar(double eldeg, double[] var) {
+        if (var == null) return 0.0;
+        double a = eldeg / 5.0;
+        int i = (int) a;
+        if (i < 0) i = 0;
+        if (i >= var.length - 1) return var[var.length - 1];
+        double t = a - i;
+        return var[i] * (1.0 - t) + var[i + 1] * t;
     }
 
     private static void udbias(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav,
@@ -578,17 +672,27 @@ public final class RtkCore {
         }
 
         for (int f = 0; f < nf; f++) {
-            for (int i = 0; i < ns; i++) {
-                int s = sat[i] - 1;
-                if (++rtk.ssat[s].outc[f] > opt.maxout) {
-                    int idx = IB(sat[i], f, opt);
+            for (int i = 1; i <= Constants.MAXSAT; i++) {
+                boolean reset = ++rtk.ssat[i - 1].outc[f] > opt.maxout;
+                int idx = IB(i, f, opt);
+                if (idx >= nx) continue;
+                if (opt.modear == Constants.ARMODE_INST && x[idx] != 0.0) {
                     initx(x, P, nx, 0.0, 0.0, idx);
+                } else if (reset && x[idx] != 0.0) {
+                    initx(x, P, nx, 0.0, 0.0, idx);
+                    rtk.ssat[i - 1].outc[f] = 0;
+                }
+                if (opt.modear != Constants.ARMODE_INST && reset) {
+                    rtk.ssat[i - 1].lock[f] = -opt.minlock;
                 }
             }
 
             for (int i = 0; i < ns; i++) {
                 int s = sat[i] - 1;
                 int idx = IB(sat[i], f, opt);
+                if (idx < nx) {
+                    P[idx * nx + idx] += SQR(opt.prn[0]) * Math.abs(rtk.tt);
+                }
                 int slip = rtk.ssat[s].slip[f];
                 int rejc = (int) rtk.ssat[s].rejc[f];
                 if (opt.ionoopt == Constants.IONOOPT_IFLC && nf > 1) {
@@ -609,120 +713,241 @@ public final class RtkCore {
                 }
             }
 
+            double[] bias = new double[ns];
+            int cnt = 0;
+            double offset = 0.0;
             for (int i = 0; i < ns; i++) {
-                int s = sat[i] - 1;
                 Obsd obsR = obs[iu[i]];
                 Obsd obsB = obs[ir[i]];
 
-                if (obsR.P[f] == 0.0 || obsB.P[f] == 0.0) continue;
-                if (obsR.L[f] == 0.0 || obsB.L[f] == 0.0) continue;
-
-                double freq = SatUtils.sat2freq(sat[i], obsR.code[f], nav);
-                if (freq == 0.0) continue;
-                double lam = Constants.CLIGHT / freq;
-
-                double bias = (obsR.L[f] - obsB.L[f]) * lam -
-                             (obsR.P[f] - obsB.P[f]);
-
+                if (opt.ionoopt != Constants.IONOOPT_IFLC) {
+                    if (obsR.P[f] == 0.0 || obsB.P[f] == 0.0) continue;
+                    if (obsR.L[f] == 0.0 || obsB.L[f] == 0.0) continue;
+                    double freqi = SatUtils.sat2freq(sat[i], obsR.code[f], nav);
+                    if (freqi == 0.0) continue;
+                    double cp = obsR.L[f] - obsB.L[f];
+                    double pr = obsR.P[f] - obsB.P[f];
+                    bias[i] = cp - pr * freqi / Constants.CLIGHT;
+                } else {
+                    if (obsR.L[0] == 0.0 || obsR.L[1] == 0.0 || obsB.L[0] == 0.0 || obsB.L[1] == 0.0) continue;
+                    if (obsR.P[0] == 0.0 || obsR.P[1] == 0.0 || obsB.P[0] == 0.0 || obsB.P[1] == 0.0) continue;
+                    double freq1 = SatUtils.sat2freq(sat[i], obsR.code[0], nav);
+                    double freq2 = SatUtils.sat2freq(sat[i], obsR.code[1], nav);
+                    if (freq1 <= 0.0 || freq2 <= 0.0) continue;
+                    double C1 = SQR(freq1) / (SQR(freq1) - SQR(freq2));
+                    double C2 = -SQR(freq2) / (SQR(freq1) - SQR(freq2));
+                    double cp1 = (obsR.L[0] - obsB.L[0]) * Constants.CLIGHT / freq1;
+                    double cp2 = (obsR.L[1] - obsB.L[1]) * Constants.CLIGHT / freq2;
+                    double pr1 = obsR.P[0] - obsB.P[0];
+                    double pr2 = obsR.P[1] - obsB.P[1];
+                    bias[i] = (C1 * cp1 + C2 * cp2) - (C1 * pr1 + C2 * pr2);
+                }
                 int idx = IB(sat[i], f, opt);
-                if (x[idx] == 0.0) {
-                    initx(x, P, nx, bias, SQR(opt.prn[0]), idx);
+                if (idx < nx && x[idx] != 0.0) {
+                    offset += bias[i] - x[idx];
+                    cnt++;
+                }
+            }
+
+            if (cnt > 0) {
+                for (int i = 1; i <= Constants.MAXSAT; i++) {
+                    int idx = IB(i, f, opt);
+                    if (idx < nx && x[idx] != 0.0) {
+                        x[idx] += offset / cnt;
+                    }
+                }
+            }
+
+            for (int i = 0; i < ns; i++) {
+                if (bias[i] == 0.0) continue;
+                int idx = IB(sat[i], f, opt);
+                if (idx >= nx) continue;
+                if (x[idx] != 0.0) continue;
+                initx(x, P, nx, bias[i], SQR(opt.std[0]), idx);
+                if (opt.modear != Constants.ARMODE_INST) {
+                    rtk.ssat[sat[i] - 1].lock[f] = -opt.minlock;
                 }
             }
         }
     }
 
-    private static int zdres(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav,
-                             int[] sat, int ns, int[] iu, int[] ir,
-                             double[] azel, int[] vflg, int nf, double[] y,
-                             double[] xState) {
-        PrcOpt opt = rtk.opt;
+    private static boolean zdres(int base, Obsd[] obs, int nu, int nr,
+                                 double[] rs, double[] dts, double[] vare, int[] svh,
+                                 Nav nav, double[] rr, PrcOpt opt,
+                                 double[] y, double[] e, double[] azel, double[] freq) {
+        int n = base != 0 ? nr : nu;
+        int off = base != 0 ? nu : 0;
+        int foff = base != 0 ? nu : 0;
+        int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
+
+        for (int i = 0; i < n * nf * 2; i++) y[off * nf * 2 + i] = 0.0;
+
+        double rrNorm = RtklibCommon.norm(rr, 3);
+        if (rrNorm <= Constants.RE_WGS84 / 2) {
+            return false;
+        }
+
+        double[] rr_ = new double[]{rr[0], rr[1], rr[2]};
+        if (opt.tidecorr != 0) {
+            double[] disp = new double[3];
+            tidedisp(TimeSystem.gpst2utc(obs[0].time), rr_, opt.tidecorr, nav.erp, opt.odisp[base], disp);
+            for (int i = 0; i < 3; i++) rr_[i] += disp[i];
+        }
         double[] pos = new double[3];
-        double[] rrRov = new double[3];
-        double[] rrBas = new double[3];
+        CoordTransform.ecef2pos(rr_, pos);
 
-        for (int i = 0; i < 3; i++) {
-            rrBas[i] = rtk.rb[i];
-            rrRov[i] = rtk.rb[i] + xState[i];
-        }
-        CoordTransform.ecef2pos(rrRov, pos);
+        double[] zazel = new double[]{0.0, Constants.PI / 2.0};
+        double zhd = TroposphereModel.saastamoinen(pos, zazel, 0.0, 293.15);
 
-        double[] rs = new double[ns * 6];
-        double[] dts = new double[ns * 2];
-        double[] var = new double[ns];
-        int[] svh = new int[ns];
+        for (int i = 0; i < n; i++) {
+            int idx = off + i;
+            double[] rsi = new double[]{rs[idx * 6], rs[idx * 6 + 1], rs[idx * 6 + 2]};
+            double[] ei = new double[3];
+            double r = RtklibCommon.geodist(rsi, rr_, ei);
+            if (r <= 0.0) continue;
 
-        Obsd[] satObs = new Obsd[ns];
-        for (int i = 0; i < ns; i++) {
-            satObs[i] = obs[iu[i]];
-        }
-        EphModel.satposs(obs[0].time, satObs, ns, nav, rs, dts, var, svh, opt.sateph);
+            double[] ae = new double[2];
+            double el = RtklibCommon.satazel(pos, ei, ae);
+            azel[idx * 2] = ae[0];
+            azel[idx * 2 + 1] = el;
+            if (el < opt.elmin) continue;
 
-        int nv = 0;
-    
-        double[] e = new double[3];
+            if (RtklibCommon.satexclude(obs[idx].sat, vare[idx], svh[idx], opt) != 0) continue;
 
-        for (int f = 0; f < nf; f++) {
-            for (int i = 0; i < ns; i++) {
-                int s = sat[i] - 1;
-                Obsd obsR = obs[iu[i]];
-                Obsd obsB = obs[ir[i]];
+            r += -Constants.CLIGHT * dts[idx * 2];
 
-                double rRov = RtklibCommon.geodist(
-                        new double[]{rs[i * 6], rs[i * 6 + 1], rs[i * 6 + 2]},
-                        rrRov, e);
-                double rBas = RtklibCommon.geodist(
-                        new double[]{rs[i * 6], rs[i * 6 + 1], rs[i * 6 + 2]},
-                        rrBas, e);
+            double[] mapfh = new double[1];
+            double mapf = TroposphereModel.tropmapf(obs[idx].time, pos, ae, mapfh);
+            r += mapf * zhd;
 
-                RtklibCommon.satazel(pos, e, new double[]{azel[i * 2], azel[i * 2 + 1]});
-                azel[i * 2] = Math.atan2(e[0], e[1]);
-                if (azel[i * 2] < 0) azel[i * 2] += 2.0 * Constants.PI;
-                azel[i * 2 + 1] = Math.asin(e[2]);
+            e[idx * 3] = ei[0];
+            e[idx * 3 + 1] = ei[1];
+            e[idx * 3 + 2] = ei[2];
 
-                rtk.ssat[s].azel[0] = azel[i * 2];
-                rtk.ssat[s].azel[1] = azel[i * 2 + 1];
+            double[] dant = new double[Constants.NFREQ];
+            antmodel(opt.pcvr[base], opt.antdel[base], ae, opt.posopt[1], dant);
 
-                double[] tropRov = new double[1];
-                double[] tropBas = new double[1];
-                SbasCorrection.sbstropcorr(obsR.time, pos, new double[]{azel[i * 2], azel[i * 2 + 1]}, tropRov);
-                SbasCorrection.sbstropcorr(obsB.time, rrBas, new double[]{azel[i * 2], azel[i * 2 + 1]}, tropBas);
+            if (opt.ionoopt == Constants.IONOOPT_IFLC) {
+                double freq1 = SatUtils.sat2freq(obs[idx].sat, obs[idx].code[0], nav);
+                int f2 = RtklibCommon.seliflc(opt.nf, SatUtils.satsys(obs[idx].sat, null));
+                double freq2 = SatUtils.sat2freq(obs[idx].sat, obs[idx].code[f2], nav);
+                if (freq1 == 0.0 || freq2 == 0.0) continue;
 
-                double ion = 0.0;
-                if (opt.ionoopt == Constants.IONOOPT_BRDC) {
-                    double[] ionArr = new double[2];
-                    IonosphereModel.ionocorr(obsR.time, nav, sat[i], pos,
-                        new double[]{azel[i * 2], azel[i * 2 + 1]}, opt.ionoopt, ionArr);
-                    ion = ionArr[0];
+                if (RtklibCommon.testsnr(base, 0, el, obs[idx].SNR[0], opt.snrmask) != 0 ||
+                    RtklibCommon.testsnr(base, f2, el, obs[idx].SNR[f2], opt.snrmask) != 0) continue;
+
+                double C1 = SQR(freq1) / (SQR(freq1) - SQR(freq2));
+                double C2 = -SQR(freq2) / (SQR(freq1) - SQR(freq2));
+                double dant_if = C1 * dant[0] + C2 * dant[f2];
+
+                freq[foff * nf + i * nf] = 1.0;
+
+                if (obs[idx].L[0] != 0.0 && obs[idx].L[f2] != 0.0) {
+                    y[off * nf * 2 + i * nf * 2] = C1 * obs[idx].L[0] * Constants.CLIGHT / freq1
+                            + C2 * obs[idx].L[f2] * Constants.CLIGHT / freq2 - r - dant_if;
                 }
-
-                double dtsVal = dts[i * 2] * Constants.CLIGHT;
-
-                double freq = SatUtils.sat2freq(sat[i], obsR.code[f], nav);
-                if (freq == 0.0) continue;
-                double lam = Constants.CLIGHT / freq;
-
-                if (obsR.P[f] != 0.0 && obsB.P[f] != 0.0) {
-                    double prRov = obsR.P[f] - (rRov + dtsVal - ion + tropRov[0]);
-                    double prBas = obsB.P[f] - (rBas + dtsVal - ion + tropBas[0]);
-                    y[nv] = prRov - prBas;
-                    vflg[nv] = (sat[i] << 8) | (0 << 4) | f;
-                    rtk.ssat[s].vsat[f] = 1;
-                    nv++;
+                if (obs[idx].P[0] != 0.0 && obs[idx].P[f2] != 0.0) {
+                    y[off * nf * 2 + i * nf * 2 + nf] = C1 * obs[idx].P[0]
+                            + C2 * obs[idx].P[f2] - r - dant_if;
                 }
+            } else {
+                for (int f = 0; f < nf; f++) {
+                    double fq = SatUtils.sat2freq(obs[idx].sat, obs[idx].code[f], nav);
+                    freq[foff * nf + i * nf + f] = fq;
+                    if (fq == 0.0) continue;
 
-                if (obsR.L[f] != 0.0 && obsB.L[f] != 0.0) {
-                    double cpRov = obsR.L[f] * lam - (rRov + dtsVal + ion + tropRov[0]);
-                    double cpBas = obsB.L[f] * lam - (rBas + dtsVal + ion + tropBas[0]);
-                    y[nv] = cpRov - cpBas;
-                    vflg[nv] = (sat[i] << 8) | (1 << 4) | f;
-                    rtk.ssat[s].vsat[f] = 1;
-                    nv++;
+                    if (RtklibCommon.testsnr(base, f, el, obs[idx].SNR[f], opt.snrmask) != 0) continue;
+
+                    double lam = Constants.CLIGHT / fq;
+
+                    if (obs[idx].L[f] != 0.0) {
+                        y[off * nf * 2 + i * nf * 2 + f] = obs[idx].L[f] * lam - r - dant[f];
+                    }
+                    if (obs[idx].P[f] != 0.0) {
+                        y[off * nf * 2 + i * nf * 2 + nf + f] = obs[idx].P[f] - r - dant[f];
+                    }
                 }
             }
         }
+        return true;
+    }
 
-        return nv;
+    private static int nb(Rtk rtk, int[] sat, int ns, PrcOpt opt) {
+        int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
+        int nb = 0;
+        for (int i = 0; i < ns; i++) {
+            for (int f = 0; f < nf; f++) {
+                if (rtk.ssat[sat[i] - 1].lock[f] > 0) nb++;
+            }
+        }
+        return nb;
+    }
+
+    private static double varerr(int sat, int sys, double el, double snr_rover,
+                                 double snr_base, double bl, double dt, int f,
+                                 PrcOpt opt, Obsd obs) {
+        double a, b, c, d;
+        int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
+        int frq = f % nf;
+        boolean code = f >= nf;
+        double s_el = Math.sin(el);
+        if (s_el <= 0.0) s_el = 0.001;
+
+        double fact;
+        if (code) {
+            fact = opt.eratio[frq];
+        } else {
+            fact = opt.eratio[frq] / opt.eratio[0];
+        }
+
+        switch (sys) {
+            case Constants.SYS_GPS: fact *= Constants.EFACT_GPS; break;
+            case Constants.SYS_GLO: fact *= Constants.EFACT_GLO; break;
+            case Constants.SYS_GAL: fact *= Constants.EFACT_GAL; break;
+            case Constants.SYS_SBS: fact *= Constants.EFACT_SBS; break;
+            case Constants.SYS_QZS: fact *= Constants.EFACT_QZS; break;
+            case Constants.SYS_CMP: fact *= Constants.EFACT_CMP; break;
+            case Constants.SYS_IRN: fact *= Constants.EFACT_IRN; break;
+            default: fact *= Constants.EFACT_GPS; break;
+        }
+
+        a = fact * opt.err[1];
+        b = fact * opt.err[2];
+        c = opt.err[3] * bl / 1E4;
+        d = Constants.CLIGHT * opt.sclkstab * dt;
+
+        double var = 2.0 * (SQR(a) + SQR(b / s_el) + SQR(c)) + SQR(d);
+
+        if (opt.err[6] > 0.0) {
+            double e = fact * opt.err[6];
+            var += SQR(e) * (Math.pow(10, 0.1 * Math.max(opt.err[5] - snr_rover, 0.0)) +
+                             Math.pow(10, 0.1 * Math.max(opt.err[5] - snr_base, 0.0)));
+        }
+        if (opt.err[7] > 0.0) {
+            if (code) var += SQR(opt.err[7] * obs.Pstd[frq]);
+            else var += SQR(opt.err[7] * obs.Lstd[frq] * 0.2);
+        }
+
+        if (opt.ionoopt == Constants.IONOOPT_IFLC) {
+            var *= SQR(3.0);
+        }
+
+        return var;
+    }
+
+    private static void ddcov(int[] nb, int b, double[] Ri, double[] Rj, int nv,
+                              double[] R) {
+        int i, j, k = 0;
+
+        for (i = 0; i < nv * nv; i++) R[i] = 0.0;
+
+        for (int bi = 0; bi < b; k += nb[bi++]) {
+            for (i = 0; i < nb[bi]; i++) {
+                for (j = 0; j < nb[bi]; j++) {
+                    R[(k + i) * nv + (k + j)] = Ri[k + i] + (i == j ? Rj[k + i] : 0.0);
+                }
+            }
+        }
     }
 
     private static void prectrop(Rtk rtk, double[] rr, double[] azel, int i,
@@ -742,186 +967,311 @@ public final class RtkCore {
         }
     }
 
-    private static int ddres(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav,
-                             int[] sat, int ns, int[] iu, int[] ir,
-                             double[] azel, int[] vflg, int nf,
-                             double[] H, double[] v, double[] R, double[] y,
-                             double[] xState) {
+    private static int ddres(Rtk rtk, Obsd[] obs, double dt, double[] x, double[] P,
+                             int[] sat, double[] y, double[] e, double[] azel,
+                             double[] freq, int[] iu, int[] ir, int ns, int nf,
+                             Nav nav, double[] v, double[] H, double[] R, int[] vflg) {
         PrcOpt opt = rtk.opt;
         int nx = rtk.nx;
+        double[] pos = new double[3];
+        int i, j, k, m, f, nv = 0;
+        int[] ref = new int[Constants.MAXSAT];
+        int[] rp = new int[Constants.MAXSAT];
+        int[] sysv = new int[Constants.MAXSAT];
+        int syscount = 0;
+        int[] nb_arr = new int[nf * Constants.MAXSAT];
+        int b = 0;
 
-        int nvIn = 0;
-        for (int i = 0; i < ns * nf * 2; i++) {
-            if (vflg[i] != 0) nvIn++;
+        double[] Ri = null, Rj = null;
+        if (R != null) {
+            Ri = new double[ns * nf * 2];
+            Rj = new double[ns * nf * 2];
         }
 
-        int[] refIdx = new int[nf * 2];
-        for (int i = 0; i < nf * 2; i++) refIdx[i] = -1;
+        for (m = 0; m < ns; m++) {
+            int s = sat[m] - 1;
+            sysv[m] = SatUtils.satsys(sat[m], null);
+        }
 
-        for (int f = 0; f < nf * 2; f++) {
-            double maxEl = 0.0;
-            for (int i = 0; i < nvIn; i++) {
-                int satIdx = (vflg[i] >> 8) & 0xFF;
-                int type = (vflg[i] >> 4) & 0xF;
-                int frq = vflg[i] & 0xF;
-                int ft = frq + (type >= 1 ? nf : 0);
-                if (ft == f && satIdx > 0 && satIdx <= Constants.MAXSAT) {
-                    double el = rtk.ssat[satIdx - 1].azel[1];
-                    if (el > maxEl) {
-                        maxEl = el;
-                        refIdx[f] = i;
-                    }
+        for (int sys = Constants.SYS_GPS; sys <= Constants.SYS_SBS; sys <<= 1) {
+            if ((opt.navsys & sys) == 0) continue;
+            double maxel = 0.0;
+            int idx = -1;
+            for (m = 0; m < ns; m++) {
+                if (sysv[m] != sys) continue;
+                double el = azel[iu[m] * 2 + 1];
+                if (el <= 0.0) continue;
+                boolean hasObs = false;
+                for (f = 0; f < nf; f++) {
+                    if (obs[iu[m]].L[f] != 0.0 && obs[ir[m]].L[f] != 0.0) hasObs = true;
+                }
+                if (!hasObs) continue;
+                if (el > maxel) {
+                    maxel = el;
+                    idx = m;
                 }
             }
+            if (idx >= 0) {
+                ref[syscount] = idx;
+                rp[syscount] = idx;
+                syscount++;
+            }
         }
 
-        int nvOut = 0;
-        double[] refY = new double[nf * 2];
-        double[] refV = new double[nf * 2];
-        int[] refSat = new int[nf * 2];
+        if (syscount == 0) return 0;
 
-        for (int f = 0; f < nf * 2; f++) {
-            if (refIdx[f] < 0) continue;
-            int satIdx = (vflg[refIdx[f]] >> 8) & 0xFF;
-            refSat[f] = satIdx;
-        }
+        double[] rr_rover = new double[3];
+        for (i = 0; i < 3; i++) rr_rover[i] = rtk.rb[i] + x[i];
+        CoordTransform.ecef2pos(rr_rover, pos);
 
-        for (int i = 0; i < nvIn; i++) {
-            int satIdx = (vflg[i] >> 8) & 0xFF;
-            int type = (vflg[i] >> 4) & 0xF;
-            int frq = vflg[i] & 0xF;
-            int ft = frq + (type >= 1 ? nf : 0);
+        double bl = RtklibCommon.norm(x, 3);
 
-            if (refIdx[ft] < 0 || refIdx[ft] == i) continue;
+        b = 0;
+        for (f = 0; f < nf; f++) {
+            for (int si = 0; si < syscount; si++) {
+                int ri = ref[si];
+                int s_ref = sat[ri] - 1;
+                int nb_count = 0;
 
-            int refI = refIdx[ft];
+                double el_ref = azel[iu[ri] * 2 + 1];
+                int sys_ref = SatUtils.satsys(sat[ri], null);
 
-            for (int k = 0; k < nx; k++) {
-                H[nvOut * nx + k] = 0.0;
-            }
+                for (m = 0; m < ns; m++) {
+                    if (m == ri) continue;
+                    if (sysv[m] != sysv[ri]) continue;
+                    int s = sat[m] - 1;
 
-            double[] e = new double[3];
-            double[] rrRov = new double[3];
-            for (int k = 0; k < 3; k++) rrRov[k] = rtk.rb[k] + xState[k];
+                    if (obs[iu[m]].L[f] == 0.0 || obs[ir[m]].L[f] == 0.0) continue;
+                    if (obs[iu[ri]].L[f] == 0.0 || obs[ir[ri]].L[f] == 0.0) continue;
 
-            double rRov = RtklibCommon.geodist(
-                    new double[]{0, 0, 0}, rrRov, e);
+                    double lam = Constants.CLIGHT / freq[iu[m] * nf + f];
+                    if (lam <= 0.0) continue;
 
-            for (int k = 0; k < 3; k++) {
-                H[nvOut * nx + k] = -e[k];
-            }
+                    if (H != null) {
+                        for (j = 0; j < nx; j++) H[nv * nx + j] = 0.0;
+                    }
 
-            int freqIdx = type >= 1 ? IB(satIdx, frq, opt) : 0;
-            int refFreqIdx = type >= 1 ? IB(refSat[ft], frq, opt) : 0;
+                    double[] ei = new double[]{e[iu[m] * 3], e[iu[m] * 3 + 1], e[iu[m] * 3 + 2]};
+                    double[] er = new double[]{e[iu[ri] * 3], e[iu[ri] * 3 + 1], e[iu[ri] * 3 + 2]};
 
-            if (freqIdx > 0 && freqIdx < nx) {
-                H[nvOut * nx + freqIdx] = 1.0;
-            }
-            if (refFreqIdx > 0 && refFreqIdx < nx) {
-                H[nvOut * nx + refFreqIdx] = -1.0;
-
-                v[nvOut] = y[i] - y[refI];
-
-                if (opt.ionoopt == Constants.IONOOPT_EST) {
-                    double[] ionMapI = new double[1];
-                    double[] ionMapJ = new double[1];
-                    double[] posI = new double[3];
-                    double[] posJ = new double[3];
-                    CoordTransform.ecef2pos(rrRov, posI);
-                    CoordTransform.ecef2pos(rrRov, posJ);
-                    double imI = IonosphereModel.ionmapf(posI, new double[]{azel[i * 2], azel[i * 2 + 1]});
-                    double imJ = IonosphereModel.ionmapf(posJ, new double[]{azel[refI * 2], azel[refI * 2 + 1]});
-                    double freqI = SatUtils.sat2freq(satIdx, obs[0].code[frq], nav);
-                    double freqJ = SatUtils.sat2freq(refSat[ft], obs[0].code[frq], nav);
-                    if (freqI > 0.0 && freqJ > 0.0) {
-                        double sign = (type == 0) ? -1.0 : 1.0;
-                        double didxI = sign * imI * SQR(Constants.FREQL1 / freqI);
-                        double didxJ = sign * imJ * SQR(Constants.FREQL1 / freqJ);
-                        int iiI = II(satIdx, opt);
-                        int iiJ = II(refSat[ft], opt);
-                        if (iiI >= 0 && iiI < nx && iiJ >= 0 && iiJ < nx) {
-                            v[nvOut] -= didxI * xState[iiI] - didxJ * xState[iiJ];
-                            H[nvOut * nx + iiI] += didxI;
-                            H[nvOut * nx + iiJ] -= didxJ;
+                    if (H != null) {
+                        for (j = 0; j < 3; j++) {
+                            H[nv * nx + j] = -ei[j] + er[j];
                         }
                     }
-                }
 
-                if (opt.tropopt == Constants.TROPOPT_EST || opt.tropopt == Constants.TROPOPT_ESTG) {
-                    double[] dtdxI = new double[nx];
-                    double[] dtdxJ = new double[nx];
-                    prectrop(rtk, rrRov, new double[]{azel[i * 2], azel[i * 2 + 1]}, i, dtdxI, nx);
-                    prectrop(rtk, rrRov, new double[]{azel[refI * 2], azel[refI * 2 + 1]}, refI, dtdxJ, nx);
-                    for (int k = 0; k < nx; k++) {
-                        H[nvOut * nx + k] += dtdxI[k] - dtdxJ[k];
+                    double freq_m = freq[iu[m] * nf + f];
+                    double freq_r = freq[iu[ri] * nf + f];
+
+                    int ib_m = IB(sat[m], f, opt);
+                    int ib_r = IB(sat[ri], f, opt);
+                    if (opt.ionoopt != Constants.IONOOPT_IFLC) {
+                        double lam_m = freq_m > 0.0 ? Constants.CLIGHT / freq_m : 0.0;
+                        double lam_r = freq_r > 0.0 ? Constants.CLIGHT / freq_r : 0.0;
+                        if (ib_m > 0 && ib_m < nx && H != null) H[nv * nx + ib_m] = lam_m;
+                        if (ib_r > 0 && ib_r < nx && H != null) H[nv * nx + ib_r] = -lam_r;
+                    } else {
+                        if (ib_m > 0 && ib_m < nx && H != null) H[nv * nx + ib_m] = 1.0;
+                        if (ib_r > 0 && ib_r < nx && H != null) H[nv * nx + ib_r] = -1.0;
                     }
-                }
 
-                if (opt.ionoopt == Constants.IONOOPT_EST && opt.ionoGradient) {
-                    double[] posI = new double[3];
-                    CoordTransform.ecef2pos(rrRov, posI);
-                    double elI = azel[i * 2 + 1];
-                    double elJ = azel[refI * 2 + 1];
-                    double azI = azel[i * 2];
-                    double azJ = azel[refI * 2];
-                    double cotElI = 1.0 / Math.tan(elI);
-                    double cotElJ = 1.0 / Math.tan(elJ);
-                    double freqI = SatUtils.sat2freq(satIdx, obs[0].code[frq], nav);
-                    double freqJ = SatUtils.sat2freq(refSat[ft], obs[0].code[frq], nav);
-                    if (freqI > 0.0 && freqJ > 0.0) {
-                        double sign = (type == 0) ? -1.0 : 1.0;
-                        double scaleI = sign * SQR(Constants.FREQL1 / freqI);
-                        double scaleJ = sign * SQR(Constants.FREQL1 / freqJ);
-                        int iiI = II(satIdx, opt);
-                        int iiJ = II(refSat[ft], opt);
-                        if (iiI + 2 < nx && iiJ + 2 < nx) {
-                            v[nvOut] -= scaleI * cotElI * Math.cos(azI) * xState[iiI + 1]
-                                      + scaleJ * cotElJ * Math.cos(azJ) * xState[iiJ + 1];
-                            v[nvOut] -= scaleI * cotElI * Math.sin(azI) * xState[iiI + 2]
-                                      + scaleJ * cotElJ * Math.sin(azJ) * xState[iiJ + 2];
-                            H[nvOut * nx + iiI + 1] += scaleI * cotElI * Math.cos(azI);
-                            H[nvOut * nx + iiI + 2] += scaleI * cotElI * Math.sin(azI);
-                            H[nvOut * nx + iiJ + 1] -= scaleJ * cotElJ * Math.cos(azJ);
-                            H[nvOut * nx + iiJ + 2] -= scaleJ * cotElJ * Math.sin(azJ);
+                    double y_r_c = y[iu[ri] * nf * 2 + f];
+                    double y_r_p = y[iu[ri] * nf * 2 + nf + f];
+                    double y_b_r_c = y[ir[ri] * nf * 2 + f];
+                    double y_b_r_p = y[ir[ri] * nf * 2 + nf + f];
+
+                    double y_m_c = y[iu[m] * nf * 2 + f];
+                    double y_m_p = y[iu[m] * nf * 2 + nf + f];
+                    double y_b_m_c = y[ir[m] * nf * 2 + f];
+                    double y_b_m_p = y[ir[m] * nf * 2 + nf + f];
+
+                    if (y_m_c != 0.0 && y_r_c != 0.0 && y_b_m_c != 0.0 && y_b_r_c != 0.0) {
+                        v[nv] = (y_m_c - y_b_m_c) - (y_r_c - y_b_r_c);
+
+                        if (ib_m > 0 && ib_m < nx && ib_r > 0 && ib_r < nx) {
+                            if (opt.ionoopt != Constants.IONOOPT_IFLC) {
+                                double lam_m = freq_m > 0.0 ? Constants.CLIGHT / freq_m : 0.0;
+                                double lam_r = freq_r > 0.0 ? Constants.CLIGHT / freq_r : 0.0;
+                                v[nv] -= lam_m * x[ib_m] - lam_r * x[ib_r];
+                            } else {
+                                v[nv] -= x[ib_m] - x[ib_r];
+                            }
                         }
-                    }
-                }
-            }
 
-            if (opt.maxinno != null && opt.maxinno.length > type
-                    && opt.maxinno[type] > 0.0) {
-                double threshAdj = 1.0;
-                if (opt.mode > Constants.PMODE_DGPS && type == 0) {
-                    int ii = IB(satIdx, frq, opt);
-                    int jj = IB(refSat[ft], frq, opt);
-                    if (ii > 0 && ii < nx && jj > 0 && jj < nx) {
-                        double[] Pp = rtk.P;
-                        if (Pp[ii + ii * nx] == SQR(opt.std[0]) ||
-                            Pp[jj + jj * nx] == SQR(opt.std[0])) {
-                            threshAdj = 10.0;
+                        if (opt.ionoopt == Constants.IONOOPT_EST) {
+                            int ii_m = II(sat[m], opt);
+                            int ii_r = II(sat[ri], opt);
+                            if (ii_m >= 0 && ii_r >= 0 && ii_m < nx && ii_r < nx) {
+                                double im_m = IonosphereModel.ionmapf(pos, new double[]{azel[iu[m] * 2], azel[iu[m] * 2 + 1]});
+                                double im_r = IonosphereModel.ionmapf(pos, new double[]{azel[iu[ri] * 2], azel[iu[ri] * 2 + 1]});
+                                double didx_m = im_m * SQR(Constants.FREQL1 / freq_m);
+                                double didx_r = im_r * SQR(Constants.FREQL1 / freq_r);
+                                v[nv] += didx_m * x[ii_m] - didx_r * x[ii_r];
+                                if (H != null) {
+                                    H[nv * nx + ii_m] += didx_m;
+                                    H[nv * nx + ii_r] -= didx_r;
+                                }
+                            }
                         }
+
+                        if (opt.tropopt == Constants.TROPOPT_EST || opt.tropopt == Constants.TROPOPT_ESTG) {
+                            double[] dtdx_m = new double[nx];
+                            double[] dtdx_r = new double[nx];
+                            prectrop(rtk, rr_rover, new double[]{azel[iu[m] * 2], azel[iu[m] * 2 + 1]}, m, dtdx_m, nx);
+                            prectrop(rtk, rr_rover, new double[]{azel[iu[ri] * 2], azel[iu[ri] * 2 + 1]}, ri, dtdx_r, nx);
+                            for (j = 0; j < nx; j++) {
+                                if (H != null) H[nv * nx + j] += dtdx_m[j] - dtdx_r[j];
+                            }
+                        }
+
+                        if (opt.ionoopt == Constants.IONOOPT_EST && opt.ionoGradient) {
+                            int ii_m = II(sat[m], opt);
+                            int ii_r = II(sat[ri], opt);
+                            if (ii_m >= 0 && ii_r >= 0 && ii_m + 2 < nx && ii_r + 2 < nx) {
+                                double az_m = azel[iu[m] * 2], el_m = azel[iu[m] * 2 + 1];
+                                double az_r = azel[iu[ri] * 2], el_r = azel[iu[ri] * 2 + 1];
+                                double im_m = IonosphereModel.ionmapf(pos, new double[]{az_m, el_m});
+                                double im_r = IonosphereModel.ionmapf(pos, new double[]{az_r, el_r});
+                                double scale_m = SQR(Constants.FREQL1 / freq_m);
+                                double scale_r = SQR(Constants.FREQL1 / freq_r);
+                                double cot_m = 1.0 / Math.tan(el_m);
+                                double cot_r = 1.0 / Math.tan(el_r);
+                                v[nv] -= scale_m * im_m * cot_m * (Math.cos(az_m) * x[ii_m + 1] + Math.sin(az_m) * x[ii_m + 2]);
+                                v[nv] += scale_r * im_r * cot_r * (Math.cos(az_r) * x[ii_r + 1] + Math.sin(az_r) * x[ii_r + 2]);
+                                if (H != null) {
+                                    H[nv * nx + ii_m + 1] -= scale_m * im_m * cot_m * Math.cos(az_m);
+                                    H[nv * nx + ii_m + 2] -= scale_m * im_m * cot_m * Math.sin(az_m);
+                                    H[nv * nx + ii_r + 1] += scale_r * im_r * cot_r * Math.cos(az_r);
+                                    H[nv * nx + ii_r + 2] += scale_r * im_r * cot_r * Math.sin(az_r);
+                                }
+                            }
+                        }
+
+                        double threshadj = 1.0;
+                        if (opt.mode > Constants.PMODE_DGPS) {
+                            double std0sq = opt.std[0] * opt.std[0];
+                            if (ib_m > 0 && ib_m < nx && ib_r > 0 && ib_r < nx) {
+                                if (P[ib_m * nx + ib_m] == std0sq || P[ib_r * nx + ib_r] == std0sq) {
+                                    threshadj = 10.0;
+                                }
+                            }
+                        }
+                        rtk.ssat[s].resc[f] = v[nv];
+                        if (Math.abs(v[nv]) > opt.maxinno[0] * threshadj) {
+                            rtk.ssat[s].vsat[f] = 0;
+                            rtk.ssat[s].rejc[f]++;
+                            continue;
+                        }
+
+                        if (Ri != null) {
+                            double el_m = azel[iu[m] * 2 + 1];
+                            int sys_m = SatUtils.satsys(sat[m], null);
+                            Ri[nv] = varerr(sat[ri], sys_ref, el_ref,
+                                    rtk.ssat[s_ref].snrRover[f], rtk.ssat[s_ref].snrBase[f],
+                                    bl, dt, f, opt, obs[iu[ri]]);
+                            Rj[nv] = varerr(sat[m], sys_m, el_m,
+                                    rtk.ssat[s].snrRover[f], rtk.ssat[s].snrBase[f],
+                                    bl, dt, f, opt, obs[iu[m]]);
+                        }
+
+                        vflg[nv] = (sat[m] << 16) | (sat[ri] << 8) | (1 << 4) | f;
+                        rtk.ssat[s].vsat[f] = 1;
+                        nv++;
+                        nb_count++;
+                    }
+
+                    if (obs[iu[m]].P[f] != 0.0 && obs[ir[m]].P[f] != 0.0 &&
+                        obs[iu[ri]].P[f] != 0.0 && obs[ir[ri]].P[f] != 0.0 &&
+                        y_m_p != 0.0 && y_r_p != 0.0 && y_b_m_p != 0.0 && y_b_r_p != 0.0) {
+
+                        if (H != null) {
+                            for (j = 0; j < nx; j++) H[nv * nx + j] = 0.0;
+                            for (j = 0; j < 3; j++) {
+                                H[nv * nx + j] = -ei[j] + er[j];
+                            }
+                        }
+
+                        if (opt.ionoopt == Constants.IONOOPT_EST) {
+                            int ii_m = II(sat[m], opt);
+                            int ii_r = II(sat[ri], opt);
+                            if (ii_m >= 0 && ii_r >= 0 && ii_m < nx && ii_r < nx) {
+                                double im_m = IonosphereModel.ionmapf(pos, new double[]{azel[iu[m] * 2], azel[iu[m] * 2 + 1]});
+                                double im_r = IonosphereModel.ionmapf(pos, new double[]{azel[iu[ri] * 2], azel[iu[ri] * 2 + 1]});
+                                double didx_m = -im_m * SQR(Constants.FREQL1 / freq_m);
+                                double didx_r = -im_r * SQR(Constants.FREQL1 / freq_r);
+                                if (H != null) {
+                                    H[nv * nx + ii_m] += didx_m;
+                                    H[nv * nx + ii_r] -= didx_r;
+                                }
+                            }
+                        }
+
+                        if (opt.tropopt == Constants.TROPOPT_EST || opt.tropopt == Constants.TROPOPT_ESTG) {
+                            double[] dtdx_m = new double[nx];
+                            double[] dtdx_r = new double[nx];
+                            prectrop(rtk, rr_rover, new double[]{azel[iu[m] * 2], azel[iu[m] * 2 + 1]}, m, dtdx_m, nx);
+                            prectrop(rtk, rr_rover, new double[]{azel[iu[ri] * 2], azel[iu[ri] * 2 + 1]}, ri, dtdx_r, nx);
+                            for (j = 0; j < nx; j++) {
+                                if (H != null) H[nv * nx + j] += dtdx_m[j] - dtdx_r[j];
+                            }
+                        }
+
+                        v[nv] = (y_m_p - y_b_m_p) - (y_r_p - y_b_r_p);
+
+                        if (opt.ionoopt == Constants.IONOOPT_EST) {
+                            int ii_m = II(sat[m], opt);
+                            int ii_r = II(sat[ri], opt);
+                            if (ii_m >= 0 && ii_r >= 0 && ii_m < nx && ii_r < nx) {
+                                double im_m = IonosphereModel.ionmapf(pos, new double[]{azel[iu[m] * 2], azel[iu[m] * 2 + 1]});
+                                double im_r = IonosphereModel.ionmapf(pos, new double[]{azel[iu[ri] * 2], azel[iu[ri] * 2 + 1]});
+                                double didx_m = -im_m * SQR(Constants.FREQL1 / freq_m);
+                                double didx_r = -im_r * SQR(Constants.FREQL1 / freq_r);
+                                v[nv] -= didx_m * x[ii_m] - didx_r * x[ii_r];
+                            }
+                        }
+
+                        rtk.ssat[s].resp[f] = v[nv];
+                        double threshadj_p = 1.0;
+                        if (opt.mode > Constants.PMODE_DGPS) {
+                            double std0sq = opt.std[0] * opt.std[0];
+                            if (ib_m > 0 && ib_m < nx && ib_r > 0 && ib_r < nx) {
+                                if (P[ib_m * nx + ib_m] == std0sq || P[ib_r * nx + ib_r] == std0sq) {
+                                    threshadj_p = 10.0;
+                                }
+                            }
+                        }
+                        if (Math.abs(v[nv]) > opt.maxinno[1] * threshadj_p) {
+                            continue;
+                        }
+
+                        if (Ri != null) {
+                            double el_m = azel[iu[m] * 2 + 1];
+                            int sys_m = SatUtils.satsys(sat[m], null);
+                            Ri[nv] = varerr(sat[ri], sys_ref, el_ref,
+                                    rtk.ssat[s_ref].snrRover[f], rtk.ssat[s_ref].snrBase[f],
+                                    bl, dt, f + nf, opt, obs[iu[ri]]);
+                            Rj[nv] = varerr(sat[m], sys_m, el_m,
+                                    rtk.ssat[s].snrRover[f], rtk.ssat[s].snrBase[f],
+                                    bl, dt, f + nf, opt, obs[iu[m]]);
+                        }
+
+                        vflg[nv] = (sat[m] << 16) | (sat[ri] << 8) | (0 << 4) | f;
+                        nv++;
+                        nb_count++;
                     }
                 }
-                if (Math.abs(v[nvOut]) > opt.maxinno[type] * threshAdj) {
-                    rtk.ssat[satIdx - 1].vsat[frq] = 0;
-                    rtk.ssat[satIdx - 1].rejc[frq]++;
-                    continue;
+
+                if (nb_count > 0) {
+                    nb_arr[b++] = nb_count;
                 }
             }
-
-            for (int k = 0; k < nvOut; k++) {
-                R[nvOut * nvIn + k] = 0.0;
-                R[k * nvIn + nvOut] = 0.0;
-            }
-
-            double varFact = (type == 0) ? 1.0 : 0.01;
-            double baseVar = (type == 0) ? SQR(opt.prn[4]) : SQR(opt.prn[3]);
-            R[nvOut * nvIn + nvOut] = 2.0 * baseVar * varFact;
-
-            nvOut++;
         }
 
-        return nvOut;
+        if (R != null) {
+            ddcov(nb_arr, b, Ri, Rj, nv, R);
+        }
+
+        return nv;
     }
 
     private static int filter(Rtk rtk, double[] xp, double[] Pp,
