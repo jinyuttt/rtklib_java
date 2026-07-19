@@ -203,7 +203,7 @@ public final class RtkOptimizations {
                 wk = cfg.iggiiiMinW;
             }
 
-            int sat2 = (vflg[i] >> 8) & 0xFF;
+            int sat2 = (vflg[i] >> 16) & 0xFF;
             double el = 0.0;
             if (sat2 > 0 && sat2 <= Constants.MAXSAT) {
                 el = rtk.ssat[sat2 - 1].azel[1];
@@ -222,7 +222,7 @@ public final class RtkOptimizations {
             }
         }
         for (int i = 0; i < nv; i++) {
-            int sat2 = (vflg[i] >> 8) & 0xFF;
+            int sat2 = (vflg[i] >> 16) & 0xFF;
             int type = (vflg[i] >> 4) & 0xF;
             int frq = vflg[i] & 0xF;
             int targetSat = sat2 - 1;
@@ -236,7 +236,7 @@ public final class RtkOptimizations {
         }
 
         for (int i = 0; i < nv; i++) {
-            int sat2 = (vflg[i] >> 8) & 0xFF;
+            int sat2 = (vflg[i] >> 16) & 0xFF;
             int type = (vflg[i] >> 4) & 0xF;
             int frq = vflg[i] & 0xF;
             int targetSat = sat2 - 1;
