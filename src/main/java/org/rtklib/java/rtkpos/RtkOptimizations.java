@@ -178,11 +178,12 @@ public final class RtkOptimizations {
 
     public static void applyIggiii(Rtk rtk, double[] v, double[] H, double[] R,
                                    int[] vflg, int nv, int nx, int[] sat, int ns,
-                                   Obsd[] obs, int[] iu, double[] azel, int nf) {
+                                   Obsd[] obs, int[] iu, double[] azel, int nf,
+                                   double[] Pp) {
         RtkConfig cfg = rtk.rtkConfig;
         if (!cfg.enableIggiii) return;
 
-        double[] diag = computeHPHtDiagNative(H, rtk.P, nv, nx);
+        double[] diag = computeHPHtDiagNative(H, Pp, nv, nx);
 
         double[] w = new double[nv];
         for (int i = 0; i < nv; i++) {
@@ -258,14 +259,7 @@ public final class RtkOptimizations {
 
         for (int i = 0; i < nv; i++) {
             if (w[i] < 1.0) {
-                for (int j = 0; j < nv; j++) {
-                    if (R[i * nv + j] != 0.0) {
-                        R[i * nv + j] /= w[i];
-                    }
-                    if (i != j && R[j * nv + i] != 0.0) {
-                        R[j * nv + i] /= w[i];
-                    }
-                }
+                R[i * nv + i] /= w[i];
             }
         }
     }
