@@ -27,6 +27,7 @@ public final class RtkCore {
     private static final double TTOL_MOVEB = 1.05;
     private static final int MIN_ND = 4;
     private static final double RNX2CLK = 299792458.0;
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(RtkCore.class);
 
     public static int rtkpos(Rtk rtk, Obsd[] obs, int n, Nav nav) {
         PrcOpt opt = rtk.opt;
@@ -43,7 +44,9 @@ public final class RtkCore {
         prevTime.sec = rtk.sol.time.sec;
 
         if (rtk.P[0] == 0 || rtk.P[0] > STD_PREC_VAR_THRESH) {
-            if (PntPos.pntpos(obs, nu, nav, opt, rtk.sol, null, rtk.ssat) == 0) {
+            int sppResult = PntPos.pntpos(obs, nu, nav, opt, rtk.sol, null, rtk.ssat);
+            if (sppResult == 0) {
+                LOG.info("rtkpos: SPP failed (P[0]={}, nu={}, nr={})", rtk.P[0], nu, nr);
                 return 0;
             }
         } else {
@@ -131,7 +134,9 @@ public final class RtkCore {
         int[] iu = new int[Constants.MAXSAT];
         int[] ir = new int[Constants.MAXSAT];
         ns = selsat(obs, azel, nu, nr, opt, sat, iu, ir);
-        if (ns <= 0) return 0;
+        if (ns <= 0) {
+            return 0;
+        }
 
         int nx_new = NR(rtk) + NB(rtk);
         rtk.na = NR(rtk);
@@ -191,7 +196,7 @@ public final class RtkCore {
             RtkOptimizations.computeQScale(rtk, sat, ns);
 
             RtkOptimizations.applyIggiii(rtk, v, H, R, vflg, nv, nx, sat, ns,
-                    obs, iu, azel, nf);
+                    obs, iu, azel, nf, Pp);
 
             int info = filter(rtk, xp, Pp, H, v, R, nx, nv);
             if (info != 0) {
@@ -254,10 +259,7 @@ public final class RtkCore {
             }
         }
 
-        if (stat == Constants.SOLQ_NONE) {
-            System.arraycopy(xp, 0, rtk.x, 0, nx);
-            System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
-        }
+
 
         if (stat == Constants.SOLQ_FIX) {
             for (i = 0; i < 3; i++) {
@@ -993,7 +995,7 @@ public final class RtkCore {
             sysv[m] = SatUtils.satsys(sat[m], null);
         }
 
-        for (int sys = Constants.SYS_GPS; sys <= Constants.SYS_SBS; sys <<= 1) {
+        for (int sys = Constants.SYS_GPS; sys <= Constants.SYS_CMP; sys <<= 1) {
             if ((opt.navsys & sys) == 0) continue;
             double maxel = 0.0;
             int idx = -1;

@@ -7,8 +7,9 @@ import org.rtklib.java.common.MatrixUtil;
  * Kalman filter measurement update.
  *
  * <p>Corresponds to RTKLIB filter() in rtkcmn.c.
- * Uses Joseph form for numerical stability, as EJML matrix operation order differs
- * from C's custom matmul(), causing P to lose positive-definiteness under ill-conditioned H.</p>
+ * Implements state compression like C version: only non-zero states (x[i]!=0 && P[i+i*nx]>0)
+ * participate in the Kalman update, significantly improving numerical stability and
+ * matching C version behavior.</p>
  *
  * <pre>
  *   K = P * H' * inv(H * P * H' + R)
@@ -21,7 +22,7 @@ public final class KalmanFilter {
     }
 
     /**
-     * Kalman filter measurement update.
+     * Kalman filter measurement update with state compression.
      *
      * @param x  state vector [nx], updated in place
      * @param P  covariance matrix [nx*nx] row-major, updated in place
@@ -36,43 +37,68 @@ public final class KalmanFilter {
                              double[] R, int nx, int nv) {
         if (nv <= 0 || nx <= 0) return 0;
 
+        int[] ix = new int[nx];
+        int k = 0;
+        for (int i = 0; i < nx; i++) {
+            if (x[i] != 0.0 && P[i * nx + i] > 0.0) {
+                ix[k++] = i;
+            }
+        }
+        if (k == 0) return 0;
+
         try {
-            SimpleMatrix HMat = MatrixUtil.createMatrix(H, nv, nx);
-            SimpleMatrix PMat = MatrixUtil.createMatrix(P, nx, nx);
+            double[] xc = new double[k];
+            double[] Pc = new double[k * k];
+            double[] Hc = new double[nv * k];
+
+            for (int i = 0; i < k; i++) {
+                xc[i] = x[ix[i]];
+                for (int j = 0; j < k; j++) {
+                    Pc[i * k + j] = P[ix[i] * nx + ix[j]];
+                }
+                for (int j = 0; j < nv; j++) {
+                    Hc[j * k + i] = H[j * nx + ix[i]];
+                }
+            }
+
+            SimpleMatrix HcMat = MatrixUtil.createMatrix(Hc, nv, k);
+            SimpleMatrix PcMat = MatrixUtil.createMatrix(Pc, k, k);
             SimpleMatrix RMat = MatrixUtil.createMatrix(R, nv, nv);
-            SimpleMatrix X = MatrixUtil.createMatrix(x, nx, 1);
+            SimpleMatrix Xc = MatrixUtil.createMatrix(xc, k, 1);
 
-            SimpleMatrix Ht = MatrixUtil.transpose(HMat);
+            SimpleMatrix Hct = MatrixUtil.transpose(HcMat);
 
-            SimpleMatrix HP = MatrixUtil.multiply(HMat, PMat);
-            SimpleMatrix HPHt = MatrixUtil.multiply(HP, Ht);
+            SimpleMatrix HPc = MatrixUtil.multiply(HcMat, PcMat);
+            SimpleMatrix HPHt = MatrixUtil.multiply(HPc, Hct);
             SimpleMatrix S = MatrixUtil.add(HPHt, RMat);
 
             SimpleMatrix SInv = MatrixUtil.invert(S);
 
-            SimpleMatrix PHt = MatrixUtil.multiply(PMat, Ht);
-            SimpleMatrix K = MatrixUtil.multiply(PHt, SInv);
+            SimpleMatrix PcHt = MatrixUtil.multiply(PcMat, Hct);
+            SimpleMatrix K = MatrixUtil.multiply(PcHt, SInv);
 
             SimpleMatrix V = MatrixUtil.createMatrix(v, nv, 1);
             SimpleMatrix KV = MatrixUtil.multiply(K, V);
-            SimpleMatrix XNew = MatrixUtil.add(X, KV);
+            SimpleMatrix XcNew = MatrixUtil.add(Xc, KV);
 
-            // Joseph form: P_new = (I-KH)*P*(I-KH)^T + K*R*K^T
-            SimpleMatrix KH = MatrixUtil.multiply(K, HMat);
-            SimpleMatrix I = SimpleMatrix.identity(nx);
-            SimpleMatrix IKH = MatrixUtil.subtract(I, KH);
+            SimpleMatrix KHc = MatrixUtil.multiply(K, HcMat);
+            SimpleMatrix Ic = SimpleMatrix.identity(k);
+            SimpleMatrix IKH = MatrixUtil.subtract(Ic, KHc);
             SimpleMatrix IKH_T = MatrixUtil.transpose(IKH);
-            SimpleMatrix P_temp = MatrixUtil.multiply(IKH, PMat);
+            SimpleMatrix P_temp = MatrixUtil.multiply(IKH, PcMat);
             SimpleMatrix P_IKH = MatrixUtil.multiply(P_temp, IKH_T);
 
-            SimpleMatrix Kt = MatrixUtil.transpose(K);
             SimpleMatrix KR = MatrixUtil.multiply(K, RMat);
-            SimpleMatrix KRKt = MatrixUtil.multiply(KR, Kt);
+            SimpleMatrix KRKt = MatrixUtil.multiply(KR, MatrixUtil.transpose(K));
 
-            SimpleMatrix PNew = MatrixUtil.add(P_IKH, KRKt);
+            SimpleMatrix PcNew = MatrixUtil.add(P_IKH, KRKt);
 
-            MatrixUtil.copyMatrix(XNew, x);
-            MatrixUtil.copyMatrix(PNew, P);
+            for (int i = 0; i < k; i++) {
+                x[ix[i]] = XcNew.get(i, 0);
+                for (int j = 0; j < k; j++) {
+                    P[ix[i] * nx + ix[j]] = PcNew.get(i, j);
+                }
+            }
 
             return 0;
         } catch (Exception e) {

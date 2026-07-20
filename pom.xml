@@ -47,7 +47,7 @@
                 <version>3.2.3</version>
                 <configuration>
                     <includes>
-                        <include>**/RtkRinexCompareTest.java</include>
+                        <include>**/RealDataRtkTest.java</include>
                     </includes>
                     <systemPropertyVariables>
                         <org.slf4j.simpleLogger.defaultLogLevel>debug</org.slf4j.simpleLogger.defaultLogLevel>
