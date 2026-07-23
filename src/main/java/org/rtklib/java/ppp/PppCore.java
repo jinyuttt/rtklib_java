@@ -300,11 +300,11 @@ public final class PppCore {
                 for (int j = i + 1; j < i + 3; j++) initx(x, P, nx, 1E-6, VAR_GRA, j);
             }
         } else {
-            P[i + i * nx] += SQR(opt.prn[2]) * Math.abs(rtk.tt);
+            P[i * nx + i] += SQR(opt.prn[2]) * Math.abs(rtk.tt);
 
             if (opt.tropopt >= Constants.TROPOPT_ESTG) {
                 for (int j = i + 1; j < i + 3; j++) {
-                    P[j + j * nx] += SQR(opt.prn[2] * 0.1) * Math.abs(rtk.tt);
+                    P[j * nx + j] += SQR(opt.prn[2] * 0.1) * Math.abs(rtk.tt);
                 }
             }
         }
@@ -849,9 +849,9 @@ public final class PppCore {
             rtk.sol.rr[i] = rtk.x[i];
             rtk.sol.qr[i] = (float) rtk.P[i * nx + i];
         }
-        rtk.sol.qr[3] = (float) rtk.P[1];
-        rtk.sol.qr[4] = (float) rtk.P[2 * nx + 1];
-        rtk.sol.qr[5] = (float) rtk.P[2];
+        rtk.sol.qr[3] = (float) rtk.P[0 * nx + 1];
+        rtk.sol.qr[4] = (float) rtk.P[1 * nx + 2];
+        rtk.sol.qr[5] = (float) rtk.P[0 * nx + 2];
 
         rtk.sol.dtr[0] = rtk.x[IC(0, opt)] / Constants.CLIGHT;
         rtk.sol.dtr[1] = (rtk.x[IC(1, opt)] - rtk.x[IC(0, opt)]) / Constants.CLIGHT;

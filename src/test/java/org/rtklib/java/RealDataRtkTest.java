@@ -50,8 +50,45 @@ public class RealDataRtkTest {
         List<Sol> solutions = Collections.synchronizedList(new ArrayList<>());
         List<String> failMsgs = Collections.synchronizedList(new ArrayList<>());
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
-        opt.navsys = Constants.SYS_CMP;
+        PrcOpt opt = new PrcOpt();
+        opt.mode = Constants.PMODE_KINEMA;
+        opt.nf = 2;
+        opt.navsys = Constants.SYS_GPS | Constants.SYS_GLO | Constants.SYS_GAL | Constants.SYS_CMP | Constants.SYS_QZS | Constants.SYS_SBS;
+        opt.elmin = 15.0 * Constants.D2R;
+        opt.ionoopt = Constants.IONOOPT_BRDC;
+        opt.tropopt = Constants.TROPOPT_SAAS;
+        opt.modear = Constants.ARMODE_FIXHOLD;
+        opt.bdsmodear = 1;
+        opt.gpsmodear = 1;
+        opt.glomodear = Constants.GLO_ARMODE_FIXHOLD;
+        opt.arfilter = 1;
+        opt.dynamics = 0;
+        opt.thresar[0] = 3.0;
+        opt.thresar[1] = 0.1;
+        opt.elmaskar = 25.0 * Constants.D2R;
+        opt.minfix = 20;
+        opt.minfixsats = 4;
+        opt.minholdsats = 5;
+        opt.mindropsats = 10;
+        opt.varholdamb = 0.1;
+        opt.gainholdamb = 0.01;
+        opt.intpref = 1;
+        opt.maxtdiff = 30.0;
+        opt.outsingle = 0;
+        opt.prn[0] = 0;
+        opt.prn[1] = 0.001;
+        opt.prn[2] = 0.0001;
+        opt.prn[3] = 3;
+        opt.prn[4] = 1;
+        opt.eratio[0] = 300;
+        opt.eratio[1] = 300;
+        opt.err[1] = 0.005;
+        opt.err[2] = 0.005;
+        opt.err[3] = 0.0;
+        opt.std[0] = 30.0;
+        opt.std[1] = 0.03;
+        opt.std[2] = 0.3;
+        opt.refposmode = Constants.REFPOS_RTCM;
         log.info("Config: mode={}, nf={}, navsys={}({}), elmin={}deg, modear={}, ionoopt={}, tropopt={}",
                 opt.mode, opt.nf, opt.navsys, "BDS",
                 String.format("%.1f", opt.elmin / Constants.D2R),
