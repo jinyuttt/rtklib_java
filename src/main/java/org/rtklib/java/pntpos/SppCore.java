@@ -264,6 +264,9 @@ public final class SppCore {
         int nClock = NX - 3;
         int[] mask = new int[nClock];
 
+        int[] skipReason = new int[n];
+        for (int i = 0; i < n; i++) skipReason[i] = 0;
+
         
         for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
             vsat[i] = 0;
@@ -271,23 +274,24 @@ public final class SppCore {
             int sat = obs[i].sat;
             int sys = SatUtils.satsys(sat, null);
             if (sys == 0) {
-
+                skipReason[i] = 1;
                 continue;
             }
             if (i < n - 1 && i < Constants.MAXOBS - 1 && sat == obs[i + 1].sat) {
-
+                skipReason[i] = 2;
                 i++;
                 continue;
             }
             double vareVal = (vare != null) ? vare[i] : 0.0;
             int svhVal = (svh != null) ? svh[i] : 0;
             if (RtklibCommon.satexclude(sat, vareVal, svhVal, opt) != 0) {
-
+                skipReason[i] = 3;
                 continue;
             }
             double[] rsi = new double[]{rs[i * 6], rs[i * 6 + 1], rs[i * 6 + 2]};
             double r = RtklibCommon.geodist(rsi, rr, e);
             if (r <= 0.0) {
+                skipReason[i] = 4;
                 continue;
             }
             double[] ae = new double[2];
@@ -295,35 +299,32 @@ public final class SppCore {
             azel[i * 2] = ae[0];
             azel[1 + i * 2] = ae[1];
             if (el < opt.elmin) {
+                skipReason[i] = 5;
                 continue;
             }
             double dion = 0.0, vion = 0.0, dtrp = 0.0, vtrp = 0.0;
             if (iter > 0) {
                 if (snrmask(obs[i], azel, i, opt) == 0) {
-
+                    skipReason[i] = 6;
                     continue;
                 }
                 double[] ionOut = new double[2];
                 if (!IonosphereModel.ionocorr(obs[i].time, nav, sat, pos, ae, opt.ionoopt, ionOut)) {
-
+                    skipReason[i] = 7;
                     continue;
                 }
                 dion = ionOut[0];
                 vion = ionOut[1];
-                /* [NOTE] code[0]=0 occurs when a satellite has no B1I/B1C data in the
-                   first frequency index (e.g. BDS-3 C10 in first epoch without B1I).
-                   sat2freq returns 0 for code=0, causing the satellite to be skipped.
-                   This is consistent with C version behavior. */
                 double freq = SatUtils.sat2freq(sat, obs[i].code[0], nav);
                 if (freq == 0.0) {
-
+                    skipReason[i] = 8;
                     continue;
                 }
                 dion *= RtklibCommon.sqr(Constants.FREQL1 / freq);
                 vion *= RtklibCommon.sqr(RtklibCommon.sqr(Constants.FREQL1 / freq));
                 double[] trpOut = new double[2];
                 if (!TroposphereModel.tropcorr(obs[i].time, nav, pos, ae, opt.tropopt, trpOut)) {
-
+                    skipReason[i] = 9;
                     continue;
                 }
                 dtrp = trpOut[0];
@@ -332,6 +333,7 @@ public final class SppCore {
             double[] vmeas = new double[1];
             double P = prange(obs[i], nav, opt, vmeas);
             if (P == 0.0) {
+                skipReason[i] = 10;
                 continue;
             }
             v[nv] = P - (r + dtr - Constants.CLIGHT * dts[i * 2] + dion + dtrp);
@@ -369,6 +371,9 @@ public final class SppCore {
             v[nv] = 0.0;
             for (int j = 0; j < NX; j++) H[nv * NX + j] = (j == i + 3) ? 1.0 : 0.0;
             var[nv++] = 0.01;
+        }
+        if (iter == 0 && nv < NX) {
+            return nv;
         }
         return nv;
     }

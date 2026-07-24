@@ -83,6 +83,26 @@ public final class Lambda {
 
         reduction(n, L, D, Z);
 
+        if (n <= 12) {
+            double detZ = 1.0;
+            for (int li = 0; li < n; li++) detZ *= Z[li*n+li];
+            System.err.printf("[LAMBDA-REDUCTION] n=%d Z_diag=", n);
+            for (int li = 0; li < n; li++) System.err.printf("%.0f ", Z[li*n+li]);
+            System.err.printf(" det_approx=%.1f%n", detZ);
+            System.err.printf("[LAMBDA-Z-FULL] n=%d%n", n);
+            for (int li = 0; li < n; li++) {
+                StringBuilder sb = new StringBuilder(String.format("  Z[%d]: ", li));
+                for (int lj = 0; lj < n; lj++) sb.append(String.format("%.0f ", Z[li*n+lj]));
+                System.err.println(sb);
+            }
+            System.err.printf("[LAMBDA-D] ");
+            for (int li = 0; li < n; li++) System.err.printf("%.6f ", D[li]);
+            System.err.println();
+            SimpleMatrix ZCheck = MatrixUtil.createMatrix(Z, n, n);
+            double detZActual = ZCheck.determinant();
+            System.err.printf("[LAMBDA-Z-DET] det(Z)=%.6f%n", detZActual);
+        }
+
         SimpleMatrix ZMat = MatrixUtil.createMatrix(Z, n, n);
         SimpleMatrix aMat = MatrixUtil.createMatrix(a, n, 1);
         SimpleMatrix Zt = MatrixUtil.transpose(ZMat);
@@ -93,6 +113,42 @@ public final class Lambda {
 
         SimpleMatrix EMat = MatrixUtil.createMatrix(E, n, m);
         SimpleMatrix FMat = MatrixUtil.solve(Zt, EMat);
+
+        if (n <= 12) {
+            System.err.printf("[LAMBDA-INTERNALS] n=%d m=%d%n", n, m);
+            System.err.printf("[LAMBDA-Z-diag] ");
+            for (int li = 0; li < n; li++) System.err.printf("%.0f ", Z[li*n+li]);
+            System.err.println();
+            System.err.printf("[LAMBDA-z] ");
+            for (int li = 0; li < n; li++) System.err.printf("%.4f ", z[li]);
+            System.err.println();
+            System.err.printf("[LAMBDA-E1] ");
+            for (int li = 0; li < n; li++) System.err.printf("%.1f ", E[li*m+0]);
+            System.err.println();
+            System.err.printf("[LAMBDA-F1] ");
+            for (int li = 0; li < n; li++) System.err.printf("%.4f ", FMat.get(li, 0));
+            System.err.println();
+            System.err.printf("[LAMBDA-s] %.6f %.6f%n", s[0], s[1]);
+            double[] yRef = new double[n];
+            System.arraycopy(a, 0, yRef, 0, n);
+            double[] roundY = new double[n];
+            for (int li = 0; li < n; li++) roundY[li] = Math.round(yRef[li]);
+            double[] f1 = new double[n];
+            for (int li = 0; li < n; li++) f1[li] = FMat.get(li, 0);
+            SimpleMatrix yRefMat = MatrixUtil.createMatrix(yRef, n, 1);
+            SimpleMatrix roundYMat = MatrixUtil.createMatrix(roundY, n, 1);
+            SimpleMatrix f1Mat = MatrixUtil.createMatrix(f1, n, 1);
+            SimpleMatrix QbMat = MatrixUtil.createMatrix(Q, n, n);
+            SimpleMatrix QbInvCheck = MatrixUtil.invert(QbMat);
+            SimpleMatrix diff1 = MatrixUtil.subtract(yRefMat, f1Mat);
+            SimpleMatrix cost1 = MatrixUtil.multiply(MatrixUtil.transpose(diff1), MatrixUtil.multiply(QbInvCheck, diff1));
+            SimpleMatrix diff2 = MatrixUtil.subtract(yRefMat, roundYMat);
+            SimpleMatrix cost2 = MatrixUtil.multiply(MatrixUtil.transpose(diff2), MatrixUtil.multiply(QbInvCheck, diff2));
+            System.err.printf("[LAMBDA-COST] LAMBDA_cost=%.6f round_cost=%.6f%n", cost1.get(0,0), cost2.get(0,0));
+            double condQb = QbMat.conditionP2();
+            System.err.printf("[LAMBDA-COND] cond(Qb)=%.1f%n", condQb);
+        }
+
         MatrixUtil.copyMatrix(FMat, F);
 
         return 0;

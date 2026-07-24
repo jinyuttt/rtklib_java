@@ -28,13 +28,13 @@ public class RtkConfig {
     public double adaptiveQScaleMinStatic = 0.01;
     public double adaptiveQScaleMaxDynamic = 5.0;
 
-    public double iggiiiK0 = 1.5;
-    public double iggiiiK1 = 3.0;
-    public double iggiiiMinW = 1e-4;
+    public double iggiiiK0 = 3.0;
+    public double iggiiiK1 = 6.0;
+    public double iggiiiMinW = 0.5;
     public double iggiiiLowElMask = 10.0 * Math.PI / 180.0;
     public double iggiiiLowElNormThresh = 2.5;
-    public double iggiiiLowElW = 0.01;
-    public double iggiiiMultiFreqW = 0.01;
+    public double iggiiiLowElW = 0.5;
+    public double iggiiiMultiFreqW = 0.5;
     public double iggiiiLowElExtraIterMask = 15.0 * Math.PI / 180.0;
 
     public double snrMedianMinEl = 10.0 * Math.PI / 180.0;

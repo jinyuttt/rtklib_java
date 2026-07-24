@@ -75,6 +75,8 @@ public class PrcOpt {
     public double[] eratio;
     /** Observation error terms (8 entries) */
     public double[] err;
+    /** Carrier frequencies for each frequency band */
+    public double[] freq;
     /** Initial-state std [0]bias,[1]iono [2]trop */
     public double[] std;
     /** Process-noise std [0]bias,[1]iono [2]trop [3]acch [4]accv [5] pos */
@@ -184,6 +186,10 @@ public class PrcOpt {
         this.err[5] = 52.0;
         this.err[6] = 0.0;
         this.err[7] = 0.0;
+        this.freq = new double[Constants.MAXFREQ];
+        this.freq[0] = Constants.FREQL1;
+        this.freq[1] = Constants.FREQL2;
+        this.freq[2] = Constants.FREQL5;
         this.std = new double[]{30.0, 0.03, 0.3};
         this.prn = new double[6];
         this.prn[0] = 1E-4;
@@ -270,6 +276,7 @@ public class PrcOpt {
         this.refposmode = other.refposmode;
         this.eratio = other.eratio.clone();
         this.err = other.err.clone();
+        this.freq = other.freq.clone();
         this.std = other.std.clone();
         this.prn = other.prn.clone();
         this.sclkstab = other.sclkstab;

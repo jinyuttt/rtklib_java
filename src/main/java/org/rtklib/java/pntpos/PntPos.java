@@ -6,9 +6,12 @@ import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
 import org.rtklib.java.ephemeris.EphModel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class PntPos {
     private static final int MAXITR = 10;
+    private static final Logger LOG = LoggerFactory.getLogger(PntPos.class);
 
     private PntPos() {
     }
