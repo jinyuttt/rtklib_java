@@ -178,11 +178,12 @@ public final class RtkOptimizations {
 
     public static void applyIggiii(Rtk rtk, double[] v, double[] H, double[] R,
                                    int[] vflg, int nv, int nx, int[] sat, int ns,
-                                   Obsd[] obs, int[] iu, double[] azel, int nf) {
+                                   Obsd[] obs, int[] iu, double[] azel, int nf,
+                                   double[] Pp) {
         RtkConfig cfg = rtk.rtkConfig;
         if (!cfg.enableIggiii) return;
 
-        double[] diag = computeHPHtDiagNative(H, rtk.P, nv, nx);
+        double[] diag = computeHPHtDiagNative(H, Pp, nv, nx);
 
         double[] w = new double[nv];
         for (int i = 0; i < nv; i++) {
@@ -203,7 +204,7 @@ public final class RtkOptimizations {
                 wk = cfg.iggiiiMinW;
             }
 
-            int sat2 = (vflg[i] >> 8) & 0xFF;
+            int sat2 = (vflg[i] >> 16) & 0xFF;
             double el = 0.0;
             if (sat2 > 0 && sat2 <= Constants.MAXSAT) {
                 el = rtk.ssat[sat2 - 1].azel[1];
@@ -222,7 +223,7 @@ public final class RtkOptimizations {
             }
         }
         for (int i = 0; i < nv; i++) {
-            int sat2 = (vflg[i] >> 8) & 0xFF;
+            int sat2 = (vflg[i] >> 16) & 0xFF;
             int type = (vflg[i] >> 4) & 0xF;
             int frq = vflg[i] & 0xF;
             int targetSat = sat2 - 1;
@@ -236,7 +237,7 @@ public final class RtkOptimizations {
         }
 
         for (int i = 0; i < nv; i++) {
-            int sat2 = (vflg[i] >> 8) & 0xFF;
+            int sat2 = (vflg[i] >> 16) & 0xFF;
             int type = (vflg[i] >> 4) & 0xF;
             int frq = vflg[i] & 0xF;
             int targetSat = sat2 - 1;
@@ -258,14 +259,7 @@ public final class RtkOptimizations {
 
         for (int i = 0; i < nv; i++) {
             if (w[i] < 1.0) {
-                for (int j = 0; j < nv; j++) {
-                    if (R[i * nv + j] != 0.0) {
-                        R[i * nv + j] /= w[i];
-                    }
-                    if (i != j && R[j * nv + i] != 0.0) {
-                        R[j * nv + i] /= w[i];
-                    }
-                }
+                R[i * nv + i] /= w[i];
             }
         }
     }
@@ -292,11 +286,11 @@ public final class RtkOptimizations {
         return diag;
     }
 
-    static int buildParIndex(Rtk rtk, int[] sat, int ns, int nf,
-                             int[] ix, int gps, int glo, int sbs) {
+    static int buildParIndex(Rtk rtk, int[] ix, int gps, int glo, int sbs) {
         RtkConfig cfg = rtk.rtkConfig;
         PrcOpt opt = rtk.opt;
         int na = rtk.na;
+        int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
         int nb = 0;
         boolean anyRefReselect = false;
 
@@ -328,8 +322,13 @@ public final class RtkOptimizations {
                 }
 
                 if (refI < 0) continue;
+
+                int newRefSat = (refI - k) + 1;
+                if (rtk.parPrevRefSat[f] > 0 && rtk.parPrevRefSat[f] != newRefSat) {
+                    anyRefReselect = true;
+                }
                 rtk.ssat[refI - k].fix[f] = 2;
-                rtk.parPrevRefSat[f] = (refI - k) + 1;
+                rtk.parPrevRefSat[f] = newRefSat;
 
                 int n = 0;
                 for (int j = k; j < k + Constants.MAXSAT; j++) {
@@ -396,10 +395,34 @@ public final class RtkOptimizations {
             }
         }
 
+        boolean diag = (rtk.epoch <= 5 || rtk.epoch == 22);
+
         for (int m = 0; m < 6; m++) {
             boolean nofix = (m == 0 && gpsMode == 0) || (m == 1 && gloMode == 0) || (m == 3 && opt.bdsmodear == 0);
 
             for (int f = 0, k = na; f < nf; f++, k += Constants.MAXSAT) {
+                if (diag) {
+                    int cntX0 = 0, cntSys = 0, cntVsat = 0, cntLock = 0, cntHalf = 0, cntEl = 0, cntTotal = 0;
+                    double minEl = 999, maxEl = -999;
+                    for (int i = k; i < k + Constants.MAXSAT; i++) {
+                        int si = i - k;
+                        if (rtk.x[i] == 0.0) { cntX0++; continue; }
+                        if (!RtkCore.testSys(rtk.ssat[si].sys, m)) { cntSys++; continue; }
+                        cntTotal++;
+                        if (rtk.ssat[si].vsat[f] == 0) cntVsat++;
+                        if (rtk.ssat[si].lock[f] < 0) cntLock++;
+                        if ((rtk.ssat[si].slip[f] & Constants.LLI_HALFC) != 0) cntHalf++;
+                        if (rtk.ssat[si].azel[1] < opt.elmaskar) cntEl++;
+                        if (rtk.ssat[si].azel[1] > maxEl) maxEl = rtk.ssat[si].azel[1];
+                        if (rtk.ssat[si].azel[1] < minEl) minEl = rtk.ssat[si].azel[1];
+                    }
+                    if (cntTotal > 0) {
+                        System.err.printf("[DDIDX-STAT] epoch=%d m=%d f=%d total=%d vsat0=%d lockNeg=%d half=%d elLow=%d nofix=%b elRange=[%.1f,%.1f] elmaskar=%.1f%n",
+                            rtk.epoch, m, f, cntTotal, cntVsat, cntLock, cntHalf, cntEl, nofix,
+                            Math.toDegrees(minEl), Math.toDegrees(maxEl), Math.toDegrees(opt.elmaskar));
+                    }
+                }
+
                 int refI = -1;
                 for (int i = k; i < k + Constants.MAXSAT; i++) {
                     int si = i - k;
@@ -410,9 +433,20 @@ public final class RtkOptimizations {
                             && rtk.ssat[si].azel[1] >= opt.elmaskar && !nofix) {
                         rtk.ssat[si].fix[f] = 2;
                         refI = i;
+                        if (diag) {
+                            System.err.printf("[DDIDX-REF] epoch=%d m=%d f=%d refSat=%d refEl=%.1f lock=%d slip=0x%02x%n",
+                                rtk.epoch, m, f, si + 1, Math.toDegrees(rtk.ssat[si].azel[1]),
+                                rtk.ssat[si].lock[f], rtk.ssat[si].slip[f]);
+                        }
                         break;
                     } else {
                         rtk.ssat[si].fix[f] = 1;
+                        if (diag && rtk.ssat[si].vsat[f] != 0 && rtk.x[i] != 0.0) {
+                            System.err.printf("[DDIDX-REF-FAIL] epoch=%d m=%d f=%d sat=%d lock=%d slip=0x%02x el=%.1f half=%d nofix=%b%n",
+                                rtk.epoch, m, f, si + 1, rtk.ssat[si].lock[f], rtk.ssat[si].slip[f],
+                                Math.toDegrees(rtk.ssat[si].azel[1]),
+                                (rtk.ssat[si].slip[f] & Constants.LLI_HALFC) != 0 ? 1 : 0, nofix);
+                        }
                     }
                 }
                 if (refI < 0 || rtk.ssat[refI - k].fix[f] != 2) continue;
@@ -439,6 +473,10 @@ public final class RtkOptimizations {
                     rtk.ssat[refI - k].fix[f] = 1;
                 }
             }
+        }
+        if (diag) {
+            System.err.printf("[DDIDX-NB] epoch=%d nb=%d na=%d nf=%d gps=%d glo=%d sbs=%d bdsmodear=%d gpsmodear=%d elmaskar=%.1f%n",
+                rtk.epoch, nb, na, nf, gps, glo, sbs, opt.bdsmodear, opt.gpsmodear, Math.toDegrees(opt.elmaskar));
         }
         return nb;
     }

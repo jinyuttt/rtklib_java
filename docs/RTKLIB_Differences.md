@@ -341,35 +341,52 @@ C 版列优先矩阵 `A_c[m][n]` 与 Java 版行优先矩阵 `A_j[m][n]` 在数�
 - 最终结果写回 `x[]` 和 `P[]` 时按行优先顺序
 ---
 
-## 8. RTK优化项（Java版独有） (2026-07-16)
+## 8. RTK额外优化项（Java版独有）
 
-以下三项优化是Java版独有的，C版RTKLIB无对应功能。所有优化通过`RtkConfig`独立开关控制，默认关闭。
+Java版包含7项C版RTKLIB没有的额外优化，通过`RtkConfig`独立开关控制，默认全部关闭。
 
-### 8.1 滑动窗自适应Q矩阵（enableAdaptiveQ）
+**详细文档见 [RTK_Extra_Optimizations.md](RTK_Extra_Optimizations.md)**，包含每项优化的：
+- 问题背景与C版对比
+- 核心算法与数学原理
+- 配置参数与新增字段
+- 实现位置与代码引用
+- 优化项之间的依赖关系与调用顺序
 
-| 差异项 | 说明 |
-|--------|------|
-| C版 | 固定过程噪声，`Q = prn[3]² * |tt|`，不区分运动状态 |
-| Java版 | 环形滑动窗（50历元）计算位置增量RMS，Sigmoid映射到缩放因子α∈[0.01, 5.0]，`Q *= α²` |
-| 影响 | 静态时噪声压制（α→0.01），动态时快速响应（α→5.0），滑坡监测场景精度提升明显 |
-| 新增字段 | `Rtk.xOld[3]`, `Rtk.posWin[100]`, `Rtk.winIdx`, `Rtk.winCnt` |
-| 新增配置 | `adaptiveQWinSize`, `adaptiveQStaticThresh`, `adaptiveQDynamicThresh`, `adaptiveQScaleMinStatic`, `adaptiveQScaleMaxDynamic` |
+### 优化项概览
 
-### 8.2 模糊度子集锚固（enableAmbAnchor）
+| # | 名称 | 开关 | 一句话说明 |
+|---|------|------|-----------|
+| 1 | 滑动窗自适应Q矩阵 | `enableAdaptiveQ` | 位置增量RMS映射Q缩放因子，静态压制/动态放大 |
+| 2 | 模糊度子集锚固 | `enableAmbAnchor` | 长期固定模糊度跳过LAMBDA搜索，防止跳变 |
+| 3 | 大气参数自适应冻结 🔭 | `atmFrozenNsThresh` | 少星时冻结电离层/对流层参数（长基线） |
+| 4 | IGGIII抗差估计 | `enableIggiii` | 标准化残差三段降权，抑制粗差 |
+| 5 | SNR中值参考星选择 | `enableSnrMedian` | SNR中值辅助参考星选择 |
+| 6 | PAR参考星重选 | `enableParRefReselect` | ratio不足时排除差星重选参考星 |
+| 7 | 电离层/对流层梯度 🔭 | `enableIonoTropGradient` | 每星VTEC+Gn+Ge三参数（长基线） |
 
-| 差异项 | 说明 |
-|--------|------|
-| C版 | Fix-and-Hold全部使用`varholdamb`协方差，LAMBDA失败时可能重置所有模糊度 |
-| Java版 | 连续固定≥100历元的模糊度标记为"锚固"，协方差压制到1e-9（数学上等价于已知常数），LAMBDA搜索跳过已锚固子集 |
-| 影响 | 解决频繁跳变问题，短时遮挡下基线解维持在毫米级精度 |
-| 新增字段 | `Rtk.ambAnchored[MAXSAT*NF]`, `Rtk.ambAnchorCount[MAXSAT*NF]` |
-| 新增配置 | `enableAmbAnchor`, `ambAnchorMinFixCount`, `ambAnchorVar` |
+🔭 = 长基线优化项（>10km），短基线无效果
 
-### 8.3 大气参数自适应冻结（atmFrozenNsThresh）
+---
 
-| 差异项 | 说明 |
-|--------|------|
-| C版 | 无论卫星数多少，每历元都更新电离层/对流层过程噪声 |
-| Java版 | ns < 7时跳过`udion()`和`udtrop()`的过程噪声更新，冻结大气参数状态 |
-| 影响 | 防止少星时法方程病态导致虚假坐标跳变 |
-| 新增配置 | `atmFrozenNsThresh` (默认7) |
+## 9. Bug修复记录
+
+已移至 [RTK_Debug_Record.md](RTK_Debug_Record.md) "阶段7：索引体系Bug修复 (2026-07-18/19)" 及 "阶段10：观测值质量控制修复 (2026-07-19)" 章节。
+
+## 10. 额外优化详细说明
+
+已移至 [RTK_Extra_Optimizations.md](RTK_Extra_Optimizations.md)，包含每项优化的完整算法、配置参数和实现位置。
+
+## 11. 观测值质量控制差异（2026-07-19 修复）
+
+C版RTKLIB的质量控制分两层，Java版原始移植时遗漏了前端剔除：
+
+| 层级 | 函数 | C版行为 | Java版(修复前) | Java版(修复后) |
+|------|------|--------|---------------|---------------|
+| **前端剔除** | `ddres()` | `maxinno` 阈值检查，超限则 `vsat=0, rejc++, continue` | **无**（所有观测无条件进入滤波） | ✅ 已添加 |
+| **前端剔除** | `ddres()` | 模糊度刚初始化时 `threshadj=10` | 无 | ✅ 已添加 |
+| **模糊度管理** | `udbias()` | `rejc>=2` 或周跳时重置模糊度 | **无** | ✅ 已添加 |
+| **模糊度管理** | `udbias()` | 重置时 `lock=-minlock, icbias=0` | 无 | ✅ 已添加 |
+| **后端诊断** | `valpos()` | 大残差输出 `errmsg`，**始终返回1** | 无日志，始终返回true | 与C版一致（始终返回true） |
+
+**关键认知**：`valpos()` 是后端诊断工具，不是质量控制。C版也始终返回1，不会因后验残差丢弃历元。
+真正的质量控制在 `ddres()` 的前端剔除中。

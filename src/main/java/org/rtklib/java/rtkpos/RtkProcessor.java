@@ -451,6 +451,7 @@ public class RtkProcessor {
     private void processEpoch(Obsd[] obs, int n, GTime time, Nav nav) {
         n = RtklibCommon.sortobs(obs, n);
         totalEpochs++;
+        rtk.epoch++;
 
         int result = RtkCore.rtkpos(rtk, obs, n, nav);
 
@@ -473,7 +474,11 @@ public class RtkProcessor {
         } else {
             failCount++;
             if (handler != null) {
-                handler.onPosFail(time, "RTK positioning failed");
+                int nu = 0, nr = 0;
+                for (nu = 0; nu < n && obs[nu].rcv == 1; nu++) ;
+                for (nr = 0; nu + nr < n && obs[nu + nr].rcv == 2; nr++) ;
+                handler.onPosFail(time, "RTK positioning failed (result=" + result +
+                        ", stat=" + rtk.sol.stat + ", nu=" + nu + ", nr=" + nr + ")");
             }
         }
 
@@ -613,6 +618,28 @@ public class RtkProcessor {
             }
 
             mergeNav(batchRtcmRover.nav, batchRtcmBase.nav);
+
+            if (epoch == 0) {
+                int ephCount = 0, gephCount = 0;
+                Nav nav0 = batchRtcmRover.nav;
+                for (int ei = 0; ei < nav0.eph.length; ei++) {
+                    if (nav0.eph[ei] != null && nav0.eph[ei].A > 0) ephCount++;
+                }
+                for (int gi = 0; gi < nav0.geph.length; gi++) {
+                    if (nav0.geph[gi] != null) gephCount++;
+                }
+                log.info("Nav diagnostics: ephCount={}, gephCount={}, nav.eph.length={}, nav.geph.length={}",
+                        ephCount, gephCount, nav0.eph.length, nav0.geph.length);
+                for (int ei = 0; ei < nav0.eph.length; ei++) {
+                    if (nav0.eph[ei] != null && nav0.eph[ei].A > 0) {
+                        int sat = ei + 1;
+                        int[] prnArr = new int[1];
+                        int sys = org.rtklib.java.common.SatUtils.satsys(sat, prnArr);
+                        log.info("  eph[{}]: sat={} (sys={}, prn={}), A={}", ei, sat, sys, prnArr[0], nav0.eph[ei].A);
+                    }
+                }
+            }
+
             processEpoch(combined, roverN + baseN, roverTime, batchRtcmRover.nav);
         }
 

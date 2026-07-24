@@ -471,7 +471,8 @@ public final class RtkTrace {
         int nr;
         if (opt != null) {
             int np = opt.dynamics == 0 ? 3 : 9;
-            int ni = opt.ionoopt != Constants.IONOOPT_EST ? 0 : Constants.MAXSAT;
+            int ni = opt.ionoopt != Constants.IONOOPT_EST ? 0 :
+                     (opt.ionoGradient ? Constants.MAXSAT * 3 : Constants.MAXSAT);
             int nt;
             if (opt.tropopt < Constants.TROPOPT_EST) nt = 0;
             else if (opt.tropopt < Constants.TROPOPT_ESTG) nt = 2;
@@ -485,4 +486,3 @@ public final class RtkTrace {
         return nr + Constants.MAXSAT * f + (sat - 1);
     }
 }
-
