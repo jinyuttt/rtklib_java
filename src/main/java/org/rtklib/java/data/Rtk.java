@@ -94,6 +94,11 @@ public class Rtk {
         this.na = 0;
         this.x = new double[Constants.NX_RTK];
         this.P = new double[Constants.NX_RTK * Constants.NX_RTK];
+        // 初始化P矩阵对角线为大值（与C版rtkinit()一致）
+        double initialVar = 1e10;
+        for (int i = 0; i < Constants.NX_RTK; i++) {
+            this.P[i * Constants.NX_RTK + i] = initialVar;
+        }
         this.xa = new double[Constants.NX_RTK];
         this.Pa = new double[Constants.NX_RTK * Constants.NX_RTK];
         this.nfix = 0;

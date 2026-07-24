@@ -129,6 +129,10 @@ public final class RtkCore {
 
                     int info = filter(rtk, xp, Pp, H, v, R, nx, nvOut);
 
+                    if (opt.modear == Constants.ARMODE_FIXHOLD) {
+                        System.out.printf("rtkpos: filter info=%d, nvOut=%d, modear=%d%n", info, nvOut, opt.modear);
+                    }
+
                     if (info == 0) {
                         System.arraycopy(xp, 0, rtk.x, 0, nx);
                         System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
@@ -717,8 +721,16 @@ public final class RtkCore {
         double[] s = new double[2];
         int info = Lambda.lambda(arNa, 2, a, Qa, F, s);
 
+        if (rtk.opt.modear == Constants.ARMODE_FIXHOLD) {
+            System.out.printf("AR: info=%d, arNa=%d%n", info, arNa);
+        }
+
         if (info == 0) {
             double ratio = s[0] > 0 ? s[1] / s[0] : 0.0;
+            if (arNa > 0 && rtk.opt.modear == Constants.ARMODE_FIXHOLD) {
+                System.out.printf("AR: s[0]=%.4f, s[1]=%.4f, ratio=%.2f, thresh=%.1f%n",
+                        s[0], s[1], ratio, opt.thresar[0]);
+            }
             if (ratio > opt.thresar[0]) {
                 for (int i = 0; i < arNa; i++) {
                     int dstIdx = (freeCount > 0) ? freeMap[i] : i;
