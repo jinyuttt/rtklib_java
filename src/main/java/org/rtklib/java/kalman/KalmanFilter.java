@@ -2,6 +2,8 @@ package org.rtklib.java.kalman;
 
 import org.ejml.simple.SimpleMatrix;
 import org.rtklib.java.common.MatrixUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Kalman filter measurement update.
@@ -17,6 +19,9 @@ import org.rtklib.java.common.MatrixUtil;
  * </pre>
  */
 public final class KalmanFilter {
+    private static final Logger log = LoggerFactory.getLogger(KalmanFilter.class);
+    private static final boolean TRACE = true; // 跟踪日志开关
+    
     private KalmanFilter() {
     }
 
@@ -76,6 +81,9 @@ public final class KalmanFilter {
 
             return 0;
         } catch (Exception e) {
+            if (TRACE) {
+                log.error("Kalman update failed: nx={}, nv={}, error={}", nx, nv, e.getMessage());
+            }
             return -1;
         }
     }
