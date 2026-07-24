@@ -1699,15 +1699,7 @@ public class Rtcm {
                without j++. DO NOT change to {j++; continue;} */
             for (k = 0; k < h.nsig; k++) {
                 if (h.cellmask[k + i * h.nsig] == 0) {
-                    if (sys == Constants.SYS_CMP && i == 0 && k < h.nsig) {
-                        System.err.printf("[MSM-BDS-CELL] sat=%d k=%d sig=%s cellmask=0 SKIPPED%n", sat, k, sig[k]);
-                    }
                     continue;
-                }
-
-                if (sys == Constants.SYS_CMP && i == 0) {
-                    System.err.printf("[MSM-BDS-STORE] sat=%d k=%d sig=%s code=%d idx=%d pr_j=%.4f cp_j=%.4f cellmask=%d%n",
-                        sat, k, sig[k], code[k], idx[k], j < pr.length ? pr[j] : -999, j < cp.length ? cp[j] : -999, h.cellmask[k + i * h.nsig]);
                 }
 
                 if (sat != 0 && index >= 0 && idx[k] >= 0) {
@@ -1728,18 +1720,8 @@ public class Rtcm {
                 }
                 j++;
             }
-            if (sys == Constants.SYS_CMP && i == 0 && sat != 0) {
-                Obsd o = this.obs.data[index];
-                System.err.printf("[MSM-BDS-OBS-BEFORE] sat=%d code=[%d,%d,%d] L=[%.4f,%.4f,%.4f] P=[%.4f,%.4f,%.4f] SNR=[%.0f,%.0f,%.0f]%n",
-                    sat, o.code[0], o.code[1], o.code[2], o.L[0], o.L[1], o.L[2], o.P[0], o.P[1], o.P[2], o.SNR[0], o.SNR[1], o.SNR[2]);
-            }
             if (sat != 0 && index >= 0) {
                 promoteExtSig(this.obs.data[index], sys);
-            }
-            if (sys == Constants.SYS_CMP && i == 0 && sat != 0) {
-                Obsd o = this.obs.data[index];
-                System.err.printf("[MSM-BDS-OBS-AFTER] sat=%d code=[%d,%d,%d] L=[%.4f,%.4f,%.4f] P=[%.4f,%.4f,%.4f] SNR=[%.0f,%.0f,%.0f]%n",
-                    sat, o.code[0], o.code[1], o.code[2], o.L[0], o.L[1], o.L[2], o.P[0], o.P[1], o.P[2], o.SNR[0], o.SNR[1], o.SNR[2]);
             }
         }
     }
@@ -1765,8 +1747,6 @@ public class Rtcm {
                 obs.LLI[ex] = 0;
                 obs.SNR[ex] = 0.0f;
                 obs.code[ex] = 0;
-                System.err.printf("[PROMOTE-SIG] sat=%d freq=%d: promoted code=%d from ext idx=%d to idx=%d%n",
-                    obs.sat, f, obs.code[f], ex, f);
                 break;
             }
         }
