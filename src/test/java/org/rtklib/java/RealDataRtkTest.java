@@ -23,9 +23,9 @@ public class RealDataRtkTest {
 
     private static final Logger log = LoggerFactory.getLogger(RealDataRtkTest.class);
 
-    private static final String ROVER_PATH = "C:\\Users\\jinyu\\Desktop\\over.rtcm3";
-    private static final String BASE_PATH = "C:\\Users\\jinyu\\Desktop\\base.rtcm3";
-    private static final String RESULT_DIR = "D:\\rtklib\\rtklib_java\\test_results";
+    private static final String ROVER_PATH = "C:\\Users\\Admin\\Desktop\\over.rtcm3";
+    private static final String BASE_PATH = "C:\\Users\\Admin\\Desktop\\base.rtcm3";
+    private static final String RESULT_DIR = "D:\\code\\rtklib_java\\rtk_compare";
 
     private static byte[] roverData;
     private static byte[] baseData;
