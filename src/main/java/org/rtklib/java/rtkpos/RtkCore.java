@@ -128,10 +128,6 @@ public final class RtkCore {
 
         double dt = TimeSystem.timediff(obs[0].time, obs[nu].time);
         rtk.sol.age = (float) dt;
-        if (rtk.epoch <= 3) {
-            System.err.printf("[DT] epoch=%d rover_time=%.3f base_time=%.3f dt=%.6f intpref=%d%n",
-                rtk.epoch, obs[0].time.time + obs[0].time.sec, obs[nu].time.time + obs[nu].time.sec, dt, opt.intpref);
-        }
         if (Math.abs(rtk.sol.age) > opt.maxtdiff) {
             return 1;
         }
@@ -163,35 +159,6 @@ public final class RtkCore {
         RtkOptimizations.computeSnrMedian(rtk, obs, nu, nr, sat, ns, nf, nav);
 
         udstate(rtk, obs, nu, nr, nav, sat, ns, iu, ir);
-
-        if (rtk.epoch == 1) {
-            int na_dbg = rtk.na;
-            System.err.printf("[UDSTATE] epoch=%d nx=%d na=%d ns=%d nf=%d%n", rtk.epoch, nx, na_dbg, ns, nf);
-            System.err.printf("[UDSTATE-X] x[0:2]=%.4f,%.4f,%.4f (baseline ECEF)%n", rtk.x[0], rtk.x[1], rtk.x[2]);
-            System.err.printf("[UDSTATE-P] P[0:2,0:2]=%.4f,%.4f,%.4f%n", rtk.P[0], rtk.P[1], rtk.P[2]);
-            System.err.printf("[UDSTATE-RB] rb=%.4f,%.4f,%.4f%n", rtk.rb[0], rtk.rb[1], rtk.rb[2]);
-            double[] rr_dbg = new double[3];
-            for (int dbg_i = 0; dbg_i < 3; dbg_i++) rr_dbg[dbg_i] = rtk.rb[dbg_i] + rtk.x[dbg_i];
-            double[] pos_dbg = new double[3];
-            CoordTransform.ecef2pos(rr_dbg, pos_dbg);
-            System.err.printf("[UDSTATE-POS] rover ECEF=%.4f,%.4f,%.4f LLH=%.9f,%.9f,%.4f%n",
-                rr_dbg[0], rr_dbg[1], rr_dbg[2],
-                Math.toDegrees(pos_dbg[0]), Math.toDegrees(pos_dbg[1]), pos_dbg[2]);
-            int amb_cnt = 0;
-            StringBuilder sbAmb = new StringBuilder("[UDSTATE-AMB] ");
-            for (int dbg_k = na_dbg; dbg_k < nx && amb_cnt < 10; dbg_k++) {
-                if (rtk.x[dbg_k] != 0.0) {
-                    sbAmb.append(String.format("[%d]=%.4f(P=%.2f) ", dbg_k, rtk.x[dbg_k], rtk.P[dbg_k*nx+dbg_k]));
-                    amb_cnt++;
-                }
-            }
-            System.err.println(sbAmb);
-        }
-
-        if (rtk.epoch <= 5) {
-            System.err.printf("[BASE-POS] epoch=%d baseX=%.4f baseY=%.4f baseZ=%.4f refposmode=%d hasBasePos=%b%n",
-                rtk.epoch, rtk.rb[0], rtk.rb[1], rtk.rb[2], opt.refposmode, (Math.abs(rtk.rb[0]) > 0.1));
-        }
 
         for (i = 0; i < ns; i++) {
             for (f = 0; f < nf; f++) {
@@ -230,259 +197,35 @@ public final class RtkCore {
                 break;
             }
 
-            if (rtk.epoch <= 10 && i == 0) {
-                System.err.printf("[EPOCH-OBS] epoch=%d iter=%d nv=%d ns=%d nf=%d nx=%d na=%d%n",
-                    rtk.epoch, i, nv, ns, nf, nx, rtk.na);
-            }
-
             RtkOptimizations.computeQScale(rtk, sat, ns);
-
-            if (rtk.epoch <= 3 && i == 0) {
-                double[] prior_abs = new double[3];
-                for (int pi = 0; pi < 3; pi++) prior_abs[pi] = rtk.rb[pi] + xp[pi];
-                double posvar_prior = (Pp[0] + Pp[nx+1] + Pp[2*nx+2]) / 3.0;
-                System.err.printf("[POS-CHECK] epoch=%d iter=%d%n", rtk.epoch, i);
-                System.err.printf("  prior:   x=%.4f  y=%.4f  z=%.4f (baseline: %.4f,%.4f,%.4f)%n",
-                    prior_abs[0], prior_abs[1], prior_abs[2], xp[0], xp[1], xp[2]);
-                System.err.printf("  posvar_prior: %.6f%n", posvar_prior);
-                System.err.printf("  P_diag: %.4f,%.4f,%.4f%n", Pp[0], Pp[nx+1], Pp[2*nx+2]);
-                System.err.printf("  v_first5=");
-                for (int vi = 0; vi < Math.min(nv, 5); vi++) System.err.printf("%.6f ", v[vi]);
-                System.err.println();
-            }
 
             RtkOptimizations.applyIggiii(rtk, v, H, R, vflg, nv, nx, sat, ns,
                     obs, iu, azel, nf, Pp);
 
-            double[] xp_prior = null;
-            if (rtk.epoch <= 3 && i == 0) {
-                xp_prior = new double[3];
-                System.arraycopy(xp, 0, xp_prior, 0, 3);
-            }
-
-            if (rtk.epoch == 1) {
-                int na = rtk.na;
-                System.err.printf("[PRE-FILTER] epoch=%d P_amb_diag_first5=", rtk.epoch);
-                int cnt = 0;
-                for (int kk = na; kk < nx && cnt < 5; kk++) {
-                    if (Pp[kk * nx + kk] > 0.0) {
-                        System.err.printf("[%d]=%.3f ", kk, Pp[kk * nx + kk]);
-                        cnt++;
-                    }
-                }
-                System.err.println();
-            }
-
             if (rtk.epoch == 1) {
                 int na_dbg = rtk.na;
                 int cnt_dbg = 0;
-                System.err.printf("[PRE-FILTER-AMB] epoch=%d P_amb_diag=", rtk.epoch);
                 for (int kk = na_dbg; kk < nx && cnt_dbg < 15; kk++) {
                     if (Pp[kk * nx + kk] > 0.0) {
-                        System.err.printf("[%d]=%.3f ", kk, Pp[kk * nx + kk]);
                         cnt_dbg++;
                     }
                 }
-                System.err.println();
             }
 
-            if ((rtk.epoch == 31 || rtk.epoch == 32) && i == 0) {
-                int[] checkIdx = new int[]{108, 109, 110, 113, 114};
-                StringBuilder sbPre = new StringBuilder(String.format("[KF-AMB-BEFORE] epoch=%d iter=%d P_diag=", rtk.epoch, i));
-                for (int ci : checkIdx) {
-                    if (ci < nx) sbPre.append(String.format("[%d]=%.4f ", ci, Pp[ci*nx+ci]));
-                }
-                System.err.println(sbPre);
-            }
             int info = filter(rtk, xp, Pp, H, v, R, nx, nv);
-            if ((rtk.epoch == 31 || rtk.epoch == 32) && i == 0) {
-                int[] checkIdx = new int[]{108, 109, 110, 113, 114};
-                StringBuilder sbPost = new StringBuilder(String.format("[KF-AMB-AFTER]  epoch=%d iter=%d P_diag=", rtk.epoch, i));
-                for (int ci : checkIdx) {
-                    if (ci < nx) sbPost.append(String.format("[%d]=%.4f ", ci, Pp[ci*nx+ci]));
-                }
-                System.err.println(sbPost);
-            }
-            if (rtk.epoch <= 3 && i == 0 && xp_prior != null) {
-                double[] poster_abs = new double[3];
-                for (int pi = 0; pi < 3; pi++) poster_abs[pi] = rtk.rb[pi] + xp[pi];
-                double posvar_poster = (Pp[0] + Pp[nx+1] + Pp[2*nx+2]) / 3.0;
-                double dx_x = xp[0] - xp_prior[0];
-                double dx_y = xp[1] - xp_prior[1];
-                double dx_z = xp[2] - xp_prior[2];
-                System.err.printf("[POS-CHECK] epoch=%d iter=%d%n", rtk.epoch, i);
-                System.err.printf("  poster:  x=%.4f  y=%.4f  z=%.4f (baseline: %.4f,%.4f,%.4f)%n",
-                    poster_abs[0], poster_abs[1], poster_abs[2], xp[0], xp[1], xp[2]);
-                System.err.printf("  posvar_poster: %.6f%n", posvar_poster);
-                System.err.printf("[DX-CHECK] epoch=%d iter=%d%n", rtk.epoch, i);
-                System.err.printf("  dx_x = %.6f m%n", dx_x);
-                System.err.printf("  dx_y = %.6f m%n", dx_y);
-                System.err.printf("  dx_z = %.6f m%n", dx_z);
-                System.err.printf("  P_diag_poster: %.4f,%.4f,%.4f%n", Pp[0], Pp[nx+1], Pp[2*nx+2]);
-            }
+
             if (info != 0) {
                 stat = Constants.SOLQ_NONE;
                 break;
             }
 
-            if (rtk.epoch <= 2) {
-                int na_dbg2 = rtk.na;
-                double maxPosAmb = 0;
-                int maxPi = 0, maxPj = 0;
-                for (int pi = 0; pi < 3; pi++) for (int pj = na_dbg2; pj < nx; pj++)
-                    if (Math.abs(Pp[pi * nx + pj]) > maxPosAmb) { maxPosAmb = Math.abs(Pp[pi * nx + pj]); maxPi = pi; maxPj = pj; }
-                System.err.printf("[POST-FILTER-CROSS] epoch=%d iter=%d max_pos_amb_cross=%.4f at P[%d,%d] P[0,na:na+5]=%.4f,%.4f,%.4f,%.4f,%.4f%n",
-                    rtk.epoch, i, maxPosAmb, maxPi, maxPj,
-                    Pp[0 * nx + na_dbg2], Pp[0 * nx + na_dbg2+1], Pp[0 * nx + na_dbg2+2], Pp[0 * nx + na_dbg2+3], Pp[0 * nx + na_dbg2+4]);
-            }
-
-            if (rtk.epoch == 1) {
-                int na_dbg = rtk.na;
-                int cnt_dbg = 0;
-                System.err.printf("[POST-FILTER-AMB] epoch=%d P_amb_diag=", rtk.epoch);
-                for (int kk = na_dbg; kk < nx && cnt_dbg < 15; kk++) {
-                    if (Pp[kk * nx + kk] > 0.0) {
-                        System.err.printf("[%d]=%.3f ", kk, Pp[kk * nx + kk]);
-                        cnt_dbg++;
-                    }
-                }
-                System.err.println();
-                cnt_dbg = 0;
-                System.err.printf("[POST-FILTER-AMB-OFF] epoch=%d P_amb_offdiag_first5pairs=", rtk.epoch);
-                int first_dbg = -1, second_dbg = -1;
-                int pair_cnt = 0;
-                for (int kk = na_dbg; kk < nx && pair_cnt < 5; kk++) {
-                    if (Pp[kk * nx + kk] > 0.0) {
-                        if (first_dbg < 0) { first_dbg = kk; }
-                        else {
-                            second_dbg = kk;
-                            double corr_dbg = Pp[first_dbg * nx + second_dbg] / Math.sqrt(Pp[first_dbg * nx + first_dbg] * Pp[second_dbg * nx + second_dbg]);
-                            System.err.printf("P[%d,%d]=%.3f corr=%.4f ", first_dbg, second_dbg, Pp[first_dbg * nx + second_dbg], corr_dbg);
-                            first_dbg = second_dbg;
-                            pair_cnt++;
-                        }
-                    }
-                }
-                System.err.println();
-            }
-
             if (rtk.epoch <= 5 || rtk.epoch == 10 || rtk.epoch == 22) {
-                int na = rtk.na;
-                int first = -1, second = -1;
-                int cnt = 0;
-                for (int kk = na; kk < nx; kk++) {
-                    if (Pp[kk * nx + kk] > 0.0) {
-                        if (cnt == 0) first = kk;
-                        else if (cnt == 1) { second = kk; break; }
-                        cnt++;
-                    }
-                }
-                if (first >= 0 && second >= 0) {
-                    double P11 = Pp[first * nx + first];
-                    double P22 = Pp[second * nx + second];
-                    double P12 = Pp[first * nx + second];
-                    double corr = P12 / Math.sqrt(P11 * P22);
-                    System.err.printf("[P-EVOL] epoch=%d P[%d,%d]=%.4f P[%d,%d]=%.4f P[%d,%d]=%.4f corr=%.6f%n",
-                        rtk.epoch, first, first, P11, second, second, P22, first, second, P12, corr);
-                }
-                int[] ambIdx = new int[5];
-                int ambCnt = 0;
-                for (int kk = na; kk < nx && ambCnt < 5; kk++) {
-                    if (xp[kk] != 0.0 && Pp[kk * nx + kk] > 0.0) ambIdx[ambCnt++] = kk;
-                }
-                System.err.printf("[P-AMB-SUB] epoch=%d ambCnt=%d na=%d%n", rtk.epoch, ambCnt, na);
-                if (ambCnt >= 2) {
-                    System.err.printf("[P-AMB-SUB] epoch=%d 5x5 submatrix:%n", rtk.epoch);
-                    for (int ii = 0; ii < ambCnt; ii++) {
-                        StringBuilder sb = new StringBuilder("  ");
-                        for (int jj = 0; jj < ambCnt; jj++) {
-                            sb.append(String.format("%10.4f", Pp[ambIdx[ii] * nx + ambIdx[jj]]));
-                        }
-                        System.err.println(sb);
-                    }
-                    System.err.printf("[P-AMB-CORR] epoch=%d correlation submatrix:%n", rtk.epoch);
-                    for (int ii = 0; ii < ambCnt; ii++) {
-                        StringBuilder sb = new StringBuilder("  ");
-                        for (int jj = 0; jj < ambCnt; jj++) {
-                            double dii = Pp[ambIdx[ii] * nx + ambIdx[ii]];
-                            double djj = Pp[ambIdx[jj] * nx + ambIdx[jj]];
-                            double c = (dii > 0 && djj > 0) ? Pp[ambIdx[ii] * nx + ambIdx[jj]] / Math.sqrt(dii * djj) : 0;
-                            sb.append(String.format("%8.4f", c));
-                        }
-                        System.err.println(sb);
-                    }
-                }
             }
 
             if (rtk.epoch == 1 || rtk.epoch == 2) {
-                int na = rtk.na;
-                System.err.printf("[EPOCH] epoch=%d nv=%d nx=%d na=%d%n", rtk.epoch, nv, nx, na);
-                StringBuilder sbX = new StringBuilder("[X-AMB] ");
-                int cnt = 0;
-                for (int kk = na; kk < nx && cnt < 20; kk++) {
-                    if (xp[kk] != 0.0) {
-                        sbX.append(String.format("[%d]=%.3f ", kk, xp[kk]));
-                        cnt++;
-                    }
-                }
-                System.err.println(sbX);
-                StringBuilder sbPamb = new StringBuilder("[P-AMB] ");
-                cnt = 0;
-                for (int kk = na; kk < nx && cnt < 20; kk++) {
-                    if (Pp[kk * nx + kk] > 0.0) {
-                        sbPamb.append(String.format("[%d]=%.3f ", kk, Pp[kk * nx + kk]));
-                        cnt++;
-                    }
-                }
-                System.err.println(sbPamb);
             }
+
             if (rtk.epoch == 3 || rtk.epoch == 22) {
-                int na = rtk.na;
-                System.err.printf("[DDRES-H] epoch=%d nv=%d nx=%d na=%d%n", rtk.epoch, nv, nx, na);
-                for (int obs_idx = 0; obs_idx < Math.min(nv, 3); obs_idx++) {
-                    StringBuilder sbH = new StringBuilder(String.format("  obs%d non0:", obs_idx));
-                    for (int kk = 0; kk < nx; kk++) {
-                        double val = H[obs_idx * nx + kk];
-                        if (val != 0.0) sbH.append(String.format("[%d]=%.4f ", kk, val));
-                    }
-                    System.err.println(sbH);
-                }
-                StringBuilder sbR = new StringBuilder("[DDRES-R] R_diag=");
-                for (int obs_idx = 0; obs_idx < Math.min(nv, 10); obs_idx++) {
-                    sbR.append(String.format("%.6f ", R[obs_idx * nv + obs_idx]));
-                }
-                System.err.println(sbR);
-                StringBuilder sbV = new StringBuilder("[DDRES-V] v_first10=");
-                for (int obs_idx = 0; obs_idx < Math.min(nv, 10); obs_idx++) {
-                    sbV.append(String.format("%.4f ", v[obs_idx]));
-                }
-                System.err.println(sbV);
-                StringBuilder sbPamb = new StringBuilder(String.format("[P-AMB] epoch=%d na=%d ", rtk.epoch, na));
-                int cnt = 0;
-                for (int kk = na; kk < nx && cnt < 15; kk++) {
-                    if (Pp[kk * nx + kk] > 0.0) {
-                        sbPamb.append(String.format("[%d]=%.2f ", kk, Pp[kk * nx + kk]));
-                        cnt++;
-                    }
-                }
-                System.err.println(sbPamb);
-                int first = -1, second = -1;
-                cnt = 0;
-                for (int kk = na; kk < nx; kk++) {
-                    if (Pp[kk * nx + kk] > 0.0) {
-                        if (cnt == 0) first = kk;
-                        else if (cnt == 1) { second = kk; break; }
-                        cnt++;
-                    }
-                }
-                if (first >= 0 && second >= 0) {
-                    double P11 = Pp[first * nx + first];
-                    double P22 = Pp[second * nx + second];
-                    double P12 = Pp[first * nx + second];
-                    double corr = P12 / Math.sqrt(P11 * P22);
-                    System.err.printf("[P-CORR] epoch=%d P[%d,%d]=%.4f P[%d,%d]=%.4f P[%d,%d]=%.4f corr=%.6f%n",
-                        rtk.epoch, first, first, P11, second, second, P22, first, second, P12, corr);
-                }
             }
         }
 
@@ -518,7 +261,6 @@ public final class RtkCore {
             if (rtk.epoch == 31 || rtk.epoch == 32) {
                 int na_d = rtk.na;
                 int nx_d = rtk.nx;
-                System.err.printf("[AMB-VAR-BEFORE-AR] epoch=%d na=%d nx=%d%n", rtk.epoch, na_d, nx_d);
                 int cntAmb = 0;
                 double sumAmbVar = 0, minAmbVar = Double.MAX_VALUE, maxAmbVar = 0;
                 for (int ai = na_d; ai < nx_d; ai++) {
@@ -531,51 +273,29 @@ public final class RtkCore {
                         if (pv > maxAmbVar) maxAmbVar = pv;
                     }
                 }
-                System.err.printf("[AMB-VAR-SUMMARY] cnt=%d avg=%.4f min=%.4f max=%.4f%n",
-                    cntAmb, cntAmb > 0 ? sumAmbVar/cntAmb : 0, minAmbVar == Double.MAX_VALUE ? 0 : minAmbVar, maxAmbVar);
                 int printCnt = 0;
                 for (int ai = na_d; ai < nx_d && printCnt < 20; ai++) {
                     double pv = rtk.P[ai * nx_d + ai];
                     double xv = rtk.x[ai];
                     if (xv != 0.0 && pv > 0.0) {
-                        System.err.printf("[AMB-VAR] idx=%d x=%.4f P=%.4f%n", ai, xv, pv);
                         printCnt++;
                     }
                 }
-                int[] checkAmb = new int[]{108, 109, 110};
-                for (int ca : checkAmb) {
-                    if (ca >= nx_d) continue;
-                    System.err.printf("[P-CROSS] epoch=%d amb_idx=%d P[0:2,%d]=%.6f,%.6f,%.6f%n",
-                        rtk.epoch, ca, ca, rtk.P[0*nx_d+ca], rtk.P[1*nx_d+ca], rtk.P[2*nx_d+ca]);
-                    System.err.printf("[P-CROSS] epoch=%d P[%d,0:2]=%.6f,%.6f,%.6f%n",
-                        rtk.epoch, ca, rtk.P[ca*nx_d+0], rtk.P[ca*nx_d+1], rtk.P[ca*nx_d+2]);
-                }
-                System.err.printf("[P-POS] epoch=%d P[0:2,0:2]=%.6f,%.6f,%.6f / %.6f / %.6f%n",
-                    rtk.epoch, rtk.P[0*nx_d+0], rtk.P[0*nx_d+1], rtk.P[0*nx_d+2],
-                    rtk.P[1*nx_d+1], rtk.P[2*nx_d+2]);
             }
             double[] bias_arr = new double[nx];
             double[] xa_arr = new double[nx];
             int nb = manage_amb_LAMBDA(rtk, bias_arr, xa_arr, sat, nf, ns);
-            System.err.printf("[AR] nb=%d ratio=%.4f thres=%.4f%n", nb, rtk.sol.ratio, rtk.sol.thres);
-            if (nb > 1 && rtk.sol.ratio > 0) {
-                System.err.printf("[AR-DETAIL] ratio=%.4f thres=%.4f ratio>=thres=%b nb=%d%n",
-                    rtk.sol.ratio, rtk.sol.thres, rtk.sol.ratio >= rtk.sol.thres, nb);
-            }
+
             if (nb > 1) {
                 for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xa_arr[j];
                 boolean zdOk = zdres(0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
                         y, e, azel, freq, rtk.epoch);
-                if (!zdOk) {
-                    System.err.printf("[FIX-CHECK] epoch=%d zdOk=false%n", rtk.epoch);
-                }
+
                 if (zdOk) {
                     nv = ddres(rtk, obs, dt, xa_arr, rtk.P, sat, y, e, azel, freq,
                             iu, ir, ns, nf, nav, v, null, R, vflg);
                     boolean valOk = nv > 0 && valpos(rtk, v, R, vflg, nv, 4.0);
-                    if (!valOk) {
-                        System.err.printf("[FIX-CHECK] epoch=%d nv=%d valOk=false%n", rtk.epoch, nv);
-                    }
+
                     if (valOk) {
                         if (++rtk.nfix >= opt.minfix) {
                             if (opt.modear == Constants.ARMODE_FIXHOLD) {
@@ -588,7 +308,6 @@ public final class RtkCore {
                         stat = Constants.SOLQ_FIX;
                         System.arraycopy(xa_arr, 0, xa, 0, nx);
                     } else {
-                        System.err.printf("[RELPOS] FIX rejected: nv=%d valpos=%b%n", nv, valOk);
                     }
                 } else {
                 }
@@ -608,12 +327,6 @@ public final class RtkCore {
             rtk.sol.qr[5] = (float) rtk.Pa[0 * rtk.na + 2];
 
             if (rtk.epoch >= 62 && rtk.epoch <= 80) {
-                System.err.printf("[FIX-QR] epoch=%d Pa_diag=[%.6f,%.6f,%.6f] Pa_offdiag=[%.6f(P01),%.6f(P12),%.6f(P02)]%n",
-                    rtk.epoch, rtk.Pa[0], rtk.Pa[1*rtk.na+1], rtk.Pa[2*rtk.na+2],
-                    rtk.Pa[0*rtk.na+1], rtk.Pa[1*rtk.na+2], rtk.Pa[0*rtk.na+2]);
-                System.err.printf("[FIX-QR-SOL] epoch=%d qr=[%.6f,%.6f,%.6f,%.6f,%.6f,%.6f]%n",
-                    rtk.epoch, rtk.sol.qr[0], rtk.sol.qr[1], rtk.sol.qr[2],
-                    rtk.sol.qr[3], rtk.sol.qr[4], rtk.sol.qr[5]);
             }
 
             if (opt.dynamics != 0) {
@@ -648,8 +361,6 @@ public final class RtkCore {
 
         if (rtk.epoch <= 30) {
             double posvar_diag = (rtk.P[0 * nx + 0] + rtk.P[1 * nx + 1] + rtk.P[2 * nx + 2]) / 3.0;
-            System.err.printf("[QR-DIAG] epoch=%d stat=%d na=%d nx=%d posvar=%.6f%n",
-                rtk.epoch, stat, rtk.na, nx, posvar_diag);
             StringBuilder sbAmbVar = new StringBuilder(String.format("[AMB-CONV] epoch=%d amb_var=", rtk.epoch));
             int ambCnt = 0;
             for (int ai = rtk.na; ai < nx && ambCnt < 5; ai++) {
@@ -660,19 +371,8 @@ public final class RtkCore {
                     ambCnt++;
                 }
             }
-            System.err.println(sbAmbVar);
-            System.err.printf("[QR-FLOAT] P_diag=[%.6f, %.6f, %.6f] P_offdiag=[%.6f(P01), %.6f(P12), %.6f(P02)]%n",
-                rtk.P[0 * nx + 0], rtk.P[1 * nx + 1], rtk.P[2 * nx + 2],
-                rtk.P[0 * nx + 1], rtk.P[1 * nx + 2], rtk.P[0 * nx + 2]);
             if (stat == Constants.SOLQ_FIX) {
-                System.err.printf("[QR-FIX] Pa_diag=[%.6f, %.6f, %.6f] Pa_offdiag=[%.6f(P01), %.6f(P12), %.6f(P02)]%n",
-                    rtk.Pa[0 * rtk.na + 0], rtk.Pa[1 * rtk.na + 1], rtk.Pa[2 * rtk.na + 2],
-                    rtk.Pa[0 * rtk.na + 1], rtk.Pa[1 * rtk.na + 2], rtk.Pa[0 * rtk.na + 2]);
             }
-            System.err.printf("[QR-SOL] rr=[%.4f, %.4f, %.4f] qr=[%.4f, %.4f, %.4f, %.6f, %.6f, %.6f]%n",
-                rtk.sol.rr[0], rtk.sol.rr[1], rtk.sol.rr[2],
-                rtk.sol.qr[0], rtk.sol.qr[1], rtk.sol.qr[2],
-                rtk.sol.qr[3], rtk.sol.qr[4], rtk.sol.qr[5]);
         }
 
         rtk.sol.stat = (byte) stat;
@@ -848,8 +548,6 @@ public final class RtkCore {
             double prePosvar = (P[0 * nx + 0] + P[1 * nx + 1] + P[2 * nx + 2]) / 3.0;
             for (int i = 0; i < 3; i++) initx(x, P, nx, rtk.sol.rr[i] - rtk.rb[i], Constants.VAR_POS, i);
             double postPosvar = (P[0 * nx + 0] + P[1 * nx + 1] + P[2 * nx + 2]) / 3.0;
-            System.err.printf("[UDPOS-RESET] dynamics=0 epoch=%d prePosvar=%.6f postPosvar=%.6f VAR_POS=%.1f%n",
-                rtk.epoch, prePosvar, postPosvar, Constants.VAR_POS);
             return;
         }
 
@@ -915,18 +613,6 @@ public final class RtkCore {
         SimpleMatrix xpMat = MatrixUtil.multiply(FMat, xcMat);
         SimpleMatrix FPMat = MatrixUtil.multiply(FMat, PcMat);
         SimpleMatrix PpMat = MatrixUtil.multiply(FPMat, MatrixUtil.transpose(FMat));
-
-        if (rtk.epoch == 10) {
-            System.err.printf("[UDPOS] epoch=10 tt=%.4f nnx=%d%n", tt, nnx);
-            System.err.printf("[UDPOS-PRE] Pc[0:8]diag=%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f%n",
-                Pc[0], Pc[nnx+1], Pc[2*nnx+2], Pc[3*nnx+3], Pc[4*nnx+4], Pc[5*nnx+5],
-                Pc[6*nnx+6], Pc[7*nnx+7], Pc[8*nnx+8]);
-            double[] PpArr = new double[nnx*nnx];
-            for (int pi = 0; pi < nnx*nnx; pi++) PpArr[pi] = PpMat.get(pi % nnx, pi / nnx);
-            System.err.printf("[UDPOS-POST] Pp[0:8]diag=%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f%n",
-                PpArr[0], PpArr[nnx+1], PpArr[2*nnx+2], PpArr[3*nnx+3], PpArr[4*nnx+4], PpArr[5*nnx+5],
-                PpArr[6*nnx+6], PpArr[7*nnx+7], PpArr[8*nnx+8]);
-        }
 
         for (int i = 0; i < nnx; i++) {
             x[ix[i]] = xpMat.get(i, 0);
@@ -1243,12 +929,8 @@ public final class RtkCore {
                 }
             }
             if (rtk.epoch <= 5) {
-                System.err.printf("[AMB-INIT] epoch=%d f=%d ns=%d initCount=%d std[0]=%.1f%n",
-                    rtk.epoch, f, ns, initCount, opt.std[0]);
                 int firstIdx = IB(sat[0], f, opt);
                 if (firstIdx < nx) {
-                    System.err.printf("[AMB-INIT-CHECK] sat[0]=%d idx=%d x[idx]=%.4f P[idx,idx]=%.4f%n",
-                        sat[0], firstIdx, x[firstIdx], P[firstIdx*nx+firstIdx]);
                 }
             }
         }
@@ -1261,17 +943,11 @@ public final class RtkCore {
                     if (idx < nx && x[idx] != 0.0) ambCount++;
                 }
             }
-            System.err.printf("[UDBIAS-SUMMARY] epoch=%d ns=%d ambActive=%d%n", rtk.epoch, ns, ambCount);
             for (int i = 0; i < ns; i++) {
                 int s = sat[i] - 1;
                 for (int f = 0; f < nf; f++) {
                     int idx = IB(sat[i], f, opt);
                     boolean biasInit = (idx < nx && x[idx] != 0.0);
-                    System.err.printf("[UDBIAS-SAT] epoch=%d sat=%d f=%d slip=0x%02x lock=%d outc=%d vsat=%d half=%d biasInit=%b bias=%.4f%n",
-                        rtk.epoch, sat[i], f,
-                        rtk.ssat[s].slip[f], rtk.ssat[s].lock[f], rtk.ssat[s].outc[f],
-                        rtk.ssat[s].vsat[f], rtk.ssat[s].half[f],
-                        biasInit, biasInit ? x[idx] : 0.0);
                 }
             }
         }
@@ -1363,8 +1039,6 @@ public final class RtkCore {
                     freq[foff * nf + i * nf + f] = fq;
                     if (fq == 0.0) {
                         if (epoch == 4 && f == 1 && base == 0 && i < 3) {
-                            System.err.printf("[ZDRES-L2] sat=%d base=%d f=%d SKIP: fq=0 code=%d%n",
-                                obs[idx].sat, base, f, obs[idx].code[f]);
                         }
                         continue;
                     }
@@ -1372,8 +1046,6 @@ public final class RtkCore {
                     int snrRet = RtklibCommon.testsnr(base, f, el, obs[idx].SNR[f], opt.snrmask);
                     if (snrRet != 0) {
                         if (epoch == 4 && f == 1 && base == 0 && i < 3) {
-                            System.err.printf("[ZDRES-L2] sat=%d base=%d f=%d SKIP: snr test failed SNR=%d el=%.1f%n",
-                                obs[idx].sat, base, f, obs[idx].SNR[f], Math.toDegrees(el));
                         }
                         continue;
                     }
@@ -1384,25 +1056,15 @@ public final class RtkCore {
                         y[off * nf * 2 + i * nf * 2 + f] = obs[idx].L[f] * lam - r - dant[f];
                     } else {
                         if (epoch == 4 && f == 1 && base == 0 && i < 3) {
-                            System.err.printf("[ZDRES-L2] sat=%d base=%d f=%d SKIP: L[f]=0%n",
-                                obs[idx].sat, base, f);
                         }
                     }
                     if (obs[idx].P[f] != 0.0) {
                         y[off * nf * 2 + i * nf * 2 + nf + f] = obs[idx].P[f] - r - dant[f];
                     } else {
                         if (epoch == 4 && f == 1 && base == 0 && i < 3) {
-                            System.err.printf("[ZDRES-L2] sat=%d base=%d f=%d SKIP: P[f]=0%n",
-                                obs[idx].sat, base, f);
                         }
                     }
                     if (epoch <= 3 && f == 0 && obs[idx].L[f] != 0.0) {
-                        System.err.printf("[ZDRES] sat=%d base=%d f=%d L=%.6f P=%.6f r=%.6f dant=%.6f y_L=%.6f y_P=%.6f lam=%.6f freq=%.4f%n",
-                            obs[idx].sat, base, f, obs[idx].L[f], obs[idx].P[f],
-                            r, dant[f],
-                            y[off * nf * 2 + i * nf * 2 + f],
-                            obs[idx].P[f] != 0.0 ? y[off * nf * 2 + i * nf * 2 + nf + f] : 0.0,
-                            lam, fq);
                     }
                 }
             }
@@ -1554,26 +1216,7 @@ public final class RtkCore {
                     }
                 }
                 if (refIdx < 0) {
-                    if (rtk.epoch <= 3) {
-                        System.err.printf("[DDRES-NOREF] epoch=%d m=%d f=%d frq=%d code=%b ns=%d - no valid ref sat%n",
-                            rtk.epoch, m, f, frq, code, ns);
-                    }
-                    continue;
-                }
-
-                if (!code && frq == 0 && (rtk.epoch <= 10 || rtk.epoch == 22 || rtk.epoch == 50 || rtk.epoch == 100)) {
-                    System.err.printf("[DDRES-REF] epoch=%d m=%d f=%d refSat=%d refEl=%.1f ns=%d%n",
-                        rtk.epoch, m, f, sat[refIdx], Math.toDegrees(azel[1 + iu[refIdx] * 2]), ns);
-                    for (int dbg_j = 0; dbg_j < ns; dbg_j++) {
-                        int sys_dbg = SatUtils.satsys(sat[dbg_j], null);
-                        double az_dbg = Math.toDegrees(azel[iu[dbg_j] * 2]);
-                        double el_dbg = Math.toDegrees(azel[1 + iu[dbg_j] * 2]);
-                        System.err.printf("  sat[%d]=%d sys=%d az=%.1f el=%.1f%n", dbg_j, sat[dbg_j], sys_dbg, az_dbg, el_dbg);
-                    }
-                }
-                if (rtk.epoch <= 10 || rtk.epoch == 22 || rtk.epoch == 50 || rtk.epoch == 100) {
-                    System.err.printf("[REFSAT] epoch=%d m=%d refSat=%d el=%.1f%n",
-                        rtk.epoch, m, sat[refIdx], Math.toDegrees(azel[1 + iu[refIdx] * 2]));
+                     continue;
                 }
 
                 int cntBefore = nv;
@@ -1582,22 +1225,12 @@ public final class RtkCore {
                     int sysj = SatUtils.satsys(sat[j], null);
                     if ((sysj & sysMap[m]) == 0) continue;
                     if (!validobs(iu[j], ir[j], f, nf, y)) {
-                        if (rtk.epoch == 4 && frq == 1 && !code && j < 5) {
-                            double y_rover = y[f + iu[j] * nf * 2];
-                            double y_base = y[f + ir[j] * nf * 2];
-                            System.err.printf("[L2-SKIP] epoch=4 sat=%d j=%d validobs=false y_rover=%.4f y_base=%.4f%n",
-                                sat[j], j, y_rover, y_base);
-                        }
                         continue;
                     }
 
                     double freqi = SatUtils.sat2freq(sat[refIdx], obs[iu[refIdx]].code[frq], nav);
                     double freqj = SatUtils.sat2freq(sat[j], obs[iu[j]].code[frq], nav);
                     if (freqi <= 0.0 || freqj <= 0.0) {
-                        if (rtk.epoch == 4 && frq == 1 && !code && j < 5) {
-                            System.err.printf("[L2-SKIP] epoch=4 sat=%d j=%d freq_invalid freqi=%.4f freqj=%.4f code_rover=%d code_base=%d%n",
-                                sat[j], j, freqi, freqj, obs[iu[j]].code[frq], obs[ir[j]].code[frq]);
-                        }
                         continue;
                     }
 
@@ -1612,11 +1245,6 @@ public final class RtkCore {
 
                     v[nv] = (y[f + idx_i * nf * 2] - y[f + idx_ir * nf * 2])
                             - (y[f + idx_j * nf * 2] - y[f + idx_jr * nf * 2]);
-
-                    if (rtk.epoch <= 5 && !code && frq == 0 && nv < 3) {
-                        System.err.printf("[V-DIAG] epoch=%d nv=%d code=%b frq=%d v=%.4f sat_i=%d sat_j=%d%n",
-                            rtk.epoch, nv, code, frq, v[nv], sat[refIdx], sat[j]);
-                    }
 
                     if (H != null) {
                         for (k = 0; k < 3; k++) {
@@ -1675,10 +1303,6 @@ public final class RtkCore {
                     } else {
                         rtk.ssat[sat[j] - 1].resc[frq] = v[nv];
                     }
-                    if (rtk.epoch <= 3 && !code && frq == 0) {
-                        System.err.printf("[DD-RES] epoch=%d pair=%d-%d finalV=%.4f%n",
-                            rtk.epoch, sat[refIdx], sat[j], v[nv]);
-                    }
 
                     double threshadj = 1.0;
                     if (opt.mode > Constants.PMODE_DGPS && !code) {
@@ -1709,12 +1333,8 @@ public final class RtkCore {
                             if ((obs[iu[j]].LLI[frq] & Constants.LLI_HALFC) != 0) Rj[nv] += 0.01;
                         }
                         if (rtk.epoch <= 3 && nv < 3 && !code) {
-                            System.err.printf("[DDRES-R] epoch=%d nv=%d code=%b frq=%d sat=%d-%d Ri=%.6f Rj=%.6f sum=%.6f%n",
-                                rtk.epoch, nv, code, frq, sat[refIdx], sat[j], Ri[nv], Rj[nv], Ri[nv]+Rj[nv]);
                         }
                         if (rtk.epoch <= 3 && nv >= 12 && nv < 15 && code) {
-                            System.err.printf("[DDRES-R-CODE] epoch=%d nv=%d code=%b frq=%d sat=%d-%d Ri=%.6f Rj=%.6f sum=%.6f%n",
-                                rtk.epoch, nv, code, frq, sat[refIdx], sat[j], Ri[nv], Rj[nv], Ri[nv]+Rj[nv]);
                         }
                     }
 
@@ -1730,55 +1350,22 @@ public final class RtkCore {
 
                     vflg[nv] = (sat[refIdx] << 16) | (sat[j] << 8) | ((code ? 1 : 0) << 4) | frq;
                     if (rtk.epoch <= 3 && !code && frq == 0 && H != null) {
-                        System.err.printf("[H-POS-COL] epoch=%d nv=%d pair=%d-%d%n",
-                            rtk.epoch, nv, sat[refIdx], sat[j]);
-                        System.err.printf("  Hx = %.6f%n", H[nv * nx + 0]);
-                        if (nx > 1) System.err.printf("  Hy = %.6f%n", H[nv * nx + 1]);
-                        if (nx > 2) System.err.printf("  Hz = %.6f%n", H[nv * nx + 2]);
                     }
                     nv++;
                     nb[b]++;
                 }
                 if (rtk.epoch <= 10) {
-                    System.err.printf("[DDRES-FREQ] epoch=%d m=%d f=%d frq=%d code=%b refIdx=%d ns=%d nv_added=%d nv_total=%d%n",
-                        rtk.epoch, m, f, frq, code, refIdx, ns, nv - cntBefore, nv);
+                    if (rtk.epoch <= 10) {
+                    }
                 }
                 b++;
             }
         }
 
         if (rtk.epoch <= 10) {
-            System.err.printf("[DDRES-COUNT] epoch=%d nv=%d ns=%d nf=%d b=%d%n", rtk.epoch, nv, ns, nf, b);
-            for (int bi = 0; bi < b; bi++) {
-                System.err.printf("  nb[%d]=%d%n", bi, nb[bi]);
-            }
-            for (int vi = 0; vi < nv; vi++) {
-                int sat1 = (vflg[vi] >> 16) & 0xFF;
-                int sat2 = (vflg[vi] >> 8) & 0xFF;
-                int isCode = (vflg[vi] >> 4) & 1;
-                int frqV = vflg[vi] & 0xF;
-                double riVal = (Ri != null && vi < Ri.length) ? Ri[vi] : -1;
-                double rjVal = (Rj != null && vi < Rj.length) ? Rj[vi] : -1;
-                System.err.printf("  vflg[%d]: sat=%d-%d code=%d frq=%d Ri=%.6f Rj=%.6f Rsum=%.6f%n",
-                    vi, sat1, sat2, isCode, frqV, riVal, rjVal, riVal + rjVal);
-            }
         }
 
         if (rtk.epoch == 31 && H != null) {
-            System.err.printf("[H-AMB-CHECK] epoch=%d nv=%d nx=%d na=%d%n", rtk.epoch, nv, nx, rtk.na);
-            int[] ambCols = new int[]{108, 109, 110, 113, 114};
-            for (int ac : ambCols) {
-                if (ac >= nx) continue;
-                StringBuilder sbH = new StringBuilder(String.format("  H[*,%d]: ", ac));
-                int nonZero = 0;
-                for (int hi = 0; hi < nv; hi++) {
-                    double hv = H[hi * nx + ac];
-                    if (hv != 0.0) nonZero++;
-                    if (hi < 10) sbH.append(String.format("%.4f ", hv));
-                }
-                sbH.append(String.format("... nonZero=%d", nonZero));
-                System.err.println(sbH);
-            }
         }
 
         if (R != null) {
@@ -1820,25 +1407,12 @@ public final class RtkCore {
         boolean diagResamb = (rtk.epoch <= 10 || rtk.epoch == 22 || rtk.epoch == 50 || rtk.epoch == 100);
 
         if (diagResamb) {
-            System.err.printf("[RESAMB-ENTER] epoch=%d nx=%d na=%d gps=%d glo=%d sbs=%d minfixsats=%d nf=%d%n",
-                rtk.epoch, nx, na, gps, glo, sbs, opt.minfixsats, nf);
         }
 
         int[] ix = new int[nx * 2];
         int nb = ddidx(rtk, ix, gps, glo, sbs);
 
         if (diagResamb) {
-            int nAmbTotal = nx - na;
-            int ambXNonZero = 0;
-            int ambF0 = 0;
-            int ambSlip = 0;
-            int ambLockNeg = 0;
-            int ambHalf = 0;
-            int ambVsat0 = 0;
-            int ambElLow = 0;
-            double maxAmbVar = 0;
-            double minAmbVarNonZero = Double.MAX_VALUE;
-
             for (int i = na; i < nx; i++) {
                 int localIdx = i - na;
                 int sat = (localIdx % Constants.MAXSAT) + 1;
@@ -1848,51 +1422,13 @@ public final class RtkCore {
 
                 double xVal = rtk.x[i];
                 double pVal = rtk.P[i * nx + i];
-                int slip = rtk.ssat[si].slip[f];
-                int lock = rtk.ssat[si].lock[f];
-                int vsat = rtk.ssat[si].vsat[f];
-                double el = rtk.ssat[si].azel[1];
-                int fix = rtk.ssat[si].fix[f];
-                int sys = rtk.ssat[si].sys;
 
                 if (xVal == 0.0) continue;
-                ambXNonZero++;
-
-                boolean isF0 = (fix == 0);
-                boolean isSlip = ((slip & 0x03) != 0);
-                boolean isLockNeg = (lock < 0);
-                boolean isHalf = ((slip & Constants.LLI_HALFC) != 0);
-                boolean isVsat0 = (vsat == 0);
-                boolean isElLow = (el < opt.elmaskar);
-
-                if (isF0) ambF0++;
-                if (isSlip) ambSlip++;
-                if (isLockNeg) ambLockNeg++;
-                if (isHalf) ambHalf++;
-                if (isVsat0) ambVsat0++;
-                if (isElLow) ambElLow++;
-
-                if (pVal > maxAmbVar) maxAmbVar = pVal;
-                if (pVal > 0 && pVal < minAmbVarNonZero) minAmbVarNonZero = pVal;
-
-                System.err.printf("[RESAMB-FILTER] epoch=%d i=%d sat=%d f=%d x=%.4f pVar=%.6f slip=0x%02x lock=%d vsat=%d el=%.1f fix=%d sys=%d half=%d%n",
-                    rtk.epoch, i, sat, f, xVal, pVal, slip, lock, vsat, Math.toDegrees(el), fix, sys,
-                    (slip & Constants.LLI_HALFC) != 0 ? 1 : 0);
             }
-
-            System.err.printf("[RESAMB-SUMMARY] epoch=%d nAmbTotal=%d ambXNonZero=%d ambF0=%d ambSlip=%d ambLockNeg=%d ambHalf=%d ambVsat0=%d ambElLow=%d maxVar=%.6f minVar=%.6f%n",
-                rtk.epoch, nAmbTotal, ambXNonZero, ambF0, ambSlip, ambLockNeg, ambHalf, ambVsat0, ambElLow,
-                maxAmbVar, ambXNonZero > 0 ? minAmbVarNonZero : 0.0);
-
-            int validSingleAmb = ambXNonZero - ambSlip - ambLockNeg - ambHalf - ambVsat0 - ambElLow;
-            System.err.printf("[RESAMB-DD] epoch=%d validSingleAmb=%d nb=%d minfixsats-1=%d%n",
-                rtk.epoch, validSingleAmb, nb, opt.minfixsats - 1);
         }
 
         if (nb < opt.minfixsats - 1) {
             if (diagResamb) {
-                System.err.printf("[RESAMB-EXIT] epoch=%d nb=%d < minfixsats-1=%d -> return -1%n",
-                    rtk.epoch, nb, opt.minfixsats - 1);
             }
             return -1;
         }
@@ -2019,66 +1555,12 @@ public final class RtkCore {
         SimpleMatrix QabMat = MatrixUtil.multiply(QacMat, MatrixUtil.transpose(DMat));
 
         if (rtk.epoch == 32 || rtk.epoch == 33) {
-            System.err.printf("[QB-GEN] epoch=%d nbLambda=%d na=%d nAmb=%d%n", rtk.epoch, nbLambda, na, nAmb);
-            StringBuilder sbIx = new StringBuilder("[QB-IX] ixUsed=");
-            for (int ii = 0; ii < nbLambda; ii++) {
-                sbIx.append(String.format("(%d,%d) ", ixUsed[ii*2], ixUsed[ii*2+1]));
-            }
-            System.err.println(sbIx);
-            StringBuilder sbPdiag = new StringBuilder("[QB-PDIAG] P[ix*2]_diag=");
-            for (int ii = 0; ii < nbLambda; ii++) {
-                int g1 = ixUsed[ii*2], g2 = ixUsed[ii*2+1];
-                sbPdiag.append(String.format("(%.4f,%.4f) ", rtk.P[g1*nx+g1], rtk.P[g2*nx+g2]));
-            }
-            System.err.println(sbPdiag);
-            StringBuilder sbXval = new StringBuilder("[QB-XVAL] x[ix*2]-x[ix*2+1]=");
-            for (int ii = 0; ii < nbLambda; ii++) {
-                sbXval.append(String.format("%.4f ", rtk.x[ixUsed[ii*2]] - rtk.x[ixUsed[ii*2+1]]));
-            }
-            System.err.println(sbXval);
-            System.err.printf("[QB-GEN] Qb[0:min(3,nbLambda),0:min(3,nbLambda)]:%n");
-            for (int ii = 0; ii < Math.min(3, nbLambda); ii++) {
-                StringBuilder sb = new StringBuilder(String.format("  row%d: ", ii));
-                for (int jj = 0; jj < Math.min(3, nbLambda); jj++) {
-                    sb.append(String.format("%.6f ", QbMat.get(ii, jj)));
-                }
-                System.err.println(sb);
-            }
-            double[] QbDirect = new double[nbLambda * nbLambda];
-            for (int ii = 0; ii < nbLambda; ii++) {
-                for (int jj = 0; jj < nbLambda; jj++) {
-                    int i1 = ixUsed[ii*2], i2 = ixUsed[ii*2+1];
-                    int j1 = ixUsed[jj*2], j2 = ixUsed[jj*2+1];
-                    QbDirect[ii*nbLambda+jj] = rtk.P[i1*nx+j1] - rtk.P[i1*nx+j2] - rtk.P[i2*nx+j1] + rtk.P[i2*nx+j2];
-                }
-            }
-            System.err.printf("[QB-DIRECT] Qb via direct formula (C-style):%n");
-            for (int ii = 0; ii < Math.min(3, nbLambda); ii++) {
-                StringBuilder sb = new StringBuilder(String.format("  row%d: ", ii));
-                for (int jj = 0; jj < Math.min(3, nbLambda); jj++) {
-                    sb.append(String.format("%.6f ", QbDirect[ii*nbLambda+jj]));
-                }
-                System.err.println(sb);
-            }
-            StringBuilder sbQbDirDiag = new StringBuilder("[QB-DIRECT-DIAG] ");
-            for (int ii = 0; ii < nbLambda; ii++) sbQbDirDiag.append(String.format("%.6f ", QbDirect[ii*nbLambda+ii]));
-            System.err.println(sbQbDirDiag);
-            double maxDiff = 0;
-            for (int ii = 0; ii < nbLambda; ii++) {
-                for (int jj = 0; jj < nbLambda; jj++) {
-                    double diff = Math.abs(QbMat.get(ii,jj) - QbDirect[ii*nbLambda+jj]);
-                    if (diff > maxDiff) maxDiff = diff;
-                }
-            }
-            System.err.printf("[QB-COMPARE] max|QbMat - QbDirect| = %.10f%n", maxDiff);
         }
 
         if (rtk.epoch <= 5 || rtk.epoch == 10 || rtk.epoch == 22) {
             StringBuilder sbIx = new StringBuilder(String.format("[LAMBDA-IX] epoch=%d nbLambda=%d na=%d nAmb=%d ixUsed=", rtk.epoch, nbLambda, na, nAmb));
             for (int i = 0; i < Math.min(nbLambda, 11); i++) {
-                sbIx.append(String.format("(%d,%d) ", ixUsed[i*2], ixUsed[i*2+1]));
             }
-            System.err.println(sbIx);
 
             int[] usedAmbIdx = new int[Math.min(5, nbLambda * 2)];
             int usedAmbCnt = 0;
@@ -2096,44 +1578,14 @@ public final class RtkCore {
                 }
             }
             if (usedAmbCnt >= 2) {
-                System.err.printf("[LAMBDA-Qc] epoch=%d %dx%d submatrix (used amb states, global idx):%n", rtk.epoch, usedAmbCnt, usedAmbCnt);
-                StringBuilder sbIdx = new StringBuilder("  global idx: ");
-                for (int ii = 0; ii < usedAmbCnt; ii++) sbIdx.append(String.format("%d ", usedAmbIdx[ii] + na));
-                System.err.println(sbIdx);
-                StringBuilder sbDiag = new StringBuilder("  Qc_diag: ");
-                for (int ii = 0; ii < usedAmbCnt; ii++) sbDiag.append(String.format("%.4f ", QcMat.get(usedAmbIdx[ii], usedAmbIdx[ii])));
-                System.err.println(sbDiag);
                 for (int ii = 0; ii < usedAmbCnt; ii++) {
-                    StringBuilder sb = new StringBuilder(String.format("  Qc[%d]: ", usedAmbIdx[ii] + na));
-                    for (int jj = 0; jj < usedAmbCnt; jj++) {
-                        sb.append(String.format("%10.4f", QcMat.get(usedAmbIdx[ii], usedAmbIdx[jj])));
-                    }
-                    System.err.println(sb);
-                }
-                System.err.printf("[LAMBDA-Qc-CORR] epoch=%d correlation submatrix:%n", rtk.epoch);
-                for (int ii = 0; ii < usedAmbCnt; ii++) {
-                    StringBuilder sb = new StringBuilder("  ");
                     for (int jj = 0; jj < usedAmbCnt; jj++) {
                         double dii = QcMat.get(usedAmbIdx[ii], usedAmbIdx[ii]);
                         double djj = QcMat.get(usedAmbIdx[jj], usedAmbIdx[jj]);
                         double c = (dii > 0 && djj > 0) ? QcMat.get(usedAmbIdx[ii], usedAmbIdx[jj]) / Math.sqrt(dii * djj) : 0;
-                        sb.append(String.format("%8.4f", c));
                     }
-                    System.err.println(sb);
                 }
             }
-
-            StringBuilder sbQbDiag = new StringBuilder(String.format("[LAMBDA-Qb-DIAG] epoch=%d Qb_diag=", rtk.epoch));
-            for (int i = 0; i < nbLambda; i++) {
-                sbQbDiag.append(String.format("%.4f ", QbMat.get(i, i)));
-            }
-            System.err.println(sbQbDiag);
-
-            StringBuilder sbQbX1000 = new StringBuilder(String.format("[LAMBDA-Qb*1000] epoch=%d Qb*1000=", rtk.epoch));
-            for (int i = 0; i < nbLambda; i++) {
-                sbQbX1000.append(String.format("%.4f ", QbMat.get(i, i) * 1000.0));
-            }
-            System.err.println(sbQbX1000);
         }
 
         for (int i = 0; i < nbLambda; i++) {
@@ -2149,13 +1601,6 @@ public final class RtkCore {
             }
         }
 
-        StringBuilder sbY = new StringBuilder(String.format("[LAMBDA-IN] epoch=%d nbLambda=%d y=", rtk.epoch, nbLambda));
-        for (int i = 0; i < nbLambda; i++) sbY.append(String.format("%.4f ", y[i]));
-        StringBuilder sbQb = new StringBuilder(String.format("[LAMBDA-IN] epoch=%d Qb_diag=", rtk.epoch));
-        for (int i = 0; i < nbLambda; i++) sbQb.append(String.format("%.6f ", Qb[i * nbLambda + i]));
-        System.err.println(sbY);
-        System.err.println(sbQb);
-
         for (int i = 0; i < na; i++) {
             for (int j = 0; j < nbLambda; j++) {
                 Qab[i * nbLambda + j] = QabMat.get(i, j);
@@ -2165,15 +1610,9 @@ public final class RtkCore {
         double[] s = new double[2];
 
         if (rtk.epoch == 21 && nbLambda <= 12) {
-            System.err.printf("[LAMBDA-INPUT] epoch=%d n=%d%n", rtk.epoch, nbLambda);
-            System.err.printf("[LAMBDA-A] ");
-            for (int li = 0; li < nbLambda; li++) System.err.printf("%.10f ", y[li]);
-            System.err.println();
-            System.err.printf("[LAMBDA-Q] n=%d%n", nbLambda);
             for (int li = 0; li < nbLambda; li++) {
-                StringBuilder sb = new StringBuilder(String.format("  Q[%d]: ", li));
-                for (int lj = 0; lj < nbLambda; lj++) sb.append(String.format("%.10e ", Qb[li * nbLambda + lj]));
-                System.err.println(sb);
+            }
+            for (int li = 0; li < nbLambda; li++) {
             }
         }
 
@@ -2182,14 +1621,8 @@ public final class RtkCore {
         if (info == 0) {
             double ratio = s[0] > 0 ? s[1]/s[0] : 0;
             if (rtk.epoch <= 80 || ratio >= 3.0) {
-                System.err.printf("[LAMBDA-RESULT] epoch=%d nbLambda=%d ratio=%.2f%n", rtk.epoch, nbLambda, ratio);
-                double qbMax = 0, qbMin = Double.MAX_VALUE;
                 for (int li = 0; li < nbLambda; li++) {
-                    double v = Qb[li*nbLambda+li];
-                    if (v > qbMax) qbMax = v;
-                    if (v < qbMin) qbMin = v;
                 }
-                System.err.printf("[LAMBDA-Qb-RANGE] epoch=%d min=%.6f max=%.6f%n", rtk.epoch, qbMin, qbMax);
             }
         }
 
@@ -2212,22 +1645,10 @@ public final class RtkCore {
                 }
 
                 if (rtk.epoch <= 30 || rtk.epoch == 32 || rtk.epoch == 33 || (rtk.epoch >= 62 && rtk.epoch <= 65)) {
-                    System.err.printf("[PA-EXTRACT] epoch=%d na=%d nx=%d nbLambda=%d ratio=%.4f%n",
-                        rtk.epoch, na, nx, nbLambda, s[0] > 0 ? s[1]/s[0] : 0);
-                    System.err.printf("[PA-EXTRACT] Pa[0:3,0:3] from P[0:3,0:3]:%n");
                     for (int ii = 0; ii < 3; ii++) {
-                        StringBuilder sb = new StringBuilder(String.format("  row%d: ", ii));
                         for (int jj = 0; jj < 3; jj++) {
-                            sb.append(String.format("%.6f ", rtk.Pa[ii * na + jj]));
                         }
-                        sb.append(" | P_src: ");
-                        for (int jj = 0; jj < 3; jj++) {
-                            sb.append(String.format("%.6f ", rtk.P[ii * nx + jj]));
-                        }
-                        System.err.println(sb);
                     }
-                    System.err.printf("[PA-EXTRACT] xa[0:3]=[%.6f, %.6f, %.6f] x[0:3]=[%.6f, %.6f, %.6f]%n",
-                        rtk.xa[0], rtk.xa[1], rtk.xa[2], rtk.x[0], rtk.x[1], rtk.x[2]);
                 }
 
                 double[] biasFull = new double[nb];
@@ -2270,39 +1691,16 @@ public final class RtkCore {
                     restamb(rtk, bias, nb, xa);
 
                     if (rtk.epoch <= 80 || (rtk.epoch >= 100 && rtk.epoch <= 105)) {
-                        System.err.printf("[FIX-DIAG] epoch=%d ratio=%.2f na=%d nbLambda=%d xa[0:3]=%.6f,%.6f,%.6f x[0:3]=%.6f,%.6f,%.6f dx=%.6f,%.6f,%.6f%n",
-                            rtk.epoch, rtk.sol.ratio, na, nbLambda,
-                            rtk.xa[0], rtk.xa[1], rtk.xa[2],
-                            rtk.x[0], rtk.x[1], rtk.x[2],
-                            rtk.xa[0]-rtk.x[0], rtk.xa[1]-rtk.x[1], rtk.xa[2]-rtk.x[2]);
-                        System.err.printf("[FIX-QAB] Qab[0:3,*] first 5 cols:%n");
-                        for (int qi = 0; qi < 3; qi++) {
-                            StringBuilder sb = new StringBuilder(String.format("  Qab[%d]: ", qi));
-                            for (int qj = 0; qj < Math.min(5, nbLambda); qj++) {
-                                sb.append(String.format("%.6f ", Qab[qi * nbLambda + qj]));
-                            }
-                            System.err.println(sb);
-                        }
-                        System.err.printf("[FIX-DB] db first 5: ");
                         for (int qi = 0; qi < Math.min(5, nbLambda); qi++) {
-                            System.err.printf("%.6f ", db[qi]);
                         }
-                        System.err.println();
-                        System.err.printf("[FIX-Y-B] y-b first 5: ");
                         for (int qi = 0; qi < Math.min(5, nbLambda); qi++) {
-                            System.err.printf("%.6f ", y[qi]);
                         }
-                        System.err.println();
-                        System.err.printf("[FIX-Y-ORIG] yFull first 5: ");
+                        for (int qi = 0; qi < Math.min(5, nbLambda); qi++) {
+                        }
                         for (int qi = 0; qi < Math.min(5, nb); qi++) {
-                            System.err.printf("%.6f ", yFull[qi]);
                         }
-                        System.err.println();
-                        System.err.printf("[FIX-B] b first 5: ");
                         for (int qi = 0; qi < Math.min(5, nbLambda); qi++) {
-                            System.err.printf("%.6f ", b[qi]);
                         }
-                        System.err.println();
                     }
                 } else {
                     nb = 0;
@@ -2355,7 +1753,6 @@ public final class RtkCore {
 
         boolean skip = opt.mode <= Constants.PMODE_DGPS || opt.modear == Constants.ARMODE_OFF ||
             opt.thresar[0] < 1.0 || posvar > opt.thresar[1];
-        System.err.printf("[MANAGE_AMB] posvar=%.6f thresar1=%.6f skip=%b%n", posvar, opt.thresar[1], skip);
 
         if (skip) {
             rtk.sol.ratio = 0.0f;
@@ -2511,7 +1908,6 @@ public final class RtkCore {
         }
 
         if (opt.modear == Constants.ARMODE_FIXHOLD && nv < opt.minholdsats) {
-            System.err.printf("[HOLDAMB] skipped: nv=%d < minholdsats=%d%n", nv, opt.minholdsats);
             return;
         }
 
@@ -2522,7 +1918,6 @@ public final class RtkCore {
 
         if (nv > 0) {
             int ret = KalmanFilter.update(rtk.x, rtk.P, H, v, Rh, nx, nv);
-            System.err.printf("[HOLDAMB] applied: nv=%d ret=%d%n", nv, ret);
         }
 
         if (enableAnchor && rtk.sol.stat != Constants.SOLQ_FIX) {

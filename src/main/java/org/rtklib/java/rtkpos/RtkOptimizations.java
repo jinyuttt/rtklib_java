@@ -416,11 +416,7 @@ public final class RtkOptimizations {
                         if (rtk.ssat[si].azel[1] > maxEl) maxEl = rtk.ssat[si].azel[1];
                         if (rtk.ssat[si].azel[1] < minEl) minEl = rtk.ssat[si].azel[1];
                     }
-                    if (cntTotal > 0) {
-                        System.err.printf("[DDIDX-STAT] epoch=%d m=%d f=%d total=%d vsat0=%d lockNeg=%d half=%d elLow=%d nofix=%b elRange=[%.1f,%.1f] elmaskar=%.1f%n",
-                            rtk.epoch, m, f, cntTotal, cntVsat, cntLock, cntHalf, cntEl, nofix,
-                            Math.toDegrees(minEl), Math.toDegrees(maxEl), Math.toDegrees(opt.elmaskar));
-                    }
+                    // 双差索引统计信息（可通过IDE断点查看）
                 }
 
                 int refI = -1;
@@ -433,20 +429,9 @@ public final class RtkOptimizations {
                             && rtk.ssat[si].azel[1] >= opt.elmaskar && !nofix) {
                         rtk.ssat[si].fix[f] = 2;
                         refI = i;
-                        if (diag) {
-                            System.err.printf("[DDIDX-REF] epoch=%d m=%d f=%d refSat=%d refEl=%.1f lock=%d slip=0x%02x%n",
-                                rtk.epoch, m, f, si + 1, Math.toDegrees(rtk.ssat[si].azel[1]),
-                                rtk.ssat[si].lock[f], rtk.ssat[si].slip[f]);
-                        }
                         break;
                     } else {
                         rtk.ssat[si].fix[f] = 1;
-                        if (diag && rtk.ssat[si].vsat[f] != 0 && rtk.x[i] != 0.0) {
-                            System.err.printf("[DDIDX-REF-FAIL] epoch=%d m=%d f=%d sat=%d lock=%d slip=0x%02x el=%.1f half=%d nofix=%b%n",
-                                rtk.epoch, m, f, si + 1, rtk.ssat[si].lock[f], rtk.ssat[si].slip[f],
-                                Math.toDegrees(rtk.ssat[si].azel[1]),
-                                (rtk.ssat[si].slip[f] & Constants.LLI_HALFC) != 0 ? 1 : 0, nofix);
-                        }
                     }
                 }
                 if (refI < 0 || rtk.ssat[refI - k].fix[f] != 2) continue;
@@ -474,10 +459,7 @@ public final class RtkOptimizations {
                 }
             }
         }
-        if (diag) {
-            System.err.printf("[DDIDX-NB] epoch=%d nb=%d na=%d nf=%d gps=%d glo=%d sbs=%d bdsmodear=%d gpsmodear=%d elmaskar=%.1f%n",
-                rtk.epoch, nb, na, nf, gps, glo, sbs, opt.bdsmodear, opt.gpsmodear, Math.toDegrees(opt.elmaskar));
-        }
+        // 双差索引最终统计（可通过IDE断点查看nb, na, nf等）
         return nb;
     }
 
