@@ -2,6 +2,7 @@ package org.rtklib.java;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.PrcOpt;
 import org.rtklib.java.data.Rtk;
@@ -56,9 +57,9 @@ public class RtkArDebugTest {
         config.enableSnrMedian = false;
         config.enableIonoTropGradient = false;
         config.enableAmbAnchor = false;
-        
+
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        RtkProcessor processor = new RtkProcessor(opt, config, baos);
+        RtkProcessor processor = new RtkProcessor(opt, null, baos);
         
         RtkResult result = processor.process(roverData, baseData);
         
