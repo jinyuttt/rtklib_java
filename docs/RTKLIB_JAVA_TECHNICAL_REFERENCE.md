@@ -909,6 +909,730 @@ public static Optional<SimpleMatrix> invertSafe(SimpleMatrix A) {
 
 ---
 
-*文档版本：v1.6*
-*最后更新：2026-07-17*
+ 的## 13. RTCM MSM多信号管理与promoteExtSig机制
+
+### 13.1 设计背景与问题
+
+#### 13.1.1 RTKLIB观测值存储架构
+
+RTKLIB使用**固定大小的频率槽位**存储卫星观测值：
+
+```
+Obsd（单个卫星的观测数据）:
+┌─────────────────────────────────────────────────────────────┐
+│ 字段          │ 索引范围         │ 说明                     │
+├───────────────┼──────────────────┼──────────────────────────┤
+│ L[] (载波相位) │ [0..NFREQ-1]     │ 主频率槽位 (L1,L2,L5...)  │
+│ P[] (伪距)    │ [0..NFREQ-1]     │ 主频率槽位               │
+│ D[] (多普勒)   │ [0..NFREQ-1]     │ 主频率槽位               │
+│ LLI[] (周跳)  │ [0..NFREQ-1]     │ 主频率槽位               │
+│ SNR[] (信噪比) │ [0..NFREQ-1]     │ 主频率槽位               │
+│ code[] (信号码)│ [0..NFREQ-1]     │ 主频率槽位               │
+├───────────────┼──────────────────┼──────────────────────────┤
+│ L[]           │ [NFREQ..NFREQ+NEXOBS-1] │ 扩展槽位 (备用)    │
+│ P[]           │ [NFREQ..NFREQ+NEXOBS-1] │ 扩展槽位          │
+│ ...           │ ...              │ 扩展槽位                 │
+└───────────────┴──────────────────┴──────────────────────────┘
+
+Java版: NFREQ=6, NEXOBS=26 → 总共32个信号槽位/卫星
+C版:   NFREQ=3, NEXOBS=...  → 通常8-16个信号槽位/卫星
+```
+
+**关键限制**：
+- **主频率槽位有限**: RTK处理通常只使用前2-3个主槽位（L1, L2）
+- **MSM消息可能包含更多信号**: 如BDS的B1I/B1C/B2I/B2a/B2b/B3I等6+个信号
+- **需要智能分配**: 将最重要的信号放入主槽位，其余放入扩展槽位
+
+#### 13.1.2 RTCM MSM消息的特点
+
+**MSM (Multiple Signal Messages)** 是新一代RTCM观测值格式：
+
+| 特性 | 传统格式 (1001-1004) | MSM格式 (1074-1077) |
+|------|---------------------|---------------------|
+| 支持信号数 | 每频段1个 | 每频段多个（最多32个） |
+| 信号标识 | 隐式（由消息类型决定） | 显式（signal-mask） |
+| 数据内容 | PR+CP+CNR | PR+CP+CNR+PRR+LLI |
+| 适用场景 | 基础GNSS | 多系统多信号 |
+
+**问题场景示例**（BDS卫星125）：
+```
+MSM消息包含6个信号:
+[0] B1I (code=40) → freq_idx=0
+[1] B3I (code=42) → freq_idx=1  
+[2] B2I (code=27) → freq_idx=?
+[3] B2P (code=58) → freq_idx=?
+[4] B2a/D (code=61) → freq_idx=2
+[5] B1P (code=2)  → freq_idx=0
+
+但RTK只需要: L1(任意), L2(任意), L3(可选)
+```
+
+### 13.2 核心方法：sigindex - 信号优先级分配
+
+#### 13.2.1 方法签名
+
+```java
+// ObsCode.java:354
+public static void sigindex(int sys, int[] code, int n, int[] idx)
+```
+
+**参数说明**：
+- `sys`: 卫星系统 (SYS_GPS/SYS_GLO/SYS_GAL/SYS_CMP...)
+- `code[n]`: 输入的信号码数组 (如 {40,42,27,58,61,2})
+- `n`: 信号数量
+- `idx[n]`: 输入输出 - 频率索引数组（输入来自code2idx，输出为分配结果）
+
+#### 13.2.2 分配算法
+
+```
+算法流程:
+1. 初始化: pri_h[8]={0}, index[8]={0}, ex[32]={0}
+2. 遍历所有信号 i=0..n-1:
+   a. 获取该信号的频率索引 idx[i]
+   b. 如果 idx[i] >= NFREQ → 标记 ex[i]=1 (扩展槽位)
+   c. 计算信号优先级 pri = getcodepri(sys, code[i])
+   d. 如果 pri > pri_h[idx[i]] (当前最高):
+      - 将原占用者挤到扩展区: ex[index[idx[i]]-1]=1
+      - 更新 pri_h[idx[i]]=pri, index[idx[i]]=i+1
+   e. 否则 → 标记 ex[i]=1 (被挤出)
+3. 分配扩展槽位:
+   对 ex[i]=1 的信号, 分配 idx[i] = NFREQ + nex++
+4. 超出NEXOBS容量的信号: idx[i] = -1 (丢弃)
+```
+
+#### 13.2.3 信号优先级定义
+
+```java
+// ObsCode.java 内部逻辑 (简化)
+private static int getcodepri(int sys, int code) {
+    // C码 > P码 > 其他码
+    // GPS: L1C/L2C > L1P/L2P > L1W/L2W > ...
+    // BDS: B1I/B3I > B1C/B2a > B2P/B3Q > ...
+    
+    switch (sys) {
+        case Constants.SYS_GPS:
+            if (code == Constants.CODE_L1C || code == Constants.CODE_L2C) return 7; // 最高
+            if (code == Constants.CODE_L1P || code == Constants.CODE_L2P) return 6;
+            return 4;
+        case Constants.SYS_CMP:  // BeiDou
+            if (code == Constants.CODE_B1I || code == Constants.CODE_B3I) return 7;
+            if (code == Constants.CODE_B1C || code == Constants.CODE_B2A) return 6;
+            return 4;
+        // ... 其他系统类似
+    }
+}
+```
+
+**优先级规则**：
+1. **跟踪精度**: C码（民用）> P码（精密）> 其他
+2. **兼容性**: 传统信号 > 新增信号
+3. **稳定性**: 开放服务 > 授权服务
+
+### 13.3 核心方法：promoteExtSig - 扩展信号提升
+
+#### 13.3.1 方法签名与位置
+
+```java
+// Rtcm.java:1747-1773
+private static void promoteExtSig(Obsd obs, int sys)
+```
+
+**调用时机**: 在 `saveMsmObs()` 方法中，每个卫星的观测值存储完成后立即调用
+
+```java
+// Rtcm.java:1737
+if (sat != 0 && index >= 0) {
+    promoteExtSig(this.obs.data[index], sys);  // ← 在此调用
+}
+```
+
+#### 13.3.2 算法详解
+
+```java
+private static void promoteExtSig(Obsd obs, int sys) {
+    // 遍历所有主频率槽位 f=0,1,2,...,NFREQ-1
+    for (int f = 0; f < Constants.NFREQ; f++) {
+        
+        // 条件1: 该槽位已有有效数据 → 跳过
+        if (obs.code[f] != 0 && (obs.L[f] != 0.0 || obs.P[f] != 0.0)) continue;
+        
+        int freqIdx = f;  // 目标频率索引
+        
+        // 搜索扩展槽位，寻找同频率的备用信号
+        for (int ex = Constants.NFREQ; ex < Constants.NFREQ + Constants.NEXOBS; ex++) {
+            
+            // 条件2: 扩展槽位为空 → 跳过
+            if (obs.code[ex] == 0) continue;
+            
+            // 条件3: 检查频率是否匹配
+            int sigFreqIdx = ObsCode.code2idx(sys, obs.code[ex]);
+            if (sigFreqIdx != freqIdx) continue;
+            
+            // 条件4: 扩展槽位有实际观测数据
+            if (obs.L[ex] == 0.0 && obs.P[ex] == 0.0) continue;
+            
+            // ✅ 找到匹配！执行提升操作:
+            
+            // Step 1: 复制所有观测值到主槽位
+            obs.L[f]   = obs.L[ex];       // 载波相位
+            obs.P[f]   = obs.P[ex];        // 伪距
+            obs.D[f]   = obs.D[ex];        // 多普勒
+            obs.LLI[f] = obs.LLI[ex];      // 周跳指示
+            obs.SNR[f] = obs.SNR[ex];      // 信噪比
+            obs.code[f] = obs.code[ex];    // 信号码
+            
+            // Step 2: 清空扩展槽位（避免重复使用）
+            obs.L[ex]   = 0.0;
+            obs.P[ex]   = 0.0;
+            obs.D[ex]   = 0.0f;
+            obs.LLI[ex] = 0;
+            obs.SNR[ex] = 0.0f;
+            obs.code[ex] = 0;
+            
+            // 调试日志
+            System.err.printf("[PROMOTE-SIG] sat=%d freq=%d: promoted code=%d from ext idx=%d to idx=%d%n",
+                obs.sat, f, obs.code[f], ex, f);
+            
+            break;  // 只提升第一个匹配的信号
+        }
+    }
+}
+```
+
+#### 13.3.3 提升条件矩阵
+
+| 条件 | 代码 | 含义 | 示例 |
+|------|------|------|------|
+| **主槽位空闲** | `obs.code[f]==0 \|\| (L==0 && P==0)` | 无有效数据 | L2无观测 |
+| **扩展槽位非空** | `obs.code[ex]!=0` | 有备选信号 | 有B2a在ext |
+| **频率匹配** | `code2idx(sys,code[ex])==f` | 同一频率 | 都是L2频段 |
+| **数据有效** | `L!=0 \|\| P!=0` | 有观测值 | 非空洞 |
+
+**只有4个条件全部满足时才执行提升**
+
+### 13.4 完整工作流程示例
+
+#### 13.4.1 场景：BDS卫星125接收MSM消息
+
+**Step 1: 解析MSM Header获取信号列表**
+```
+type=1124 (BDS MSM4) nsig=6
+signals: [2I, 6I, 7I, 5P, 7D, 1P]
+
+转换为code数组:
+code = [40, 42, 27, 58, 61, 2]
+```
+
+**Step 2: code2idx计算初始频率索引**
+```
+code[0]=40 (B1I) → freq_idx=0  (B1频段)
+code[1]=42 (B3I) → freq_idx=1  (B3频段)
+code[2]=27 (B2I) → freq_idx=?  (B2频段，可能=2或=-1)
+code[3]=58 (B2P) → freq_idx=?  (B2频段)
+code[4]=61 (B2a)→ freq_idx=2  (B2频段) ✓
+code[5]=2  (B1P) → freq_idx=0  (B1频段)
+
+idx = [0, 1, ?, ?, 2, 0]
+```
+
+**Step 3: sigindex优先级分配**
+```
+优先级排序 (BDS): B1I(7)=B3I(7) > B2a(6) > B2P(4) > B2I(4) > B1P(6)
+
+分配过程:
+i=0: B1I pri=7, idx[0]=0 → 占用主槽位0 ✓
+i=1: B3I pri=7, idx[1]=1 → 占用主槽位1 ✓
+i=2: B2I pri=4, idx[2]=2 → 占用主槽位2 (暂定)
+i=3: B2P pri=4, idx[3]=2 → pri相等，不替换 → ex[3]=1
+i=4: B2a pri=6, idx[4]=2 → pri>4! 挤走B2I → 
+     - ex[2]=1 (B2I被挤到扩展)
+     - 主槽位2=B2a ✓
+i=5: B1P pri=6, idx[5]=0 → pri==7? 不大于 → ex[5]=1
+
+最终分配:
+idx = [0, 1, 3, 4, 2, 5]  // [主,主,扩,扩,主,扩]
+```
+
+**Step 4: saveMsmObs存储观测值**
+```
+按idx顺序存储到obs.data[index]:
+
+主槽位0 (idx=0): code=40(B1I), L=198201898.04, P=38062587.71
+主槽位1 (idx=1): code=42(B3I), L=153262284.23, P=38062569.32
+主槽位2 (idx=4): code=61(B2a), L=97050968.09,  P=38062535.72
+
+扩展槽位3 (idx=2): code=27(B2I), L=94583570.63,  P=24102538.53
+扩展槽位4 (idx=3): code=58(B2P), L=0.0,           P=24102538.53  (仅伪距)
+扩展槽位5 (idx=5): code=2(B1P),  L=0.0,           P=0.0          (无数据)
+```
+
+**Step 5: promoteExtSig提升检查**
+```
+检查主槽位 f=0: code=40≠0 且 L≠0 → 已填充 ✓ 跳过
+检查主槽位 f=1: code=42≠0 且 L≠0 → 已填充 ✓ 跳过
+检查主槽位 f=2: code=61≠0 且 L≠0 → 已填充 ✓ 路过
+
+结果: 无需提升（理想情况）
+```
+
+**另一种情况（如果B2a没有数据）**:
+```
+假设主槽位2: code=0, L=0, P=0 (空)
+
+promoteExtSig执行:
+  f=2: 发现主槽位为空!
+  搜索扩展槽位:
+    ex=3: code=27(B2I), code2idx→2=freqIdx ✓ 匹配!
+         L=94583570.63 ≠0 ✓ 有效!
+         
+  执行提升:
+    obs.L[2]   = 94583570.63  (从ex=3复制)
+    obs.P[2]   = 24102538.53
+    obs.code[2] = 27
+    
+    清空ex=3:
+    obs.L[3]   = 0.0
+    obs.code[3] = 0
+  
+  日志输出:
+  [PROMOTE-SIG] sat=125 freq=2: promoted code=27 from ext idx=3 to idx=2
+```
+
+### 13.5 与其他方法的协作关系
+
+#### 13.5.1 三阶段信号管理流水线
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    RTCM MSM解码流程                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────┐  │
+│  │ Phase 1      │    │ Phase 2      │    │ Phase 3          │  │
+│  │ code2idx()   │ →  │ sigindex()   │ →  │ promoteExtSig()  │  │
+│  │              │    │              │    │                  │  │
+│  │ 信号码→频率  │    │ 优先级分配   │    │ 填补空缺槽位     │  │
+│  │ 索引映射     │    │ 到主/扩展区  │    │ 从扩展区提升     │  │
+│  └──────────────┘    └──────────────┘    └──────────────────┘  │
+│         ↓                   ↓                    ↓             │
+│  idx[0]=0            idx[0]=0              主槽位全满          │
+│  idx[1]=1            idx[1]=1              (或尽量满)          │
+│  idx[2]=?            idx[2]=3(扩展)                            │
+│  idx[3]=?            idx[3]=4(扩展)                            │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 13.5.2 各方法的职责边界
+
+| 方法 | 输入 | 输出 | 决策依据 | 作用域 |
+|------|------|------|----------|--------|
+| **code2idx** | (sys, code) | freq_idx (-1~5) | 物理频率 | 单个信号 |
+| **sigindex** | (sys, code[], n) | idx[] (修改后) | 信号优先级 | 所有信号全局 |
+| **promoteExtSig** | (obs, sys) | obs (修改后) | 频率匹配+数据有效性 | 单个卫星 |
+
+### 13.6 关键常量配置
+
+#### 13.6.1 Java版 vs C版的差异
+
+| 参数 | Java版 | C版 (rtklib 2.5.0) | 影响 |
+|------|--------|-------------------|------|
+| `NFREQ` | **6** | **3** | Java可追踪更多主频率 |
+| `NEXOBS` | **26** | **NEXOBS=12** (典型) | Java有更大扩展空间 |
+| **总槽位数** | **32** | **15** (典型) | Java支持更多信号 |
+
+#### 13.6.2 Obsd数组大小影响
+
+```java
+// Java版定义 (Constants.java)
+public static final int NFREQ  = 6;   // 主频率数
+public static final int NEXOBS = 26;  // 扩展观测数
+
+// Obsd类字段声明
+public class Obsd {
+    public double L[]   = new double[NFREQ + NEXOBS];  // 32个元素
+    public double P[]   = new double[NFREQ + NEXOBS];
+    public float  D[]   = new float[NFREQ + NEXOBS];
+    public short  LLI[] = new short[NFREQ + NEXOBS];
+    public float  SNR[] = new float[NFREQ + NEXOBS];
+    public byte   code[]= new byte[NFREQ + NEXOBS];
+}
+```
+
+**内存开销**:
+- 每个Obsd对象: ~32 * (8+8+4+2+4+1) = **864 bytes**
+- MAXSAT=228个卫星: **197 KB** (单历元)
+- 可接受的开销换取灵活性
+
+### 13.7 典型应用场景
+
+#### 13.7.1 场景1：BDS三频信号完整接收
+
+**输入信号**: B1I, B1C, B2I, B2a, B2b, B3I, B3Q (7个)
+
+**期望输出** (opt.nf=3时):
+```
+主槽位0 (L1): B1I (优先级最高)
+主槽位1 (L2): B2a (B2频段最佳)
+主槽位2 (L3): B3I (优先级最高)
+
+扩展区: B1C, B2I, B2b, B3Q (备用)
+```
+
+**执行过程**:
+1. `code2idx`: B1I→0, B1C→0, B2I→?, B2a→2, B2b→?, B3I→1, B3Q→1
+2. `sigindex`: 
+   - L1: B1I胜出(pri=7), B1C被挤到扩展
+   - L2: B2a胜出(pri=6), B2I/B2b被挤到扩展
+   - L3: B3I胜出(pri=7), B3Q被挤到扩展
+3. `promoteExtSig`: 主槽位已满，无需提升
+
+#### 13.7.2 场景2：GPS双频部分缺失
+
+**输入信号**: L1C, L1W, L2P (3个)
+
+**异常情况**: L2C丢失，只有L2P
+
+**期望输出**:
+```
+主槽位0 (L1): L1C
+主槽位1 (L2): L2P (从扩展提升!)
+主槽位2 (L5): 空
+```
+
+**执行过程**:
+1. `code2idx`: L1C→0, L1W→0, L2P→1
+2. `sigindex`:
+   - L1: L1C(pri=7) > L1W(pri=5) → L1C占主槽位, L1W去扩展
+   - L2: 只有L2P → 直接占主槽位1
+3. `promoteExtSig`: 无需操作（L2P已在主槽位）
+
+**如果sigindex将L2P错误地放到扩展区**（理论上不会，但如果发生）:
+- `promoteExtSig`会将其救回主槽位1 ✅
+
+#### 13.7.3 场景3：GLONASS多信号冲突
+
+**输入信号**: L1C/A, L1P, L2C/A, L2P (4个, 含FDMA特性)
+
+**特殊考虑**: GLONASS需要FCN（频率通道号）
+
+**期望输出**:
+```
+主槽位0 (L1): L1C/A (标准C码)
+主槽位1 (L2): L2C/A (标准C码)
+扩展区: L1P, L2P (精密码，优先级略低但可用)
+```
+
+### 13.8 调试与日志
+
+#### 13.8.1 日志输出格式
+
+```
+[PROMOTE-SIG] sat={卫星号} freq={目标频率}: promoted code={信号码} from ext idx={源索引} to idx={目标索引}
+
+示例:
+[PROMOTE-SIG] sat=106 freq=1: promoted code=61 from ext idx=6 to idx=1
+含义: 卫星106(G08)的第1频率(L2)槽位为空，从扩展槽位6提升信号码61(B2a)
+```
+
+#### 13.8.2 相关调试日志链
+
+```
+[MSM-BDS-SIG] type=1124 nsig=6 [...]           ← sigindex之前，显示原始信号
+[MSM-BDS-STORE] sat=125 k=0 sig=2I [...]       ← 存储到主槽位
+[MSM-BDS-CELL] sat=125 k=2 sig=7I SKIPPED      ← 某些cell被跳过
+[MSM-BDS-OBS-BEFORE] sat=125 code=[...]        ← promoteExtSig之前的状态
+[PROMOTE-SIG] sat=125 freq=2: promoted ...     ← promoteExtSig执行
+[MSM-BDS-OBS-AFTER] sat=125 code=[...]         ← promoteExtSig之后的状态
+```
+
+#### 13.8.3 如何启用详细日志
+
+```java
+// Rtcm.java 中已有的调试代码 (BDS专用)
+if (sys == Constants.SYS_CMP && i == 0 && sat != 0) {
+    // promoteExtSig前后打印obs状态
+    System.err.printf("[MSM-BDS-OBS-BEFORE] sat=%d ...\n", sat);
+    // ... promoteExtSig ...
+    System.err.printf("[MSM-BDS-OBS-AFTER] sat=%d ...\n", sat);
+}
+```
+
+**要为其他系统启用类似日志**:
+```java
+// 修改 saveMsmObs() 方法
+if (sat != 0 && index >= 0) {
+    // 添加通用调试（不仅限于BDS）
+    if (true) {  // 改为始终打印
+        Obsd o = this.obs.data[index];
+        System.err.printf("[MSM-OBS-BEFORE] sys=%d sat=%d code=[%d,%d,%d]%n",
+            sys, sat, o.code[0], o.code[1], o.code[2]);
+    }
+    
+    promoteExtSig(this.obs.data[index], sys);
+    
+    if (true) {
+        Obsd o = this.obs.data[index];
+        System.err.printf("[MSM-OBS-AFTER] sys=%d sat=%d code=[%d,%d,%d]%n",
+            sys, sat, o.code[0], o.code[1], o.code[2]);
+    }
+}
+```
+
+### 13.9 性能分析
+
+#### 13.9.1 时间复杂度
+
+```java
+// promoteExtSig 时间复杂度
+for (int f = 0; f < NFREQ; f++) {           // 外层循环: NFREQ次 (≤6)
+    for (int ex = NFREQ; ex < NFREQ+NEXOBS; ex++) {  // 内层循环: NEXOBS次 (≤26)
+        // O(1) 操作
+    }
+}
+// 总计: O(NFREQ × NEXOBS) = O(6 × 26) = O(156) ≈ 常数时间
+```
+
+**每次调用耗时**: < 1微秒（现代CPU）
+
+#### 13.9.2 调用频率
+
+```
+每秒调用次数 ≈ 观测历元率 × 平均可见卫星数
+典型值: 1 Hz × 14颗星 = 14次/秒
+极端值: 50 Hz × 30颗星 = 1500次/秒
+
+CPU占用: 1500 × 1μs = 1.5ms/s = 0.15% (可忽略)
+```
+
+#### 13.9.3 内存访问模式
+
+```
+优化点:
+✅ 连续内存访问: Obsd的所有数组都是连续分配
+✅ 缓存友好: 外层循环按f递增，内层按ex递增
+✅ 无动态分配: 不涉及new/malloc
+
+潜在瓶颈:
+⚠️ code2idx内部有switch-case (分支预测)
+⚠️ System.err.printf (I/O操作，仅调试时启用)
+```
+
+### 13.10 已知限制与改进方向
+
+#### 13.10.1 当前限制
+
+| 限制 | 描述 | 影响程度 |
+|------|------|----------|
+| **仅提升第一个匹配** | 找到第一个可用信号就停止 | 低 (通常够用) |
+| **不区分信号质量** | 不比较SNR、LLI等指标 | 中 (可能不是最优选择) |
+| **静态优先级** | sigindex使用固定优先级表 | 中 (无法适应环境变化) |
+| **无回退机制** | 提升后不可撤销 | 低 (极少需要) |
+
+#### 13.10.2 可能的改进方向
+
+**方向1: 基于SNR的智能选择**
+```java
+// 当前: 选择第一个匹配
+// 改进: 选择SNR最高的匹配
+int bestEx = -1;
+float bestSnr = -999;
+for (int ex = NFREQ; ex < NFREQ+NEXOBS; ex++) {
+    if (...匹配条件...) {
+        if (obs.SNR[ex] > bestSnr) {
+            bestSnr = obs.SNR[ex];
+            bestEx = ex;
+        }
+    }
+}
+if (bestEx >= 0) {
+    // 使用bestEx而非第一个匹配
+}
+```
+
+**方向2: 多级提升策略**
+```java
+// 当前: 仅填补空缺
+// 改进: 也尝试替换低质量信号
+if (主槽位为空 || obs.SNR[f] < SNR_THRESHOLD) {
+    // 寻找更优的扩展信号来替换
+}
+```
+
+**方向3: 自适应优先级调整**
+```java
+// 当前: 固定优先级 (getcodepri)
+// 改进: 根据历史表现动态调整
+float reliability = getSignalReliability(sys, code);
+pri = basePri * reliability;  // 可靠性加权
+```
+
+### 13.11 测试验证
+
+#### 13.11.1 单元测试用例
+
+```java
+@Test
+void testPromoteExtSig_Basic() {
+    Obsd obs = new Obsd();
+    obs.sat = 125;
+    
+    // 设置主槽位0,1有数据，槽位2为空
+    obs.code[0] = 40; obs.L[0] = 100.0; obs.P[0] = 20000000.0;
+    obs.code[1] = 42; obs.L[1] = 150.0; obs.P[1] = 21000000.0;
+    obs.code[2] = 0;  obs.L[2] = 0.0;    obs.P[2] = 0.0;
+    
+    // 扩展槽位3有B2a信号 (freq_idx=2)
+    obs.code[3] = 61; obs.L[3] = 200.0; obs.P[3] = 22000000.0;
+    
+    // 执行提升
+    Rtcm.promoteExtSig(obs, Constants.SYS_CMP);
+    
+    // 验证结果
+    assertEquals(61, obs.code[2]);  // B2a被提升到主槽位2
+    assertEquals(200.0, obs.L[2], 1e-6);
+    assertEquals(0, obs.code[3]);   // 扩展槽位3被清空
+}
+
+@Test
+void testPromoteExtSig_NoMatch() {
+    Obsd obs = new Obsd();
+    obs.sat = 106;
+    
+    // 主槽位2为空
+    obs.code[2] = 0;
+    
+    // 扩展槽位有L1信号 (freq_idx=0, 不匹配!)
+    obs.code[3] = 2;  // B1P, freq_idx=0
+    
+    Rtcm.promoteExtSig(obs, Constants.SYS_CMP);
+    
+    // 验证: 不应该提升 (频率不匹配)
+    assertEquals(0, obs.code[2]);  // 主槽位2仍为空
+    assertEquals(2, obs.code[3]);  // 扩展槽位保持不变
+}
+```
+
+#### 13.11.2 集成测试验证
+
+使用真实RTCM数据进行端到端测试:
+
+```bash
+# 运行RTCM解析测试
+mvn test -Dtest=RtcmParserTest#testRoverRtcmParsing
+
+# 检查日志中的[PROMOTE-SIG]条目
+grep "\[PROMOTE-SIG\]" target/surefire-reports/*.txt
+```
+
+**预期结果**:
+- 对于高质量数据: 极少或无promoteExtSig触发（sigindex已正确分配）
+- 对于缺失某些信号的数据: 适当数量的提升操作
+- 无错误或异常
+
+### 13.12 实现位置索引
+
+| 文件 | 行号 | 方法名 | 类型 |
+|------|------|--------|------|
+| `src/main/java/org/rtklib/java/rtcm/Rtcm.java` | 1747-1773 | `promoteExtSig()` | 核心方法 |
+| `src/main/java/org/rtklib/java/common/ObsCode.java` | 76-95 | `code2idx()` | 辅助方法 |
+| `src/main/java/org/rtklib/java/common/ObsCode.java` | 354-388 | `sigindex()` | 辅助方法 |
+| `src/main/java/org/rtklib/java/rtcm/Rtcm.java` | 1631-1745 | `saveMsmObs()` | 调用方 |
+| `src/test/java/org/rtklib/java/RtcmParserTest.java` | 全文 | 测试用例 | 测试 |
+
+### 13.13 参考资源
+
+#### 13.13.1 RTKLIB C源码对照
+
+```c
+/* rtkcmn.c - C版本的等效逻辑 */
+static void sigindex(int sys, const int *code, int n, int *idx, const prcopt_t *opt)
+{
+    /* 类似逻辑，但多了opt参数用于自定义优先级 */
+}
+
+/* 注意: C版没有显式的promoteExtSig函数 */
+/* C版通过在decodeMsM中直接检查并赋值实现相同效果 */
+```
+
+#### 13.13.2 RTCM标准文档
+
+- **RTCM 10403.3**: Multiple Signal Messages (MSM) 定义
+- **RTKLIB Manual**: Section 12.3 MSM Decoding
+- **BeiDou ICD**: B1I/B2I/B3I信号特征
+- **GPS IS-GPS-200**: L1/L2/L5信号定义
+
+---
+
+## 14. 附录
+
+### 14.1 快速参考卡：promoteExtSig决策树
+
+```
+输入: obs (Obsd对象), sys (卫星系统)
+
+对于每个主频率槽位 f = 0, 1, ..., NFREQ-1:
+│
+├─ 槽位f是否已有数据?
+│  └─ 是 → 跳过 (continue)
+│  └─ 否 → 继续检查
+│
+└─ 遍历扩展槽位 ex = NFREQ, ..., NFREQ+NEXOBS-1:
+   │
+   ├─ 扩展槽位ex是否为空?
+   │  └─ 是 → 检查下一个ex
+   │  └─ 否 → 继续
+   │
+   ├─ code2idx(sys, obs.code[ex]) == f ? (频率匹配?)
+   │  └─ 否 → 检查下一个ex
+   │  └─ 是 → 继续
+   │
+   ├─ obs.L[ex]!=0 || obs.P[ex]!=0 ? (数据有效?)
+   │  └─ 否 → 检查下一个ex
+   │  └─ 是 → ✅ 执行提升!
+   │
+   │   1. 复制 L,P,D,LLI,SNR,code 从 ex → f
+   │   2. 清零 ex 的所有字段
+   │   3. 打印 [PROMOTE-SIG] 日志
+   │   4. break (停止搜索)
+   │
+   └─ (如果循环结束未找到) → 槽位f保持空
+```
+
+### 14.2 常见信号码速查表 (BDS)
+
+| 信号名称 | Code值 | Freq Index | 优先级 | 说明 |
+|----------|--------|------------|--------|------|
+| B1I | 40 | 0 | 7 | B1频段开放服务 |
+| B1C | 44 | 0 | 6 | B1新民用信号 |
+| B1P | 2 | 0 | 6 | B1授权信号 |
+| B2I | 27 | 2 | 4 | B2开放服务 |
+| B2a (D) | 61 | 2 | 6 | B2新民用信号 |
+| B2b | 58 | 2 | 4 | B2授权信号 |
+| B3I | 42 | 1 | 7 | B3开放服务 |
+| B3Q | 59 | 1 | 4 | B3授权信号 |
+
+### 14.3 故障排查清单
+
+**问题1: 某些卫星的主槽位始终为空**
+- [ ] 检查MSM消息是否包含该频率的任何信号
+- [ ] 检查code2idx返回值是否正确
+- [ ] 检查sigindex是否将该信号错误地分到扩展区
+- [ ] 启用[MSM-BDS-OBS-BEFORE/AFTER]日志对比
+
+**问题2: promoteExtSig频繁触发**
+- [ ] 正常现象: 说明原始信号分布不均
+- [ ] 检查是否某个频率的主信号经常缺失
+- [ ] 考虑调整getcodepri优先级表
+
+**问题3: 定位精度下降**
+- [ ] 检查提升后的信号SNR是否过低
+- [ ] 检查是否有错误的频率匹配(code2idx bug)
+- [ ] 对比提升前后的obs数据一致性
+
+---
+
+*文档版本：v1.7*
+*最后更新：2026-07-24*
+*新增章节：13. RTCM MSM多信号管理与promoteExtSig机制*
 *维护者：RTKLIB Java移植团队*
