@@ -31,8 +31,8 @@ public class RtkTest {
     private static final String DATA_BASE =
             "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage";
 
-    private static final String ROVER_ID = "GS2025090017";
-    private static final String BASE_ID = "GS2025090006";
+    private static final String ROVER_ID = "XXX";
+    private static final String BASE_ID = "XXX";
     private static final String DATE = "2026-07-01";
     private static final int HOUR = 8;
 
