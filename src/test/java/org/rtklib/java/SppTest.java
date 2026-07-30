@@ -200,11 +200,7 @@ public class SppTest {
         for (int i = 0; i < rtcm.nav.eph.length; i++) {
             if (rtcm.nav.eph[i] != null && rtcm.nav.eph[i].A > 0) {
                 ephValid++;
-                if (ephValid <= 25) {
-                    log.info("  eph[{}]: sat={}, A={}, week={}, iode={}",
-                            i, rtcm.nav.eph[i].sat, String.format("%.1f", rtcm.nav.eph[i].A),
-                            rtcm.nav.eph[i].week, rtcm.nav.eph[i].iode);
-                }
+
             }
         }
         log.info("Phase 1 complete: ephTypes={}, obsEpochs={}, validEph={}",

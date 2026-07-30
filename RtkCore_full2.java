@@ -557,24 +557,20 @@ public final class RtkCore {
             double[] bias_arr = new double[nx];
             double[] xa_arr = new double[nx];
             int nb = manage_amb_LAMBDA(rtk, bias_arr, xa_arr, sat, nf, ns);
-            System.err.printf("[AR] nb=%d ratio=%.4f thres=%.4f%n", nb, rtk.sol.ratio, rtk.sol.thres);
-            if (nb > 1 && rtk.sol.ratio > 0) {
-                System.err.printf("[AR-DETAIL] ratio=%.4f thres=%.4f ratio>=thres=%b nb=%d%n",
-                    rtk.sol.ratio, rtk.sol.thres, rtk.sol.ratio >= rtk.sol.thres, nb);
-            }
+
             if (nb > 1) {
                 for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xa_arr[j];
                 boolean zdOk = zdres(0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
                         y, e, azel, freq, rtk.epoch);
                 if (!zdOk) {
-                    System.err.printf("[FIX-CHECK] epoch=%d zdOk=false%n", rtk.epoch);
+
                 }
                 if (zdOk) {
                     nv = ddres(rtk, obs, dt, xa_arr, rtk.P, sat, y, e, azel, freq,
                             iu, ir, ns, nf, nav, v, null, R, vflg);
                     boolean valOk = nv > 0 && valpos(rtk, v, R, vflg, nv, 4.0);
                     if (!valOk) {
-                        System.err.printf("[FIX-CHECK] epoch=%d nv=%d valOk=false%n", rtk.epoch, nv);
+
                     }
                     if (valOk) {
                         if (++rtk.nfix >= opt.minfix) {
@@ -845,11 +841,7 @@ public final class RtkCore {
         }
 
         if (opt.dynamics == 0) {
-            double prePosvar = (P[0 * nx + 0] + P[1 * nx + 1] + P[2 * nx + 2]) / 3.0;
             for (int i = 0; i < 3; i++) initx(x, P, nx, rtk.sol.rr[i] - rtk.rb[i], Constants.VAR_POS, i);
-            double postPosvar = (P[0 * nx + 0] + P[1 * nx + 1] + P[2 * nx + 2]) / 3.0;
-            System.err.printf("[UDPOS-RESET] dynamics=0 epoch=%d prePosvar=%.6f postPosvar=%.6f VAR_POS=%.1f%n",
-                rtk.epoch, prePosvar, postPosvar, Constants.VAR_POS);
             return;
         }
 
@@ -2149,12 +2141,7 @@ public final class RtkCore {
             }
         }
 
-        StringBuilder sbY = new StringBuilder(String.format("[LAMBDA-IN] epoch=%d nbLambda=%d y=", rtk.epoch, nbLambda));
-        for (int i = 0; i < nbLambda; i++) sbY.append(String.format("%.4f ", y[i]));
-        StringBuilder sbQb = new StringBuilder(String.format("[LAMBDA-IN] epoch=%d Qb_diag=", rtk.epoch));
-        for (int i = 0; i < nbLambda; i++) sbQb.append(String.format("%.6f ", Qb[i * nbLambda + i]));
-        System.err.println(sbY);
-        System.err.println(sbQb);
+
 
         for (int i = 0; i < na; i++) {
             for (int j = 0; j < nbLambda; j++) {
@@ -2164,34 +2151,9 @@ public final class RtkCore {
 
         double[] s = new double[2];
 
-        if (rtk.epoch == 21 && nbLambda <= 12) {
-            System.err.printf("[LAMBDA-INPUT] epoch=%d n=%d%n", rtk.epoch, nbLambda);
-            System.err.printf("[LAMBDA-A] ");
-            for (int li = 0; li < nbLambda; li++) System.err.printf("%.10f ", y[li]);
-            System.err.println();
-            System.err.printf("[LAMBDA-Q] n=%d%n", nbLambda);
-            for (int li = 0; li < nbLambda; li++) {
-                StringBuilder sb = new StringBuilder(String.format("  Q[%d]: ", li));
-                for (int lj = 0; lj < nbLambda; lj++) sb.append(String.format("%.10e ", Qb[li * nbLambda + lj]));
-                System.err.println(sb);
-            }
-        }
+
 
         int info = Lambda.lambda(nbLambda, 2, y, Qb, b, s);
-
-        if (info == 0) {
-            double ratio = s[0] > 0 ? s[1]/s[0] : 0;
-            if (rtk.epoch <= 80 || ratio >= 3.0) {
-                System.err.printf("[LAMBDA-RESULT] epoch=%d nbLambda=%d ratio=%.2f%n", rtk.epoch, nbLambda, ratio);
-                double qbMax = 0, qbMin = Double.MAX_VALUE;
-                for (int li = 0; li < nbLambda; li++) {
-                    double v = Qb[li*nbLambda+li];
-                    if (v > qbMax) qbMax = v;
-                    if (v < qbMin) qbMin = v;
-                }
-                System.err.printf("[LAMBDA-Qb-RANGE] epoch=%d min=%.6f max=%.6f%n", rtk.epoch, qbMin, qbMax);
-            }
-        }
 
         if (info == 0) {
             rtk.sol.ratio = s[0] > 0 ? (float) (s[1] / s[0]) : 0.0f;
@@ -2355,7 +2317,7 @@ public final class RtkCore {
 
         boolean skip = opt.mode <= Constants.PMODE_DGPS || opt.modear == Constants.ARMODE_OFF ||
             opt.thresar[0] < 1.0 || posvar > opt.thresar[1];
-        System.err.printf("[MANAGE_AMB] posvar=%.6f thresar1=%.6f skip=%b%n", posvar, opt.thresar[1], skip);
+
 
         if (skip) {
             rtk.sol.ratio = 0.0f;

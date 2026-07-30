@@ -630,14 +630,7 @@ public class RtkProcessor {
                 }
                 log.info("Nav diagnostics: ephCount={}, gephCount={}, nav.eph.length={}, nav.geph.length={}",
                         ephCount, gephCount, nav0.eph.length, nav0.geph.length);
-                for (int ei = 0; ei < nav0.eph.length; ei++) {
-                    if (nav0.eph[ei] != null && nav0.eph[ei].A > 0) {
-                        int sat = ei + 1;
-                        int[] prnArr = new int[1];
-                        int sys = org.rtklib.java.common.SatUtils.satsys(sat, prnArr);
-                        log.info("  eph[{}]: sat={} (sys={}, prn={}), A={}", ei, sat, sys, prnArr[0], nav0.eph[ei].A);
-                    }
-                }
+
             }
 
             processEpoch(combined, roverN + baseN, roverTime, batchRtcmRover.nav);

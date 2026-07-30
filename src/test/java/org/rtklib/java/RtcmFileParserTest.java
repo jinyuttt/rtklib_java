@@ -23,7 +23,7 @@ public class RtcmFileParserTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtcmFileParserTest.class);
 
-    private static final String FILE_PATH = "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage\\GS2025090019\\2026-07-09\\1.rtcm3";
+    private static final String FILE_PATH = "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage\\<DEVICE_ID>\\2026-07-09\\1.rtcm3";
 
     @Test
     @DisplayName("Parse RTCM3 binary file")
