@@ -377,6 +377,22 @@ public final class RtkCore {
 
         rtk.sol.stat = (byte) stat;
 
+        double[] dopAzel = new double[Constants.MAXSAT * 2];
+        int dopNs = 0;
+        for (i = 0; i < Constants.MAXSAT; i++) {
+            if (rtk.ssat[i].azel[1] > 0.0) {
+                dopAzel[dopNs * 2] = rtk.ssat[i].azel[0];
+                dopAzel[dopNs * 2 + 1] = rtk.ssat[i].azel[1];
+                dopNs++;
+            }
+        }
+        double[] dop = new double[4];
+        RtklibCommon.dops(dopNs, dopAzel, opt.elmin, dop);
+        rtk.sol.gdop = (float) dop[0];
+        rtk.sol.pdop = (float) dop[1];
+        rtk.sol.hdop = (float) dop[2];
+        rtk.sol.vdop = (float) dop[3];
+
         for (i = 0; i < n; i++) {
             for (j = 0; j < nf; j++) {
                 if (obs[i].L[j] == 0.0) continue;

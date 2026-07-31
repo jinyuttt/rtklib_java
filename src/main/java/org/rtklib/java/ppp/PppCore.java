@@ -857,6 +857,22 @@ public final class PppCore {
         rtk.sol.dtr[1] = (rtk.x[IC(1, opt)] - rtk.x[IC(0, opt)]) / Constants.CLIGHT;
         rtk.sol.dtr[2] = (rtk.x[IC(2, opt)] - rtk.x[IC(0, opt)]) / Constants.CLIGHT;
         rtk.sol.dtr[3] = (rtk.x[IC(3, opt)] - rtk.x[IC(0, opt)]) / Constants.CLIGHT;
+
+        double[] dopAzel = new double[Constants.MAXSAT * 2];
+        int dopNs = 0;
+        for (int i = 0; i < Constants.MAXSAT; i++) {
+            if (rtk.ssat[i].azel[1] > 0.0) {
+                dopAzel[dopNs * 2] = rtk.ssat[i].azel[0];
+                dopAzel[dopNs * 2 + 1] = rtk.ssat[i].azel[1];
+                dopNs++;
+            }
+        }
+        double[] dop = new double[4];
+        RtklibCommon.dops(dopNs, dopAzel, opt.elmin, dop);
+        rtk.sol.gdop = (float) dop[0];
+        rtk.sol.pdop = (float) dop[1];
+        rtk.sol.hdop = (float) dop[2];
+        rtk.sol.vdop = (float) dop[3];
     }
 
     private static double SQR(double x) {

@@ -77,7 +77,7 @@ public class PppProcessor {
 
     private static final String POS_HEADER =
             "# PPP (Precise Point Positioning) Result (EXPERIMENTAL)\n" +
-            "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio\n";
+            "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
 
     private final PrcOpt opt;
     private final PosHandler handler;
@@ -581,11 +581,12 @@ public class PppProcessor {
         double sdeu = sol.qr[4] > 0 ? Math.sqrt(Math.abs(sol.qr[4])) : 0;
         double sdun = sol.qr[5] > 0 ? Math.sqrt(Math.abs(sol.qr[5])) : 0;
 
-        return String.format("  %s %s %14.9f %14.9f %10.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f\n",
+        return String.format("  %s %s %14.9f %14.9f %10.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f %5.1f %5.1f %5.1f %5.1f\n",
                 dateStr, timeStr, latDeg, lonDeg, height,
                 qStr, sol.ns,
                 sdn, sde, sdu, sdne, sdeu, sdun,
-                sol.age, sol.ratio);
+                sol.age, sol.ratio,
+                sol.gdop, sol.pdop, sol.hdop, sol.vdop);
     }
 
     private List<List<Obsd>> groupObsByEpoch(Obsd[] data, int n) {
