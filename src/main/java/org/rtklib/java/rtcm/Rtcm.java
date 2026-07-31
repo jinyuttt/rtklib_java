@@ -318,69 +318,83 @@ public class Rtcm {
     private boolean decodeObs1001To1004(boolean extended, int nfreq) {
         int i = 24 + 12;
         int staid = (int) BitUtils.getbitu(buff, i, 12); i += 12;
-        double tow = 0.0;
-        if (nfreq == 1) {
-            tow = BitUtils.getbitu(buff, i, 17) * 0.001; i += 17;
-        } else {
-            tow = BitUtils.getbitu(buff, i, 20) * 0.001; i += 20;
-        }
+        double tow = BitUtils.getbitu(buff, i, 30) * 0.001; i += 30;
         int sync = (int) BitUtils.getbitu(buff, i, 1); i += 1;
         int nsat = (int) BitUtils.getbitu(buff, i, 5); i += 5;
+        i += 1; // divergence-free smoothing indicator
+        i += 3; // smoothing interval
         if (!testStaid(staid)) return false;
         adjweek(tow);
+
+        if (!extended) {
+            this.obsflag = (sync == 0) ? 1 : 0;
+            return sync == 0;
+        }
 
         if (this.obsflag != 0) {
             this.obs.n = 0;
             this.obsflag = 0;
         }
 
-        for (int j = 0; j < nsat && this.obs.n < Constants.MAXOBS; j++) {
+        int bitsPerSat = (nfreq >= 2) ? 125 : 74;
+
+        for (int j = 0; j < nsat && this.obs.n < Constants.MAXOBS && i + bitsPerSat <= buff.length * 8; j++) {
             int prn = (int) BitUtils.getbitu(buff, i, 6); i += 6;
-            int sat = SatUtils.satno(Constants.SYS_GPS, prn);
+            int sys = (prn < 40) ? Constants.SYS_GPS : Constants.SYS_SBS;
+            if (sys == Constants.SYS_SBS) prn += 80;
+            int sat = SatUtils.satno(sys, prn);
             if (sat == 0) continue;
 
-            Obsd obs = this.obs.data[this.obs.n];
-            obs.time = this.time;
-            obs.sat = sat;
-
-            if (nfreq >= 1) {
-                double code1 = BitUtils.getbitu(buff, i, 1); i += 1;
-                double pr1 = extended ? BitUtils.getbits(buff, i, 24) * 0.02 : BitUtils.getbitu(buff, i, 24) * 0.02;
-                i += 24;
-                double cp1 = extended ? BitUtils.getbits(buff, i, 20) * 0.0005 : BitUtils.getbitu(buff, i, 20) * 0.0005;
-                i += 20;
-                double lli1 = BitUtils.getbitu(buff, i, 2); i += 2;
-                double cnr1 = BitUtils.getbitu(buff, i, 1); i += 1;
-
-                obs.P[0] = pr1 == 0.0 ? 0.0 : pr1;
-                obs.L[0] = cp1 == 0.0 ? 0.0 : cp1;
-                obs.SNR[0] = (short) cnr1;
-                obs.LLI[0] = (short) lli1;
-                obs.code[0] = code1 != 0 ? Constants.CODE_L1P : Constants.CODE_L1C;
+            double tt = TimeSystem.timediff(this.obs.data[0].time, this.time);
+            if (Math.abs(tt) > 1E-9) {
+                this.obs.n = 0;
+                this.obsflag = 0;
             }
+
+            int index = obsindex(this.obs, this.time, sat);
+            if (index < 0) continue;
+
+            int code1 = (int) BitUtils.getbitu(buff, i, 1); i += 1;
+            int pr1Raw = (int) BitUtils.getbitu(buff, i, 24); i += 24;
+            int ppr1 = BitUtils.getbits(buff, i, 20); i += 20;
+            int lock1 = (int) BitUtils.getbitu(buff, i, 7); i += 7;
+            int amb = (int) BitUtils.getbitu(buff, i, 8); i += 8;
+            double cnr1 = BitUtils.getbitu(buff, i, 8) * 0.25; i += 8;
+
+            double pr1 = pr1Raw * 0.02 + amb * Constants.PRUNIT_GPS;
+            this.obs.data[index].P[0] = pr1;
+
+            if (ppr1 != (int) 0xFFF80000) {
+                double cp1 = adjcp(sat, 0, ppr1 * 0.0005 * Constants.FREQL1 / Constants.CLIGHT);
+                this.obs.data[index].L[0] = pr1 * Constants.FREQL1 / Constants.CLIGHT + cp1;
+            }
+            this.obs.data[index].LLI[0] = (short) lossoflock(sat, 0, lock1);
+            this.obs.data[index].SNR[0] = (float) snratio(cnr1);
+            this.obs.data[index].code[0] = (byte) (code1 != 0 ? Constants.CODE_L1P : Constants.CODE_L1C);
 
             if (nfreq >= 2) {
-                double code2 = BitUtils.getbitu(buff, i, 2); i += 2;
-                double pr2 = extended ? BitUtils.getbits(buff, i, 20) * 0.02 : BitUtils.getbitu(buff, i, 20) * 0.02;
-                i += 20;
-                double cp2 = extended ? BitUtils.getbits(buff, i, 20) * 0.0005 : BitUtils.getbitu(buff, i, 20) * 0.0005;
-                i += 20;
-                double lli2 = BitUtils.getbitu(buff, i, 2); i += 2;
-                double cnr2 = BitUtils.getbitu(buff, i, 1); i += 1;
+                final int[] L2codes = {Constants.CODE_L2X, Constants.CODE_L2P, Constants.CODE_L2D, Constants.CODE_L2W};
+                int code2 = (int) BitUtils.getbitu(buff, i, 2); i += 2;
+                int pr21 = BitUtils.getbits(buff, i, 14); i += 14;
+                int ppr2 = BitUtils.getbits(buff, i, 20); i += 20;
+                int lock2 = (int) BitUtils.getbitu(buff, i, 7); i += 7;
+                double cnr2 = BitUtils.getbitu(buff, i, 8) * 0.25; i += 8;
 
-                obs.P[1] = pr2 == 0.0 ? 0.0 : pr2;
-                obs.L[1] = cp2 == 0.0 ? 0.0 : cp2;
-                obs.SNR[1] = (short) cnr2;
-                obs.LLI[1] = (short) lli2;
-                obs.code[1] = code2 != 0 ? Constants.CODE_L2P : Constants.CODE_L2C;
+                if (pr21 != (int) 0xFFFFE000) {
+                    this.obs.data[index].P[1] = pr1 + pr21 * 0.02;
+                }
+                if (ppr2 != (int) 0xFFF80000) {
+                    double cp2 = adjcp(sat, 1, ppr2 * 0.0005 * Constants.FREQL2 / Constants.CLIGHT);
+                    this.obs.data[index].L[1] = pr1 * Constants.FREQL2 / Constants.CLIGHT + cp2;
+                }
+                this.obs.data[index].LLI[1] = (short) lossoflock(sat, 1, lock2);
+                this.obs.data[index].SNR[1] = (float) snratio(cnr2);
+                this.obs.data[index].code[1] = (byte) L2codes[code2];
             }
-
-            this.obs.n++;
         }
 
-        this.time = this.obs.data[0].time.time > 0 ? this.obs.data[0].time : this.time;
-        this.obsflag = sync != 0 ? 0 : 1;
-        return true;
+        this.obsflag = (sync == 0) ? 1 : 0;
+        return sync == 0;
     }
 
     // ---- Station messages ----------------------------------------------------
