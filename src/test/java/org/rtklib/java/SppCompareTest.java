@@ -112,7 +112,7 @@ public class SppCompareTest {
         writer.write("% inp file  : 1.nav\n");
         writer.write("%\n");
         writer.write("% (lat/lon/height=WGS84/ellipsoidal,Q=1:fix,2:float,3:sbas,4:dgps,5:single,6:ppp,ns=# of satellites)\n");
-        writer.write("%  GPST          latitude(deg) longitude(deg)  height(m)   Q  ns   sdx(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio\n");
+        writer.write("%  GPST          latitude(deg) longitude(deg)  height(m)   Q  ns   sdx(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n");
 
         int successCount = 0;
         int failCount = 0;

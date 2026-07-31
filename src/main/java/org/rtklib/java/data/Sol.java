@@ -57,6 +57,15 @@ public class Sol {
     /** Reference station ID */
     public int refstationid;
 
+    /** Geometric DOP */
+    public float gdop;
+    /** Position DOP */
+    public float pdop;
+    /** Horizontal DOP */
+    public float hdop;
+    /** Vertical DOP */
+    public float vdop;
+
     /**
      * Default constructor.
      */
@@ -76,6 +85,10 @@ public class Sol {
         this.prev_ratio2 = 0.0f;
         this.thres = 0.0f;
         this.refstationid = 0;
+        this.gdop = 0.0f;
+        this.pdop = 0.0f;
+        this.hdop = 0.0f;
+        this.vdop = 0.0f;
     }
 
     /**
@@ -98,5 +111,9 @@ public class Sol {
         this.prev_ratio2 = other.prev_ratio2;
         this.thres = other.thres;
         this.refstationid = other.refstationid;
+        this.gdop = other.gdop;
+        this.pdop = other.pdop;
+        this.hdop = other.hdop;
+        this.vdop = other.vdop;
     }
 }

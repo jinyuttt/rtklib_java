@@ -43,7 +43,7 @@ public class RinexRtkProcessor {
 
     private static final String POS_HEADER =
             "# RTK (Relative Positioning) Result - RINEX Input\n" +
-            "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio\n";
+            "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
 
     private final PrcOpt opt;
     private final PosHandler handler;

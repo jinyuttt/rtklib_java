@@ -22,7 +22,7 @@ public class RinexPppProcessor {
 
     private static final String POS_HEADER =
             "# PPP (Precise Point Positioning) Result - RINEX Input (EXPERIMENTAL)\n" +
-            "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio\n";
+            "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
 
     private final PrcOpt opt;
     private final Rtk rtk;
@@ -170,12 +170,13 @@ public class RinexPppProcessor {
             TimeSystem.time2epoch(sol.time, ep);
             String timeStr = String.format("%04.0f/%02.0f/%02.0f %02.0f:%02.0f:%06.3f",
                     ep[0], ep[1], ep[2], ep[3], ep[4], ep[5]);
-            writer.write(String.format("%s  %12.9f %13.9f %10.3f %2d %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f\n",
+            writer.write(String.format("%s  %12.9f %13.9f %10.3f %2d %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %5.1f %5.1f %5.1f\n",
                     timeStr,
                     lat, lon, hgt, sol.stat, sol.ns,
                     Math.sqrt(sol.qr[0]), Math.sqrt(sol.qr[1]), Math.sqrt(sol.qr[2]),
                     Math.sqrt(Math.abs(sol.qr[3])), Math.sqrt(Math.abs(sol.qr[4])),
-                    Math.sqrt(Math.abs(sol.qr[5]))));
+                    Math.sqrt(Math.abs(sol.qr[5])),
+                    sol.gdop, sol.pdop, sol.hdop, sol.vdop));
             writer.flush();
         } catch (IOException e) {
             throw new UncheckedIOException(e);

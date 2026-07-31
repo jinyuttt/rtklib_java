@@ -436,6 +436,12 @@ public final class SppCore {
                 sol.ns = (byte) ns[0];
                 sol.age = sol.ratio = 0.0f;
                 sol.stat = Constants.SOLQ_SINGLE;
+                double[] dop = new double[4];
+                RtklibCommon.dops(ns[0], azel, opt.elmin, dop);
+                sol.gdop = (float) dop[0];
+                sol.pdop = (float) dop[1];
+                sol.hdop = (float) dop[2];
+                sol.vdop = (float) dop[3];
                 return 1;
             }
         }
