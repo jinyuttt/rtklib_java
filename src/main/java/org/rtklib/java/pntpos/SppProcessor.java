@@ -367,14 +367,7 @@ public class SppProcessor {
                 int n = batchRtcm.obs.n;
                 Obsd[] obsCopy = new Obsd[n];
                 for (int i = 0; i < n; i++) {
-                    obsCopy[i] = new Obsd();
-                    obsCopy[i].time = batchRtcm.obs.data[i].time;
-                    obsCopy[i].sat = batchRtcm.obs.data[i].sat;
-                    obsCopy[i].code = batchRtcm.obs.data[i].code.clone();
-                    obsCopy[i].P = batchRtcm.obs.data[i].P.clone();
-                    obsCopy[i].L = batchRtcm.obs.data[i].L.clone();
-                    obsCopy[i].SNR = batchRtcm.obs.data[i].SNR.clone();
-                    obsCopy[i].LLI = batchRtcm.obs.data[i].LLI.clone();
+                    obsCopy[i] = new Obsd(batchRtcm.obs.data[i]);
                 }
                 batchObsList.add(obsCopy);
                 batchObsCountList.add(n);
@@ -506,14 +499,7 @@ public class SppProcessor {
             int n = rtcm.obs.n;
             Obsd[] obsCopy = new Obsd[n];
             for (int i = 0; i < n; i++) {
-                obsCopy[i] = new Obsd();
-                obsCopy[i].time = rtcm.obs.data[i].time;
-                obsCopy[i].sat = rtcm.obs.data[i].sat;
-                obsCopy[i].code = rtcm.obs.data[i].code.clone();
-                obsCopy[i].P = rtcm.obs.data[i].P.clone();
-                obsCopy[i].L = rtcm.obs.data[i].L.clone();
-                obsCopy[i].SNR = rtcm.obs.data[i].SNR.clone();
-                obsCopy[i].LLI = rtcm.obs.data[i].LLI.clone();
+                obsCopy[i] = new Obsd(rtcm.obs.data[i]);
             }
             GTime epochTime = rtcm.obs.data[0].time;
 

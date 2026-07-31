@@ -203,18 +203,22 @@ public class RinexObsWriter {
                     int codeVal = ObsCode.obs2code(obsCodeStr);
                     int freqIdx = ObsCode.code2idx(sys, codeVal);
                     double value = 0.0;
-                    int lli = 0;
-                    int snr = 0;
+                    int lli = -1;
+                    int std = -1;
 
                     if (freqIdx >= 0 && freqIdx < Constants.NFREQ + Constants.NEXOBS) {
                         if (typePrefix == 'C' || typePrefix == 'P') {
                             value = o.P[freqIdx];
-                            lli = o.LLI[freqIdx];
-                            snr = (int) o.SNR[freqIdx];
+                            if (value != 0.0) {
+                                lli = -1;
+                                std = o.Pstd[freqIdx] > 0 ? (int) (Math.log(o.Pstd[freqIdx] * 100.0) / Math.log(2.0) - 5.0 + 0.5) : -1;
+                            }
                         } else if (typePrefix == 'L') {
                             value = o.L[freqIdx];
-                            lli = o.LLI[freqIdx];
-                            snr = (int) o.SNR[freqIdx];
+                            if (value != 0.0) {
+                                lli = o.LLI[freqIdx] & 0x07;
+                                std = o.Lstd[freqIdx] > 0 ? (int) (o.Lstd[freqIdx] / 0.004 + 0.5) : -1;
+                            }
                         } else if (typePrefix == 'D') {
                             value = o.D[freqIdx];
                         } else if (typePrefix == 'S') {
@@ -223,11 +227,20 @@ public class RinexObsWriter {
                     }
 
                     if (value != 0.0) {
-                        line.append(String.format("%14.3f", value));
+                        line.append(String.format("%14.3f", value % 1e9));
                     } else {
                         line.append("              ");
                     }
-                    line.append(String.format("%1d%1d", lli, Math.min(snr, 9)));
+                    if (lli < 0) {
+                        line.append(' ');
+                    } else {
+                        line.append(String.format("%1d", lli));
+                    }
+                    if (std <= 0) {
+                        line.append(' ');
+                    } else {
+                        line.append(String.format("%1x", Math.min(std, 9)));
+                    }
                 }
                 line.append("\n");
                 writer.write(line.toString());

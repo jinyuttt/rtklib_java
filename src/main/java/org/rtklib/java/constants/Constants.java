@@ -30,7 +30,8 @@ public final class Constants {
     
     /** speed of light (m/s) */
     public static final double CLIGHT = 299792458.0;
-
+    /** RTCM3 GPS pseudorange unit (m) */
+    public static final double PRUNIT_GPS = 299792.458;
     /** RTCM3 GLONASS pseudorange unit (m) */
     public static final double PRUNIT_GLO = 599584.916;
 

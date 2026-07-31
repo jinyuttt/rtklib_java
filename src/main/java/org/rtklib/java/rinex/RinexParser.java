@@ -55,6 +55,9 @@ public class RinexParser {
     private String[][] tobs = new String[7][MAXOBSTYPE];
     private int[] nobs = new int[7];
 
+    /** cycle slip persistence across epochs [MAXSAT][NFREQ+NEXOBS] */
+    private int[][] slips = new int[Constants.MAXSAT][Constants.NFREQ + Constants.NEXOBS];
+
     /**
      * Default constructor.
      */
@@ -95,7 +98,15 @@ public class RinexParser {
                 Obsd[] epochObs = readObsEpoch(reader, line);
                 if (epochObs != null) {
                     for (Obsd o : epochObs) {
-                        if (o != null) obsList.add(o);
+                        if (o != null) {
+                            saveslips(o);
+                        }
+                    }
+                    for (Obsd o : epochObs) {
+                        if (o != null) {
+                            restslips(o);
+                            obsList.add(o);
+                        }
                     }
                 }
             }
@@ -317,11 +328,11 @@ public class RinexParser {
                 if (pos + 14 > line.length()) break;
 
                 double value = parseDouble(line, pos, 14);
-                int lli = (pos + 14 < line.length()) ? parseInteger(line, pos + 14, 1) : 0;
+                int lli = ((pos + 14 < line.length()) ? parseInteger(line, pos + 14, 1) : 0) & 3;
                 int snr = (pos + 15 < line.length()) ? parseInteger(line, pos + 15, 1) : 0;
                 pos += 16;
 
-                if (si < 0 || value == 0.0) continue;
+                if (si < 0 || (value == 0.0 && lli == 0)) continue;
 
                 String tobj = tobs[si][j];
                 if (tobj == null || tobj.length() < 2) continue;
@@ -337,12 +348,12 @@ public class RinexParser {
                     case 'P':
                         obsd.P[freqIdx] = value;
                         obsd.code[freqIdx] = codeVal;
-                        obsd.Pstd[freqIdx] = (float) snr;
+                        obsd.Pstd[freqIdx] = snr > 0 ? (float)(0.01 * Math.pow(2, snr + 5)) : 0.0f;
                         break;
                     case 'L':
                         obsd.L[freqIdx] = value;
                         obsd.LLI[freqIdx] = lli;
-                        obsd.Lstd[freqIdx] = (float) snr;
+                        obsd.Lstd[freqIdx] = snr > 0 ? (float)(snr * 0.004) : 0.0f;
                         if (obsd.code[freqIdx] == 0) {
                             obsd.code[freqIdx] = codeVal;
                         }
@@ -816,6 +827,37 @@ public class RinexParser {
         if (nav.ns < nav.nsmax) {
             nav.seph[nav.ns] = seph;
             nav.ns++;
+        }
+    }
+
+    /**
+     * Save cycle slip flags from observation data to persistent array.
+     * Corresponds to RTKLIB saveslips() in rinex.c.
+     * @param data observation data
+     */
+    private void saveslips(Obsd data) {
+        int satIndex = data.sat - 1;
+        if (satIndex < 0 || satIndex >= Constants.MAXSAT) return;
+        for (int i = 0; i < Constants.NFREQ + Constants.NEXOBS; i++) {
+            if ((data.LLI[i] & 1) != 0) {
+                slips[satIndex][i] |= Constants.LLI_SLIP;
+            }
+        }
+    }
+
+    /**
+     * Restore previously saved cycle slip flags to observation data.
+     * Corresponds to RTKLIB restslips() in rinex.c.
+     * @param data observation data
+     */
+    private void restslips(Obsd data) {
+        int satIndex = data.sat - 1;
+        if (satIndex < 0 || satIndex >= Constants.MAXSAT) return;
+        for (int i = 0; i < Constants.NFREQ + Constants.NEXOBS; i++) {
+            if ((slips[satIndex][i] & 1) != 0) {
+                data.LLI[i] |= Constants.LLI_SLIP;
+            }
+            slips[satIndex][i] = 0;
         }
     }
 

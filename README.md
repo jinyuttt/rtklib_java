@@ -29,6 +29,16 @@ RTKLIB-Java 将 C 语言编写的 RTKLIB 核心 GNSS 定位算法移植为 Java 
 | 处理模式 | `procmode` | `PROCMODE_REALTIME(0)` / `PROCMODE_POST(1)` | `PROCMODE_POST` | 实时流 / 事后处理 |
 | 参考站位置模式 | `refposmode` | `REFPOS_FIXED(0)` / `REFPOS_SPP_AVERAGE(1)` / `REFPOS_RTCM(2)` | `REFPOS_FIXED` | 固定值 / SPP均值 / RTCM动态 |
 
+## 文档
+
+| 文档 | 说明 |
+|------|------|
+| [使用指南](docs/USAGE_GUIDE.md) | 各功能模块使用方法、API 示例、输出字段含义 |
+| [矩阵存储参考](docs/MATRIX_DIMENSION_REFERENCE.md) | Kalman 滤波矩阵维度、存储约定及运算差异 |
+| [优化介绍](docs/RTK_Extra_Optimizations.md) | Java 版额外优化项（C 版没有的），独立开关控制 |
+| [技术文档](docs/RTKLIB_JAVA_TECHNICAL_REFERENCE.md) | 关键数据结构、状态索引、常量定义及已知问题 |
+| [实现差异](docs/RTKLIB_Differences.md) | Java 版与 C 版的有意差异说明 |
+
 ## 模块结构
 
 ```
@@ -102,93 +112,79 @@ mvn test
 
 ## 快速使用
 
+> 详细使用方法和输出字段含义见 [使用指南](docs/USAGE_GUIDE.md)。
+
 ### SPP 单点定位
 
 ```java
-PrcOpt opt = new PrcOpt();
-opt.mode = Constants.PMODE_SINGLE;
+// RTCM 文件 SPP
+PrcOpt opt = SppProcessor.createDefaultOpt();
+SppProcessor spp = new SppProcessor(opt);
+SppProcessor.SppResult result = spp.process("data.rtcm3");
 
-Rtk rtk = new Rtk(opt);
+// RINEX 文件 SPP
+RinexSppProcessor.SppResult result =
+    RinexSppProcessor.processRinex("ROVER.obs", "ROVER.nav");
 
-// 每个历元调用
-int stat = RtkCore.rtkpos(rtk, obs, n, nav);
-if (rtk.sol.stat == Constants.SOLQ_SINGLE) {
+for (Sol sol : result.solutions) {
     double[] pos = new double[3];
-    CoordTransform.ecef2pos(rtk.sol.rr, pos);
-    System.out.printf("Lat=%.8f Lon=%.8f H=%.3f%n", pos[0], pos[1], pos[2]);
+    CoordTransform.ecef2pos(sol.rr, pos);
+    System.out.printf("Lat=%.8f Lon=%.8f H=%.3f%n",
+        Math.toDegrees(pos[0]), Math.toDegrees(pos[1]), pos[2]);
 }
 ```
 
 ### RTK 相对定位
 
 ```java
-PrcOpt opt = new PrcOpt();
-opt.mode = Constants.PMODE_KINEMA;
-opt.procmode = Constants.PROCMODE_POST;
-opt.refposmode = Constants.REFPOS_FIXED;
+// RTCM 文件 RTK
+PrcOpt opt = RtkProcessor.createDefaultOpt();
+opt.modear = Constants.ARMODE_FIXHOLD;
+RtkProcessor rtk = new RtkProcessor(opt);
+RtkProcessor.RtkResult result = rtk.process("rover.rtcm3", "base.rtcm3");
 
-// 设置基站已知坐标（ECEF）
-opt.rb[0] = -2148744.236;
-opt.rb[1] =  4426649.117;
-opt.rb[2] =  4046168.936;
+// RINEX 文件 RTK
+RtkProcessor.RtkResult result =
+    RinexRtkProcessor.processRinex("ROVER.obs", "BASE.obs", "NAV.nav", opt);
 
-Rtk rtk = new Rtk(opt);
-
-// 每个历元调用（obs中rcv=1为流动站，rcv=2为基站）
-int stat = RtkCore.rtkpos(rtk, obs, n, nav);
-if (rtk.sol.stat == Constants.SOLQ_FIX) {
-    double[] pos = new double[3];
-    CoordTransform.ecef2pos(rtk.sol.rr, pos);
-    System.out.printf("FIX: Lat=%.8f Lon=%.8f H=%.3f%n", pos[0], pos[1], pos[2]);
+for (Sol sol : result.solutions) {
+    if (sol.stat == Constants.SOLQ_FIX) {
+        System.out.println("Fixed solution");
+    }
 }
 ```
 
 ### PPP 精密单点定位
 
 ```java
-PrcOpt opt = new PrcOpt();
-opt.mode = Constants.PMODE_PPP_KINEMA;
-opt.ionoopt = Constants.IONOOPT_IFLC;
-opt.tropopt = Constants.TROPOPT_SAAS;
-
-PppProcessor processor = new PppProcessor(opt);
-
-processor.processRinex(obsFilePath, navFilePath, sp3FilePath, clkFilePath);
-
-for (Sol sol : processor.getResults()) {
-    if (sol.stat == Constants.SOLQ_PPP_FLOAT) {
-        double[] pos = new double[3];
-        CoordTransform.ecef2pos(sol.rr, pos);
-        System.out.printf("PPP FLOAT: Lat=%.8f Lon=%.8f H=%.3f%n",
-            pos[0], pos[1], pos[2]);
-    }
-}
-```
-
-### RINEX 文件处理
-
-```java
-RinexParser parser = new RinexParser();
-Obs obs = parser.parse(obsFilePath, navFilePath);
-
-RinexSppProcessor spp = new RinexSppProcessor(obs, opt);
-spp.process();
+PrcOpt opt = PppProcessor.createDefaultOpt();
+PppProcessor ppp = new PppProcessor(opt);
+PppProcessor.PppResult result =
+    ppp.processRinex("rover.obs", "rover.nav", "igs.sp3", "igs.clk");
 ```
 
 ### RTCM 数据解码
 
 ```java
-Rtcm rtcm = new Rtcm();
-byte[] data = Files.readAllBytes(Paths.get(rtcmFilePath));
+// 回调模式（推荐）- 自动合并历元，输出字段语义统一
+RtcmCallbackDecoder decoder = new RtcmCallbackDecoder(handler);
+decoder.feed(fileData, 0, fileData.length);
+decoder.finish();
 
-for (int i = 0; i < data.length; i++) {
-    int type = rtcm.decode(data[i]);
-    if (type == 1077) {
-        // MSM4 观测数据已就绪
-        Obsd[] obs = rtcm.obs.obs;
-        int n = rtcm.obs.n;
-    }
+// 底层模式 - 逐字节解码
+Rtcm rtcm = new Rtcm();
+int pos = 0;
+while (pos < data.length) {
+    int consumed = rtcm.input(data, pos, data.length - pos);
+    if (consumed > 0) { pos += consumed; }
+    else { pos++; }
 }
+```
+
+### RTCM 转 RINEX
+
+```java
+RtcmFileToRinexConverter.convertFile("data.rtcm3", 3.05, "D:/output", "ROVER");
 ```
 
 ## 与 C 版 RTKLIB 的对齐状态

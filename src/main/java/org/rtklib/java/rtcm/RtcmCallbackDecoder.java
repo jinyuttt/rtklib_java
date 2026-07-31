@@ -201,9 +201,11 @@ public class RtcmCallbackDecoder {
                     }
                     if (src.L[j] != 0.0) {
                         existing.L[j] = src.L[j];
-                        existing.LLI[j] = src.LLI[j];
                         existing.Lstd[j] = src.Lstd[j];
                         if (existing.code[j] == 0) existing.code[j] = src.code[j];
+                    }
+                    if (src.LLI[j] != 0) {
+                        existing.LLI[j] = src.LLI[j];
                     }
                     if (src.D[j] != 0.0f) {
                         existing.D[j] = src.D[j];
