@@ -219,14 +219,6 @@ public final class RtkCore {
                 break;
             }
 
-            if (rtk.epoch <= 5 || rtk.epoch == 10 || rtk.epoch == 22) {
-            }
-
-            if (rtk.epoch == 1 || rtk.epoch == 2) {
-            }
-
-            if (rtk.epoch == 3 || rtk.epoch == 22) {
-            }
         }
 
         if (stat != Constants.SOLQ_NONE) {
@@ -326,9 +318,6 @@ public final class RtkCore {
             rtk.sol.qr[4] = (float) rtk.Pa[1 * rtk.na + 2];
             rtk.sol.qr[5] = (float) rtk.Pa[0 * rtk.na + 2];
 
-            if (rtk.epoch >= 62 && rtk.epoch <= 80) {
-            }
-
             if (opt.dynamics != 0) {
                 for (i = 3; i < 6; i++) {
                     rtk.sol.rr[i] = xa[i];
@@ -370,8 +359,6 @@ public final class RtkCore {
                     sbAmbVar.append(String.format("[%d]=%.2f ", ai, pv));
                     ambCnt++;
                 }
-            }
-            if (stat == Constants.SOLQ_FIX) {
             }
         }
 
@@ -946,25 +933,6 @@ public final class RtkCore {
             }
             if (rtk.epoch <= 5) {
                 int firstIdx = IB(sat[0], f, opt);
-                if (firstIdx < nx) {
-                }
-            }
-        }
-        if (rtk.epoch <= 5) {
-            int ambCount = 0;
-            for (int i = 0; i < ns; i++) {
-                int s = sat[i] - 1;
-                for (int f = 0; f < nf; f++) {
-                    int idx = IB(sat[i], f, opt);
-                    if (idx < nx && x[idx] != 0.0) ambCount++;
-                }
-            }
-            for (int i = 0; i < ns; i++) {
-                int s = sat[i] - 1;
-                for (int f = 0; f < nf; f++) {
-                    int idx = IB(sat[i], f, opt);
-                    boolean biasInit = (idx < nx && x[idx] != 0.0);
-                }
             }
         }
     }
@@ -1054,15 +1022,11 @@ public final class RtkCore {
                     double fq = SatUtils.sat2freq(obs[idx].sat, obs[idx].code[f], nav);
                     freq[foff * nf + i * nf + f] = fq;
                     if (fq == 0.0) {
-                        if (epoch == 4 && f == 1 && base == 0 && i < 3) {
-                        }
                         continue;
                     }
 
                     int snrRet = RtklibCommon.testsnr(base, f, el, obs[idx].SNR[f], opt.snrmask);
                     if (snrRet != 0) {
-                        if (epoch == 4 && f == 1 && base == 0 && i < 3) {
-                        }
                         continue;
                     }
 
@@ -1070,17 +1034,9 @@ public final class RtkCore {
 
                     if (obs[idx].L[f] != 0.0) {
                         y[off * nf * 2 + i * nf * 2 + f] = obs[idx].L[f] * lam - r - dant[f];
-                    } else {
-                        if (epoch == 4 && f == 1 && base == 0 && i < 3) {
-                        }
                     }
                     if (obs[idx].P[f] != 0.0) {
                         y[off * nf * 2 + i * nf * 2 + nf + f] = obs[idx].P[f] - r - dant[f];
-                    } else {
-                        if (epoch == 4 && f == 1 && base == 0 && i < 3) {
-                        }
-                    }
-                    if (epoch <= 3 && f == 0 && obs[idx].L[f] != 0.0) {
                     }
                 }
             }
@@ -1348,10 +1304,6 @@ public final class RtkCore {
                             if ((obs[iu[refIdx]].LLI[frq] & Constants.LLI_HALFC) != 0) Ri[nv] += 0.01;
                             if ((obs[iu[j]].LLI[frq] & Constants.LLI_HALFC) != 0) Rj[nv] += 0.01;
                         }
-                        if (rtk.epoch <= 3 && nv < 3 && !code) {
-                        }
-                        if (rtk.epoch <= 3 && nv >= 12 && nv < 15 && code) {
-                        }
                     }
 
                     if (opt.mode > Constants.PMODE_DGPS) {
@@ -1365,23 +1317,11 @@ public final class RtkCore {
                     }
 
                     vflg[nv] = (sat[refIdx] << 16) | (sat[j] << 8) | ((code ? 1 : 0) << 4) | frq;
-                    if (rtk.epoch <= 3 && !code && frq == 0 && H != null) {
-                    }
                     nv++;
                     nb[b]++;
                 }
-                if (rtk.epoch <= 10) {
-                    if (rtk.epoch <= 10) {
-                    }
-                }
                 b++;
             }
-        }
-
-        if (rtk.epoch <= 10) {
-        }
-
-        if (rtk.epoch == 31 && H != null) {
         }
 
         if (R != null) {
@@ -1398,7 +1338,6 @@ public final class RtkCore {
     private static int filter(Rtk rtk, double[] xp, double[] Pp,
                               double[] H, double[] v, double[] R,
                               int nx, int nv) {
-        KalmanFilter.debugEpoch = (rtk.epoch <= 3 || rtk.epoch == 31);
         int ret = KalmanFilter.update(xp, Pp, H, v, R, nx, nv);
         return ret;
     }
@@ -1420,32 +1359,10 @@ public final class RtkCore {
         rtk.sol.ratio = 0.0f;
         rtk.nb_ar = 0;
 
-        boolean diagResamb = (rtk.epoch <= 10 || rtk.epoch == 22 || rtk.epoch == 50 || rtk.epoch == 100);
-
-        if (diagResamb) {
-        }
-
         int[] ix = new int[nx * 2];
         int nb = ddidx(rtk, ix, gps, glo, sbs);
 
-        if (diagResamb) {
-            for (int i = na; i < nx; i++) {
-                int localIdx = i - na;
-                int sat = (localIdx % Constants.MAXSAT) + 1;
-                int f = localIdx / Constants.MAXSAT;
-                if (f >= nf) continue;
-                int si = sat - 1;
-
-                double xVal = rtk.x[i];
-                double pVal = rtk.P[i * nx + i];
-
-                if (xVal == 0.0) continue;
-            }
-        }
-
         if (nb < opt.minfixsats - 1) {
-            if (diagResamb) {
-            }
             return -1;
         }
         rtk.nb_ar = nb;
@@ -1570,40 +1487,6 @@ public final class RtkCore {
         SimpleMatrix QbMat = MatrixUtil.multiply(MatrixUtil.multiply(DMat, QcMat), MatrixUtil.transpose(DMat));
         SimpleMatrix QabMat = MatrixUtil.multiply(QacMat, MatrixUtil.transpose(DMat));
 
-        if (rtk.epoch == 32 || rtk.epoch == 33) {
-        }
-
-        if (rtk.epoch <= 5 || rtk.epoch == 10 || rtk.epoch == 22) {
-            StringBuilder sbIx = new StringBuilder(String.format("[LAMBDA-IX] epoch=%d nbLambda=%d na=%d nAmb=%d ixUsed=", rtk.epoch, nbLambda, na, nAmb));
-            for (int i = 0; i < Math.min(nbLambda, 11); i++) {
-            }
-
-            int[] usedAmbIdx = new int[Math.min(5, nbLambda * 2)];
-            int usedAmbCnt = 0;
-            boolean[] seen = new boolean[nAmb];
-            for (int i = 0; i < nbLambda && usedAmbCnt < 5; i++) {
-                int local_i = ixUsed[i * 2] - na;
-                int local_j = ixUsed[i * 2 + 1] - na;
-                if (local_i >= 0 && local_i < nAmb && !seen[local_i] && QcMat.get(local_i, local_i) > 0.0) {
-                    seen[local_i] = true;
-                    usedAmbIdx[usedAmbCnt++] = local_i;
-                }
-                if (local_j >= 0 && local_j < nAmb && !seen[local_j] && QcMat.get(local_j, local_j) > 0.0) {
-                    seen[local_j] = true;
-                    usedAmbIdx[usedAmbCnt++] = local_j;
-                }
-            }
-            if (usedAmbCnt >= 2) {
-                for (int ii = 0; ii < usedAmbCnt; ii++) {
-                    for (int jj = 0; jj < usedAmbCnt; jj++) {
-                        double dii = QcMat.get(usedAmbIdx[ii], usedAmbIdx[ii]);
-                        double djj = QcMat.get(usedAmbIdx[jj], usedAmbIdx[jj]);
-                        double c = (dii > 0 && djj > 0) ? QcMat.get(usedAmbIdx[ii], usedAmbIdx[jj]) / Math.sqrt(dii * djj) : 0;
-                    }
-                }
-            }
-        }
-
         for (int i = 0; i < nbLambda; i++) {
             for (int j = 0; j < nbLambda; j++) {
                 Qb[i * nbLambda + j] = QbMat.get(i, j);
@@ -1625,22 +1508,7 @@ public final class RtkCore {
 
         double[] s = new double[2];
 
-        if (rtk.epoch == 21 && nbLambda <= 12) {
-            for (int li = 0; li < nbLambda; li++) {
-            }
-            for (int li = 0; li < nbLambda; li++) {
-            }
-        }
-
         int info = Lambda.lambda(nbLambda, 2, y, Qb, b, s);
-
-        if (info == 0) {
-            double ratio = s[0] > 0 ? s[1]/s[0] : 0;
-            if (rtk.epoch <= 80 || ratio >= 3.0) {
-                for (int li = 0; li < nbLambda; li++) {
-                }
-            }
-        }
 
         if (info == 0) {
             rtk.sol.ratio = s[0] > 0 ? (float) (s[1] / s[0]) : 0.0f;
@@ -1657,13 +1525,6 @@ public final class RtkCore {
                     rtk.xa[i] = rtk.x[i];
                     for (int j = 0; j < na; j++) {
                         rtk.Pa[i * na + j] = rtk.P[i * nx + j];
-                    }
-                }
-
-                if (rtk.epoch <= 30 || rtk.epoch == 32 || rtk.epoch == 33 || (rtk.epoch >= 62 && rtk.epoch <= 65)) {
-                    for (int ii = 0; ii < 3; ii++) {
-                        for (int jj = 0; jj < 3; jj++) {
-                        }
                     }
                 }
 
@@ -1705,19 +1566,6 @@ public final class RtkCore {
                     MatrixUtil.copyMatrix(PaNew, rtk.Pa);
 
                     restamb(rtk, bias, nb, xa);
-
-                    if (rtk.epoch <= 80 || (rtk.epoch >= 100 && rtk.epoch <= 105)) {
-                        for (int qi = 0; qi < Math.min(5, nbLambda); qi++) {
-                        }
-                        for (int qi = 0; qi < Math.min(5, nbLambda); qi++) {
-                        }
-                        for (int qi = 0; qi < Math.min(5, nbLambda); qi++) {
-                        }
-                        for (int qi = 0; qi < Math.min(5, nb); qi++) {
-                        }
-                        for (int qi = 0; qi < Math.min(5, nbLambda); qi++) {
-                        }
-                    }
                 } else {
                     nb = 0;
                 }

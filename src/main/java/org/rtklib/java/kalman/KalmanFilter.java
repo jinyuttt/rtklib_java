@@ -11,18 +11,10 @@ import org.rtklib.java.common.MatrixUtil;
  * participate in the Kalman update, significantly improving numerical stability and
  * matching C version behavior.</p>
  *
- * <p>Covariance update uses a hybrid strategy:
- * <ul>
- *   <li>Standard form: P = (I-KH)*P, then symmetrize P = (P+P^T)/2</li>
- *   <li>If any diagonal element becomes non-positive after standard update,
- *       fall back to Joseph form: P = (I-KH)*P*(I-KH)^T + K*R*K^T</li>
- * </ul>
- * This combines the tighter covariance of the standard form (better ambiguity resolution)
- * with the guaranteed positive semi-definiteness of the Joseph form.</p>
+ * <p>Covariance update uses the Joseph form: P = (I-KH)*P*(I-KH)^T + K*R*K^T,
+ * which guarantees positive semi-definiteness of the updated covariance matrix.</p>
  */
 public final class KalmanFilter {
-    public static int debugEpochNum = -1;
-    public static boolean debugEpoch = false;
 
     /**
      * Kalman filter measurement update with state compression.
@@ -80,70 +72,24 @@ public final class KalmanFilter {
             SimpleMatrix PcHt = MatrixUtil.multiply(PcMat, Hct);
             SimpleMatrix K = MatrixUtil.multiply(PcHt, SInv);
 
-            if (debugEpoch && k >= 3) {
-            }
-
             SimpleMatrix V = MatrixUtil.createMatrix(v, nv, 1);
             SimpleMatrix KV = MatrixUtil.multiply(K, V);
             SimpleMatrix XcNew = MatrixUtil.add(Xc, KV);
-
-            if (debugEpoch && k > 0) {
-            }
 
             SimpleMatrix KHc = MatrixUtil.multiply(K, HcMat);
             SimpleMatrix Ic = SimpleMatrix.identity(k);
             SimpleMatrix IKH = MatrixUtil.subtract(Ic, KHc);
 
-            if (debugEpoch) {
-                for (int ambLocalIdx = 3; ambLocalIdx < Math.min(8, k); ambLocalIdx++) {
-                    if (ix[ambLocalIdx] >= 108 && ix[ambLocalIdx] <= 150) {
-                    }
-                }
-            }
-
-            SimpleMatrix PcNewStandard = MatrixUtil.multiply(IKH, PcMat);
-
-            SimpleMatrix PcNewStandardSym = MatrixUtil.add(PcNewStandard, MatrixUtil.transpose(PcNewStandard));
-            for (int si = 0; si < k; si++) for (int sj = 0; sj < k; sj++)
-                PcNewStandardSym.set(si, sj, PcNewStandardSym.get(si, sj) * 0.5);
-
-            boolean useJoseph = false;
-            for (int ci = 0; ci < k; ci++) {
-                if (PcNewStandardSym.get(ci, ci) <= 0) {
-                    useJoseph = true;
-                    break;
-                }
-            }
-
-            SimpleMatrix PcNew;
             SimpleMatrix IKH_T = MatrixUtil.transpose(IKH);
-            SimpleMatrix P_temp = MatrixUtil.multiply(IKH, PcMat);
-            SimpleMatrix P_IKH = MatrixUtil.multiply(P_temp, IKH_T);
-            SimpleMatrix KR = MatrixUtil.multiply(K, RMat);
-            SimpleMatrix KRKt = MatrixUtil.multiply(KR, MatrixUtil.transpose(K));
-            SimpleMatrix PcJoseph = MatrixUtil.add(P_IKH, KRKt);
-            PcNew = PcJoseph;
-
-            if (debugEpoch) {
-                SimpleMatrix IKH_T2 = MatrixUtil.transpose(IKH);
-                SimpleMatrix P_temp2 = MatrixUtil.multiply(IKH, PcMat);
-                SimpleMatrix P_IKH2 = MatrixUtil.multiply(P_temp2, IKH_T2);
-                SimpleMatrix KR2 = MatrixUtil.multiply(K, RMat);
-                SimpleMatrix KRKt2 = MatrixUtil.multiply(KR2, MatrixUtil.transpose(K));
-                for (int ambLocalIdx = 3; ambLocalIdx < Math.min(8, k); ambLocalIdx++) {
-                    if (ix[ambLocalIdx] >= 108 && ix[ambLocalIdx] <= 150) {
-                    }
-                }
-            }
+            SimpleMatrix P_IKH = MatrixUtil.multiply(MatrixUtil.multiply(IKH, PcMat), IKH_T);
+            SimpleMatrix KRKt = MatrixUtil.multiply(MatrixUtil.multiply(K, RMat), MatrixUtil.transpose(K));
+            SimpleMatrix PcNew = MatrixUtil.add(P_IKH, KRKt);
 
             for (int i = 0; i < k; i++) {
                 x[ix[i]] = XcNew.get(i, 0);
                 for (int j = 0; j < k; j++) {
                     P[ix[i] * nx + ix[j]] = PcNew.get(i, j);
                 }
-            }
-
-            if (nx > 100) {
             }
 
             return 0;

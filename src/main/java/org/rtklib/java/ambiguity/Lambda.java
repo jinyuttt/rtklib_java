@@ -99,9 +99,6 @@ public final class Lambda {
         SimpleMatrix EMat = MatrixUtil.createMatrix(E, n, m);
         SimpleMatrix FMat = MatrixUtil.solve(Zt, EMat);
 
-        if (n <= 12) {
-        }
-
         MatrixUtil.copyMatrix(FMat, F);
 
         return 0;
