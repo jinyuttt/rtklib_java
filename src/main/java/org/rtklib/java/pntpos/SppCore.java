@@ -399,10 +399,6 @@ public final class SppCore {
                 msg[0] = "lack of valid sats ns=" + ns[0] + " nv=" + nv + " NX=" + NX;
                 return 0;
             }
-            if (it <= 1) {
-                for (int j = 0; j < nv; j++) {
-                }
-            }
             for (int j = 0; j < nv; j++) {
                 double sig = Math.sqrt(var[j]);
                 v[j] /= sig;
