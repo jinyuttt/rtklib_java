@@ -89,13 +89,14 @@ public class SppProcessorTest {
         assertTrue(result.successCount > 0, "Should have successful SPP");
         assertFalse(result.solutions.isEmpty(), "Should have solutions");
 
-        Sol first = result.solutions.get(0);
-        double[] llh = new double[3];
-        CoordTransform.ecef2pos(first.rr, llh);
-        log.info("First solution: lat={}, lon={}, h={}, ns={}",
-                String.format("%.9f", Math.toDegrees(llh[0])),
-                String.format("%.9f", Math.toDegrees(llh[1])),
-                String.format("%.3f", llh[2]), first.ns);
+        SolData first = result.solutions.get(0);
+        Position llh = first.getPosition(CoordType.LLH);
+        if (llh != null) {
+            log.info("First solution: lat={}, lon={}, h={}, ns={}",
+                    String.format("%.9f", llh.v1),
+                    String.format("%.9f", llh.v2),
+                    String.format("%.3f", llh.v3), first.numSat);
+        }
     }
 
     @Test
@@ -179,8 +180,8 @@ public class SppProcessorTest {
         int nsDiffCount = 0;
         int unmatchedCount = 0;
 
-        for (Sol sol : result.solutions) {
-            String timeKey = formatTimeKey(sol.time);
+        for (SolData sd : result.solutions) {
+            String timeKey = formatTimeKey(sd.time);
             double[] rtklibData = rtklibResult.get(timeKey);
             if (rtklibData == null) {
                 if (unmatchedCount < 5) {
@@ -196,11 +197,10 @@ public class SppProcessorTest {
             double rtklibH = rtklibData[2];
             int rtklibNs = (int) rtklibData[3];
 
-            double[] llh = new double[3];
-            CoordTransform.ecef2pos(sol.rr, llh);
-            double javaLat = Math.toDegrees(llh[0]);
-            double javaLon = Math.toDegrees(llh[1]);
-            double javaH = llh[2];
+            Position llhPos = sd.getPosition(CoordType.LLH);
+            double javaLat = llhPos != null ? llhPos.v1 : 0;
+            double javaLon = llhPos != null ? llhPos.v2 : 0;
+            double javaH = llhPos != null ? llhPos.v3 : 0;
 
             double latDiff = Math.abs(javaLat - rtklibLat);
             double lonDiff = Math.abs(javaLon - rtklibLon);
@@ -213,7 +213,7 @@ public class SppProcessorTest {
             maxLonDiff = Math.max(maxLonDiff, lonDiff);
             maxHDiff = Math.max(maxHDiff, hDiff);
 
-            int nsDiff = sol.ns - rtklibNs;
+            int nsDiff = sd.numSat - rtklibNs;
             if (nsDiff != 0) nsDiffCount++;
 
             matchCount++;
@@ -221,7 +221,7 @@ public class SppProcessorTest {
             if (matchCount <= 5 || latDiff > 0.0000001 || hDiff > 0.01) {
                 log.info("  [{}] Java: lat={} lon={} h={} ns={} | C: lat={} lon={} h={} ns={} | dLat={} dLon={} dH={}",
                         timeKey,
-                        String.format("%.9f", javaLat), String.format("%.9f", javaLon), String.format("%.1f", javaH), sol.ns,
+                        String.format("%.9f", javaLat), String.format("%.9f", javaLon), String.format("%.1f", javaH), sd.numSat,
                         String.format("%.9f", rtklibLat), String.format("%.9f", rtklibLon), String.format("%.1f", rtklibH), rtklibNs,
                         String.format("%.9f", latDiff), String.format("%.9f", lonDiff), String.format("%.3f", hDiff));
             }

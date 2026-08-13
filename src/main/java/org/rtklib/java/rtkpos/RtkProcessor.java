@@ -705,7 +705,7 @@ public class RtkProcessor {
             handler.onFinish(totalEpochs, successCount, failCount);
         }
 
-        return new RtkResult(totalEpochs, successCount, failCount, solutions);
+        return buildResult();
     }
 
     public void reset() {
@@ -843,12 +843,25 @@ public class RtkProcessor {
     public static void writePosFile(RtkResult result, String outputPath) throws IOException {
         try (BufferedWriter w = new BufferedWriter(new FileWriter(outputPath))) {
             w.write(POS_HEADER);
-            for (Sol sol : result.solutions) {
-                w.write(formatSolutionLine(sol));
+            for (SolData solData : result.solutions) {
+                w.write(formatSolDataLine(solData));
             }
             w.write(String.format("# Total: %d, Success: %d, Fail: %d\n",
                     result.totalEpochs, result.successCount, result.failCount));
         }
+    }
+
+    static String formatSolDataLine(SolData solData) {Position llh = solData.getPosition(CoordType.LLH);
+        Accuracy acc = solData.getAccuracy(CoordType.ENU);
+        if (llh == null || acc == null) return "";
+
+        String qStr = String.valueOf(solData.status.code);
+        return String.format("  %s %14.9f %14.9f %10.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f %5.1f %5.1f %5.1f %5.1f\n",
+                solData.timeStr, llh.v1, llh.v2, llh.v3,
+                qStr, solData.numSat,
+                acc.s2, acc.s1, acc.s3, acc.c12, acc.c23, acc.c31,
+                solData.age, solData.ratio,
+                solData.gdop, solData.pdop, solData.hdop, solData.vdop);
     }
 
     private static Obsd copyObsd(Obsd src) {
@@ -883,6 +896,14 @@ public class RtkProcessor {
         return copy;
     }
 
+    private RtkResult buildResult() {
+        double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
+        List<SolData> solDataList = solutions.stream()
+                .map(sol -> new SolData(sol, opt.posMask, rb))
+                .toList();
+        return new RtkResult(totalEpochs, successCount, failCount, solDataList);
+    }
+
     private byte[] ensureCapacity(byte[] buf, int need) {
         if (need > buf.length) {
             return Arrays.copyOf(buf, Math.max(buf.length * 2, need + 1024));
@@ -911,9 +932,9 @@ public class RtkProcessor {
         public final int totalEpochs;
         public final int successCount;
         public final int failCount;
-        public final List<Sol> solutions;
+        public final List<SolData> solutions;
 
-        public RtkResult(int totalEpochs, int successCount, int failCount, List<Sol> solutions) {
+        public RtkResult(int totalEpochs, int successCount, int failCount, List<SolData> solutions) {
             this.totalEpochs = totalEpochs;
             this.successCount = successCount;
             this.failCount = failCount;

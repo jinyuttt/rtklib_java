@@ -94,7 +94,7 @@ public class RinexPppProcessor {
 
         if (parser.obs.n == 0) {
             log.warn("No observation data in RINEX file");
-            return new PppResult(0, 0, 0, solutions);
+            return buildResult(0, 0, 0);
         }
 
         if (parser.sta != null && parser.sta.pos != null
@@ -126,7 +126,7 @@ public class RinexPppProcessor {
             }
         }
 
-        return new PppResult(totalEpochs, successCount, failCount, solutions);
+        return buildResult();
     }
 
     private void processEpoch(Obsd[] obs, int n, Nav nav) {
@@ -202,13 +202,24 @@ public class RinexPppProcessor {
         return groups;
     }
 
+    private PppResult buildResult() {
+        List<SolData> solDataList = solutions.stream()
+                .map(sol -> new SolData(sol, opt.posMask))
+                .toList();
+        return new PppResult(totalEpochs, successCount, failCount, solDataList);
+    }
+
+    private PppResult buildResult(int total, int success, int fail) {
+        return new PppResult(total, success, fail, List.of());
+    }
+
     public static class PppResult {
         public final int totalEpochs;
         public final int successCount;
         public final int failCount;
-        public final List<Sol> solutions;
+        public final List<SolData> solutions;
 
-        public PppResult(int totalEpochs, int successCount, int failCount, List<Sol> solutions) {
+        public PppResult(int totalEpochs, int successCount, int failCount, List<SolData> solutions) {
             this.totalEpochs = totalEpochs;
             this.successCount = successCount;
             this.failCount = failCount;

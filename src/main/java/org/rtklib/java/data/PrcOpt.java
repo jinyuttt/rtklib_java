@@ -7,6 +7,11 @@ import org.rtklib.java.constants.Constants;
  * Aligned with RTKLIB prcopt_t.
  */
 public class PrcOpt {
+    /** Position output format mask (bitwise OR of POS_ECEF/POS_LLH/POS_ENU) */
+    public static final int POS_ECEF = 1;
+    public static final int POS_LLH  = 2;
+    public static final int POS_ENU  = 4;
+
     /** Positioning mode (PMODE_???) */
     public int mode;
     /** Solution type (SOLTYPE_???) */
@@ -138,6 +143,8 @@ public class PrcOpt {
 
     /** Ionosphere gradient estimation (false:VTEC only, true:VTEC+Gn+Ge per sat) */
     public boolean ionoGradient = false;
+    /** Position output format mask (bitwise OR of POS_ECEF/POS_LLH/POS_ENU) */
+    public int posMask;
 
     /**
      * Default constructor with RTKLIB default values.
@@ -232,6 +239,8 @@ public class PrcOpt {
         this.pppopt = "";
         this.outputThrottleInterval = 100;
         this.outputThrottleSleepMs = 10;
+
+        this.posMask = POS_ECEF | POS_LLH;
     }
 
     /**
@@ -311,5 +320,6 @@ public class PrcOpt {
         this.outputThrottleInterval = other.outputThrottleInterval;
         this.outputThrottleSleepMs = other.outputThrottleSleepMs;
         this.ionoGradient = other.ionoGradient;
+        this.posMask = other.posMask;
     }
 }

@@ -5,8 +5,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.io.TempDir;
 import org.rtklib.java.constants.Constants;
+import org.rtklib.java.data.CoordType;
+import org.rtklib.java.data.Position;
 import org.rtklib.java.data.PrcOpt;
 import org.rtklib.java.data.Sol;
+import org.rtklib.java.data.SolData;
 import org.rtklib.java.data.Ssat;
 import org.rtklib.java.data.GTime;
 import org.rtklib.java.pntpos.PosHandler;
@@ -63,10 +66,13 @@ public class RinexSppProcessorTest {
         assertTrue(result.successCount > 0, "应有成功定位");
 
         if (!result.solutions.isEmpty()) {
-            Sol firstSol = result.solutions.get(0);
-            log.info(String.format("首个定位解: ECEF=(%.4f, %.4f, %.4f), ns=%d",
-                    firstSol.rr[0], firstSol.rr[1], firstSol.rr[2], firstSol.ns));
-            assertTrue(firstSol.ns >= 4, "有效卫星数应>=4");
+            SolData first = result.solutions.get(0);
+            Position ecef = first.getPosition(CoordType.ECEF);
+            if (ecef != null) {
+                log.info(String.format("首个定位解: ECEF=(%.4f, %.4f, %.4f), ns=%d",
+                        ecef.v1, ecef.v2, ecef.v3, first.numSat));
+            }
+            assertTrue(first.numSat >= 4, "有效卫星数应>=4");
         }
     }
 

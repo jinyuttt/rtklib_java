@@ -103,13 +103,14 @@ public class RtkProcessorTest {
         assertTrue(result.totalEpochs > 0, "Should have processed epochs");
         assertFalse(result.solutions.isEmpty(), "Should have solutions");
 
-        Sol first = result.solutions.get(0);
-        double[] llh = new double[3];
-        CoordTransform.ecef2pos(first.rr, llh);
-        log.info("First solution: lat={}, lon={}, h={}, ns={}, stat={}",
-                String.format("%.9f", Math.toDegrees(llh[0])),
-                String.format("%.9f", Math.toDegrees(llh[1])),
-                String.format("%.3f", llh[2]), first.ns, first.stat);
+        SolData first = result.solutions.get(0);
+        Position llh = first.getPosition(CoordType.LLH);
+        if (llh != null) {
+            log.info("First solution: lat={}, lon={}, h={}, ns={}, stat={}",
+                    String.format("%.9f", llh.v1),
+                    String.format("%.9f", llh.v2),
+                    String.format("%.3f", llh.v3), first.numSat, first.status);
+        }
     }
 
     @Test
@@ -267,10 +268,10 @@ public class RtkProcessorTest {
         RtkProcessor.RtkResult result = rtk.process(roverData, baseData);
 
         int fixCount = 0, floatCount = 0, singleCount = 0;
-        for (Sol sol : result.solutions) {
-            if (sol.stat == Constants.SOLQ_FIX) fixCount++;
-            else if (sol.stat == Constants.SOLQ_FLOAT) floatCount++;
-            else if (sol.stat == Constants.SOLQ_SINGLE) singleCount++;
+        for (SolData sd : result.solutions) {
+            if (sd.status == SolutionStatus.FIX) fixCount++;
+            else if (sd.status == SolutionStatus.FLOAT) floatCount++;
+            else if (sd.status == SolutionStatus.SINGLE) singleCount++;
         }
 
         log.info("Solution types: Fix={}, Float={}, Single={}", fixCount, floatCount, singleCount);
@@ -278,13 +279,14 @@ public class RtkProcessorTest {
         assertEquals(result.successCount, fixCount + floatCount + singleCount, "Solution type counts should sum to success count");
 
         if (!result.solutions.isEmpty()) {
-            Sol last = result.solutions.get(result.solutions.size() - 1);
-            double[] llh = new double[3];
-            CoordTransform.ecef2pos(last.rr, llh);
-            log.info("Last solution: lat={}, lon={}, h={}, stat={}, ns={}",
-                    String.format("%.9f", Math.toDegrees(llh[0])),
-                    String.format("%.9f", Math.toDegrees(llh[1])),
-                    String.format("%.3f", llh[2]), last.stat, last.ns);
+            SolData last = result.solutions.get(result.solutions.size() - 1);
+            Position llh2 = last.getPosition(CoordType.LLH);
+            if (llh2 != null) {
+                log.info("Last solution: lat={}, lon={}, h={}, stat={}, ns={}",
+                        String.format("%.9f", llh2.v1),
+                        String.format("%.9f", llh2.v2),
+                        String.format("%.3f", llh2.v3), last.status, last.numSat);
+            }
         }
     }
 }

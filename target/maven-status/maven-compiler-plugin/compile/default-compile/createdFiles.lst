@@ -2,6 +2,7 @@ org\rtklib\java\rinex\RtcmToRinexConverter.class
 org\rtklib\java\rtkpos\RtkPos.class
 org\rtklib\java\data\PepH.class
 org\rtklib\java\rtkpos\RtkCore.class
+org\rtklib\java\data\SolData.class
 org\rtklib\java\rtcm\MsmH.class
 org\rtklib\java\time\TimeSystem.class
 org\rtklib\java\data\SbsSat.class
@@ -9,6 +10,7 @@ org\rtklib\java\trace\TraceControl.class
 org\rtklib\java\data\Ssat.class
 org\rtklib\java\trace\RtkTrace.class
 org\rtklib\java\data\SnrMask.class
+org\rtklib\java\data\Accuracy.class
 org\rtklib\java\rinex\RinexPppProcessor$PppResult.class
 org\rtklib\java\data\Rtk.class
 org\rtklib\java\data\Ambc.class
@@ -17,6 +19,7 @@ org\rtklib\java\data\GTime.class
 org\rtklib\java\pntpos\SppCore.class
 org\rtklib\java\pntpos\PntPos.class
 org\rtklib\java\data\Eph.class
+org\rtklib\java\data\Velocity.class
 org\rtklib\java\rinex\RinexParser.class
 org\rtklib\java\trace\TraceCallback.class
 org\rtklib\java\common\CrcUtils.class
@@ -25,10 +28,12 @@ org\rtklib\java\trace\PppTrace.class
 org\rtklib\java\data\SbsLCorr.class
 org\rtklib\java\ephemeris\Sp3Reader.class
 org\rtklib\java\kalman\KalmanFilter.class
+org\rtklib\java\data\CoordType.class
 org\rtklib\java\data\Pcv.class
 org\rtklib\java\rtcm\Rtcm.class
 org\rtklib\java\data\Seph.class
 org\rtklib\java\pntpos\SppProcessor.class
+org\rtklib\java\data\SolutionStatus.class
 org\rtklib\java\rtkpos\RtkProcessor.class
 org\rtklib\java\pntpos\SppProcessor$SppResult.class
 org\rtklib\java\rinex\RtcmFileToRinexConverter.class
@@ -40,6 +45,8 @@ org\rtklib\java\rinex\RinexSppProcessor.class
 org\rtklib\java\rtkpos\Tides.class
 org\rtklib\java\data\SbsFCorr.class
 org\rtklib\java\data\SbsIgp.class
+org\rtklib\java\data\Position$1.class
+org\rtklib\java\data\Position.class
 org\rtklib\java\constants\Constants.class
 org\rtklib\java\ephemeris\EphModel.class
 org\rtklib\java\rtkpos\RtkOptimizations.class
