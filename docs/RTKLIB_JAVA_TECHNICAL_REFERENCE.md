@@ -1358,10 +1358,20 @@ Sol（内部，始终ECEF）                    SolData（输出封装）
                                         └─────────────────────────────────┘
 ```
 
-**构造时机**：各Processor的 `buildResult()` 方法中，`List<Sol>` → `List<SolData>`
+**构造时机**：
+
+1. **实时回调**：每个历元定位成功后，立即构造 `SolData` 并通过 `PosHandler.onResult(SolData)` 回调
+2. **批量结果**：各Processor的 `buildResult()` 方法中，`List<Sol>` → `List<SolData>`
 
 ```java
-// RtkProcessor.java 示例
+// RtkProcessor.java 实时回调（每个历元）
+if (handler != null) {
+    handler.onSolution(new Sol(rtk.sol), copySsatArray(rtk.ssat));
+    double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
+    handler.onResult(new SolData(solCopy, opt.posMask, rb));
+}
+
+// RtkProcessor.java 批量结果（处理完成后）
 private RtkResult buildResult() {
     double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
     List<SolData> solDataList = solutions.stream()
@@ -1370,6 +1380,8 @@ private RtkResult buildResult() {
     return new RtkResult(totalEpochs, successCount, failCount, solDataList);
 }
 ```
+
+**回调调用顺序**：`onSolution(Sol, Ssat[])` → `onResult(SolData)`，每个历元依次调用。
 
 ### 12.6 使用示例
 
@@ -1399,10 +1411,18 @@ for (SolData sd : result.solutions) {
 
 #### 12.6.2 回调方式
 
+每个历元定位成功后，`onResult(SolData)` 会自动被调用（在 `onSolution` 之后），
+应用层只需实现 `onResult` 即可实时接收结构化定位结果：
+
 ```java
 PosHandler handler = new PosHandler() {
     @Override
+    public void onSolution(Sol sol, Ssat[] ssat) {
+        // 内部回调，一般不需要实现
+    }
+    @Override
     public void onResult(SolData solData) {
+        // 输出回调，每个历元自动调用
         Position llh = solData.getPosition(CoordType.LLH);
         if (llh != null && solData.status == SolutionStatus.FIX) {
             System.out.printf("FIX: %.9f %.9f %.4f%n", llh.v1, llh.v2, llh.v3);
@@ -1540,7 +1560,7 @@ Java版方法名遵循以下规则，在保持Java驼峰命名的同时保留C�
 
 ---
 
-*文档版本：v1.9*
+*文档版本：v2.0*
 *最后更新：2026-08-13*
-*新增章节：16. C版对齐状态 / 17. 方法命名规则 / 18. 测试验证状态（从README迁移）*
+*变更：onResult回调现在在每个历元定位成功后自动调用（onSolution→onResult）*
 *维护者：RTKLIB Java移植团队*
