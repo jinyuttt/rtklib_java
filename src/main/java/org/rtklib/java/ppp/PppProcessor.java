@@ -517,6 +517,7 @@ public class PppProcessor {
 
             if (handler != null) {
                 handler.onSolution(new Sol(rtk.sol), copySsatArray(rtk.ssat));
+                handler.onResult(new SolData(solCopy, opt.posMask));
             }
             if (writer != null) {
                 try {

@@ -402,6 +402,34 @@ K0 = 1.5 对应约87%置信区间，K1 = 3.0 对应约99.7%置信区间。
 | `computeHPHtDiagNative()` | RtkOptimizations.java | 计算H*P*H'对角线 |
 | `relpos()` | RtkCore.java | ddres之后、filter之前调用 |
 
+### 4.7 HPHt对角线计算：EJML版本与Native版本
+
+IGG-III需要计算新息协方差 `S = R + HPHᵀ` 的对角线元素，用于标准化新息。
+
+**当前使用EJML版本** `computeHPHtDiag()`：
+```java
+// EJML实现：完整矩阵乘法后提取对角线
+SimpleMatrix Hmat = MatrixUtil.createMatrix(H, nv, nx);
+SimpleMatrix Pmat = MatrixUtil.createMatrix(P, nx, nx);
+SimpleMatrix HPHt = Hmat.mult(Pmat).mult(Hmat.transpose());
+for (int i = 0; i < nv; i++) diag[i] = HPHt.get(i, i);
+```
+
+**保留的Native版本** `computeHPHtDiagNative()`：
+```java
+// 手写数组运算：只算对角线，跳过非对角线元素
+// Step1: PH[i,j] = Σ_k P[i,k] * H[j,k]
+// Step2: diag[i] = Σ_k H[i,k] * PH[k,i]
+```
+
+| 版本 | 复杂度 | 优点 | 缺点 |
+|------|--------|------|------|
+| EJML（当前） | O(nx²×nv + nx×nv²) | 代码简洁，与项目风格一致 | 计算了nv²-nv个无用元素 |
+| Native | O(nx²×nv + nx×nv) | 无冗余计算 | 手写循环，与项目EJML风格不一致 |
+
+**性能差异**：典型RTK场景（nx=60, nv=60），FLOP浪费约49%，但绝对耗时在微秒级，1Hz RTK可忽略。
+若需10~20Hz或嵌入式场景，可切换到Native版本。
+
 ---
 
 ## 5. SNR中值参考星选择（enableSnrMedian）

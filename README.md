@@ -126,11 +126,11 @@ SppProcessor.SppResult result = spp.process("data.rtcm3");
 RinexSppProcessor.SppResult result =
     RinexSppProcessor.processRinex("ROVER.obs", "ROVER.nav");
 
-for (Sol sol : result.solutions) {
-    double[] pos = new double[3];
-    CoordTransform.ecef2pos(sol.rr, pos);
-    System.out.printf("Lat=%.8f Lon=%.8f H=%.3f%n",
-        Math.toDegrees(pos[0]), Math.toDegrees(pos[1]), pos[2]);
+for (SolData sd : result.solutions) {
+    Position llh = sd.getPosition(CoordType.LLH);
+    if (llh != null) {
+        System.out.printf("Lat=%.8f Lon=%.8f H=%.3f%n", llh.v1, llh.v2, llh.v3);
+    }
 }
 ```
 
@@ -147,8 +147,8 @@ RtkProcessor.RtkResult result = rtk.process("rover.rtcm3", "base.rtcm3");
 RtkProcessor.RtkResult result =
     RinexRtkProcessor.processRinex("ROVER.obs", "BASE.obs", "NAV.nav", opt);
 
-for (Sol sol : result.solutions) {
-    if (sol.stat == Constants.SOLQ_FIX) {
+for (SolData sd : result.solutions) {
+    if (sd.status == SolutionStatus.FIX) {
         System.out.println("Fixed solution");
     }
 }
@@ -187,85 +187,12 @@ while (pos < data.length) {
 RtcmFileToRinexConverter.convertFile("data.rtcm3", 3.05, "D:/output", "ROVER");
 ```
 
-## 与 C 版 RTKLIB 的对齐状态
-
-### 已对齐的核心流程
-
-| 模块 | C版函数 | Java版方法 | 状态 |
-|------|---------|-----------|------|
-| SPP | `pntpos()` | `PntPos.pntpos()` | ✅ 完整对齐 |
-| SPP核心 | `estpos()` | `SppCore.estpos()` | ✅ |
-| RAIM FDE | `raim_fde()` | `PntPos.raimFde()` | ✅ |
-| 速度估计 | `estvel()` | `PntPos.estvel()` | ✅ |
-| 多普勒残差 | `resdop()` | `PntPos.resdop()` | ✅ |
-| RTK入口 | `rtkpos()` | `RtkCore.rtkpos()` | ✅ 完整对齐 |
-| 相对定位 | `relpos()` | `RtkCore.relpos()` | ✅ |
-| 卫星位置 | `satposs()` | `EphModel.satposs()` | ✅ |
-| 坐标变换 | `ecef2pos()`/`xyz2enu()` | `CoordTransform` | ✅ |
-| LAMBDA | `lambda()` | `Lambda` | ✅ |
-| 周跳检测 | `detslp_*()` | `RtkCore.detslpLl/Gf/Code/Dop()` | ✅ |
-| RINEX读写 | `readrnx()`/`outrnx()` | `RinexParser`/`RinexObsWriter` | ✅ |
-| RTCM解码 | `decode_*()` | `Rtcm` | ✅ |
-| PPP入口 | `pppos()` | `PppCore.pppos()` | ✅ 基本对齐 |
-| PPP状态更新 | `udstate_ppp()` | `PppCore.udstate()` | ✅ |
-| PPP观测修正 | `corrMeas()` | `PppCore.corrMeas()` | ✅ |
-| PPP RINEX处理 | - | `PppProcessor`/`RinexPppProcessor` | ✅ |
-| 追踪日志 | `trace*()` | `RtkTrace`/`PppTrace` | ✅ |
-
-### 已对齐的 rtkpos() 流程细节
-
-| 逻辑 | 说明 | 状态 |
-|------|------|------|
-| 流动站SPP | `P[0]==0||P[0]>STD_PREC_VAR_THRESH` → `pntpos()` | ✅ |
-| SPP失败dynamics容错 | dynamics模式下不直接返回 | ✅ |
-| outsingle抑制 | 非SINGLE模式抑制单点解输出 | ✅ |
-| 基站坐标设置 | `refposmode!=REFPOS_RTCM` | ✅ |
-| MOVEB基站SPP | 基站观测数据独立SPP | ✅ |
-| MOVEB age检查 | 时间同步验证 | ✅ |
-| ssat后处理 | vs/azel/resp/resc更新 | ✅ |
-| eventime传递 | `sol.eventime=obs[0].eventime` | ✅ |
-
-### 未移植项
-
-| 功能 | 优先级 | 原因 |
-|------|--------|------|
-| Static Start长延迟恢复 | 低 | 边界场景，`tt>300`时重置状态 |
-| 多系统PPP验证 | 中 | GPS+BDS联合PPP，需多系统精密星历 |
-
-## 方法命名规则
-
-Java版方法名遵循以下规则，在保持Java驼峰命名的同时保留C版函数名核心：
-
-| C版 | Java版 | 规则 |
-|-----|--------|------|
-| `pntpos()` | `pntpos()` | 无下划线，直接保留 |
-| `estpos()` | `estpos()` | 同上 |
-| `raim_fde()` | `raimFde()` | 下划线后首字母大写 |
-| `detslp_ll()` | `detslpLl()` | 下划线后每段首字母大写 |
-| `satposs()` | `satposs()` | 直接保留 |
-| `ecef2pos()` | `ecef2pos()` | 直接保留 |
-
 ## 参考来源
 
 - [RTKLIB 2.5.0](https://github.com/tomojitakasu/RTKLIB) - 原始 C 语言实现
 - [RTKLIB Manual](http://www.rtklib.com/rtklib_document.htm) - 算法原理与使用说明
 
-## 测试验证状态
-
-当前测试以**北斗（BDS）单系统**和**多系统（GPS+BDS）**短基线数据为主。SPP 已通过 BDS 数据与 C 版 RTKLIB 亚毫米级对比验证；RTK 已通过多系统短基线数据验证，Fix 解比例达 88.7%。PPP 已实现基本功能，IFLC 模式下 BDS 浮点解可正常输出。
-
-多系统（GPS+GLONASS 等）联合定位尚未充分验证。如有**多系统真实观测数据**条件，欢迎测试验证并反馈结果。
-
-### 已验证场景
-
-| 场景 | 数据源 | 状态 |
-|------|--------|------|
-| SPP（BDS-only） | RTCM MSM4 | ✅ 240历元与C版亚毫米级匹配 |
-| RTK（GPS+BDS 短基线） | RTCM MSM4 | ✅ Fix解比例88.7%，ratio 42~384 |
-| RTK（BDS-only 短基线） | RTCM MSM4 | ✅ 浮点解收敛稳定（数据质量限制，C版同样无法Fix） |
-| PPP（BDS-only IFLC） | RINEX + SP3/CLK | ✅ 240历元浮点解输出 |
-| SPP（GPS+BDS） | - | ⏳ 待验证 |
-| PPP（GPS+BDS） | - | ⏳ 待验证 |
+> C版对齐状态、方法命名规则、测试验证状态详见 [技术文档](docs/RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第16~18章。
 
 ## License
 

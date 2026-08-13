@@ -297,6 +297,8 @@ public class RinexRtkProcessor {
 
             if (handler != null) {
                 handler.onSolution(new Sol(rtk.sol), copySsatArray(rtk.ssat));
+                double[] rb = (rtk.rb[0] != 0 || rtk.rb[1] != 0 || rtk.rb[2] != 0) ? rtk.rb : null;
+                handler.onResult(new SolData(solCopy, opt.posMask, rb));
             }
             if (writer != null) {
                 try {
