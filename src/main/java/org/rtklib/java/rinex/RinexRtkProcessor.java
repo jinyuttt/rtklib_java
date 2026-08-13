@@ -142,7 +142,7 @@ public class RinexRtkProcessor {
 
         if (roverParser.obs.n == 0) {
             log.warn("No observation data in RINEX file");
-            return new RtkProcessor.RtkResult(0, 0, 0, solutions);
+            return buildResult(0, 0, 0);
         }
 
         if (roverParser.sta != null && roverParser.sta.pos != null
@@ -217,7 +217,7 @@ public class RinexRtkProcessor {
             handler.onFinish(totalEpochs, successCount, failCount);
         }
 
-        return new RtkProcessor.RtkResult(totalEpochs, successCount, failCount, solutions);
+        return buildResult();
     }
 
     /**
@@ -331,5 +331,17 @@ public class RinexRtkProcessor {
             System.arraycopy(src.amb, 0, dst.amb, 0, src.amb.length);
         }
         return copy;
+    }
+
+    private RtkProcessor.RtkResult buildResult() {
+        double[] rb = (rtk.rb[0] != 0 || rtk.rb[1] != 0 || rtk.rb[2] != 0) ? rtk.rb : null;
+        List<SolData> solDataList = solutions.stream()
+                .map(sol -> new SolData(sol, opt.posMask, rb))
+                .toList();
+        return new RtkProcessor.RtkResult(totalEpochs, successCount, failCount, solDataList);
+    }
+
+    private RtkProcessor.RtkResult buildResult(int total, int success, int fail) {
+        return new RtkProcessor.RtkResult(total, success, fail, List.of());
     }
 }

@@ -277,18 +277,19 @@ public class PppTest {
         assertTrue(result.totalEpochs > 0, "Should process epochs");
 
         if (!result.solutions.isEmpty()) {
-            Sol firstSol = result.solutions.get(0);
-            double[] pos = new double[3];
-            CoordTransform.ecef2pos(firstSol.rr, pos);
-            log.info(String.format("First solution: lat=%.9f lon=%.9f h=%.3f ns=%d stat=%d",
-                    Math.toDegrees(pos[0]), Math.toDegrees(pos[1]),
-                    pos[2], firstSol.ns, firstSol.stat));
+            SolData first = result.solutions.get(0);
+            Position llh1 = first.getPosition(CoordType.LLH);
+            if (llh1 != null) {
+                log.info(String.format("First solution: lat=%.9f lon=%.9f h=%.3f ns=%d stat=%s",
+                        llh1.v1, llh1.v2, llh1.v3, first.numSat, first.status));
+            }
 
-            Sol lastSol = result.solutions.get(result.solutions.size() - 1);
-            CoordTransform.ecef2pos(lastSol.rr, pos);
-            log.info(String.format("Last solution: lat=%.9f lon=%.9f h=%.3f ns=%d stat=%d",
-                    Math.toDegrees(pos[0]), Math.toDegrees(pos[1]),
-                    pos[2], lastSol.ns, lastSol.stat));
+            SolData last = result.solutions.get(result.solutions.size() - 1);
+            Position llhN = last.getPosition(CoordType.LLH);
+            if (llhN != null) {
+                log.info(String.format("Last solution: lat=%.9f lon=%.9f h=%.3f ns=%d stat=%s",
+                        llhN.v1, llhN.v2, llhN.v3, last.numSat, last.status));
+            }
         }
 
         String output = baos.toString();
@@ -317,12 +318,12 @@ public class PppTest {
             assertTrue(result.totalEpochs > 0, "Should process epochs");
 
             if (!result.solutions.isEmpty()) {
-                Sol lastSol = result.solutions.get(result.solutions.size() - 1);
-                double[] pos = new double[3];
-                CoordTransform.ecef2pos(lastSol.rr, pos);
-                log.info("Last solution: lat={} lon={} h={} ns={} stat={}",
-                        Math.toDegrees(pos[0]), Math.toDegrees(pos[1]),
-                        pos[2], lastSol.ns, lastSol.stat);
+                SolData last = result.solutions.get(result.solutions.size() - 1);
+                Position llh = last.getPosition(CoordType.LLH);
+                if (llh != null) {
+                    log.info("Last solution: lat={} lon={} h={} ns={} stat={}",
+                            llh.v1, llh.v2, llh.v3, last.numSat, last.status);
+                }
             }
         } catch (IOException e) {
             fail("IO error: " + e.getMessage());

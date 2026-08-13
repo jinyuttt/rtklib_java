@@ -384,7 +384,7 @@ public class PppProcessor {
         if (parser.obs.n == 0) {
             log.warn("No observation data in RINEX file");
             finished = true;
-            return new PppResult(0, 0, 0, solutions);
+            return buildResult(0, 0, 0);
         }
 
         if (parser.sta != null && parser.sta.pos != null
@@ -412,12 +412,26 @@ public class PppProcessor {
     public static void writePosFile(PppResult result, String outputPath) throws IOException {
         try (BufferedWriter w = new BufferedWriter(new FileWriter(outputPath))) {
             w.write(POS_HEADER);
-            for (Sol sol : result.solutions) {
-                w.write(formatSolutionLine(sol));
+            for (SolData solData : result.solutions) {
+                w.write(formatSolDataLine(solData));
             }
             w.write(String.format("# Total: %d, Success: %d, Fail: %d\n",
                     result.totalEpochs, result.successCount, result.failCount));
         }
+    }
+
+    static String formatSolDataLine(SolData solData) {
+        Position llh = solData.getPosition(CoordType.LLH);
+        Accuracy acc = solData.getAccuracy(CoordType.ENU);
+        if (llh == null || acc == null) return "";
+
+        String qStr = String.valueOf(solData.status.code);
+        return String.format("  %s %14.9f %14.9f %10.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f %5.1f %5.1f %5.1f %5.1f\n",
+                solData.timeStr, llh.v1, llh.v2, llh.v3,
+                qStr, solData.numSat,
+                acc.s2, acc.s1, acc.s3, acc.c12, acc.c23, acc.c31,
+                solData.age, solData.ratio,
+                solData.gdop, solData.pdop, solData.hdop, solData.vdop);
     }
 
     private void onRtcmMessage() {
@@ -538,7 +552,7 @@ public class PppProcessor {
             handler.onFinish(totalEpochs, successCount, failCount);
         }
 
-        return new PppResult(totalEpochs, successCount, failCount, solutions);
+        return buildResult();
     }
 
     private int findEphWeek(Nav nav) {
@@ -640,6 +654,17 @@ public class PppProcessor {
         return copy;
     }
 
+    private PppResult buildResult() {
+        List<SolData> solDataList = solutions.stream()
+                .map(sol -> new SolData(sol, opt.posMask))
+                .toList();
+        return new PppResult(totalEpochs, successCount, failCount, solDataList);
+    }
+
+    private PppResult buildResult(int total, int success, int fail) {
+        return new PppResult(total, success, fail, List.of());
+    }
+
     private void ensureCapacity(int need) {
         if (need > pending.length) {
             pending = Arrays.copyOf(pending, Math.max(pending.length * 2, need + 1024));
@@ -667,9 +692,9 @@ public class PppProcessor {
         public final int totalEpochs;
         public final int successCount;
         public final int failCount;
-        public final List<Sol> solutions;
+        public final List<SolData> solutions;
 
-        public PppResult(int totalEpochs, int successCount, int failCount, List<Sol> solutions) {
+        public PppResult(int totalEpochs, int successCount, int failCount, List<SolData> solutions) {
             this.totalEpochs = totalEpochs;
             this.successCount = successCount;
             this.failCount = failCount;

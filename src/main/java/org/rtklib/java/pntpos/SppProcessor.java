@@ -318,7 +318,7 @@ public class SppProcessor {
             handler.onFinish(totalEpochs, successCount, failCount);
         }
 
-        return new SppResult(totalEpochs, successCount, failCount, solutions);
+        return buildResult();
     }
 
     /**
@@ -439,7 +439,7 @@ public class SppProcessor {
             handler.onFinish(totalEpochs, successCount, failCount);
         }
 
-        return new SppResult(totalEpochs, successCount, failCount, solutions);
+        return buildResult();
     }
 
     /**
@@ -464,8 +464,8 @@ public class SppProcessor {
     public static void writePosFile(SppResult result, String outputPath) throws IOException {
         try (BufferedWriter w = new BufferedWriter(new FileWriter(outputPath))) {
             w.write(POS_HEADER);
-            for (Sol sol : result.solutions) {
-                w.write(formatSolutionLine(sol));
+            for (SolData solData : result.solutions) {
+                w.write(formatSolDataLine(solData));
             }
             w.write(String.format("# Total: %d, Success: %d, Fail: %d\n",
                     result.totalEpochs, result.successCount, result.failCount));
@@ -601,6 +601,20 @@ public class SppProcessor {
         return -1;
     }
 
+    static String formatSolDataLine(SolData solData) {
+        Position llh = solData.getPosition(CoordType.LLH);
+        Accuracy acc = solData.getAccuracy(CoordType.ENU);
+        if (llh == null || acc == null) return "";
+
+        String qStr = String.valueOf(solData.status.code);
+        return String.format("  %s %14.9f %14.9f %10.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f %5.1f %5.1f %5.1f %5.1f\n",
+                solData.timeStr, llh.v1, llh.v2, llh.v3,
+                qStr, solData.numSat,
+                acc.s2, acc.s1, acc.s3, acc.c12, acc.c23, acc.c31,
+                solData.age, solData.ratio,
+                solData.gdop, solData.pdop, solData.hdop, solData.vdop);
+    }
+
     static String formatSolutionLine(Sol sol) {
         double[] llh = new double[3];
         CoordTransform.ecef2pos(sol.rr, llh);
@@ -680,6 +694,13 @@ public class SppProcessor {
         }
     }
 
+    private SppResult buildResult() {
+        List<SolData> solDataList = solutions.stream()
+                .map(sol -> new SolData(sol, opt.posMask))
+                .toList();
+        return new SppResult(totalEpochs, successCount, failCount, solDataList);
+    }
+
     /**
      * SPP定位结果。
      */
@@ -691,9 +712,9 @@ public class SppProcessor {
         /** 定位失败历元数 */
         public final int failCount;
         /** 定位成功的结果列表 */
-        public final List<Sol> solutions;
+        public final List<SolData> solutions;
 
-        SppResult(int totalEpochs, int successCount, int failCount, List<Sol> solutions) {
+        SppResult(int totalEpochs, int successCount, int failCount, List<SolData> solutions) {
             this.totalEpochs = totalEpochs;
             this.successCount = successCount;
             this.failCount = failCount;

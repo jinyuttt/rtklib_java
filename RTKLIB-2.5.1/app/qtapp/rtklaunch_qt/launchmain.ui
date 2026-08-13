@@ -1,0 +1,399 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainForm</class>
+ <widget class="QWidget" name="MainForm">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>601</width>
+    <height>192</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>RTKLib</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="3" column="0" colspan="2">
+    <widget class="QWidget" name="panelBottom" native="true">
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <spacer name="horizontalSpacer">
+        <property name="orientation">
+         <enum>Qt::Orientation::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnRtklib">
+        <property name="toolTip">
+         <string>RTKLIB APs</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/icons/rtk9</normaloff>:/icons/rtk9</iconset>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnExit">
+        <property name="text">
+         <string>Exit</string>
+        </property>
+        <property name="default">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <layout class="QHBoxLayout" name="horizontalLayout_3">
+     <item>
+      <spacer name="horizontalSpacer_2">
+       <property name="orientation">
+        <enum>Qt::Orientation::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnOption">
+       <property name="icon">
+        <iconset resource="../icon/resources.qrc">
+         <normaloff>:/buttons/tool</normaloff>:/buttons/tool</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnTray">
+       <property name="maximumSize">
+        <size>
+         <width>30</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>Task Tray</string>
+       </property>
+       <property name="icon">
+        <iconset resource="../icon/resources.qrc">
+         <normaloff>:/buttons/square</normaloff>:/buttons/square</iconset>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item row="0" column="0">
+    <widget class="QWidget" name="panelTop" native="true">
+     <layout class="QHBoxLayout" name="horizontalLayout_2">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QPushButton" name="btnPlot">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>Plotting</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/icons/rtkplot</normaloff>:/icons/rtkplot</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>64</width>
+          <height>64</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnConv">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>Data format converter</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/icons/rtkconv</normaloff>:/icons/rtkconv</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>64</width>
+          <height>64</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnStrSvr">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>Stream Server</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/icons/strsvr</normaloff>:/icons/strsvr</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>64</width>
+          <height>64</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnPost">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>Post Processing</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/icons/rtkpost</normaloff>:/icons/rtkpost</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>64</width>
+          <height>64</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnSrcTblBrows">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>NTRIP Browser</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/icons/srctblbrows</normaloff>:/icons/srctblbrows</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>64</width>
+          <height>64</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnNavi">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>Real-time Navigation</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/icons/rtknavi</normaloff>:/icons/rtknavi</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>64</width>
+          <height>64</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnGet">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>Data downloader</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../icon/resources.qrc">
+          <normaloff>:/icons/rtkget</normaloff>:/icons/rtkget</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>64</width>
+          <height>64</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+  <action name="actionRtkConv">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/rtk3</normaloff>:/icons/rtk3</iconset>
+   </property>
+   <property name="text">
+    <string>rtkConv</string>
+   </property>
+   <property name="toolTip">
+    <string>RTK Convert</string>
+   </property>
+  </action>
+  <action name="actionRtkGet">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/rtk8</normaloff>:/icons/rtk8</iconset>
+   </property>
+   <property name="text">
+    <string>rtkGet</string>
+   </property>
+   <property name="toolTip">
+    <string>RTK Get</string>
+   </property>
+  </action>
+  <action name="actionRtkNavi">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/rtk5</normaloff>:/icons/rtk5</iconset>
+   </property>
+   <property name="text">
+    <string>rtkNavi</string>
+   </property>
+   <property name="toolTip">
+    <string>RTK Navi</string>
+   </property>
+  </action>
+  <action name="actionRtkNtrip">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/rtk7</normaloff>:/icons/rtk7</iconset>
+   </property>
+   <property name="text">
+    <string>rtkNtrip</string>
+   </property>
+   <property name="toolTip">
+    <string>RTK NTRIP</string>
+   </property>
+  </action>
+  <action name="actionRtkPlot">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/rtk2</normaloff>:/icons/rtk2</iconset>
+   </property>
+   <property name="text">
+    <string>rtkPlot</string>
+   </property>
+   <property name="toolTip">
+    <string>RTK Plot</string>
+   </property>
+  </action>
+  <action name="actionRtkPost">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/rtk1</normaloff>:/icons/rtk1</iconset>
+   </property>
+   <property name="text">
+    <string>rtkPost</string>
+   </property>
+   <property name="toolTip">
+    <string>RTK Post</string>
+   </property>
+  </action>
+  <action name="actionRtkStr">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/rtk6</normaloff>:/icons/rtk6</iconset>
+   </property>
+   <property name="text">
+    <string>rtkStr</string>
+   </property>
+   <property name="toolTip">
+    <string>RTK Stream</string>
+   </property>
+  </action>
+  <action name="actionRtkVideo">
+   <property name="text">
+    <string>rtkVideo</string>
+   </property>
+   <property name="toolTip">
+    <string>RTK Video</string>
+   </property>
+  </action>
+ </widget>
+ <tabstops>
+  <tabstop>btnExit</tabstop>
+  <tabstop>btnPlot</tabstop>
+  <tabstop>btnConv</tabstop>
+  <tabstop>btnStrSvr</tabstop>
+  <tabstop>btnPost</tabstop>
+  <tabstop>btnSrcTblBrows</tabstop>
+  <tabstop>btnNavi</tabstop>
+  <tabstop>btnGet</tabstop>
+  <tabstop>btnRtklib</tabstop>
+ </tabstops>
+ <resources>
+  <include location="../icon/resources.qrc"/>
+ </resources>
+ <connections/>
+</ui>

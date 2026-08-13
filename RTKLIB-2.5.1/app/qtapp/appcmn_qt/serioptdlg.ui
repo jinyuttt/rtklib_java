@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SerialOptDialog</class>
+ <widget class="QWidget" name="SerialOptDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>379</width>
+    <height>185</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Serial Options</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="6" column="3">
+    <widget class="QComboBox" name="cBFlowControl">
+     <property name="toolTip">
+      <string>Flow control</string>
+     </property>
+     <item>
+      <property name="text">
+       <string>None</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>RTS/CTS</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>XON/XOFF</string>
+      </property>
+     </item>
+    </widget>
+   </item>
+   <item row="4" column="0">
+    <widget class="QLabel" name="label1">
+     <property name="toolTip">
+      <string/>
+     </property>
+     <property name="text">
+      <string>Bit&amp;rate</string>
+     </property>
+     <property name="buddy">
+      <cstring>cBBitRate</cstring>
+     </property>
+    </widget>
+   </item>
+   <item row="6" column="2">
+    <widget class="QLabel" name="label8">
+     <property name="toolTip">
+      <string/>
+     </property>
+     <property name="text">
+      <string>&amp;Flow Control</string>
+     </property>
+     <property name="buddy">
+      <cstring>cBFlowControl</cstring>
+     </property>
+    </widget>
+   </item>
+   <item row="7" column="3">
+    <widget class="QSpinBox" name="cBTcpPort">
+     <property name="maximum">
+      <number>65535</number>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="2">
+    <widget class="QLabel" name="label5">
+     <property name="toolTip">
+      <string/>
+     </property>
+     <property name="text">
+      <string>&amp;Stop Bits</string>
+     </property>
+     <property name="buddy">
+      <cstring>cBStopBits</cstring>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QLabel" name="label3">
+     <property name="toolTip">
+      <string/>
+     </property>
+     <property name="text">
+      <string>&amp;Port</string>
+     </property>
+     <property name="buddy">
+      <cstring>cBPort</cstring>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="3">
+    <widget class="QComboBox" name="cBStopBits">
+     <property name="toolTip">
+      <string>Number of stop bits</string>
+     </property>
+     <item>
+      <property name="text">
+       <string>1 bit</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>2 bits</string>
+      </property>
+     </item>
+    </widget>
+   </item>
+   <item row="7" column="0" colspan="3">
+    <widget class="QCheckBox" name="cBOutputTcpPort">
+     <property name="toolTip">
+      <string>Stream serial data to TCP port</string>
+     </property>
+     <property name="text">
+      <string>&amp;Output Received Stream to TCP Port</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="2">
+    <widget class="QLabel" name="label4">
+     <property name="toolTip">
+      <string/>
+     </property>
+     <property name="text">
+      <string>P&amp;arity</string>
+     </property>
+     <property name="buddy">
+      <cstring>cBParity</cstring>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="1" rowspan="3">
+    <widget class="QComboBox" name="cBBitRate">
+     <property name="toolTip">
+      <string>Baud rate</string>
+     </property>
+     <item>
+      <property name="text">
+       <string>300 bps</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>600 bps</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>1200 bps</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>2400 bps</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>4800 bps</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>9600 bps</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>19200 bps</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>38400 bps</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>57600 bps</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>115200 bps</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>230400 bps</string>
+      </property>
+     </item>
+    </widget>
+   </item>
+   <item row="6" column="0">
+    <widget class="QLabel" name="label2">
+     <property name="toolTip">
+      <string/>
+     </property>
+     <property name="text">
+      <string>&amp;Byte Size</string>
+     </property>
+     <property name="buddy">
+      <cstring>cBByteSize</cstring>
+     </property>
+    </widget>
+   </item>
+   <item row="6" column="1">
+    <widget class="QComboBox" name="cBByteSize">
+     <property name="toolTip">
+      <string>Byte size</string>
+     </property>
+     <item>
+      <property name="text">
+       <string>7 bits</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>8 bits</string>
+      </property>
+     </item>
+    </widget>
+   </item>
+   <item row="0" column="1" rowspan="3">
+    <widget class="QComboBox" name="cBPort">
+     <property name="toolTip">
+      <string>Serial port</string>
+     </property>
+     <item>
+      <property name="text">
+       <string>COM1</string>
+      </property>
+     </item>
+    </widget>
+   </item>
+   <item row="1" column="3">
+    <widget class="QComboBox" name="cBParity">
+     <property name="toolTip">
+      <string>Parity bit</string>
+     </property>
+     <item>
+      <property name="text">
+       <string>None</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Even</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Odd</string>
+      </property>
+     </item>
+    </widget>
+   </item>
+   <item row="8" column="0" colspan="4">
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>cBPort</tabstop>
+  <tabstop>cBParity</tabstop>
+  <tabstop>cBBitRate</tabstop>
+  <tabstop>cBStopBits</tabstop>
+  <tabstop>cBByteSize</tabstop>
+  <tabstop>cBFlowControl</tabstop>
+  <tabstop>cBOutputTcpPort</tabstop>
+  <tabstop>cBTcpPort</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>
