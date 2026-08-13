@@ -378,69 +378,9 @@ private static void holdamb(Rtk rtk, double[] xa) {
 
 ---
 
-## 6. 调试日志格式说明
+## 6. 文件路径索引
 
-### 6.1 KalmanFilter 日志
-
-```
-KF update: n=433 m=14 k=12
-ix=[0 1 2 3 4 111 117 119 120 138 139 333]  # 活跃状态索引
-xc=[9.894398 262.721532 -174.706700 ...]      # 压缩后的状态向量
-v=[2.5090 0.8966 1.4909 -2.1148 2.1011 ...]   # 双差残差向量
-Hc_full=[                                        # 压缩后的设计矩阵 (m×k)
-  obs0: [0.470723 0.107021 -0.561206 0 0 -0.192039 0.192039 0 0 0 0 0]
-  obs1: [-0.276383 -0.175810 0.056411 0 0 0 0.192039 -0.192039 0 0 0 0]
-  ...
-]
-Pc_diag=[18.5038 46.9267 27.0886 0.0000 0.0000 228.8884 202.6907 ...] # 压缩后协方差对角线
-R_diag=[0.0001 0.0001 0.0001 0.0001 0.0001 7.7003 7.0178 ...]          # 观测噪声对角线
-K(row0)[0:9]=[0.12345678 0.23456789 ...]  # Kalman增益第0行
-KV=[4.982145 -8.173201 ...]                # K*v (状态修正量)
-dx=[4.982145 -8.173201 ...]                # dx = x_new - x_old
-P_new_diag=[7.2384 18.3233 8.8409 ...]      # 更新后协方差对角线
-I_KH_diag=[0.876543 0.765432 ...]           # (I-KH)对角线 (可能出现负值!)
-```
-
-### 6.2 ddres 日志
-
-```
-ddres: bl=320.5 m rb=(xxx,yyy,zzz) rr_f=(xxx,yyy,zzz)
-ddres ref: f=0 ref=C08 sat=113 el=45.2°
-ddres v: ref=113-107 L1 y_r=xxxx y_b=xxxx y_r2=xxxx y_b2=xxxx dd=0.0063
-ddres e: e_ref=(a,b,c) e_j=(d,e,f) H_pos=(d-a,e-b,f-c)
-
-pre-filter: nv=10 v=[113:10700=0.0063 113:11500=-0.0076 ...]
-             Rdiag=[0.0001 0.0001 ... 7.7000 7.0170 ...]
-             xp0=(14.87,254.55,-174.49) P0=18.5 P1=46.9 P2=27.1
-```
-
-### 6.3 resamb_LAMBDA 日志
-
-```
-resamb_LAMBDA: na=5 nx=433 nb=6
-  dd[0]: x[117]=xx.xxxx - x[111]=xx.xxxx = xx.xxxx  P_diag=xxx.xxx/xxx.xxx
-  ...
-Qb matrix (6x6):
-  [x.xxxxxx x.xxxxxx ... ]
-  [...]
-LAMBDA: nb=6 na=5 nx=433 s=[86.6010, 142.6950] ratio=1.6477
-resamb_LAMBDA: validation failed (nb=6 ratio=1.65 thresh=3.00)
-```
-
-### 6.4 udbias 日志
-
-```
-udbias init: sat=107 f=0 idx=111 bias=42.1714 var=900.0
-udbias init: sat=113 f=0 idx=117 bias=-17.6240 var=900.0
-udbias init: sat=115 f=0 idx=119 bias=-86.3637 var=900.0  # ⚠️ 异常大
-...
-```
-
----
-
-## 7. 文件路径索引
-
-### 7.1 核心源码文件
+### 6.1 核心源码文件
 
 | 文件 | 关键内容 | 行号范围 |
 |------|----------|----------|
@@ -463,7 +403,7 @@ udbias init: sat=115 f=0 idx=119 bias=-86.3637 var=900.0  # ⚠️ 异常大
 | `Lambda.java` | LAMBDA算法 | 全文 |
 | `MatrixUtil.java` | EJML工具封装 | 全文 |
 
-### 7.2 测试文件
+### 6.2 测试文件
 
 | 文件 | 用途 |
 |------|------|
@@ -480,9 +420,9 @@ udbias init: sat=115 f=0 idx=119 bias=-86.3637 var=900.0  # ⚠️ 异常大
 
 ---
 
-## 8. 配置模板
+## 7. 配置模板
 
-### 8.1 当前测试配置（RtkTest.java）
+### 7.1 当前测试配置（RtkTest.java）
 
 ```java
 rtk.opt.mode = PMODE_STATIC;                    // Static定位模式
@@ -499,7 +439,7 @@ rtk.opt.thresar[2] = 3.0;                       // AR ratio阈值
 rtk.opt.varholdamb = 0.001;                     // Hold约束方差
 ```
 
-### 8.2 数据文件路径
+### 7.2 数据文件路径
 
 ```java
 ROVER_PATH = "<rover_rtcm3_file_path>";
@@ -508,7 +448,7 @@ BASE_PATH  = "<base_rtcm3_file_path>";
 
 ---
 
-## 9. 已完成的修复清单
+## 8. 已完成的修复清单
 
 | 序号 | 问题 | 修复日期 | 状态 |
 |------|------|----------|------|
@@ -528,110 +468,39 @@ BASE_PATH  = "<base_rtcm3_file_path>";
 
 ---
 
-## 10. 待完善项
+## 9. 待完善项
 
-### 10.1 中优先级
+### 9.1 中优先级
 - [ ] **基准站位置自动获取**：部分已实现（RINEX头 `APPROX POSITION XYZ` 自动读取、MOVEB模式SPP平均），缺失 `POSOPT_SINGLE`（非MOVEB模式SPP取平均）和 `POSOPT_FILE`（位置文件读取）
 
-### 10.2 低优先级
+### 9.2 低优先级
 
 - [ ] **Static Start长延迟恢复**：边界场景，`tt>300`时重置状态
 - [ ] **多系统PPP验证**：GPS+BDS联合PPP，需多系统精密星历
 
 ---
 
-## 11. 附录：快速排查清单
+## 10. RTK引擎扩展与C版对齐实现
 
-当遇到"Fix解比例低"问题时，按以下顺序排查：
+> 本节记录与C版RTKLIB对齐的功能实现（TROPOPT_ESTG、IONOOPT_EST、电离层梯度等）及Java版特有的安全修复。
+> Java版独有的额外优化项（自适应Q、模糊度锚固、大气冻结、IGGIII、SNR中值、PAR重选等）详见 [优化文档](RTK_Extra_Optimizations.md)。
 
-1. **检查配置**：`modear`, `bdsmodear`, `gpsmodear`, `glomodear` 是否开启？
-2. **检查数据**：是否有足够的公共卫星（≥5颗）？截止高度角是否合理？
-3. **检查posvar**：是否满足 `< thresar[1]=0.25`？如果不满足，检查`udpos`。
-4. **检查模糊度方差**：`P_diag` 中模糊度项是否在收敛？如果不变，检查`ddres`中H矩阵。
-5. **检查ratio**：如果ratio始终<2，检查`Qb`矩阵（双差协方差）是否合理。
-6. **检查Kalman滤波**：确认使用Joseph形式更新P（`KalmanFilter.java`），标准形式在病态条件下不稳定。
-7. **检查IB函数**：确认返回的索引与预期一致（特别是多频情况下的`f`参数）。
-8. **检查数据质量**：C版RTKLIB是否同样无法Fix？如果C版也无法Fix，可能是数据质量问题。
+### 10.1 扩展功能总览
 
----
+| 功能 | 分类 | 对应C版 | 说明 |
+|------|------|---------|------|
+| TROPOPT_ESTG | C版对齐 | ✅ rtkpos.c | 对流层梯度估计 |
+| IONOOPT_EST | C版对齐 | ✅ rtkpos.c | 电离层延迟估计 |
+| 电离层梯度增强 | C版对齐 | ✅ ionoGradient | 梯度参数纳入RtkConfig管理 |
+| SingularMatrix修复 | Java特有 | — | EJML异常安全防护 |
+| 自适应Q矩阵 | 额外优化 | — | 详见 [优化文档§1](RTK_Extra_Optimizations.md#1-滑动窗自适应q矩阵enableadaptiveq) |
+| 模糊度子集锚固 | 额外优化 | — | 详见 [优化文档§2](RTK_Extra_Optimizations.md#2-模糊度子集锚固enableambanchor) |
+| 大气参数冻结 | 额外优化 | — | 详见 [优化文档§3](RTK_Extra_Optimizations.md#3-大气参数自适应冻结atmfrozennsthresh) |
+| IGGIII抗差估计 | 额外优化 | — | 详见 [优化文档§4](RTK_Extra_Optimizations.md#4-iggiii抗差估计enableiggiii) |
+| SNR中值参考星 | 额外优化 | — | 详见 [优化文档§5](RTK_Extra_Optimizations.md#5-snr中值参考星选择enablesnrmedian) |
+| PAR参考星重选 | 额外优化 | — | 详见 [优化文档§6](RTK_Extra_Optimizations.md#6-par参考星重选enableparrefreselect) |
 
-## 12. RTK引擎优化模块技术说明
-
-> 五项核心优化均通过 `RtkConfig` 开关控制，默认全部关闭，不影响现有功能。
-
-### 12.1 优化开关与执行时序
-
-| 开关 | 优化项 | 默认值 |
-|------|--------|--------|
-| `enableParRefReselect` | 部分模糊度固定（PAR）与基准星动态重选 | `false` |
-| `enableAdaptiveQ` | 自适应过程噪声与零速检测门控 | `false` |
-| `enableIggiii` | 抗差M估计（IGG-III）等价权修正 | `false` |
-| `enableSnrMedian` | SNR随机模型（动态中位数基准） | `false` |
-| `enableIonoTropGradient` | 电离层/对流层梯度增强 | `false` |
-
-执行时序（`relpos()` 内部）：
-```
-① computeSnrMedian()           → SNR中位数计算
-② udstate() → udpos()          → Q缩放应用于时间更新
-③ ddres() → varerr()           → SNR中位数权重修正
-④ applyIggiii()                → 抗差修正R
-⑤ filter()                     → Kalman滤波
-⑥ computeQScale()              → 为下一历元Q做准备
-⑦ resamb_LAMBDA() → ddidxPar() → PAR基准星重选+固定
-```
-
-### 12.2 HPHt对角线计算：EJML版本与Native版本
-
-IGG-III需要计算新息协方差 `S = R + HPHᵀ` 的对角线元素，用于标准化新息。
-
-**当前使用EJML版本** `computeHPHtDiag()`：
-```java
-// EJML实现：完整矩阵乘法后提取对角线
-SimpleMatrix Hmat = MatrixUtil.createMatrix(H, nv, nx);
-SimpleMatrix Pmat = MatrixUtil.createMatrix(P, nx, nx);
-SimpleMatrix HPHt = Hmat.mult(Pmat).mult(Hmat.transpose());
-for (int i = 0; i < nv; i++) diag[i] = HPHt.get(i, i);
-```
-
-**保留的Native版本** `computeHPHtDiagNative()`：
-```java
-// 手写数组运算：只算对角线，跳过非对角线元素
-// Step1: PH[i,j] = Σ_k P[i,k] * H[j,k]
-// Step2: diag[i] = Σ_k H[i,k] * PH[k,i]
-```
-
-| 版本 | 复杂度 | 优点 | 缺点 |
-|------|--------|------|------|
-| EJML（当前） | O(nx²×nv + nx×nv²) | 代码简洁，与项目风格一致 | 计算了nv²-nv个无用元素 |
-| Native | O(nx²×nv + nx×nv) | 无冗余计算 | 手写循环，与项目EJML风格不一致 |
-
-**性能差异**：典型RTK场景（nx=60, nv=60），FLOP浪费约49%，但绝对耗时在微秒级，1Hz RTK可忽略。
-若需10~20Hz或嵌入式场景，可切换到Native版本。
-
-### 12.3 PAR基准星动态重选与连续重选保护 ✅ 已实现 (2026-07-17) → 详见 12.11
-
-**参考星跟踪**：`rtk.parPrevRefSat[f]` 记录每个频率上一历元的参考星卫星ID（1-based）。
-
-**重选检测**：`ddidxPar()` 中比较 `parPrevRefSat[f]` 与当前排除列表，若上一历元参考星被排除则标记 `anyRefReselect=true`。
-
-**连续重选保护**：
-```
-if (anyRefReselect) {
-    parConsecutiveReselectCount++;
-    if (parConsecutiveReselectCount > parMaxConsecutiveReselect) {
-        // 清空排除列表，退回全模糊度固定
-        parExcludedSatCount = 0;
-        parConsecutiveReselectCount = 0;
-        return ddidxFallback(rtk, ix, gps, glo, sbs);
-    }
-} else {
-    parConsecutiveReselectCount = 0;
-}
-```
-
-**退回策略**：`ddidxFallback()` 与原始 `ddidx()` 逻辑一致（不排除任何卫星），确保连续重选时PAR退化为全模糊度固定。
-
-### 12.4 对流层梯度估计（TROPOPT_ESTG） ✅ 已实现 (2026-07-17) → 详见 12.11
+### 10.2 对流层梯度估计（TROPOPT_ESTG） ✅ 已实现 (2026-07-17)
 
 Java版已补全C版RTKLIB的 `TROPOPT_ESTG` 支持，包括：
 
@@ -652,7 +521,7 @@ IT(1,opt) = NP + NI + 3      // 基准站: ZWD, Gn, Ge
 **注意**：当前测试配置 `tropopt=TROPOPT_SAAS`（不估计对流层），上述代码路径未被测试。
 需设置 `tropopt=TROPOPT_ESTG` 并使用长基线数据（>30km）验证。
 
-### 12.5 电离层延迟估计（IONOOPT_EST） ✅ 已实现 (2026-07-17) → 详见 12.11
+### 10.3 电离层延迟估计（IONOOPT_EST） ✅ 已实现 (2026-07-17)
 
 Java版已补全C版RTKLIB的 `IONOOPT_EST` 支持，包括：
 
@@ -697,7 +566,7 @@ if (opt.ionoopt == IONOOPT_EST) {
 
 **关键差异**：C版 `didxi/didxj` 使用 `sat[i]/sat[j]` 索引，Java版使用 `refIdx/j` 索引（`refIdx` 是参考星在 `sat[]` 数组中的下标）。
 
-### 12.6 电离层梯度增强（enableIonoTropGradient） ✅ 已实现 (2026-07-17) → 详见 12.11
+### 10.4 电离层梯度增强（enableIonoTropGradient） ✅ 已实现 (2026-07-17)
 
 当 `RtkConfig.enableIonoTropGradient=true` 且 `ionoopt=IONOOPT_EST` 时，每颗卫星的电离层状态从1个扩展为3个（VTEC + Gn + Ge），通过 `PrcOpt.ionoGradient` 标志控制。
 
@@ -719,7 +588,7 @@ II(sat,opt)+2 = NP + (sat-1)*3+2  // Ge (东西梯度)
 
 **风险控制**：默认 `ionoGradient=false`，不影响现有状态布局和功能。需 `enableIonoTropGradient=true` + `ionoopt=IONOOPT_EST` + 长基线数据才激活。
 
-### 12.7 关键文件索引
+### 10.5 关键文件索引
 
 | 文件 | 职责 |
 |------|------|
@@ -727,153 +596,7 @@ II(sat,opt)+2 = NP + (sat-1)*3+2  // Ge (东西梯度)
 | `rtkpos/RtkOptimizations.java` | 所有优化算法实现 |
 | `rtkpos/RtkCore.java` | RTK核心，集成优化调用点 |
 | `data/Rtk.java` | RTK状态结构体，新增优化状态字段 |
-
-### 12.8 滑动窗自适应Q矩阵（enableAdaptiveQ） ✅ 已实现 (2026-07-16)
-
-#### 设计目标
-传统Q矩阵使用固定过程噪声，无法区分静态/蠕变/滑动状态。静态时Q应极小以压制观测噪声，动态时需增大Q以避免滞后。
-
-#### 新增字段
-| 文件 | 字段 | 类型 | 说明 |
-|------|------|------|------|
-| Rtk.java | `xOld[3]` | double[] | 上一历元绝对ECEF位置 |
-| Rtk.java | `posWin[100]` | double[] | 位置增量环形滑动窗缓冲区 |
-| Rtk.java | `winIdx` | int | 滑动窗当前写入位置 |
-| Rtk.java | `winCnt` | int | 滑动窗有效元素计数 |
-
-#### 新增配置
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `adaptiveQWinSize` | 50 | 滑动窗大小（历元） |
-| `adaptiveQStaticThresh` | 0.001 m | 静态阈值 |
-| `adaptiveQDynamicThresh` | 0.05 m | 动态阈值 |
-| `adaptiveQScaleMinStatic` | 0.01 | 静态最小缩放因子 |
-| `adaptiveQScaleMaxDynamic` | 5.0 | 动态最大缩放因子 |
-
-#### 核心算法
-```
-1. 计算当前历元绝对位置 curPos = x[0:2] + rb[0:2]
-2. 若 xOld 非零，计算位置增量 posInc = ||curPos - xOld||
-3. 存入环形滑动窗 posWin[winIdx]，winIdx = (winIdx+1) % winSize
-4. 更新 xOld = curPos
-5. 计算滑动窗内位置增量的 RMS：σ_pos = sqrt(∑(x-μ)²/validCount)
-6. Sigmoid 映射：
-   - σ_pos ≤ 0.001m → α = 0.01（静态）
-   - σ_pos ≥ 0.05m  → α = 5.0（动态）
-   - 中间值 → S型过渡：sigmoid(t) = 1/(1+exp(-10*(t-0.5)))
-7. 最终缩放 = α × nsFactor × pdopFactor × clamp(min, max)
-8. udpos() 中 qh/qv *= qScale²
-```
-
-#### 实现位置
-- `RtkOptimizations.computeQScale()`：完整滑动窗实现
-- `RtkCore.udpos()`：已有 qScale 乘法逻辑
-
-### 12.9 模糊度子集锚固（enableAmbAnchor） ✅ 已实现 (2026-07-16)
-
-#### 设计目标
-标准Fix-and-Hold在LAMBDA失败时重置所有模糊度。锚固机制将长期固定（≥100历元）的模糊度协方差压制到1e-9，数学上等价于"已知常数"。
-
-#### 新增字段
-| 文件 | 字段 | 类型 | 说明 |
-|------|------|------|------|
-| Rtk.java | `ambAnchored[MAXSAT*NF]` | boolean[] | 模糊度锚固标记 |
-| Rtk.java | `ambAnchorCount[MAXSAT*NF]` | int[] | 连续固定历元计数 |
-
-#### 新增配置
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `enableAmbAnchor` | false | 锚固开关 |
-| `ambAnchorMinFixCount` | 100 | 锚固所需连续固定历元数 |
-| `ambAnchorVar` | 1e-9 | 锚固后的协方差值 |
-
-#### 核心算法
-
-**holdamb() 修改**：
-```
-1. SOLQ_FIX 时，对所有 fix[f]>0 的模糊度 ambAnchorCount[globalIdx]++
-2. 连续固定 ≥100 历元 → ambAnchored[globalIdx] = true
-3. 已锚固的模糊度，holdamb中 Rh 使用 ambAnchorVar(1e-9) 而非 varholdamb
-4. 非 SOLQ_FIX 时，仅重置未固定卫星的 ambAnchorCount，不清空锚固标记
-```
-
-**resamb_LAMBDA() 修改**：
-```
-1. 分离已锚固和未锚固的模糊度（freeMap[] / anchoredMap[]）
-2. 若全部锚固 → 直接返回 SOLQ_FIX（ratio=999.9）
-3. 仅对未锚固子集提取 a/Qa 子矩阵
-4. 对子集执行 LAMBDA 搜索
-5. 固定成功后，已锚固值保持原值，未锚固值用 LAMBDA 结果
-```
-
-#### 实现位置
-- `RtkCore.holdamb()`：锚固计数、协方差压制、失败不清空
-- `RtkCore.resamb_LAMBDA()`：子集分离、子矩阵提取、子集LAMBDA
-
-### 12.10 大气参数自适应冻结（atmFrozenNsThresh） ✅ 已实现 (2026-07-16)
-
-#### 设计目标
-卫星数少（<7颗）时，强行估计大气参数会导致法方程病态，滤波器将大气误差"吸收"进坐标分量，造成虚假位移。
-
-#### 新增配置
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `atmFrozenNsThresh` | 7 | 卫星数阈值，0=禁用 |
-
-#### 核心算法
-```
-udion(): if (ns < atmFrozenNsThresh) return;  // 冻结电离层过程噪声更新
-udtrop(): if (ns < atmFrozenNsThresh) return;  // 冻结对流层过程噪声更新
-```
-
-#### 实现位置
-- `RtkCore.udion()`：第277行，RtkCore.java
-- `RtkCore.udtrop()`：第297行，RtkCore.java
-
-### 12.11 PAR重选、TROPOPT_ESTG、IONOOPT_EST、电离层梯度 ✅ 已实现 (2026-07-17)
-
-#### 设计目标
-四项优化通过配置控制，默认关闭，不影响已调试功能。扩展RTK观测模型，支持电离层/对流层参数估计及梯度项，提升复杂环境下的定位精度。
-
-#### 新增配置
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `enableParRefReselect` | false | PAR参考星动态重选 |
-| `ionoGradient` | false | 电离层梯度项启用 |
-| `ionoopt` | IONOOPT_OFF | 电离层估计模式 |
-| `tropopt` | TROPOPT_SAAS | 对流层估计模式 |
-
-#### 核心算法
-
-**PAR重选**：
-```
-ddidx(): if (enableParRefReselect) → buildParIndex() else → ddidxFallback()
-```
-- 动态参考星：基于高度角、信号质量、锁相状态
-- 回退保护：`parMaxConsecutiveReselect` 超限时清空排除列表
-
-**电离层估计（ddres）**：
-```
-if (ionoopt == IONOOPT_EST):
-  imI = ionmapf(posI, azelI); imJ = ionmapf(posJ, azelJ)
-  H[ionoI] += imI; H[ionoJ] -= imJ
-  if (ionoGradient): H[+] = cotEl * cosAz/sinAz
-```
-
-**对流层梯度估计（prectrop + ddres）**：
-```
-prectrop():
-  TROPOPT_EST:  dtdx[IT] = mw
-  TROPOPT_ESTG: dtdx[IT/GN/GE] = mw; mw*cotEl*cosAz; mw*cotEl*sinAz
-
-ddres(): H[k] += dtdxI[k] - dtdxJ[k]
-```
-
-#### 实现位置
-- `RtkCore.ddidx()`、`II()`、`prectrop()`、`zdres()`、`ddres()`
-- `RtkOptimizations.buildParIndex()`、`ddidxFallback()`
-
-### 12.12 SingularMatrixException 安全修复 ✅ 已实现 (2026-07-17)
+### 10.6 SingularMatrixException 安全修复 ✅ 已实现 (2026-07-17)
 
 #### 问题分析
 
@@ -909,11 +632,11 @@ public static Optional<SimpleMatrix> invertSafe(SimpleMatrix A) {
 
 ---
 
- 的## 13. RTCM MSM多信号管理与promoteExtSig机制
+## 11. RTCM MSM多信号管理与promoteExtSig机制
 
-### 13.1 设计背景与问题
+### 11.1 设计背景与问题
 
-#### 13.1.1 RTKLIB观测值存储架构
+#### 11.1.1 RTKLIB观测值存储架构
 
 RTKLIB使用**固定大小的频率槽位**存储卫星观测值：
 
@@ -943,7 +666,7 @@ C版:   NFREQ=3, NEXOBS=...  → 通常8-16个信号槽位/卫星
 - **MSM消息可能包含更多信号**: 如BDS的B1I/B1C/B2I/B2a/B2b/B3I等6+个信号
 - **需要智能分配**: 将最重要的信号放入主槽位，其余放入扩展槽位
 
-#### 13.1.2 RTCM MSM消息的特点
+#### 11.1.2 RTCM MSM消息的特点
 
 **MSM (Multiple Signal Messages)** 是新一代RTCM观测值格式：
 
@@ -967,9 +690,9 @@ MSM消息包含6个信号:
 但RTK只需要: L1(任意), L2(任意), L3(可选)
 ```
 
-### 13.2 核心方法：sigindex - 信号优先级分配
+### 11.2 核心方法：sigindex - 信号优先级分配
 
-#### 13.2.1 方法签名
+#### 11.2.1 方法签名
 
 ```java
 // ObsCode.java:354
@@ -982,7 +705,7 @@ public static void sigindex(int sys, int[] code, int n, int[] idx)
 - `n`: 信号数量
 - `idx[n]`: 输入输出 - 频率索引数组（输入来自code2idx，输出为分配结果）
 
-#### 13.2.2 分配算法
+#### 11.2.2 分配算法
 
 ```
 算法流程:
@@ -1000,7 +723,7 @@ public static void sigindex(int sys, int[] code, int n, int[] idx)
 4. 超出NEXOBS容量的信号: idx[i] = -1 (丢弃)
 ```
 
-#### 13.2.3 信号优先级定义
+#### 11.2.3 信号优先级定义
 
 ```java
 // ObsCode.java 内部逻辑 (简化)
@@ -1323,65 +1046,9 @@ public class Obsd {
 扩展区: L1P, L2P (精密码，优先级略低但可用)
 ```
 
-### 13.8 调试与日志
+### 13.8 性能分析
 
-#### 13.8.1 日志输出格式
-
-```
-[PROMOTE-SIG] sat={卫星号} freq={目标频率}: promoted code={信号码} from ext idx={源索引} to idx={目标索引}
-
-示例:
-[PROMOTE-SIG] sat=106 freq=1: promoted code=61 from ext idx=6 to idx=1
-含义: 卫星106(G08)的第1频率(L2)槽位为空，从扩展槽位6提升信号码61(B2a)
-```
-
-#### 13.8.2 相关调试日志链
-
-```
-[MSM-BDS-SIG] type=1124 nsig=6 [...]           ← sigindex之前，显示原始信号
-[MSM-BDS-STORE] sat=125 k=0 sig=2I [...]       ← 存储到主槽位
-[MSM-BDS-CELL] sat=125 k=2 sig=7I SKIPPED      ← 某些cell被跳过
-[MSM-BDS-OBS-BEFORE] sat=125 code=[...]        ← promoteExtSig之前的状态
-[PROMOTE-SIG] sat=125 freq=2: promoted ...     ← promoteExtSig执行
-[MSM-BDS-OBS-AFTER] sat=125 code=[...]         ← promoteExtSig之后的状态
-```
-
-#### 13.8.3 如何启用详细日志
-
-```java
-// Rtcm.java 中已有的调试代码 (BDS专用)
-if (sys == Constants.SYS_CMP && i == 0 && sat != 0) {
-    // promoteExtSig前后打印obs状态
-    System.err.printf("[MSM-BDS-OBS-BEFORE] sat=%d ...\n", sat);
-    // ... promoteExtSig ...
-    System.err.printf("[MSM-BDS-OBS-AFTER] sat=%d ...\n", sat);
-}
-```
-
-**要为其他系统启用类似日志**:
-```java
-// 修改 saveMsmObs() 方法
-if (sat != 0 && index >= 0) {
-    // 添加通用调试（不仅限于BDS）
-    if (true) {  // 改为始终打印
-        Obsd o = this.obs.data[index];
-        System.err.printf("[MSM-OBS-BEFORE] sys=%d sat=%d code=[%d,%d,%d]%n",
-            sys, sat, o.code[0], o.code[1], o.code[2]);
-    }
-    
-    promoteExtSig(this.obs.data[index], sys);
-    
-    if (true) {
-        Obsd o = this.obs.data[index];
-        System.err.printf("[MSM-OBS-AFTER] sys=%d sat=%d code=[%d,%d,%d]%n",
-            sys, sat, o.code[0], o.code[1], o.code[2]);
-    }
-}
-```
-
-### 13.9 性能分析
-
-#### 13.9.1 时间复杂度
+#### 13.8.1 时间复杂度
 
 ```java
 // promoteExtSig 时间复杂度
@@ -1395,7 +1062,7 @@ for (int f = 0; f < NFREQ; f++) {           // 外层循环: NFREQ次 (≤6)
 
 **每次调用耗时**: < 1微秒（现代CPU）
 
-#### 13.9.2 调用频率
+#### 13.8.2 调用频率
 
 ```
 每秒调用次数 ≈ 观测历元率 × 平均可见卫星数
@@ -1405,7 +1072,7 @@ for (int f = 0; f < NFREQ; f++) {           // 外层循环: NFREQ次 (≤6)
 CPU占用: 1500 × 1μs = 1.5ms/s = 0.15% (可忽略)
 ```
 
-#### 13.9.3 内存访问模式
+#### 13.8.3 内存访问模式
 
 ```
 优化点:
@@ -1418,9 +1085,9 @@ CPU占用: 1500 × 1μs = 1.5ms/s = 0.15% (可忽略)
 ⚠️ System.err.printf (I/O操作，仅调试时启用)
 ```
 
-### 13.10 已知限制与改进方向
+### 13.9 已知限制与改进方向
 
-#### 13.10.1 当前限制
+#### 13.9.1 当前限制
 
 | 限制 | 描述 | 影响程度 |
 |------|------|----------|
@@ -1429,7 +1096,7 @@ CPU占用: 1500 × 1μs = 1.5ms/s = 0.15% (可忽略)
 | **静态优先级** | sigindex使用固定优先级表 | 中 (无法适应环境变化) |
 | **无回退机制** | 提升后不可撤销 | 低 (极少需要) |
 
-#### 13.10.2 可能的改进方向
+#### 13.9.2 可能的改进方向
 
 **方向1: 基于SNR的智能选择**
 ```java
@@ -1467,70 +1134,7 @@ float reliability = getSignalReliability(sys, code);
 pri = basePri * reliability;  // 可靠性加权
 ```
 
-### 13.11 测试验证
-
-#### 13.11.1 单元测试用例
-
-```java
-@Test
-void testPromoteExtSig_Basic() {
-    Obsd obs = new Obsd();
-    obs.sat = 125;
-    
-    // 设置主槽位0,1有数据，槽位2为空
-    obs.code[0] = 40; obs.L[0] = 100.0; obs.P[0] = 20000000.0;
-    obs.code[1] = 42; obs.L[1] = 150.0; obs.P[1] = 21000000.0;
-    obs.code[2] = 0;  obs.L[2] = 0.0;    obs.P[2] = 0.0;
-    
-    // 扩展槽位3有B2a信号 (freq_idx=2)
-    obs.code[3] = 61; obs.L[3] = 200.0; obs.P[3] = 22000000.0;
-    
-    // 执行提升
-    Rtcm.promoteExtSig(obs, Constants.SYS_CMP);
-    
-    // 验证结果
-    assertEquals(61, obs.code[2]);  // B2a被提升到主槽位2
-    assertEquals(200.0, obs.L[2], 1e-6);
-    assertEquals(0, obs.code[3]);   // 扩展槽位3被清空
-}
-
-@Test
-void testPromoteExtSig_NoMatch() {
-    Obsd obs = new Obsd();
-    obs.sat = 106;
-    
-    // 主槽位2为空
-    obs.code[2] = 0;
-    
-    // 扩展槽位有L1信号 (freq_idx=0, 不匹配!)
-    obs.code[3] = 2;  // B1P, freq_idx=0
-    
-    Rtcm.promoteExtSig(obs, Constants.SYS_CMP);
-    
-    // 验证: 不应该提升 (频率不匹配)
-    assertEquals(0, obs.code[2]);  // 主槽位2仍为空
-    assertEquals(2, obs.code[3]);  // 扩展槽位保持不变
-}
-```
-
-#### 13.11.2 集成测试验证
-
-使用真实RTCM数据进行端到端测试:
-
-```bash
-# 运行RTCM解析测试
-mvn test -Dtest=RtcmParserTest#testRoverRtcmParsing
-
-# 检查日志中的[PROMOTE-SIG]条目
-grep "\[PROMOTE-SIG\]" target/surefire-reports/*.txt
-```
-
-**预期结果**:
-- 对于高质量数据: 极少或无promoteExtSig触发（sigindex已正确分配）
-- 对于缺失某些信号的数据: 适当数量的提升操作
-- 无错误或异常
-
-### 13.12 实现位置索引
+### 13.10 实现位置索引
 
 | 文件 | 行号 | 方法名 | 类型 |
 |------|------|--------|------|
@@ -1540,9 +1144,9 @@ grep "\[PROMOTE-SIG\]" target/surefire-reports/*.txt
 | `src/main/java/org/rtklib/java/rtcm/Rtcm.java` | 1631-1745 | `saveMsmObs()` | 调用方 |
 | `src/test/java/org/rtklib/java/RtcmParserTest.java` | 全文 | 测试用例 | 测试 |
 
-### 13.13 参考资源
+### 13.11 参考资源
 
-#### 13.13.1 RTKLIB C源码对照
+#### 13.11.1 RTKLIB C源码对照
 
 ```c
 /* rtkcmn.c - C版本的等效逻辑 */
@@ -1555,7 +1159,7 @@ static void sigindex(int sys, const int *code, int n, int *idx, const prcopt_t *
 /* C版通过在decodeMsM中直接检查并赋值实现相同效果 */
 ```
 
-#### 13.13.2 RTCM标准文档
+#### 13.11.2 RTCM标准文档
 
 - **RTCM 10403.3**: Multiple Signal Messages (MSM) 定义
 - **RTKLIB Manual**: Section 12.3 MSM Decoding
@@ -1564,9 +1168,9 @@ static void sigindex(int sys, const int *code, int n, int *idx, const prcopt_t *
 
 ---
 
-## 14. 附录
+## 11. 附录
 
-### 14.1 快速参考卡：promoteExtSig决策树
+### 11.1 快速参考卡：promoteExtSig决策树
 
 ```
 输入: obs (Obsd对象), sys (卫星系统)
@@ -1599,7 +1203,7 @@ static void sigindex(int sys, const int *code, int n, int *idx, const prcopt_t *
    └─ (如果循环结束未找到) → 槽位f保持空
 ```
 
-### 14.2 常见信号码速查表 (BDS)
+### 11.2 常见信号码速查表 (BDS)
 
 | 信号名称 | Code值 | Freq Index | 优先级 | 说明 |
 |----------|--------|------------|--------|------|
@@ -1612,27 +1216,331 @@ static void sigindex(int sys, const int *code, int n, int *idx, const prcopt_t *
 | B3I | 42 | 1 | 7 | B3开放服务 |
 | B3Q | 59 | 1 | 4 | B3授权信号 |
 
-### 14.3 故障排查清单
-
-**问题1: 某些卫星的主槽位始终为空**
-- [ ] 检查MSM消息是否包含该频率的任何信号
-- [ ] 检查code2idx返回值是否正确
-- [ ] 检查sigindex是否将该信号错误地分到扩展区
-- [ ] 启用[MSM-BDS-OBS-BEFORE/AFTER]日志对比
-
-**问题2: promoteExtSig频繁触发**
-- [ ] 正常现象: 说明原始信号分布不均
-- [ ] 检查是否某个频率的主信号经常缺失
-- [ ] 考虑调整getcodepri优先级表
-
-**问题3: 定位精度下降**
-- [ ] 检查提升后的信号SNR是否过低
-- [ ] 检查是否有错误的频率匹配(code2idx bug)
-- [ ] 对比提升前后的obs数据一致性
+> 调试日志格式、排查清单、测试验证详见 [调试指南](RTKLIB_JAVA_DEBUG_GUIDE.md)
 
 ---
 
-*文档版本：v1.7*
-*最后更新：2026-07-24*
-*新增章节：13. RTCM MSM多信号管理与promoteExtSig机制*
+## 12. 定位结果输出体系（SolData）
+
+> Java版定位结果的面向对象封装，替代C版直接写 `.pos` 文件的方式。
+> 内部 `Sol` 结构保持不变（始终ECEF），仅在输出时按配置转换为 `SolData`。
+
+### 12.1 设计背景
+
+C版RTKLIB在 `outsol()` 中直接格式化输出到 `.pos` 文件，坐标转换（ECEF→LLH/ENU）和协方差旋转在输出时完成。
+Java版作为库使用，不应直接写文件，而是提供结构化的结果对象供调用方使用。
+
+**核心原则**：
+- 内部 `Sol` 始终ECEF，不做任何修改
+- 输出时通过 `SolData` 封装，按 `PrcOpt.posMask` 配置转换坐标
+- 支持回调（`PosHandler.onResult(SolData)`）实时获取结果
+
+### 12.2 类结构总览
+
+```
+SolData（一个历元的定位结果）
+├── time: GTime              // GPS时间
+├── timeUtc: LocalDateTime   // UTC时间
+├── timeStr: String          // 时间字符串（.pos格式）
+├── status: SolutionStatus   // 解状态枚举
+├── numSat: int              // 有效卫星数
+├── positions: List<Position>  // 位置列表（可含ECEF/LLH/ENU多种格式）
+├── velocities: List<Velocity> // 速度列表（可含ECEF/ENU）
+├── accuracies: List<Accuracy> // 精度列表（可含ECEF/ENU）
+├── age: double              // 差分龄期（s）
+├── ratio: double            // AR ratio
+├── getPosition(CoordType)   // 便捷访问：按类型直接取
+├── getVelocity(CoordType)   // 便捷访问：按类型直接取
+└── getAccuracy(CoordType)   // 便捷访问：按类型直接取
+
+Position（位置数据）
+├── type: CoordType          // 坐标系类型
+├── v1: double               // x / lat(deg) / e
+├── v2: double               // y / lon(deg) / n
+└── v3: double               // z / height(m) / u
+
+Velocity（速度数据）
+├── type: CoordType          // 坐标系类型
+├── v1: double               // vx / ve
+├── v2: double               // vy / vn
+└── v3: double               // vz / vu
+
+Accuracy（精度数据）
+├── type: CoordType          // 坐标系类型
+├── s1: double               // σx / σe
+├── s2: double               // σy / σn
+├── s3: double               // σz / σu
+├── c12: double              // σxy / σen
+├── c23: double              // σyz / σeu
+└── c31: double              // σzx / σnu
+
+CoordType（坐标系枚举）
+├── ECEF                     // 地心地固坐标系
+├── LLH                      // 大地坐标系（经纬度高）
+└── ENU                       // 站心坐标系（东北天基线）
+
+SolutionStatus（解状态枚举）
+├── NONE                     // 无解
+├── SINGLE                   // 单点定位
+├── DGPS                     // DGPS
+├── FLOAT                    // 浮点解
+├── FIX                      // 固定解
+├── PPP                      // PPP浮点解
+├── PPP_FIX                  // PPP固定解
+└── SBAS                     // SBAS
+```
+
+### 12.3 CoordType 枚举
+
+| 枚举值 | 含义 | Position 分量 | Velocity 分量 | Accuracy 分量 |
+|--------|------|---------------|---------------|---------------|
+| `ECEF` | 地心地固 | v1=x, v2=y, v3=z (m) | v1=vx, v2=vy, v3=vz (m/s) | s1=σx, s2=σy, s3=σz (m) |
+| `LLH` | 经纬度高 | v1=lat, v2=lon, v3=h (deg,deg,m) | — | — |
+| `ENU` | 东北天基线 | v1=e, v2=n, v3=u (m) | v1=ve, v2=vn, v3=vu (m/s) | s1=σe, s2=σn, s3=σu (m) |
+
+**注意**：
+- 速度不存在LLH表示（经纬度对时间的导数无意义），LLH和ENU方向的速度统一用 `CoordType.ENU`
+- 精度同理，LLH和ENU方向的精度统一用 `CoordType.ENU`
+
+### 12.4 输出格式配置（posMask）
+
+通过 `PrcOpt.posMask` 位掩码控制输出哪些坐标格式：
+
+| 常量 | 值 | 说明 |
+|------|-----|------|
+| `PrcOpt.POS_ECEF` | 1 | 输出ECEF格式 |
+| `PrcOpt.POS_LLH` | 2 | 输出LLH格式 |
+| `PrcOpt.POS_ENU` | 4 | 输出ENU格式（需基站位置） |
+
+**配置示例**：
+
+```java
+PrcOpt opt = new PrcOpt();
+
+// 默认：ECEF + LLH
+opt.posMask = PrcOpt.POS_ECEF | PrcOpt.POS_LLH;
+
+// 全部输出：ECEF + LLH + ENU
+opt.posMask = PrcOpt.POS_ECEF | PrcOpt.POS_LLH | PrcOpt.POS_ENU;
+
+// 仅LLH
+opt.posMask = PrcOpt.POS_LLH;
+```
+
+**posMask 对输出列表的影响**：
+
+| posMask | positions | velocities | accuracies |
+|---------|-----------|------------|------------|
+| `ECEF` | [ECEF] | [ECEF] | [ECEF] |
+| `LLH` | [LLH] | [ENU] | [ENU] |
+| `ECEF\|LLH` | [ECEF, LLH] | [ECEF, ENU] | [ECEF, ENU] |
+| `ECEF\|LLH\|ENU` | [ECEF, LLH, ENU] | [ECEF, ENU] | [ECEF, ENU] |
+
+### 12.5 内部转换流程
+
+```
+Sol（内部，始终ECEF）                    SolData（输出封装）
+┌─────────────────────┐                ┌─────────────────────────────────┐
+│ rr[0..2]: ECEF位置   │ ──posMask──→  │ positions:                      │
+│ rr[3..5]: ECEF速度   │                │   [ECEF] if POS_ECEF           │
+│ qr[0..8]: ECEF协方差 │                │   [LLH]  if POS_LLH            │
+│ stat: 解状态(int)    │                │   [ENU]  if POS_ENU            │
+│ ns: 卫星数           │                │ velocities:                     │
+│ time: GTime          │                │   [ECEF] if POS_ECEF           │
+│ age, ratio           │                │   [ENU]  if POS_LLH|POS_ENU    │
+└─────────────────────┘                │ accuracies:                     │
+                                        │   [ECEF] if POS_ECEF           │
+  转换方法：                            │   [ENU]  if POS_LLH            │
+  ECEF→LLH: CoordTransform.ecef2pos()  │   [ENU]  if POS_ENU            │
+  ECEF→ENU: CoordTransform.ecef2enu()  │ status: SolutionStatus(枚举)   │
+  协方差旋转: CoordTransform.covenu()   │ numSat: int                    │
+                                        │ age, ratio                     │
+                                        └─────────────────────────────────┘
+```
+
+**构造时机**：各Processor的 `buildResult()` 方法中，`List<Sol>` → `List<SolData>`
+
+```java
+// RtkProcessor.java 示例
+private RtkResult buildResult() {
+    double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
+    List<SolData> solDataList = solutions.stream()
+            .map(sol -> new SolData(sol, opt.posMask, rb))
+            .toList();
+    return new RtkResult(totalEpochs, successCount, failCount, solDataList);
+}
+```
+
+### 12.6 使用示例
+
+#### 12.6.1 基本使用
+
+```java
+// 配置输出格式
+opt.posMask = PrcOpt.POS_ECEF | PrcOpt.POS_LLH | PrcOpt.POS_ENU;
+
+// 运行RTK
+RtkProcessor.RtkResult result = RtkProcessor.process(opt, nav, roverObs, baseObs);
+
+// 遍历结果
+for (SolData sd : result.solutions) {
+    // 直接按类型获取，无需遍历过滤
+    Position ecef = sd.getPosition(CoordType.ECEF);
+    Position llh  = sd.getPosition(CoordType.LLH);
+    Position enu  = sd.getPosition(CoordType.ENU);
+    Accuracy acc  = sd.getAccuracy(CoordType.ENU);
+    Velocity vel  = sd.getVelocity(CoordType.ECEF);
+
+    System.out.printf("%s %s lat=%.9f lon=%.9f h=%.4f ns=%d%n",
+            sd.timeStr, sd.status,
+            llh.v1, llh.v2, llh.v3, sd.numSat);
+}
+```
+
+#### 12.6.2 回调方式
+
+```java
+PosHandler handler = new PosHandler() {
+    @Override
+    public void onResult(SolData solData) {
+        Position llh = solData.getPosition(CoordType.LLH);
+        if (llh != null && solData.status == SolutionStatus.FIX) {
+            System.out.printf("FIX: %.9f %.9f %.4f%n", llh.v1, llh.v2, llh.v3);
+        }
+    }
+};
+```
+
+#### 12.6.3 .pos 文件格式输出
+
+```java
+// 与RTKLIB C版 .pos文件格式兼容
+static String formatSolDataLine(SolData solData) {
+    Position llh = solData.getPosition(CoordType.LLH);
+    Accuracy acc = solData.getAccuracy(CoordType.ENU);
+    if (llh == null || acc == null) return "";
+
+    return String.format("%s %s %14.9f %14.9f %10.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %d %d",
+            solData.timeStr, solData.status,
+            llh.v1, llh.v2, llh.v3,
+            acc.s1, acc.s2, acc.s3, acc.c12, acc.c23, acc.c31,
+            solData.numSat, 0);
+}
+```
+
+### 12.7 SolutionStatus 枚举映射
+
+| 枚举值 | C版常量 | 值 | 说明 |
+|--------|---------|-----|------|
+| `NONE` | SOLQ_NONE | 0 | 无解 |
+| `SINGLE` | SOLQ_SINGLE | 1 | 单点定位 |
+| `DGPS` | SOLQ_DGPS | 2 | DGPS差分 |
+| `FLOAT` | SOLQ_FLOAT | 3 | RTK浮点解 |
+| `FIX` | SOLQ_FIX | 4 | RTK固定解 |
+| `PPP` | SOLQ_PPP | 5 | PPP浮点解 |
+| `PPP_FIX` | SOLQ_PPP_FIX | 6 | PPP固定解 |
+| `SBAS` | — | — | SBAS |
+
+### 12.8 文件索引
+
+| 文件 | 说明 |
+|------|------|
+| `data/SolData.java` | 输出数据类，Sol→SolData转换逻辑 |
+| `data/Position.java` | 位置封装（CoordType + 3分量） |
+| `data/Velocity.java` | 速度封装（CoordType + 3分量） |
+| `data/Accuracy.java` | 精度封装（CoordType + 6分量：3标准差+3互协方差） |
+| `data/CoordType.java` | 坐标系枚举（ECEF/LLH/ENU） |
+| `data/SolutionStatus.java` | 解状态枚举 |
+| `data/PrcOpt.java` | 新增 posMask 配置字段 |
+| `pntpos/PosHandler.java` | 新增 onResult(SolData) 回调方法 |
+| `rtkpos/RtkProcessor.java` | RtkResult.solutions: List\<SolData\>，buildResult() |
+| `pntpos/SppProcessor.java` | SppResult.solutions: List\<SolData\>，buildResult() |
+| `ppp/PppProcessor.java` | PppResult.solutions: List\<SolData\>，buildResult() |
+
+---
+
+## 12. 与 C 版 RTKLIB 的对齐状态
+
+### 12.1 已对齐的核心流程
+
+| 模块 | C版函数 | Java版方法 | 状态 |
+|------|---------|-----------|------|
+| SPP | `pntpos()` | `PntPos.pntpos()` | ✅ 完整对齐 |
+| SPP核心 | `estpos()` | `SppCore.estpos()` | ✅ |
+| RAIM FDE | `raim_fde()` | `PntPos.raimFde()` | ✅ |
+| 速度估计 | `estvel()` | `PntPos.estvel()` | ✅ |
+| 多普勒残差 | `resdop()` | `PntPos.resdop()` | ✅ |
+| RTK入口 | `rtkpos()` | `RtkCore.rtkpos()` | ✅ 完整对齐 |
+| 相对定位 | `relpos()` | `RtkCore.relpos()` | ✅ |
+| 卫星位置 | `satposs()` | `EphModel.satposs()` | ✅ |
+| 坐标变换 | `ecef2pos()`/`xyz2enu()` | `CoordTransform` | ✅ |
+| LAMBDA | `lambda()` | `Lambda` | ✅ |
+| 周跳检测 | `detslp_*()` | `RtkCore.detslpLl/Gf/Code/Dop()` | ✅ |
+| RINEX读写 | `readrnx()`/`outrnx()` | `RinexParser`/`RinexObsWriter` | ✅ |
+| RTCM解码 | `decode_*()` | `Rtcm` | ✅ |
+| PPP入口 | `pppos()` | `PppCore.pppos()` | ✅ 基本对齐 |
+| PPP状态更新 | `udstate_ppp()` | `PppCore.udstate()` | ✅ |
+| PPP观测修正 | `corrMeas()` | `PppCore.corrMeas()` | ✅ |
+| PPP RINEX处理 | - | `PppProcessor`/`RinexPppProcessor` | ✅ |
+| 追踪日志 | `trace*()` | `RtkTrace`/`PppTrace` | ✅ |
+
+### 12.2 已对齐的 rtkpos() 流程细节
+
+| 逻辑 | 说明 | 状态 |
+|------|------|------|
+| 流动站SPP | `P[0]==0||P[0]>STD_PREC_VAR_THRESH` → `pntpos()` | ✅ |
+| SPP失败dynamics容错 | dynamics模式下不直接返回 | ✅ |
+| outsingle抑制 | 非SINGLE模式抑制单点解输出 | ✅ |
+| 基站坐标设置 | `refposmode!=REFPOS_RTCM` | ✅ |
+| MOVEB基站SPP | 基站观测数据独立SPP | ✅ |
+| MOVEB age检查 | 时间同步验证 | ✅ |
+| ssat后处理 | vs/azel/resp/resc更新 | ✅ |
+| eventime传递 | `sol.eventime=obs[0].eventime` | ✅ |
+
+### 12.3 未移植项
+
+| 功能 | 优先级 | 原因 |
+|------|--------|------|
+| Static Start长延迟恢复 | 低 | 边界场景，`tt>300`时重置状态 |
+| 多系统PPP验证 | 中 | GPS+BDS联合PPP，需多系统精密星历 |
+
+---
+
+## 13. 方法命名规则
+
+Java版方法名遵循以下规则，在保持Java驼峰命名的同时保留C版函数名核心：
+
+| C版 | Java版 | 规则 |
+|-----|--------|------|
+| `pntpos()` | `pntpos()` | 无下划线，直接保留 |
+| `estpos()` | `estpos()` | 同上 |
+| `raim_fde()` | `raimFde()` | 下划线后首字母大写 |
+| `detslp_ll()` | `detslpLl()` | 下划线后每段首字母大写 |
+| `satposs()` | `satposs()` | 直接保留 |
+| `ecef2pos()` | `ecef2pos()` | 直接保留 |
+
+---
+
+## 14. 测试验证状态
+
+当前测试以**北斗（BDS）单系统**和**多系统（GPS+BDS）**短基线数据为主。SPP 已通过 BDS 数据与 C 版 RTKLIB 亚毫米级对比验证；RTK 已通过多系统短基线数据验证，Fix 解比例达 88.7%。PPP 已实现基本功能，IFLC 模式下 BDS 浮点解可正常输出。
+
+多系统（GPS+GLONASS 等）联合定位尚未充分验证。如有**多系统真实观测数据**条件，欢迎测试验证并反馈结果。
+
+### 14.1 已验证场景
+
+| 场景 | 数据源 | 状态 |
+|------|--------|------|
+| SPP（BDS-only） | RTCM MSM4 | ✅ 240历元与C版亚毫米级匹配 |
+| RTK（GPS+BDS 短基线） | RTCM MSM4 | ✅ Fix解比例88.7%，ratio 42~384 |
+| RTK（BDS-only 短基线） | RTCM MSM4 | ✅ 浮点解收敛稳定（数据质量限制，C版同样无法Fix） |
+| PPP（BDS-only IFLC） | RINEX + SP3/CLK | ✅ 240历元浮点解输出 |
+| SPP（GPS+BDS） | - | ⏳ 待验证 |
+| PPP（GPS+BDS） | - | ⏳ 待验证 |
+
+---
+
+*文档版本：v1.9*
+*最后更新：2026-08-13*
+*新增章节：16. C版对齐状态 / 17. 方法命名规则 / 18. 测试验证状态（从README迁移）*
 *维护者：RTKLIB Java移植团队*
