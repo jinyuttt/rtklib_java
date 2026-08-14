@@ -56,7 +56,7 @@ public final class Smoother {
             }
         }
 
-        return 0;
+        return 1;
     }
 
     public static double[] buildCovMatrix(float[] qr) {
