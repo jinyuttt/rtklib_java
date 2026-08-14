@@ -1560,7 +1560,21 @@ Java版方法名遵循以下规则，在保持Java驼峰命名的同时保留C�
 
 ---
 
-*文档版本：v2.0*
-*最后更新：2026-08-13*
-*变更：onResult回调现在在每个历元定位成功后自动调用（onSolution→onResult）*
+## 15. PPP 关键改正项
+
+PPP 定位精度依赖多种外部改正数据，以下为 Java 版支持的改正项及其读取器：
+
+| 改正项 | 读取器 | 文件格式 | 影响量级 |
+|--------|--------|----------|----------|
+| 天线相位中心偏差 (PCV) | `PcvReader` | ANTEX (.atx), NGS (.pcv) | 10-15 cm |
+| 差分码偏差 (DCB) | `DcbReader` | BIA, BSX, DCB | 几十 cm（伪距） |
+| 海潮负荷 (OTL) | `OtlReader` | BLQ | 1-5 cm（沿海站） |
+| 固体潮 | `Tides.tidedisp()` | 内置模型 | ~30 cm |
+| 极潮 | `Tides.tidePole()` | ERP文件 | ~1-2 cm |
+
+---
+
+*文档版本：v2.1*
+*最后更新：2026-08-14*
+*变更：新增15节PPP改正项（从README迁移）；README定位模式表拆为3个维度*
 *维护者：RTKLIB Java移植团队*

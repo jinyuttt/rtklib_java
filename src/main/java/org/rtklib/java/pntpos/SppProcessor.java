@@ -599,7 +599,7 @@ public class SppProcessor {
 
             if (handler != null) {
                 handler.onSolution(new Sol(sol), copySsatArray(ssat));
-                handler.onResult(new SolData(solCopy, opt.posMask));
+                handler.onResult(new SolData(lastSourceId, solCopy, opt.posMask, null));
             }
             if (writer != null) {
                 try {

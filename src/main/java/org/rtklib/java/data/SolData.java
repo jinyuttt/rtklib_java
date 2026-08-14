@@ -50,6 +50,8 @@ public class SolData {
     private static final int POS_LLH  = PrcOpt.POS_LLH;
     private static final int POS_ENU  = PrcOpt.POS_ENU;
 
+    public final String sourceId;
+
     public final GTime time;
     public final LocalDateTime timeUtc;
     public final String timeStr;
@@ -92,11 +94,15 @@ public class SolData {
     public final double hdop;
     public final double vdop;
 
-    public SolData(Sol sol, int posMask) {
-        this(sol, posMask, null);
+    public SolData(Sol sol, int posMask) {this(null, sol, posMask, null);
     }
 
     public SolData(Sol sol, int posMask, double[] rb) {
+        this(null, sol, posMask, rb);
+    }
+
+    public SolData(String sourceId, Sol sol, int posMask, double[] rb) {
+        this.sourceId = sourceId;
         this.time = new GTime(sol.time);
         this.timeUtc = toLocalDateTime(sol.time);
         this.timeStr = formatTime(sol.time);
