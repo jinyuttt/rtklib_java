@@ -10,36 +10,75 @@ RTKLIB-Java 将 C 语言编写的 RTKLIB 核心 GNSS 定位算法移植为 Java 
 
 ### 支持的定位模式
 
+**维度一：定位模式**（`PrcOpt.mode`，必设，默认 `PMODE_SINGLE`）
+
+| 模式 | 常量 | 精度 | 数据入口 | 说明 |
+|------|------|------|----------|------|
+| SPP | `PMODE_SINGLE` | 米级 | 实时流(RTCM3) / 事后(RINEX) | 伪距单点定位，仅正向 |
+| RTK | `PMODE_KINEMA` / `PMODE_STATIC` / `PMODE_MOVEB` | 厘米~毫米 | 实时流(RTCM3) / 事后(RINEX) | 载波相位差分，支持双向 |
+| PPP | `PMODE_PPP_KINEMA` / `PMODE_PPP_STATIC` | 分米~厘米 | 实时流(RTCM3) / 事后(RINEX) | 精密单点定位，事后支持双向 |
+
+> DGPS（`PMODE_DGPS`）未独立实现，RTK模式已覆盖。`PMODE_FIXED`/`PMODE_PPP_FIXED`仅输出基线或固定坐标。
+>
+> **数据格式**：实时流仅RTCM 3（MSM4/5/6），事后仅RINEX 3.x（OBS/NAV/CLK/SP3）。不支持接收机原始协议、NMEA编解码、NTRIP/TCP/串口。
+
+**维度二：状态模式**（不是独立字段，隐含在 `mode` 中，设置 `mode` 即同时确定）
+
+| 状态 | 适用定位 | 对应 mode 常量 | 说明 |
+|------|----------|----------------|------|
+| 动态 (Kinematic) | SPP | `PMODE_SINGLE` | 接收机运动，逐历元独立估计位置 |
+| 动态 (Kinematic) | RTK | `PMODE_KINEMA` | 接收机运动，载波相位差分 |
+| 静态 (Static) | RTK | `PMODE_STATIC` | 接收机固定，位置不随历元变化，精度更高 |
+| 移动基线 (Moving-Base) | RTK | `PMODE_MOVEB` | 基站也移动的短基线差分 |
+| 动态 (Kinematic) | PPP | `PMODE_PPP_KINEMA` | 精密单点，动态 |
+| 静态 (Static) | PPP | `PMODE_PPP_STATIC` | 精密单点，静态 |
+
+> `mode` 一个值同时决定定位模式（SPP/RTK/PPP）和状态模式（动态/静态/移动基线），不需要也不存在单独设置状态模式的字段。
+
+**维度三：参考站位置模式**（`PrcOpt.refpos`，仅RTK需要，默认 `POSOPT_POS_XYZ`）
+
 | 模式 | 常量 | 说明 |
 |------|------|------|
-| SPP | `PMODE_SINGLE` | 单点定位（伪距） |
-| DGPS | `PMODE_DGPS` | 差分 GPS |
-| Static | `PMODE_STATIC` | 静态相对定位 |
-| Kinematic | `PMODE_KINEMA` | 动态相对定位 |
-| Moving-Base | `PMODE_MOVEB` | 移动基线 |
-| Fixed | `PMODE_FIXED` | 固定位置 |
-| PPP Kinematic | `PMODE_PPP_KINEMA` | PPP动态定位 |
-| PPP Static | `PMODE_PPP_STATIC` | PPP静态定位 |
-| PPP Fixed | `PMODE_PPP_FIXED` | PPP固定坐标 |
+| 固定LLH | `POSOPT_POS_LLH` | 从`PrcOpt.rb`读取（LLH格式，自动转ECEF） |
+| 固定XYZ | `POSOPT_POS_XYZ` | 从`PrcOpt.rb`读取（ECEF格式，默认） |
+| SPP均值 | `POSOPT_SINGLE` | 用基准站观测数据SPP定位取均值 |
+| RINEX头 | `POSOPT_RINEX` | 从RINEX观测文件头读取近似坐标 |
+| RTCM动态 | `POSOPT_RTCM` | 从RTCM 1005/1006消息实时获取 |
 
-### PPP 关键改正项
+**处理方向与双向缓存**
 
-| 改正项 | 读取器 | 文件格式 | 影响量级 |
-|--------|--------|----------|----------|
-| 天线相位中心偏差 (PCV) | `PcvReader` | ANTEX (.atx), NGS (.pcv) | 10-15 cm |
-| 差分码偏差 (DCB) | `DcbReader` | BIA, BSX, DCB | 几十 cm（伪距） |
-| 海潮负荷 (OTL) | `OtlReader` | BLQ | 1-5 cm（沿海站） |
-| 固体潮 | `Tides.tidedisp()` | 内置模型 | ~30 cm |
-| 极潮 | `Tides.tidePole()` | ERP文件 | ~1-2 cm |
+| 方向 | SPP | RTK | PPP | 说明 |
+|------|:---:|:---:|:---:|------|
+| 正向 | ✅ | ✅ | ✅ | 逐历元向前滤波，实时输出 |
+| 事后双向 | ❌ | ✅ `PostPosProcessor` | ✅ `PostPosProcessor` | 正向→反向→CombinedFilter合并 |
+| 实时双向 | ❌ | ✅ `RtkProcessor` | ❌ | 缓存满自动触发反向→合并 |
 
-### 数据输入格式
+> SPP为绝对定位无反向意义。RTK实时双向通过`cacheMaxEpochs`配置触发；RTK/PPP事后双向通过`soltype`配置（`SOLTYPE_COMBINED`）。详见 [使用指南-双向缓存](docs/USAGE_GUIDE.md#9-实时流双向缓存)。
 
-| 格式 | 读写 | 说明 |
-|------|------|------|
-| RTCM 3 | 解码 ✅ | MSM4/5/6、多系统星历、SSR改正 |
-| RINEX 3.x | 读写 ✅ | OBS/NAV/CLK/SP3 |
-| 接收机原始协议 | ❌ | u-blox/NovAtel/Septentrio等，需先用convbin转换 |
-| NMEA 0183 | ❌ | 仅定义常量，无编解码实现 |
+### 模式配置示例
+
+```java
+PrcOpt opt = new PrcOpt();
+
+// 维度一+二：定位模式+状态模式（一个mode值同时确定）
+opt.mode = Constants.PMODE_SINGLE;        // SPP 动态
+opt.mode = Constants.PMODE_KINEMA;        // RTK 动态
+opt.mode = Constants.PMODE_STATIC;        // RTK 静态
+opt.mode = Constants.PMODE_MOVEB;         // RTK 移动基线
+opt.mode = Constants.PMODE_PPP_KINEMA;    // PPP 动态
+opt.mode = Constants.PMODE_PPP_STATIC;    // PPP 静态
+
+// 维度三：参考站位置模式（仅RTK需要，SPP/PPP不涉及）
+opt.refpos = Constants.POSOPT_POS_XYZ;    // 固定XYZ（默认，从opt.rb读取）
+opt.refpos = Constants.POSOPT_RTCM;       // RTCM动态获取（实时流常用）
+opt.refpos = Constants.POSOPT_SINGLE;     // SPP均值（事后常用）
+opt.rb = new double[]{-2267749.0, 5009154.0, 3220906.0}; // 基站ECEF坐标（refpos=POSOPT_POS_XYZ时使用）
+
+// 处理方向
+opt.soltype = Constants.SOLTYPE_FORWARD;     // 仅正向（默认）
+opt.soltype = Constants.SOLTYPE_COMBINED;    // 正向+反向+合并（事后PostPosProcessor）
+opt.cacheMaxEpochs = 240;                     // 实时双向：缓存满240历元触发反向（RtkProcessor）
+```
 
 ### 库级参数体系
 
@@ -47,8 +86,12 @@ RTKLIB-Java 将 C 语言编写的 RTKLIB 核心 GNSS 定位算法移植为 Java 
 
 | 参数 | 字段 | 可选值 | 默认值 | 说明 |
 |------|------|--------|--------|------|
-| 处理模式 | `procmode` | `PROCMODE_REALTIME(0)` / `PROCMODE_POST(1)` | `PROCMODE_POST` | 实时流 / 事后处理 |
-| 参考站位置模式 | `refposmode` | `REFPOS_FIXED(0)` / `REFPOS_SPP_AVERAGE(1)` / `REFPOS_RTCM(2)` | `REFPOS_FIXED` | 固定值 / SPP均值 / RTCM动态 |
+| 双向缓存大小 | `cacheMaxEpochs` | `0` / `>0` | `0` | 0=纯正向，>0=缓存满触发反向滤波+合并 |
+| 输出节流间隔 | `outputThrottleInterval` | `0` / `>0` | `100` | 每N个历元节流一次，0=不节流 |
+| 输出节流休眠 | `outputThrottleSleepMs` | 任意 | `10` | 节流时休眠毫秒数 |
+| 电离层梯度估计 | `ionoGradient` | `true` / `false` | `false` | false=仅VTEC，true=VTEC+Gn+Ge逐星估计 |
+| 位置输出格式 | `posMask` | `POS_ECEF` / `POS_LLH` / `POS_ENU` 位组合 | `ECEF\|LLH` | 控制SolData输出哪些坐标系 |
+| 参考站位置模式 | `refpos` | `POSOPT_POS_XYZ` / `POSOPT_RTCM` 等 | `POSOPT_POS_XYZ` | 固定值 / RTCM动态 / SPP均值 |
 
 ## 文档
 
@@ -182,6 +225,24 @@ PrcOpt opt = PppProcessor.createDefaultOpt();
 PppProcessor ppp = new PppProcessor(opt);
 PppProcessor.PppResult result =
     ppp.processRinex("rover.obs", "rover.nav", "igs.sp3", "igs.clk");
+```
+
+ ### 实时流 + 双向缓存
+
+```java
+// 配置：每240历元触发一次反向滤波+合并
+PrcOpt opt = RtkProcessor.createDefaultOpt();
+opt.cacheMaxEpochs = 240;  // 0:纯正向(默认)  >0:缓存满触发反向
+
+RtkProcessor rtk = new RtkProcessor(opt, handler);
+
+// 带sourceId投喂数据（自动缓存）
+rtk.feedRover("rover_device_001", roverData);
+rtk.feedBase("base_BJFS", baseData);
+
+// 缓存满240时自动触发：反向处理 → CombinedFilter合并 → 通过handler.onResult()输出
+// 应用方也可手动触发
+RtkProcessor.RtkResult improved = rtk.reprocess("rover_device_001");
 ```
 
 ### RTCM 数据解码

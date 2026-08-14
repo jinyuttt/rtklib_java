@@ -505,7 +505,7 @@ public class RtkProcessor {
 
         List<SolData> solDataList = combined.stream()
                 .filter(s -> s != null)
-                .map(sol -> new SolData(sol, opt.posMask, null))
+                .map(sol -> new SolData(sourceId, sol, opt.posMask, null))
                 .toList();
         return new RtkResult(combined.size(), bSuccess, bFail, solDataList);
     }
@@ -610,7 +610,7 @@ public class RtkProcessor {
             if (handler != null) {
                 handler.onSolution(new Sol(rtk.sol), copySsatArray(rtk.ssat));
                 double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
-                handler.onResult(new SolData(solCopy, opt.posMask, rb));
+                handler.onResult(new SolData(lastRoverSourceId, solCopy, opt.posMask, rb));
             }
             if (writer != null) {
                 try {

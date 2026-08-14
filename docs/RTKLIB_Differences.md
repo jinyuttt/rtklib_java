@@ -1252,12 +1252,44 @@ python rtk_compare/compare_results.py \
 **已实现的核心能力**：
 - RTCM3完整解码（含MSM4/5/6、多系统星历、SSR）
 - RINEX 3.x读写
-- SPP/RTK/PPP定位（含正向/反向滤波）
+- SPP/RTK/PPP定位（含正向/反向/双向滤波）
 - 天线PCV/DCB/海潮/固体潮/极潮改正
 - LAMBDA模糊度固定
+- 实时流双向缓存（内存/外部，缓存满自动触发反向+合并）
 - 多种优化项（自适应Q、IGGIII抗差、SNR质量控制等）
 
 **需要应用层自行实现**：
-- 网络数据获取（NTRIP/TCP/串口）→ 通过feed()注入
+- 网络数据获取（NTRIP/TCP/串口）→ 通过feed(sourceId, data)注入
 - NMEA输出 → 通过SolData自行编码
 - 实时流管理 → 自行组合Processor实例
+### 14.8 实时流双向缓存系统（Java版新增，C版无对应）
+
+C版RTKLIB的反向滤波仅支持事后批处理（读完文件→正向→反向→合并→输出），
+Java版新增实时流场景下的双向缓存能力。
+
+**适用范围**：
+
+| 场景 | SPP | RTK | PPP |
+|------|:---:|:---:|:---:|
+| 实时正向 | ✅ | ✅ | ✅ |
+| 实时双向（缓存触发） | ❌ | ✅ | ❌ |
+| 事后双向（soltype配置） | ❌ | ✅ | ✅ |
+
+SPP为绝对定位无反向意义。RTK实时双向通过`cacheMaxEpochs`触发；RTK/PPP事后双向通过`PostPosProcessor`+`soltype`配置（与C版对齐）。
+
+**设计要点**：
+- `PrcOpt.cacheMaxEpochs`：0=纯正向(默认)，>0=缓存满触发反向的批次大小
+- `feed(sourceId, data)`：带数据源标识的投喂接口，sourceId由调用方定义（站ID/设备序列号/NTRIP mountpoint等）
+- 缓存满自动触发：反向处理→CombinedFilter合并→通过handler.onResult()输出→清空缓存
+- 两种缓存实现：InMemoryEpochCache（环形缓冲区）、ExternalEpochCache（对接Redis/DB/文件）
+- 向后兼容：feed(data)等价于feed(null, data)，cacheMaxEpochs=0时行为与原版一致
+
+**与C版对比**：
+
+| 特性 | C版 | Java版 |
+|------|-----|--------|
+| 反向滤波 | 仅事后（文件边界） | 事后+实时（缓存边界） |
+| 批次边界 | 文件长度 | cacheMaxEpochs |
+| 数据源标识 | 无（文件名隐含） | sourceId（调用方注入） |
+| 缓存方式 | 无（全量内存） | 内存环形缓冲/外部接口 |
+| 触发方式 | 自动（文件读完） | 缓存满自动/手动reprocess() |

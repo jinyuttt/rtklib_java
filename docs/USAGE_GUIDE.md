@@ -14,6 +14,7 @@
 6. [PPP 精密单点定位](#6-ppp-精密单点定位)
 7. [输出字段含义](#7-输出字段含义)
 8. [观测值字段统一语义](#8-观测值字段统一语义)
+9. [实时流双向缓存](#9-实时流双向缓存)
 
 ---
 
@@ -315,7 +316,7 @@ opt.nf = 3;                               // 使用频率数
 opt.navsys = Constants.SYS_GPS | Constants.SYS_CMP;  // 卫星系统
 opt.elmin = 15.0 * Constants.D2R;         // 高度角限制 (rad)
 opt.modear = Constants.ARMODE_FIXHOLD;    // 模糊度固定模式
-opt.refposmode = Constants.REFPOS_RTCM;   // 基站坐标来源
+opt.refpos = Constants.POSOPT_RTCM;   // 基站坐标来源
 opt.maxtdiff = 30.0;                      // 最大时间差 (s)
 opt.outsingle = 1;                        // RTK失败时输出SPP解
 ```
@@ -521,6 +522,116 @@ PppProcessor.PppResult result = ppp.finish();
 
 ---
 
+## 9. 实时流双向缓存
+
+RTK 实时流场景下，通过缓存观测数据实现双向滤波（正向+反向），合并后提升定位精度。
+C 版 RTKLIB 的反向滤波仅支持事后批处理（文件读完→正向→反向→合并），Java 版扩展到实时流场景。
+
+### 9.1 基本原理
+
+```
+正向滤波：  epoch1 → epoch2 → ... → epochN  （实时逐历元处理）
+反向滤波：  epochN → ... → epoch2 → epoch1  （缓存满后逆序处理）
+合并输出：  CombinedFilter 加权平均正向和反向结果
+```
+
+反向滤波利用后续历元的信息修正前期模糊度未收敛时的精度损失，
+对 RTK 初始化阶段和周跳恢复阶段效果显著。
+
+### 9.2 配置与使用
+
+```java
+PrcOpt opt = RtkProcessor.createDefaultOpt();
+opt.cacheMaxEpochs = 240;  // 关键配置：0=纯正向(默认), >0=缓存满触发反向
+
+PosHandler handler = new PosHandler() {
+    @Override
+    public void onResult(SolData solData) {
+        // solData.sourceId 可区分不同数据源
+        // 正向结果实时推送，反向合并结果在缓存满时批量推送
+        System.out.printf("[%s] Q=%d sourceId=%s%n",
+            solData.timeStr, solData.status.getCode(), solData.sourceId);
+    }
+    // ... onSolution, onPosFail, onFinish
+};
+
+RtkProcessor rtk = new RtkProcessor(opt, handler);
+
+// 带sourceId投喂数据（自动缓存）
+rtk.feedRover("rover_device_001", roverData);
+rtk.feedBase("base_BJFS", baseData);
+
+// 缓存满240历元时自动触发：反向处理 → CombinedFilter合并 → handler.onResult()输出
+```
+
+### 9.3 触发机制
+
+| 条件 | 行为 |
+|------|------|
+| `cacheMaxEpochs = 0` | 纯正向，不缓存（默认，与无缓存时行为一致） |
+| `cacheMaxEpochs > 0` 且缓存满 | 自动触发反向滤波 → 合并 → 通过 `handler.onResult()` 输出 → 清空缓存 |
+| 手动调用 `reprocess(sourceId)` | 立即对指定数据源的缓存数据执行反向+合并 |
+
+### 9.4 数据源标识 (sourceId)
+
+`sourceId` 由调用方定义，用于区分不同测站/设备的数据：
+
+```java
+// 多数据源场景
+rtk.feedRover("station_A", roverDataA);  // 缓存按 sourceId 分桶
+rtk.feedRover("station_B", roverDataB);  // 互不干扰
+
+// 回调中通过 SolData.sourceId 区分结果来源
+```
+
+`sourceId` 可为 null（向后兼容 `feed(data)` 等价于 `feed(null, data)`），但 null 不参与缓存。
+
+### 9.5 缓存实现
+
+| 实现 | 类 | 说明 |
+|------|------|------|
+| 内存缓存 | `InMemoryEpochCache` | 环形缓冲区，超容量自动丢弃最旧历元（默认） |
+| 外部缓存 | `ExternalEpochCache` | 通过 `ExternalCacheProvider` 接口对接 Redis/数据库/文件 |
+
+```java
+// 使用外部缓存
+ExternalCacheProvider provider = new MyRedisCacheProvider();
+EpochCache externalCache = new ExternalEpochCache(provider, 240);
+rtk.setEpochCache(externalCache);
+```
+
+### 9.6 事后双向滤波
+
+事后处理（RINEX文件）通过 `PostPosProcessor` + `soltype` 配置实现双向，RTK 和 PPP 均支持：
+
+```java
+PrcOpt opt = new PrcOpt();
+opt.mode = Constants.PMODE_KINEMA;
+opt.soltype = Constants.SOLTYPE_COMBINED;  // 正向+反向+合并
+
+PostPosProcessor post = new PostPosProcessor(opt, sopt, handler);
+PostPosProcessor.PostPosResult result = post.process("rover.obs", "base.obs", "nav.nav");
+```
+
+| soltype | 常量 | 说明 |
+|---------|------|------|
+| 0 | `SOLTYPE_FORWARD` | 仅正向 |
+| 1 | `SOLTYPE_BACKWARD` | 仅反向 |
+| 2 | `SOLTYPE_COMBINED` | 正向+反向+合并（反向独立初始化） |
+| 3 | `SOLTYPE_COMBINED_NORESET` | 正向+反向+合并（反向复用正向状态） |
+
+### 9.7 适用范围
+
+| 场景 | SPP | RTK | PPP |
+|------|:---:|:---:|:---:|
+| 实时正向 | ✅ | ✅ | ✅ |
+| 实时双向（缓存触发） | ❌ | ✅ | ❌ |
+| 事后双向（soltype配置） | ❌ | ✅ | ✅ |
+
+SPP 为绝对定位，无反向滤波意义。PPP 事后双向已实现（`PostPosProcessor`），实时双向暂未实现。
+
+---
+
 ## 常量参考
 
 ### 定位模式 (PrcOpt.mode)
@@ -556,6 +667,26 @@ PppProcessor.PppResult result = ppp.finish();
 | `SOLQ_DGPS` | 4 | DGPS 解 |
 | `SOLQ_SINGLE` | 5 | 单点解 |
 | `SOLQ_PPP` | 6 | PPP 解 |
+
+### 滤波方向 (PrcOpt.soltype)
+
+| 常量 | 值 | 说明 |
+|------|---|------|
+| `SOLTYPE_FORWARD` | 0 | 正向 |
+| `SOLTYPE_BACKWARD` | 1 | 反向 |
+| `SOLTYPE_COMBINED` | 2 | 正向+反向+合并 |
+| `SOLTYPE_COMBINED_NORESET` | 3 | 正向+反向+合并（反向复用正向状态） |
+
+### 参考站位置模式 (PrcOpt.refpos)
+
+| 常量 | 值 | 说明 |
+|------|---|------|
+| `POSOPT_POS_LLH` | 0 | 固定LLH（从PrcOpt.rb读取） |
+| `POSOPT_POS_XYZ` | 1 | 固定XYZ（从PrcOpt.rb读取，默认） |
+| `POSOPT_SINGLE` | 2 | SPP均值 |
+| `POSOPT_FILE` | 3 | 从文件读取 |
+| `POSOPT_RINEX` | 4 | RINEX头近似坐标 |
+| `POSOPT_RTCM` | 5 | RTCM 1005/1006动态获取 |
 
 ### 卫星系统
 
