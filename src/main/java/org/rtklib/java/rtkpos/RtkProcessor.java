@@ -111,6 +111,10 @@ public class RtkProcessor {
     private byte[] pendingBase = new byte[4096];
     private int pendingBaseLen = 0;
 
+    private EpochCache epochCache;
+    private String lastRoverSourceId = null;
+    private String lastBaseSourceId = null;
+
     /**
      * 构造RTK处理器。
      *
@@ -124,6 +128,7 @@ public class RtkProcessor {
         this.rtk = new Rtk();
         this.rtk.opt = this.opt;
         initFromOpt();
+        initCache();
 
         if (outputStream != null) {
             this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
@@ -153,6 +158,20 @@ public class RtkProcessor {
     public void setOutputThrottle(int interval, int sleepMs) {
         this.sleepInterval = interval;
         this.sleepMs = sleepMs;
+    }
+
+    private void initCache() {
+        if (opt.cacheEnabled) {
+            this.epochCache = new InMemoryEpochCache(opt.cacheMaxEpochs);
+        }
+    }
+
+    public void setEpochCache(EpochCache cache) {
+        this.epochCache = cache;
+    }
+
+    public EpochCache getEpochCache() {
+        return epochCache;
     }
 
     private void initFromOpt() {
@@ -271,6 +290,24 @@ public class RtkProcessor {
 
     public PrcOpt getOpt() { return opt; }
 
+    public void feedRover(String sourceId, byte[] data, int offset, int length) {
+        this.lastRoverSourceId = sourceId;
+        feedRover(data, offset, length);
+    }
+
+    public void feedRover(String sourceId, byte[] data) {
+        feedRover(sourceId, data, 0, data.length);
+    }
+
+    public void feedBase(String sourceId, byte[] data, int offset, int length) {
+        this.lastBaseSourceId = sourceId;
+        feedBase(data, offset, length);
+    }
+
+    public void feedBase(String sourceId, byte[] data) {
+        feedBase(sourceId, data, 0, data.length);
+    }
+
     public void feedRover(byte[] data, int offset, int length) {
         if (finished) {
             throw new IllegalStateException("Processor already finished");
@@ -364,6 +401,7 @@ public class RtkProcessor {
             pendingRoverObsList.add(obsCopy);
             pendingRoverObsCountList.add(n);
             pendingRoverObsTimeList.add(rtcmRover.obs.data[0].time);
+            cacheEpoch(lastRoverSourceId, obsCopy, n, rtcmRover.obs.data[0].time);
         }
     }
 
@@ -386,6 +424,13 @@ public class RtkProcessor {
             pendingBaseObsList.add(obsCopy);
             pendingBaseObsCountList.add(n);
             pendingBaseObsTimeList.add(rtcmBase.obs.data[0].time);
+            cacheEpoch(lastBaseSourceId, obsCopy, n, rtcmBase.obs.data[0].time);
+        }
+    }
+
+    private void cacheEpoch(String sourceId, Obsd[] obs, int n, GTime time) {
+        if (epochCache != null && sourceId != null) {
+            epochCache.put(sourceId, obs, n, time);
         }
     }
 

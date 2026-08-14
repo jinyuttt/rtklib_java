@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory;
 
 import org.rtklib.java.common.CompatFileIO;
 import org.rtklib.java.common.RtklibCommon;
+import org.rtklib.java.rtkpos.EpochCache;
+import org.rtklib.java.rtkpos.InMemoryEpochCache;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -93,6 +95,9 @@ public class SppProcessor {
     private byte[] pending = new byte[4096];
     private int pendingLen = 0;
 
+    private EpochCache epochCache;
+    private String lastSourceId = null;
+
     /**
      * 构造SPP处理器。
      *
@@ -106,6 +111,7 @@ public class SppProcessor {
         this.handler = handler;
         for (int i = 0; i < Constants.MAXSAT; i++) ssat[i] = new Ssat();
         initFromOpt();
+        initCache();
 
         if (outputStream != null) {
             this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
@@ -163,6 +169,20 @@ public class SppProcessor {
         }
     }
 
+    private void initCache() {
+        if (opt.cacheEnabled) {
+            this.epochCache = new InMemoryEpochCache(opt.cacheMaxEpochs);
+        }
+    }
+
+    public void setEpochCache(EpochCache cache) {
+        this.epochCache = cache;
+    }
+
+    public EpochCache getEpochCache() {
+        return epochCache;
+    }
+
     public static PrcOpt createDefaultOpt() {
         PrcOpt opt = new PrcOpt();
         opt.mode = Constants.PMODE_SINGLE;
@@ -189,6 +209,15 @@ public class SppProcessor {
      * @param length 数据长度
      * @throws IllegalStateException 已调用finish()后再次调用
      */
+    public void feed(String sourceId, byte[] data, int offset, int length) {
+        this.lastSourceId = sourceId;
+        feed(data, offset, length);
+    }
+
+    public void feed(String sourceId, byte[] data) {
+        feed(sourceId, data, 0, data.length);
+    }
+
     public void feed(byte[] data, int offset, int length) {
         if (finished) {
             throw new IllegalStateException("Processor already finished");
@@ -502,6 +531,10 @@ public class SppProcessor {
                 obsCopy[i] = new Obsd(rtcm.obs.data[i]);
             }
             GTime epochTime = rtcm.obs.data[0].time;
+
+            if (epochCache != null && lastSourceId != null) {
+                epochCache.put(lastSourceId, obsCopy, n, epochTime);
+            }
 
             if (ephReady) {
                 processEpoch(obsCopy, n, epochTime, rtcm.nav);
