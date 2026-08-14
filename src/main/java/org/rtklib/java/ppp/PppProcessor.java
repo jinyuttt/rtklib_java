@@ -7,6 +7,7 @@ import org.rtklib.java.ephemeris.ClkReader;
 import org.rtklib.java.ephemeris.Sp3Reader;
 import org.rtklib.java.pntpos.PntPos;
 import org.rtklib.java.pntpos.PosHandler;
+import org.rtklib.java.rtkpos.CombinedFilter;
 import org.rtklib.java.rtcm.Rtcm;
 import org.rtklib.java.time.TimeSystem;
 import org.slf4j.Logger;
@@ -18,6 +19,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -346,9 +348,13 @@ public class PppProcessor {
 
         rtcm.nav = batchRtcm.nav;
         ephReady = true;
-        finished = true;
         ephTypeCount.putAll(batchEphTypeCount);
 
+        if (opt.cacheMaxEpochs > 0 && solutions.size() > 10) {
+            return processBatchCombined(batchObsList, batchObsCountList, batchObsTimeList, batchRtcm.nav);
+        }
+
+        finished = true;
         return finishInternal();
     }
 
@@ -653,6 +659,98 @@ public class PppProcessor {
             System.arraycopy(src.amb, 0, dst.amb, 0, src.amb.length);
         }
         return copy;
+    }
+
+    private PppResult processBatchCombined(
+            List<Obsd[]> obsList, List<Integer> obsCountList, List<GTime> obsTimeList, Nav nav) {
+
+        List<Sol> solfList = new ArrayList<>(solutions);
+        List<double[]> rbfList = new ArrayList<>();
+        for (Sol s : solfList) {
+            rbfList.add(s != null ? new double[3] : null);
+        }
+        log.info("PPP Batch forward pass done: {} valid solutions", solfList.size());
+
+        Rtk rtkB = new Rtk();
+        rtkB.opt = this.opt;
+
+        List<Obsd[]> reversedObs = new ArrayList<>(obsList);
+        Collections.reverse(reversedObs);
+        List<Integer> reversedCount = new ArrayList<>(obsCountList);
+        Collections.reverse(reversedCount);
+        List<GTime> reversedTime = new ArrayList<>(obsTimeList);
+        Collections.reverse(reversedTime);
+
+        List<Sol> solbList = new ArrayList<>();
+        List<double[]> rbbList = new ArrayList<>();
+        int bTotal = 0, bSuccess = 0, bFail = 0;
+
+        for (int i = 0; i < reversedObs.size(); i++) {
+            Obsd[] obsData = reversedObs.get(i);
+            int n = reversedCount.get(i);
+            GTime time = reversedTime.get(i);
+
+            bTotal++;
+
+            GTime prevTime = new GTime(rtkB.sol.time);
+            if (rtkB.sol.stat == Constants.SOLQ_NONE) {
+                PntPos.pntpos(obsData, n, nav, opt, rtkB.sol, null, rtkB.ssat);
+            } else {
+                rtkB.sol.time = obsData[0].time;
+            }
+            if (prevTime.time != 0) {
+                rtkB.tt = TimeSystem.timediff(rtkB.sol.time, prevTime);
+            } else {
+                rtkB.tt = 0.0;
+            }
+
+            PppCore.pppos(rtkB, obsData, n, nav);
+            if (rtkB.sol.stat != Constants.SOLQ_NONE) {
+                solbList.add(new Sol(rtkB.sol));
+                rbbList.add(new double[3]);
+                bSuccess++;
+            } else {
+                solbList.add(null);
+                rbbList.add(null);
+                bFail++;
+            }
+        }
+        Collections.reverse(solbList);
+        Collections.reverse(rbbList);
+        log.info("PPP Batch backward pass done: {} total, {} valid, {} fail", bTotal, bSuccess, bFail);
+
+        int totalEpochs = obsList.size();
+        while (solfList.size() < totalEpochs) solfList.add(null);
+        while (solbList.size() < totalEpochs) solbList.add(null);
+        while (rbfList.size() < totalEpochs) rbfList.add(null);
+        while (rbbList.size() < totalEpochs) rbbList.add(null);
+
+        Sol[] solf = solfList.toArray(new Sol[0]);
+        Sol[] solb = solbList.toArray(new Sol[0]);
+        double[][] rbf = rbfList.toArray(new double[0][]);
+        double[][] rbb = rbbList.toArray(new double[0][]);
+
+        List<Sol> combined = CombinedFilter.combine(solf, solb, rbf, rbb, opt, null);
+        log.info("PPP Batch combined: {} solutions", combined.size());
+
+        finished = true;
+
+        int cSuccess = (int) combined.stream().filter(s -> s != null && s.stat != Constants.SOLQ_NONE).count();
+        int cFail = combined.size() - cSuccess;
+
+        List<SolData> solDataList = combined.stream()
+                .filter(s -> s != null)
+                .map(sol -> new SolData(sol, opt.posMask))
+                .toList();
+
+        if (handler != null) {
+            for (SolData sd : solDataList) {
+                handler.onResult(sd);
+            }
+            handler.onFinish(totalEpochs, cSuccess, cFail);
+        }
+
+        return new PppResult(totalEpochs, cSuccess, cFail, solDataList);
     }
 
     private PppResult buildResult() {
