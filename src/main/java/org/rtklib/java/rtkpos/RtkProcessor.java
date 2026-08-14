@@ -432,7 +432,8 @@ public class RtkProcessor {
     private void cacheEpoch(String sourceId, Obsd[] obs, int n, GTime time) {
         if (epochCache != null && sourceId != null) {
             epochCache.put(sourceId, obs, n, time);
-            if (epochCache.size(sourceId) >= opt.cacheMaxEpochs && opt.cacheMaxEpochs > 0) {
+            if (epochCache.size(sourceId) >= opt.cacheMaxEpochs && opt.cacheMaxEpochs > 0
+                    && opt.soltype != Constants.SOLTYPE_FORWARD) {
                 onCacheFull(sourceId);
             }
         }
