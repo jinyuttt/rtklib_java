@@ -1152,3 +1152,112 @@ python rtk_compare/compare_results.py \
 #### 测试验证
 - RTK测试（RtkLocalTest）：2个测试全部通过，240历元0失败
 - 潮汐改正测试（tidecorr=7，固体潮+海潮+极潮）：240历元全部成功
+
+---
+
+## 14. 功能边界：Java版未实现功能清单（2026-08-14 梳理）
+
+### 14.1 数据流与网络协议
+
+| C版功能 | C版源码 | Java版状态 | 说明 |
+|---------|---------|------------|------|
+| 串口通信 (STR_SERIAL) | stream.c | ❌ 未实现 | Java可用jSerialComm等库，但未集成 |
+| TCP服务端 (STR_TCPSVR) | stream.c | ❌ 未实现 | 需自行用Java ServerSocket实现 |
+| TCP客户端 (STR_TCPCLI) | stream.c | ❌ 未实现 | 需自行用Java Socket实现 |
+| NTRIP客户端 (STR_NTRIPCLI) | stream.c | ❌ 未实现 | NTRIP协议未实现，无法从Caster获取数据 |
+| NTRIP服务端 (STR_NTRIPSVR) | stream.c | ❌ 未实现 | 无法向Caster推送数据 |
+| NTRIP Caster (STR_NTRIPCAS) | stream.c | ❌ 未实现 | — |
+| UDP服务端/客户端 | stream.c | ❌ 未实现 | — |
+| FTP下载 (STR_FTP) | stream.c | ❌ 未实现 | — |
+| HTTP下载 (STR_HTTP) | stream.c | ❌ 未实现 | — |
+| 内存缓冲区 (STR_MEMBUF) | stream.c | ❌ 未实现 | — |
+| 流服务 (streamsvr.c) | streamsvr.c | ❌ 未实现 | 数据流管理、格式转换服务 |
+| RTK服务 (rtksvr.c) | rtksvr.c | ❌ 未实现 | 多流实时定位服务 |
+
+**Java版数据输入方式**：仅支持本地文件（RTCM/RINEX）和byte[]直接输入（feed方法），
+网络数据获取需应用层自行实现后通过feed()注入。
+
+### 14.2 接收机原始协议
+
+| C版接收机 | C版源码 | Java版状态 | 说明 |
+|-----------|---------|------------|------|
+| NovAtel OEM4/6/7 | rcv/novatel.c | ❌ 未实现 | 仅定义了STRFMT_OEM4常量 |
+| u-blox | rcv/ublox.c | ❌ 未实现 | 仅定义了STRFMT_UBX常量 |
+| SwiftNav Piksi | rcv/swiftnav.c | ❌ 未实现 | 仅定义了STRFMT_SBP常量 |
+| Hemisphere | rcv/crescent.c | ❌ 未实现 | 仅定义了STRFMT_CRES常量 |
+| Septentrio | rcv/septentrio.c | ❌ 未实现 | 仅定义了STRFMT_STQ常量 |
+| Javad | rcv/javad.c | ❌ 未实现 | 仅定义了STRFMT_JAVAD常量 |
+| NVS | rcv/nvs.c | ❌ 未实现 | 仅定义了STRFMT_NVS常量 |
+| BINEX | rcv/binex.c | ❌ 未实现 | 仅定义了STRFMT_BINEX常量 |
+| Trimble RT17 | rcv/rt17.c | ❌ 未实现 | 仅定义了STRFMT_RT17常量 |
+| Tersus | rcv/tersus.c | ❌ 未实现 | C版有，Java版无常量 |
+| Unicore | rcv/unicore.c | ❌ 未实现 | 仅定义了STRFMT_UNICORE常量 |
+| SkyTraq | rcv/skytraq.c | ❌ 未实现 | C版有，Java版无常量 |
+| ComNav | rcv/comnav.c | ❌ 未实现 | C版有，Java版无常量 |
+
+**Java版数据格式**：仅支持 **RTCM3**（完整解码）和 **RINEX 3.x**（读写）。
+接收机原始协议需先用convbin转为RTCM3/RINEX后使用。
+
+### 14.3 解算输出格式
+
+| C版格式 | C版函数 | Java版状态 | 说明 |
+|---------|---------|------------|------|
+| LLH (.pos) | outsols() | ✅ 已实现 | 默认输出格式 |
+| XYZ ECEF | outsols() | ✅ 已实现 | 通过posMask配置 |
+| ENU基线 | outsols() | ✅ 已实现 | 通过posMask配置 |
+| NMEA 0183 | outnmea_rmc/gga/gsa/gsv() | ❌ 未实现 | 常量SOLF_NMEA已定义，但无编码实现 |
+| Solution Status | outsols() | ❌ 未实现 | 常量SOLF_STAT已定义 |
+| GSI F1/F2 | outsols() | ❌ 未实现 | 常量SOLF_GSIF已定义 |
+
+### 14.4 坐标转换与格式
+
+| C版功能 | C版源码 | Java版状态 | 说明 |
+|---------|---------|------------|------|
+| GPX输出 | convgpx.c | ❌ 未实现 | Google Earth格式 |
+| KML输出 | convkml.c | ❌ 未实现 | Google Earth格式 |
+| 大地水准面模型 | geoid.c | ❌ 未实现 | EGM96等大地水准面改正 |
+| 基准转换 | datum.c | ❌ 未实现 | ITRF间坐标转换 |
+| TLE星历 | tle.c | ❌ 未实现 | 两行根数星历 |
+| GIS功能 | gis.c | ❌ 未实现 | Shapefile等 |
+| IONEX电离层 | ionex.c | ❌ 未实现 | IGS IONEX文件读取 |
+| 下载功能 | download.c | ❌ 未实现 | IGS数据自动下载 |
+
+### 14.5 定位模式
+
+| C版模式 | 常量 | Java版状态 | 说明 |
+|---------|------|------------|------|
+| SPP单点定位 | PMODE_SINGLE | ✅ 已实现 | SppProcessor |
+| DGPS差分 | PMODE_DGPS | ⚠️ 部分 | RTK框架内，modear=OFF时等效 |
+| Kinematic | PMODE_KINEMA | ✅ 已实现 | RtkProcessor |
+| Static | PMODE_STATIC | ✅ 已实现 | RtkProcessor |
+| Static-Start | PMODE_STATIC_START | ✅ 已实现 | RtkProcessor |
+| Moving-Base | PMODE_MOVEB | ⚠️ 部分 | 常量已定义，核心逻辑未完整验证 |
+| Fixed | PMODE_FIXED | ✅ 已实现 | RtkProcessor |
+| PPP-Kinematic | PMODE_PPP_KINEMA | ✅ 已实现 | PppProcessor |
+| PPP-Static | PMODE_PPP_STATIC | ✅ 已实现 | PppProcessor |
+| PPP-Fixed | PMODE_PPP_FIXED | ✅ 已实现 | PppProcessor |
+
+### 14.6 SBAS
+
+| C版功能 | Java版状态 | 说明 |
+|---------|------------|------|
+| SBAS改正 | ⚠️ 部分实现 | SbasCorrection/SbsIgpBand存在，但未完整集成 |
+| SBAS电离层 | ⚠️ 部分实现 | 数据结构已定义，算法未完整 |
+
+### 14.7 功能边界总结
+
+**Java版定位目标**：作为GNSS定位算法引擎，提供SPP/RTK/PPP核心解算能力，
+不包含C版的网络通信、GUI、实时流服务等功能。
+
+**已实现的核心能力**：
+- RTCM3完整解码（含MSM4/5/6、多系统星历、SSR）
+- RINEX 3.x读写
+- SPP/RTK/PPP定位（含正向/反向滤波）
+- 天线PCV/DCB/海潮/固体潮/极潮改正
+- LAMBDA模糊度固定
+- 多种优化项（自适应Q、IGGIII抗差、SNR质量控制等）
+
+**需要应用层自行实现**：
+- 网络数据获取（NTRIP/TCP/串口）→ 通过feed()注入
+- NMEA输出 → 通过SolData自行编码
+- 实时流管理 → 自行组合Processor实例

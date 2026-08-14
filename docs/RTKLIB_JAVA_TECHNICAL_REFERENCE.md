@@ -1216,7 +1216,7 @@ static void sigindex(int sys, const int *code, int n, int *idx, const prcopt_t *
 | B3I | 42 | 1 | 7 | B3开放服务 |
 | B3Q | 59 | 1 | 4 | B3授权信号 |
 
-> 调试日志格式、排查清单、测试验证详见 [调试指南](RTKLIB_JAVA_DEBUG_GUIDE.md)
+> 调试日志格式、排查清单、测试验证详见 [调试指南](archive/RTKLIB_JAVA_DEBUG_GUIDE.md)
 
 ---
 
