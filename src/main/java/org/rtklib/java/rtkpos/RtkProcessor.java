@@ -790,7 +790,8 @@ public class RtkProcessor {
         ephReady = true;
         ephTypeCount.putAll(batchEphTypeCount);
 
-        if (opt.cacheMaxEpochs > 0 && solutions.size() > 10) {
+        if (opt.cacheMaxEpochs > 0 && solutions.size() > 10
+                && opt.soltype != Constants.SOLTYPE_FORWARD) {
             return processBatchCombined(batchRoverObsList, batchRoverObsCountList,
                     batchRoverObsTimeList, batchBaseObsList, batchBaseObsCountList,
                     batchBaseObsTimeList, batchRtcmRover.nav);
