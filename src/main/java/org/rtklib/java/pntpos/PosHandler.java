@@ -60,6 +60,4 @@ public interface PosHandler {
      * @param failCount    失败历元数
      */
     void onFinish(int totalEpochs, int successCount, int failCount);
-
-    default void onBackwardResult(String sourceId, Object result) {}
 }

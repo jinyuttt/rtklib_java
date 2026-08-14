@@ -442,8 +442,10 @@ public class RtkProcessor {
         log.info("Cache full for sourceId={}, size={}, triggering backward pass",
                 sourceId, epochCache.size(sourceId));
         RtkResult backwardResult = reprocess(sourceId);
-        if (handler != null && backwardResult != null) {
-            handler.onBackwardResult(sourceId, backwardResult);
+        if (backwardResult != null && handler != null) {
+            for (SolData sd : backwardResult.solutions) {
+                handler.onResult(sd);
+            }
         }
     }
 
