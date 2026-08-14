@@ -6,7 +6,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
 import org.rtklib.java.rinex.PostPosProcessor;
+import org.rtklib.java.rinex.RinexRtkProcessor;
 import org.rtklib.java.rtkpos.CombinedFilter;
+import org.rtklib.java.rtkpos.RtkProcessor;
 import org.rtklib.java.rtkpos.Smoother;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -265,5 +267,61 @@ public class ForwardBackwardFilterTest {
         log.info("Forward success={}, Combined success={}", resultF.successCount, resultC.successCount);
         assertTrue(resultC.successCount >= resultF.successCount,
                 "Combined should have at least as many valid solutions as forward alone");
+    }
+
+    @Test
+    @DisplayName("RinexRtkProcessor: soltype=COMBINED drives bidirectional filter")
+    void testRtkProcessorConfigDriven() {
+        if (!dataAvailable) {
+            log.warn("Skipping testRtkProcessorConfigDriven - data not available");
+            return;
+        }
+
+        PrcOpt opt = new PrcOpt();
+        opt.mode = Constants.PMODE_KINEMA;
+        opt.soltype = Constants.SOLTYPE_COMBINED;
+        opt.nf = 2;
+        opt.navsys = Constants.SYS_GPS | Constants.SYS_GLO | Constants.SYS_GAL | Constants.SYS_CMP;
+        opt.elmin = 15.0 * Constants.D2R;
+        opt.ionoopt = Constants.IONOOPT_BRDC;
+        opt.tropopt = Constants.TROPOPT_SAAS;
+        opt.modear = Constants.ARMODE_FIXHOLD;
+
+        RinexRtkProcessor rtk = new RinexRtkProcessor(opt);
+        RtkProcessor.RtkResult result = rtk.process(ROVER_OBS, BASE_OBS, NAV_PATH);
+
+        log.info("RinexRtkProcessor COMBINED: total={}, success={}, fail={}",
+                result.totalEpochs, result.successCount, result.failCount);
+        assertTrue(result.totalEpochs > 0, "Should have processed epochs");
+        assertTrue(result.successCount > 0, "Should have successful solutions");
+        assertFalse(result.solutions.isEmpty(), "Should have solution data");
+    }
+
+    @Test
+    @DisplayName("RinexRtkProcessor: soltype=FORWARD (default) unchanged behavior")
+    void testRtkProcessorForwardDefault() {
+        if (!dataAvailable) {
+            log.warn("Skipping testRtkProcessorForwardDefault - data not available");
+            return;
+        }
+
+        PrcOpt opt = new PrcOpt();
+        opt.mode = Constants.PMODE_KINEMA;
+        opt.nf = 2;
+        opt.navsys = Constants.SYS_GPS | Constants.SYS_GLO | Constants.SYS_GAL | Constants.SYS_CMP;
+        opt.elmin = 15.0 * Constants.D2R;
+        opt.ionoopt = Constants.IONOOPT_BRDC;
+        opt.tropopt = Constants.TROPOPT_SAAS;
+        opt.modear = Constants.ARMODE_FIXHOLD;
+
+        assertEquals(Constants.SOLTYPE_FORWARD, opt.soltype, "Default soltype should be FORWARD");
+
+        RinexRtkProcessor rtk = new RinexRtkProcessor(opt);
+        RtkProcessor.RtkResult result = rtk.process(ROVER_OBS, BASE_OBS, NAV_PATH);
+
+        log.info("RinexRtkProcessor FORWARD (default): total={}, success={}, fail={}",
+                result.totalEpochs, result.successCount, result.failCount);
+        assertTrue(result.totalEpochs > 0, "Should have processed epochs");
+        assertTrue(result.successCount > 0, "Should have successful solutions");
     }
 }

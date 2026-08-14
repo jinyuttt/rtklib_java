@@ -94,7 +94,7 @@ public class PostPosProcessor {
 
         if (roverParser.obs.n == 0) {
             log.warn("No observation data in RINEX file");
-            return new PostPosResult(0, 0, 0, List.of());
+            return new PostPosResult(0, 0, 0, List.of(), List.of());
         }
 
         double[] approxPos = null;
@@ -173,12 +173,11 @@ public class PostPosProcessor {
         }
 
         finishOutput(totalEpochs, successCount, failCount);
-        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions));
+        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions), solutions);
     }
 
-    private PostPosResult processBackward(List<List<Obsd>> roverEpochs,
-                                           List<List<Obsd>> baseEpochs, Nav nav,
-                                           double[] approxPos, double[] basePos) {
+    private PostPosResult processBackward(List<List<Obsd>> roverEpochs, List<List<Obsd>> baseEpochs,
+                                           Nav nav, double[] approxPos, double[] basePos) {
         Rtk rtk = createRtk(approxPos, basePos);
         int totalEpochs = 0, successCount = 0, failCount = 0;
         List<Sol> solutions = new ArrayList<>();
@@ -208,7 +207,7 @@ public class PostPosProcessor {
         Collections.reverse(solutions);
 
         finishOutput(totalEpochs, successCount, failCount);
-        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions));
+        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions), solutions);
     }
 
     private PostPosResult processCombined(List<List<Obsd>> roverEpochs,
@@ -284,7 +283,7 @@ public class PostPosProcessor {
         }
 
         finishOutput(totalEpochs, successCount, failCount);
-        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(combined));
+        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(combined), combined);
     }
 
     private Rtk createRtk(double[] approxPos, double[] basePos) {
@@ -416,12 +415,15 @@ public class PostPosProcessor {
         public final int successCount;
         public final int failCount;
         public final List<SolData> solutions;
+        final List<Sol> solList;
 
-        public PostPosResult(int totalEpochs, int successCount, int failCount, List<SolData> solutions) {
+        public PostPosResult(int totalEpochs, int successCount, int failCount,
+                             List<SolData> solutions, List<Sol> solList) {
             this.totalEpochs = totalEpochs;
             this.successCount = successCount;
             this.failCount = failCount;
             this.solutions = solutions;
+            this.solList = solList;
         }
     }
 }

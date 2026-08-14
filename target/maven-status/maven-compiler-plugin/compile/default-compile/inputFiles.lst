@@ -59,6 +59,7 @@ D:\code\rtklib_java\src\main\java\org\rtklib\java\pntpos\SppCore.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\pntpos\SppProcessor.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\ppp\PppCore.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\ppp\PppProcessor.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\rinex\PostPosProcessor.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rinex\RinexNavWriter.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rinex\RinexObsWriter.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rinex\RinexParser.java
@@ -74,10 +75,12 @@ D:\code\rtklib_java\src\main\java\org\rtklib\java\rtcm\ObservationEpoch.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtcm\Rtcm.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtcm\RtcmCallbackDecoder.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtcm\RtcmDataHandler.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\CombinedFilter.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkCore.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkOptimizations.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkPos.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkProcessor.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\Smoother.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\Tides.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\time\TimeSystem.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\trace\PppTrace.java

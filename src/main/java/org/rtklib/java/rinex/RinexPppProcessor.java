@@ -74,6 +74,9 @@ public class RinexPppProcessor {
 
     public PppResult process(String obsFilePath, String navFilePath,
                              String sp3FilePath, String clkFilePath) {
+        if (opt.soltype != Constants.SOLTYPE_FORWARD) {
+            return processViaPostPos(obsFilePath, navFilePath, sp3FilePath, clkFilePath);
+        }
         RinexParser parser = new RinexParser();
         boolean obsOk = parser.parseObs(obsFilePath);
         if (!obsOk) {
@@ -129,13 +132,22 @@ public class RinexPppProcessor {
         return buildResult();
     }
 
-    public PostPosProcessor.PostPosResult processBidirectional(
-            String obsFilePath, String navFilePath,
-            String sp3FilePath, String clkFilePath, int soltype) {
+    private PppResult processViaPostPos(String obsFilePath, String navFilePath,
+                                        String sp3FilePath, String clkFilePath) {
         PrcOpt procOpt = new PrcOpt(opt);
-        procOpt.soltype = soltype;
         PostPosProcessor proc = new PostPosProcessor(procOpt, new SolOpt());
-        return proc.process(obsFilePath, null, navFilePath, sp3FilePath, clkFilePath);
+        PostPosProcessor.PostPosResult result = proc.process(obsFilePath, null, navFilePath, sp3FilePath, clkFilePath);
+
+        totalEpochs = result.totalEpochs;
+        successCount = result.successCount;
+        failCount = result.failCount;
+        for (Sol sol : result.solList) {
+            solutions.add(new Sol(sol));
+        }
+
+        log.info("RINEX PPP (soltype={}): total={}, success={}, fail={}",
+                opt.soltype, totalEpochs, successCount, failCount);
+        return buildResult();
     }
 
     private void processEpoch(Obsd[] obs, int n, Nav nav) {

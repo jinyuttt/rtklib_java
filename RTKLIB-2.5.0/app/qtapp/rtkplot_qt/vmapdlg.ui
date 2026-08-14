@@ -1,0 +1,448 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>VecMapDialog</class>
+ <widget class="QWidget" name="VecMapDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>430</width>
+    <height>562</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Map Layer</string>
+  </property>
+  <property name="toolTip">
+   <string/>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0" rowspan="2" colspan="5">
+    <widget class="QFrame" name="Panel1">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="toolTip">
+      <string/>
+     </property>
+     <property name="layoutDirection">
+      <enum>Qt::LayoutDirection::LeftToRight</enum>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::Shape::NoFrame</enum>
+     </property>
+     <property name="text" stdset="0">
+      <string/>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_2">
+      <item row="12" column="0">
+       <widget class="QCheckBox" name="cBVisible12">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="12" column="3">
+       <widget class="QPushButton" name="btnColor12F"/>
+      </item>
+      <item row="7" column="0">
+       <widget class="QCheckBox" name="cBVisible7">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="2">
+       <widget class="QPushButton" name="btnColor3"/>
+      </item>
+      <item row="9" column="3">
+       <widget class="QPushButton" name="btnColor9F"/>
+      </item>
+      <item row="5" column="0">
+       <widget class="QCheckBox" name="cBVisible5">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="2">
+       <widget class="QPushButton" name="btnColor9"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QCheckBox" name="cBVisible1">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="1">
+       <widget class="QRadioButton" name="rBLayer9">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="10" column="1">
+       <widget class="QRadioButton" name="rBLayer10">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QCheckBox" name="cBVisible3">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QPushButton" name="btnColor1"/>
+      </item>
+      <item row="4" column="3">
+       <widget class="QPushButton" name="btnColor4F"/>
+      </item>
+      <item row="10" column="0">
+       <widget class="QCheckBox" name="cBVisible10">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QRadioButton" name="rBLayer2">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="11" column="1">
+       <widget class="QRadioButton" name="rBLayer11">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="3">
+       <widget class="QPushButton" name="btnColor3F"/>
+      </item>
+      <item row="5" column="2">
+       <widget class="QPushButton" name="btnColor5"/>
+      </item>
+      <item row="12" column="2">
+       <widget class="QPushButton" name="btnColor12"/>
+      </item>
+      <item row="8" column="0">
+       <widget class="QCheckBox" name="cBVisible8">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="lblShow">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>Show</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="3">
+       <widget class="QPushButton" name="btnColor5F"/>
+      </item>
+      <item row="0" column="2">
+       <widget class="QLabel" name="lblLine">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>Line</string>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="2">
+       <widget class="QPushButton" name="btnColor8"/>
+      </item>
+      <item row="10" column="2">
+       <widget class="QPushButton" name="btnColor10"/>
+      </item>
+      <item row="8" column="3">
+       <widget class="QPushButton" name="btnColor8F"/>
+      </item>
+      <item row="1" column="1">
+       <widget class="QRadioButton" name="rBLayer1">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QCheckBox" name="cBVisible2">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="11" column="2">
+       <widget class="QPushButton" name="btnColor11"/>
+      </item>
+      <item row="8" column="1">
+       <widget class="QRadioButton" name="rBLayer8">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="2">
+       <widget class="QPushButton" name="btnColor6"/>
+      </item>
+      <item row="4" column="2">
+       <widget class="QPushButton" name="btnColor4"/>
+      </item>
+      <item row="7" column="2">
+       <widget class="QPushButton" name="btnColor7"/>
+      </item>
+      <item row="7" column="3">
+       <widget class="QPushButton" name="btnColor7F"/>
+      </item>
+      <item row="6" column="0">
+       <widget class="QCheckBox" name="cBVisible6">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QRadioButton" name="rBLayer3">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="1">
+       <widget class="QRadioButton" name="rBLayer6">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="0">
+       <widget class="QCheckBox" name="cBVisible9">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="2">
+       <widget class="QPushButton" name="btnColor2"/>
+      </item>
+      <item row="12" column="1">
+       <widget class="QRadioButton" name="rBLayer12">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="11" column="0">
+       <widget class="QCheckBox" name="cBVisible11">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLabel" name="lblLayer">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>Layer</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0">
+       <widget class="QCheckBox" name="cBVisible4">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QPushButton" name="btnColor1F"/>
+      </item>
+      <item row="10" column="3">
+       <widget class="QPushButton" name="btnColor10F"/>
+      </item>
+      <item row="11" column="3">
+       <widget class="QPushButton" name="btnColor11F"/>
+      </item>
+      <item row="2" column="3">
+       <widget class="QPushButton" name="btnColor2F"/>
+      </item>
+      <item row="6" column="3">
+       <widget class="QPushButton" name="btnColor6F"/>
+      </item>
+      <item row="7" column="1">
+       <widget class="QRadioButton" name="rBLayer7">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="3">
+       <widget class="QLabel" name="lblFill">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text">
+         <string>Fill</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="1">
+       <widget class="QRadioButton" name="rBLayer5">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="QRadioButton" name="rBLayer4">
+        <property name="toolTip">
+         <string/>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="2" column="1" colspan="2">
+    <widget class="QPushButton" name="btnDown">
+     <property name="toolTip">
+      <string>Move layer down in the stack</string>
+     </property>
+     <property name="text">
+      <string>&amp;Down</string>
+     </property>
+     <property name="icon">
+      <iconset resource="../icon/resources.qrc">
+       <normaloff>:/buttons/down</normaloff>:/buttons/down</iconset>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QPushButton" name="btnUp">
+     <property name="toolTip">
+      <string>Move layer up the stack</string>
+     </property>
+     <property name="text">
+      <string>&amp;Up</string>
+     </property>
+     <property name="icon">
+      <iconset resource="../icon/resources.qrc">
+       <normaloff>:/buttons/up2</normaloff>:/buttons/up2</iconset>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="3">
+    <spacer name="horizontalSpacer">
+     <property name="orientation">
+      <enum>Qt::Orientation::Horizontal</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>40</width>
+       <height>20</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item row="2" column="4">
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::StandardButton::Apply|QDialogButtonBox::StandardButton::Close</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>cBVisible1</tabstop>
+  <tabstop>rBLayer1</tabstop>
+  <tabstop>btnColor1</tabstop>
+  <tabstop>btnColor1F</tabstop>
+  <tabstop>cBVisible2</tabstop>
+  <tabstop>rBLayer2</tabstop>
+  <tabstop>btnColor2</tabstop>
+  <tabstop>btnColor2F</tabstop>
+  <tabstop>cBVisible3</tabstop>
+  <tabstop>rBLayer3</tabstop>
+  <tabstop>btnColor3</tabstop>
+  <tabstop>btnColor3F</tabstop>
+  <tabstop>cBVisible4</tabstop>
+  <tabstop>rBLayer4</tabstop>
+  <tabstop>btnColor4</tabstop>
+  <tabstop>btnColor4F</tabstop>
+  <tabstop>cBVisible5</tabstop>
+  <tabstop>rBLayer5</tabstop>
+  <tabstop>btnColor5</tabstop>
+  <tabstop>btnColor5F</tabstop>
+  <tabstop>cBVisible6</tabstop>
+  <tabstop>rBLayer6</tabstop>
+  <tabstop>btnColor6</tabstop>
+  <tabstop>btnColor6F</tabstop>
+  <tabstop>cBVisible7</tabstop>
+  <tabstop>rBLayer7</tabstop>
+  <tabstop>btnColor7</tabstop>
+  <tabstop>btnColor7F</tabstop>
+  <tabstop>cBVisible8</tabstop>
+  <tabstop>rBLayer8</tabstop>
+  <tabstop>btnColor8</tabstop>
+  <tabstop>btnColor8F</tabstop>
+  <tabstop>cBVisible9</tabstop>
+  <tabstop>rBLayer9</tabstop>
+  <tabstop>btnColor9</tabstop>
+  <tabstop>btnColor9F</tabstop>
+  <tabstop>cBVisible10</tabstop>
+  <tabstop>rBLayer10</tabstop>
+  <tabstop>btnColor10</tabstop>
+  <tabstop>btnColor10F</tabstop>
+  <tabstop>cBVisible11</tabstop>
+  <tabstop>rBLayer11</tabstop>
+  <tabstop>btnColor11</tabstop>
+  <tabstop>btnColor11F</tabstop>
+  <tabstop>cBVisible12</tabstop>
+  <tabstop>rBLayer12</tabstop>
+  <tabstop>btnColor12</tabstop>
+  <tabstop>btnColor12F</tabstop>
+  <tabstop>btnUp</tabstop>
+  <tabstop>btnDown</tabstop>
+ </tabstops>
+ <resources>
+  <include location="../icon/resources.qrc"/>
+ </resources>
+ <connections/>
+</ui>

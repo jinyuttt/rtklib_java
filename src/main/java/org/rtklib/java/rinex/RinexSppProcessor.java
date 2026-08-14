@@ -106,6 +106,9 @@ public class RinexSppProcessor {
      * @return 定位结果
      */
     public SppResult process(String obsFilePath, String navFilePath) {
+        if (opt.soltype != Constants.SOLTYPE_FORWARD) {
+            return processViaPostPos(obsFilePath, navFilePath);
+        }
         RinexParser parser = new RinexParser();
         boolean obsOk = parser.parseObs(obsFilePath);
         if (!obsOk) {
@@ -182,12 +185,21 @@ public class RinexSppProcessor {
         return processRinex(obsFilePath, navFilePath, createDefaultOpt());
     }
 
-    public PostPosProcessor.PostPosResult processBidirectional(
-            String obsFilePath, String navFilePath, int soltype) {
+    private SppResult processViaPostPos(String obsFilePath, String navFilePath) {
         PrcOpt procOpt = new PrcOpt(opt);
-        procOpt.soltype = soltype;
         PostPosProcessor proc = new PostPosProcessor(procOpt, new SolOpt());
-        return proc.process(obsFilePath, null, navFilePath);
+        PostPosProcessor.PostPosResult result = proc.process(obsFilePath, null, navFilePath);
+
+        totalEpochs = result.totalEpochs;
+        successCount = result.successCount;
+        failCount = result.failCount;
+        for (Sol sol : result.solList) {
+            solutions.add(new Sol(sol));
+        }
+
+        log.info("RINEX SPP (soltype={}): total={}, success={}, fail={}",
+                opt.soltype, totalEpochs, successCount, failCount);
+        return buildResult();
     }
 
     private List<List<Obsd>> groupObsByEpoch(Obsd[] data, int n) {
