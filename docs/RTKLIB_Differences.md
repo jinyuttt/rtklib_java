@@ -1272,10 +1272,11 @@ Java版新增实时流场景下的双向缓存能力。
 | 场景 | SPP | RTK | PPP |
 |------|:---:|:---:|:---:|
 | 实时正向 | ✅ | ✅ | ✅ |
+| 批处理双向（process方法） | ❌ | ✅ | ✅ |
 | 实时双向（缓存触发） | ❌ | ✅ | ❌ |
-| 事后双向（soltype配置） | ❌ | ✅ | ✅ |
+| 事后双向（soltype配置） | — | ✅ | ✅ |
 
-SPP为绝对定位无反向意义。RTK实时双向通过`cacheMaxEpochs`触发；RTK/PPP事后双向通过`PostPosProcessor`+`soltype`配置（与C版对齐）。
+SPP为绝对定位，每历元独立求解，双向无意义。RTK/PPP批处理双向通过`cacheMaxEpochs>0`触发（正向成功历元>10时自动执行反向→合并）。RTK实时双向通过缓存满触发；RTK/PPP事后双向通过`PostPosProcessor`+`soltype`配置（与C版对齐）。
 
 **设计要点**：
 - `PrcOpt.cacheMaxEpochs`：0=纯正向(默认)，>0=缓存满触发反向的批次大小

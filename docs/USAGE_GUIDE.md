@@ -620,15 +620,32 @@ PostPosProcessor.PostPosResult result = post.process("rover.obs", "base.obs", "n
 | 2 | `SOLTYPE_COMBINED` | 正向+反向+合并（反向独立初始化） |
 | 3 | `SOLTYPE_COMBINED_NORESET` | 正向+反向+合并（反向复用正向状态） |
 
-### 9.7 适用范围
+### 9.7 批处理双向
+
+RtkProcessor/PppProcessor 的 `process()` 批处理方法支持双向滤波（SPP不支持，见9.8）：
+
+```java
+PrcOpt opt = new PrcOpt();
+opt.mode = Constants.PMODE_KINEMA;
+opt.cacheMaxEpochs = 240;  // >0 开启批处理双向
+
+RtkProcessor rtk = new RtkProcessor(opt, handler);
+RtkProcessor.RtkResult result = rtk.process(roverData, baseData);
+// 正向成功历元>10时，自动执行：反向→CombinedFilter合并→返回合并结果
+```
+
+触发条件：`cacheMaxEpochs > 0` 且正向成功历元数 > 10。不满足条件时退化为纯正向。
+
+### 9.8 适用范围
 
 | 场景 | SPP | RTK | PPP |
 |------|:---:|:---:|:---:|
 | 实时正向 | ✅ | ✅ | ✅ |
+| 批处理双向（process方法） | ❌ | ✅ | ✅ |
 | 实时双向（缓存触发） | ❌ | ✅ | ❌ |
-| 事后双向（soltype配置） | ❌ | ✅ | ✅ |
+| 事后双向（soltype配置） | — | ✅ | ✅ |
 
-SPP 为绝对定位，无反向滤波意义。PPP 事后双向已实现（`PostPosProcessor`），实时双向暂未实现。
+SPP为绝对定位，每历元独立求解，正反向结果相同，双向无意义。
 
 ---
 

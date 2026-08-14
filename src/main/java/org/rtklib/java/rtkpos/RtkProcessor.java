@@ -788,9 +788,15 @@ public class RtkProcessor {
         rtcmRover.nav = batchRtcmRover.nav;
         rtcmBase.nav = batchRtcmBase.nav;
         ephReady = true;
-        finished = true;
         ephTypeCount.putAll(batchEphTypeCount);
 
+        if (opt.cacheMaxEpochs > 0 && solutions.size() > 10) {
+            return processBatchCombined(batchRoverObsList, batchRoverObsCountList,
+                    batchRoverObsTimeList, batchBaseObsList, batchBaseObsCountList,
+                    batchBaseObsTimeList, batchRtcmRover.nav);
+        }
+
+        finished = true;
         return finishInternal();
     }
 
@@ -834,6 +840,109 @@ public class RtkProcessor {
         pendingBaseObsTimeList.clear();
 
         return finishInternal();
+    }
+
+    private RtkResult processBatchCombined(
+            List<Obsd[]> roverObsList, List<Integer> roverObsCountList, List<GTime> roverObsTimeList,
+            List<Obsd[]> baseObsList, List<Integer> baseObsCountList, List<GTime> baseObsTimeList,
+            Nav nav) {
+
+        List<Sol> solfList = new ArrayList<>(solutions);
+        List<double[]> rbfList = new ArrayList<>();
+        for (Sol s : solfList) {
+            rbfList.add(s != null ? new double[]{rtk.rb[0], rtk.rb[1], rtk.rb[2]} : null);
+        }
+        log.info("Batch forward pass done: {} valid solutions", solfList.size());
+
+        Rtk rtkB = new Rtk();
+        rtkB.opt = this.opt;
+        if (hasBasePos) {
+            System.arraycopy(rtk.rb, 0, rtkB.rb, 0, 3);
+        }
+
+        List<Obsd[]> reversedRoverObs = new ArrayList<>(roverObsList);
+        Collections.reverse(reversedRoverObs);
+        List<Integer> reversedRoverCount = new ArrayList<>(roverObsCountList);
+        Collections.reverse(reversedRoverCount);
+        List<GTime> reversedRoverTime = new ArrayList<>(roverObsTimeList);
+        Collections.reverse(reversedRoverTime);
+
+        List<Obsd[]> reversedBaseObs = new ArrayList<>(baseObsList);
+        Collections.reverse(reversedBaseObs);
+        List<Integer> reversedBaseCount = new ArrayList<>(baseObsCountList);
+        Collections.reverse(reversedBaseCount);
+        List<GTime> reversedBaseTime = new ArrayList<>(baseObsTimeList);
+        Collections.reverse(reversedBaseTime);
+
+        List<Sol> solbList = new ArrayList<>();
+        List<double[]> rbbList = new ArrayList<>();
+        int bTotal = 0, bSuccess = 0, bFail = 0;
+
+        for (int i = 0; i < reversedRoverObs.size(); i++) {
+            Obsd[] roverObs = reversedRoverObs.get(i);
+            int roverN = reversedRoverCount.get(i);
+            GTime roverTime = reversedRoverTime.get(i);
+
+            Obsd[] baseObs = findMatchingBaseObsFromList(
+                    reversedBaseObs, reversedBaseCount, reversedBaseTime, roverTime);
+            int baseN = (baseObs != null) ? baseObs.length : 0;
+
+            Obsd[] combined = new Obsd[roverN + baseN];
+            System.arraycopy(roverObs, 0, combined, 0, roverN);
+            if (baseObs != null) {
+                System.arraycopy(baseObs, 0, combined, roverN, baseN);
+            }
+
+            bTotal++;
+            int result = RtkCore.rtkpos(rtkB, combined, roverN + baseN, nav);
+            if (result == 1 && rtkB.sol.stat != Constants.SOLQ_NONE) {
+                solbList.add(new Sol(rtkB.sol));
+                rbbList.add(new double[]{rtkB.rb[0], rtkB.rb[1], rtkB.rb[2]});
+                bSuccess++;
+            } else {
+                solbList.add(null);
+                rbbList.add(null);
+                bFail++;
+            }
+        }
+        Collections.reverse(solbList);
+        Collections.reverse(rbbList);
+        log.info("Batch backward pass done: {} total, {} valid, {} fail", bTotal, bSuccess, bFail);
+
+        int totalEpochs = roverObsList.size();
+        while (solfList.size() < totalEpochs) solfList.add(null);
+        while (solbList.size() < totalEpochs) solbList.add(null);
+        while (rbfList.size() < totalEpochs) rbfList.add(null);
+        while (rbbList.size() < totalEpochs) rbbList.add(null);
+
+        Sol[] solf = solfList.toArray(new Sol[0]);
+        Sol[] solb = solbList.toArray(new Sol[0]);
+        double[][] rbf = rbfList.toArray(new double[0][]);
+        double[][] rbb = rbbList.toArray(new double[0][]);
+
+        List<Sol> combined = CombinedFilter.combine(solf, solb, rbf, rbb, opt, null);
+        log.info("Batch combined: {} solutions", combined.size());
+
+        finished = true;
+
+        int cSuccess = (int) combined.stream().filter(s -> s != null && s.stat != Constants.SOLQ_NONE).count();
+        int cFail = combined.size() - cSuccess;
+
+        double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
+        String sourceId = lastRoverSourceId;
+        List<SolData> solDataList = combined.stream()
+                .filter(s -> s != null)
+                .map(sol -> new SolData(sourceId, sol, opt.posMask, rb))
+                .toList();
+
+        if (handler != null) {
+            for (SolData sd : solDataList) {
+                handler.onResult(sd);
+            }
+            handler.onFinish(totalEpochs, cSuccess, cFail);
+        }
+
+        return new RtkResult(totalEpochs, cSuccess, cFail, solDataList);
     }
 
     private RtkResult finishInternal() {

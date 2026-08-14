@@ -50,10 +50,11 @@ RTKLIB-Java 将 C 语言编写的 RTKLIB 核心 GNSS 定位算法移植为 Java 
 | 方向 | SPP | RTK | PPP | 说明 |
 |------|:---:|:---:|:---:|------|
 | 正向 | ✅ | ✅ | ✅ | 逐历元向前滤波，实时输出 |
-| 事后双向 | ❌ | ✅ `PostPosProcessor` | ✅ `PostPosProcessor` | 正向→反向→CombinedFilter合并 |
+| 批处理双向 | ❌ | ✅ `RtkProcessor` | ✅ `PppProcessor` | `cacheMaxEpochs>0`且历元>10时自动触发 |
+| 事后双向 | — | ✅ `PostPosProcessor` | ✅ `PostPosProcessor` | `soltype=SOLTYPE_COMBINED` |
 | 实时双向 | ❌ | ✅ `RtkProcessor` | ❌ | 缓存满自动触发反向→合并 |
 
-> SPP为绝对定位无反向意义。RTK实时双向通过`cacheMaxEpochs`配置触发；RTK/PPP事后双向通过`soltype`配置（`SOLTYPE_COMBINED`）。详见 [使用指南-双向缓存](docs/USAGE_GUIDE.md#9-实时流双向缓存)。
+> SPP为绝对定位，每历元独立求解，正反向结果相同，双向无意义。RTK/PPP批处理双向：`process()`方法中，若`cacheMaxEpochs>0`且正向成功历元>10，自动执行反向→CombinedFilter合并。详见 [使用指南-双向缓存](docs/USAGE_GUIDE.md#9-实时流双向缓存)。
 
 ### 模式配置示例
 
