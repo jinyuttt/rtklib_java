@@ -1,0 +1,17 @@
+     2.11           OBSERVATION DATA    M: Mixed            RINEX VERSION / TYPE
+CONVBIN EX 2.5.0                        20260720 092247 UTC PGM / RUN BY / DATE 
+format: RTCM 3                                              COMMENT             
+log: D:\tdengine-jetlinks\jetlinks-data\device_rtcmbin_storaCOMMENT             
+  ge\GS2025090017\2026-07-20\12.rtcm3                       COMMENT             
+0000                                                        MARKER NAME         
+                                                            MARKER NUMBER       
+                                                            OBSERVER / AGENCY   
+                                                            REC # / TYPE / VERS 
+                                                            ANT # / TYPE        
+ -1083471.1671  5483522.8201  3066265.3354                  APPROX POSITION XYZ 
+        0.0000        0.0000        0.0000                  ANTENNA: DELTA H/E/N
+     1     1                                                WAVELENGTH FACT L1/2
+     0                                                      # / TYPES OF OBSERV 
+  2026    07    20    04    00   30.0000000     GPS         TIME OF FIRST OBS   
+  2026    07    20    05    00   15.0000000     GPS         TIME OF LAST OBS    
+                                                            END OF HEADER       

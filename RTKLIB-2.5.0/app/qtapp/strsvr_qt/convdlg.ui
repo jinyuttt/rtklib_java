@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ConvDialog</class>
+ <widget class="QWidget" name="ConvDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>374</width>
+    <height>188</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Conversion Option</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="4" column="0">
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QLabel" name="lblOptions">
+       <property name="toolTip">
+        <string/>
+       </property>
+       <property name="text">
+        <string>Options</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="lEOptions">
+       <property name="toolTip">
+        <string>Additional options for conversion. Format specific.</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item row="2" column="0">
+    <widget class="QLabel" name="lblMessageTypes">
+     <property name="toolTip">
+      <string/>
+     </property>
+     <property name="text">
+      <string>Message Types(Interval in seconds) separated by comma</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="0">
+    <layout class="QHBoxLayout" name="horizontalLayout_3">
+     <item>
+      <widget class="QCheckBox" name="cBConversion">
+       <property name="toolTip">
+        <string>Enable Conversion</string>
+       </property>
+       <property name="text">
+        <string>Conversion from</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="cBInputFormat">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="toolTip">
+        <string>Source Format</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="lblTo">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="toolTip">
+        <string/>
+       </property>
+       <property name="text">
+        <string>to</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignmentFlag::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="cBOutputFormat">
+       <property name="toolTip">
+        <string>Destination Format</string>
+       </property>
+       <item>
+        <property name="text">
+         <string>RTCM 2</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>RTCM 3</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item row="3" column="0">
+    <widget class="QLineEdit" name="lEOutputMessages">
+     <property name="toolTip">
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Comma separated list of message type IDs with interval given in round brackets, e.g. 1004(1),1012(1)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
+     <property name="text">
+      <string>1004(1),1012(1)</string>
+     </property>
+     <property name="placeholderText">
+      <string>1004(1),1012(1)</string>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="0">
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::StandardButton::Cancel|QDialogButtonBox::StandardButton::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>cBConversion</tabstop>
+  <tabstop>cBInputFormat</tabstop>
+  <tabstop>cBOutputFormat</tabstop>
+  <tabstop>lEOutputMessages</tabstop>
+  <tabstop>lEOptions</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>

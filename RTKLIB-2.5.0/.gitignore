@@ -1,0 +1,53 @@
+*.o
+*.d
+*.a
+*.obs
+*.ini
+*.local
+Release
+Release_Build
+Debug
+Debug_Build
+__history
+__astcache
+
+# CMake files
+CMakeLists.txt.user
+_deps
+CMakeUserPresets.json
+**/cmake-build-debug
+**/CMakeCache.txt
+**/cmake_install.cmake
+**/install_manifest.txt
+**/CMakeFiles/
+**/CTestTestfile.cmake
+**/Makefile
+**/*.cbp
+**/CMakeScripts
+**/compile_commands.json
+CPackConfig.cmake
+CPackSourceConfig.cmake
+build/
+
+# QT
+.qt/
+.lupdate/
+
+# Ignore compilation results
+
+util/gencrc/gencrc
+util/gencrc/genmsk
+util/gencrc/genxor
+util/rnx2rtcm/rnx2rtcm
+util/simobs/gcc/simobs
+
+# gets created by qmake
+*.qmake.stash
+/app/qtapp/Makefile
+/src/Makefile
+
+# deployment files
+app/qtapp/packaging/packages/**.exe
+app/qtapp/packaging/packages/*/data
+app/qtapp/packaging/packages/com.rtklib/meta/license.txt
+app/qtapp/packaging/packages/RtkLibInstaller.exe

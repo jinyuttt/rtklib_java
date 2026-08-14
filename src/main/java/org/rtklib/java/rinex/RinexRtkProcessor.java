@@ -122,6 +122,9 @@ public class RinexRtkProcessor {
      * @return RTK定位结果
      */
     public RtkProcessor.RtkResult process(String roverObsPath, String baseObsPath, String navPath) {
+        if (opt.soltype != Constants.SOLTYPE_FORWARD) {
+            return processViaPostPos(roverObsPath, baseObsPath, navPath);
+        }
         RinexParser roverParser = new RinexParser();
         boolean roverOk = roverParser.parseObs(roverObsPath);
         if (!roverOk) {
@@ -231,20 +234,37 @@ public class RinexRtkProcessor {
         return process(roverObsPath, baseObsPath, null);
     }
 
-    public PostPosProcessor.PostPosResult processBidirectional(
-            String roverObsPath, String baseObsPath, String navPath, int soltype) {
+    private RtkProcessor.RtkResult processViaPostPos(
+            String roverObsPath, String baseObsPath, String navPath) {
         PrcOpt procOpt = new PrcOpt(opt);
-        procOpt.soltype = soltype;
         if (rtk.rb[0] != 0.0 || rtk.rb[1] != 0.0 || rtk.rb[2] != 0.0) {
             procOpt.rb = new double[]{rtk.rb[0], rtk.rb[1], rtk.rb[2]};
         }
         PostPosProcessor proc = new PostPosProcessor(procOpt, new SolOpt());
-        return proc.process(roverObsPath, baseObsPath, navPath);
-    }
+        PostPosProcessor.PostPosResult result = proc.process(roverObsPath, baseObsPath, navPath);
 
-    public PostPosProcessor.PostPosResult processBidirectional(
-            String roverObsPath, String baseObsPath, int soltype) {
-        return processBidirectional(roverObsPath, baseObsPath, null, soltype);
+        totalEpochs = result.totalEpochs;
+        successCount = result.successCount;
+        failCount = result.failCount;
+        for (Sol sol : result.solList) {
+            solutions.add(new Sol(sol));
+        }
+
+        log.info("RINEX RTK (soltype={}): total={}, success={}, fail={}",
+                opt.soltype, totalEpochs, successCount, failCount);
+
+        if (writer != null) {
+            try {
+                writer.write(String.format("# Total: %d, Success: %d, Fail: %d\n", totalEpochs, successCount, failCount));
+                writer.flush();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+        if (handler != null) {
+            handler.onFinish(totalEpochs, successCount, failCount);
+        }
+        return buildResult();
     }
 
     public static RtkProcessor.RtkResult processRinex(String roverObsPath, String baseObsPath,
