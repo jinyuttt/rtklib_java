@@ -212,7 +212,7 @@ public class RtkProcessorTest {
     @DisplayName("8. RTK with manual base position")
     void testRtkManualBasePosition() {
         PrcOpt opt = RtkProcessor.createDefaultOpt();
-        opt.refposmode = Constants.REFPOS_FIXED;
+        opt.refpos = Constants.POSOPT_POS_XYZ;
 
         RtkProcessor rtk = new RtkProcessor(opt);
         double[] basePos = {-493099.65, 5551400.76, 3092551.49};

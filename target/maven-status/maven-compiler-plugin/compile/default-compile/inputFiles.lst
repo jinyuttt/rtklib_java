@@ -47,7 +47,10 @@ D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Ssr.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Sta.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\data\Velocity.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\ephemeris\ClkReader.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\ephemeris\DcbReader.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\ephemeris\EphModel.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\ephemeris\OtlReader.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\ephemeris\PcvReader.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\ephemeris\Sp3Reader.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\ionosphere\IonosphereModel.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\ionosphere\SbasCorrection.java
@@ -76,6 +79,7 @@ D:\code\rtklib_java\src\main\java\org\rtklib\java\rtcm\Rtcm.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtcm\RtcmCallbackDecoder.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtcm\RtcmDataHandler.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\CombinedFilter.java
+D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\IddData.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkCore.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkOptimizations.java
 D:\code\rtklib_java\src\main\java\org\rtklib\java\rtkpos\RtkPos.java

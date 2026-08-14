@@ -1,6 +1,8 @@
 package org.rtklib.java.rinex;
 
+import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.constants.Constants;
+import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
 import org.rtklib.java.ephemeris.ClkReader;
 import org.rtklib.java.ephemeris.Sp3Reader;
@@ -110,26 +112,27 @@ public class PostPosProcessor {
 
         List<List<Obsd>> baseEpochs = null;
         double[] basePos = null;
-        if (baseObsPath != null && (opt.mode == Constants.PMODE_DGPS || opt.mode == Constants.PMODE_KINEMA
-                || opt.mode == Constants.PMODE_STATIC || opt.mode == Constants.PMODE_STATIC_START
-                || opt.mode == Constants.PMODE_MOVEB || opt.mode == Constants.PMODE_FIXED)) {
+        Sta baseSta = null;
+        if (baseObsPath != null && isRelativeMode(opt.mode)) {
             RinexParser baseParser = new RinexParser();
             boolean baseOk = baseParser.parseObs(baseObsPath);
             if (!baseOk) {
                 throw new RuntimeException("Failed to parse base RINEX observation file: " + baseObsPath);
             }
-
-            if (baseParser.sta != null && baseParser.sta.pos != null
-                    && (baseParser.sta.pos[0] != 0.0 || baseParser.sta.pos[1] != 0.0 || baseParser.sta.pos[2] != 0.0)) {
-                basePos = baseParser.sta.pos.clone();
-                log.info("Using base station position from RINEX header: ({}, {}, {})",
-                        basePos[0], basePos[1], basePos[2]);
-            }
+            baseSta = baseParser.sta;
 
             if (baseParser.obs.n > 0) {
                 baseEpochs = groupObsByEpoch(baseParser.obs.data, baseParser.obs.n);
                 log.info("PostPos: base {} total observations, {} epochs", baseParser.obs.n, baseEpochs.size());
             }
+        }
+
+        if (isRelativeMode(opt.mode)) {
+            basePos = resolveBasePos(opt.refpos, opt.rb, baseSta, baseEpochs, nav);
+        }
+
+        if (opt.mode == Constants.PMODE_FIXED) {
+            approxPos = resolveRoverPos(opt.rovpos, opt.ru, roverParser.sta, roverEpochs, nav);
         }
 
         if (opt.soltype == Constants.SOLTYPE_FORWARD) {
@@ -156,20 +159,43 @@ public class PostPosProcessor {
         int totalEpochs = 0, successCount = 0, failCount = 0;
         List<Sol> solutions = new ArrayList<>();
 
+        boolean solstatic = sopt != null && sopt.solstatic != 0 &&
+                (opt.mode == Constants.PMODE_STATIC || opt.mode == Constants.PMODE_STATIC_START
+                        || opt.mode == Constants.PMODE_PPP_STATIC);
+        Sol bestSol = null;
+        GTime bestTime = null;
+        int[] pri = {6, 1, 2, 3, 4, 5, 1, 6};
+
         List<List<Obsd>> baseEpochsCopy = copyBaseEpochs(baseEpochs);
 
         for (List<Obsd> roverEpoch : roverEpochs) {
             Obsd[] obs = buildEpochObs(roverEpoch, baseEpochsCopy);
+            if (obs.length == 0) continue;
             totalEpochs++;
             int result = RtkCore.rtkpos(rtk, obs, obs.length, nav);
             if (result == 1 && rtk.sol.stat != Constants.SOLQ_NONE) {
                 successCount++;
                 Sol solCopy = new Sol(rtk.sol);
-                solutions.add(solCopy);
-                outputSolution(solCopy);
+                if (!solstatic) {
+                    solutions.add(solCopy);
+                    outputSolution(solCopy);
+                } else {
+                    if (bestSol == null || pri[solCopy.stat] <= pri[bestSol.stat]) {
+                        bestSol = solCopy;
+                        if (bestTime == null || TimeSystem.timediff(solCopy.time, bestTime) < 0.0) {
+                            bestTime = new GTime(solCopy.time);
+                        }
+                    }
+                }
             } else {
                 failCount++;
             }
+        }
+
+        if (solstatic && bestSol != null) {
+            bestSol.time = bestTime != null ? bestTime : bestSol.time;
+            solutions.add(bestSol);
+            outputSolution(bestSol);
         }
 
         finishOutput(totalEpochs, successCount, failCount);
@@ -182,6 +208,13 @@ public class PostPosProcessor {
         int totalEpochs = 0, successCount = 0, failCount = 0;
         List<Sol> solutions = new ArrayList<>();
 
+        boolean solstatic = sopt != null && sopt.solstatic != 0 &&
+                (opt.mode == Constants.PMODE_STATIC || opt.mode == Constants.PMODE_STATIC_START
+                        || opt.mode == Constants.PMODE_PPP_STATIC);
+        Sol bestSol = null;
+        GTime bestTime = null;
+        int[] pri = {6, 1, 2, 3, 4, 5, 1, 6};
+
         List<List<Obsd>> baseEpochsCopy = copyBaseEpochs(baseEpochs);
         List<List<Obsd>> reversedRover = new ArrayList<>(roverEpochs);
         Collections.reverse(reversedRover);
@@ -192,20 +225,35 @@ public class PostPosProcessor {
 
         for (List<Obsd> roverEpoch : reversedRover) {
             Obsd[] obs = buildEpochObs(roverEpoch, reversedBase);
+            if (obs.length == 0) continue;
             totalEpochs++;
             int result = RtkCore.rtkpos(rtk, obs, obs.length, nav);
             if (result == 1 && rtk.sol.stat != Constants.SOLQ_NONE) {
                 successCount++;
                 Sol solCopy = new Sol(rtk.sol);
-                solutions.add(solCopy);
-                outputSolution(solCopy);
+                if (!solstatic) {
+                    solutions.add(solCopy);
+                } else {
+                    if (bestSol == null || pri[solCopy.stat] <= pri[bestSol.stat]) {
+                        bestSol = solCopy;
+                        if (bestTime == null || TimeSystem.timediff(solCopy.time, bestTime) < 0.0) {
+                            bestTime = new GTime(solCopy.time);
+                        }
+                    }
+                }
             } else {
                 failCount++;
             }
         }
 
-        Collections.reverse(solutions);
+        if (!solstatic) {
+            Collections.reverse(solutions);
+        } else if (bestSol != null) {
+            bestSol.time = bestTime != null ? bestTime : bestSol.time;
+            solutions.add(bestSol);
+        }
 
+        for (Sol sol : solutions) { outputSolution(sol); }
         finishOutput(totalEpochs, successCount, failCount);
         return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions), solutions);
     }
@@ -221,6 +269,11 @@ public class PostPosProcessor {
 
         for (List<Obsd> roverEpoch : roverEpochs) {
             Obsd[] obs = buildEpochObs(roverEpoch, baseEpochsFwd);
+            if (obs.length == 0) {
+                solfList.add(null);
+                rbfList.add(null);
+                continue;
+            }
             int result = RtkCore.rtkpos(rtkF, obs, obs.length, nav);
             if (result == 1 && rtkF.sol.stat != Constants.SOLQ_NONE) {
                 solfList.add(new Sol(rtkF.sol));
@@ -252,6 +305,11 @@ public class PostPosProcessor {
 
         for (List<Obsd> roverEpoch : reversedRover) {
             Obsd[] obs = buildEpochObs(roverEpoch, reversedBase);
+            if (obs.length == 0) {
+                solbList.add(null);
+                rbbList.add(null);
+                continue;
+            }
             int result = RtkCore.rtkpos(rtkB, obs, obs.length, nav);
             if (result == 1 && rtkB.sol.stat != Constants.SOLQ_NONE) {
                 solbList.add(new Sol(rtkB.sol));
@@ -301,22 +359,27 @@ public class PostPosProcessor {
     }
 
     private Obsd[] buildEpochObs(List<Obsd> roverEpoch, List<List<Obsd>> baseEpochs) {
-        List<Obsd> epochObs = new ArrayList<>(roverEpoch);
+        List<Obsd> epochObs = new ArrayList<>();
         GTime epochTime = roverEpoch.get(0).time;
 
-        for (Obsd o : epochObs) {
+        for (Obsd o : roverEpoch) {
             o.rcv = 1;
+            if ((SatUtils.satsys(o.sat, null) & opt.navsys) != 0
+                    && (opt.exsats == null || o.sat <= 0 || o.sat > Constants.MAXSAT || opt.exsats[o.sat - 1] != 1)) {
+                epochObs.add(o);
+            }
         }
 
-        if (baseEpochs != null && (opt.mode == Constants.PMODE_DGPS || opt.mode == Constants.PMODE_KINEMA
-                || opt.mode == Constants.PMODE_STATIC || opt.mode == Constants.PMODE_STATIC_START
-                || opt.mode == Constants.PMODE_MOVEB || opt.mode == Constants.PMODE_FIXED)) {
+        if (baseEpochs != null && isRelativeMode(opt.mode)) {
             List<Obsd> baseMatch = findMatchingBaseEpoch(baseEpochs, epochTime);
             if (baseMatch != null) {
                 for (Obsd o : baseMatch) {
                     o.rcv = 2;
+                    if ((SatUtils.satsys(o.sat, null) & opt.navsys) != 0
+                            && (opt.exsats == null || o.sat <= 0 || o.sat > Constants.MAXSAT || opt.exsats[o.sat - 1] != 1)) {
+                        epochObs.add(o);
+                    }
                 }
-                epochObs.addAll(baseMatch);
             }
         }
 
@@ -408,6 +471,133 @@ public class PostPosProcessor {
             }
         }
         return list;
+    }
+
+    private static boolean isRelativeMode(int mode) {
+        return mode == Constants.PMODE_DGPS || mode == Constants.PMODE_KINEMA
+                || mode == Constants.PMODE_STATIC || mode == Constants.PMODE_STATIC_START
+                || mode == Constants.PMODE_MOVEB || mode == Constants.PMODE_FIXED;
+    }
+
+    private double[] resolveBasePos(int refpos, double[] optRb, Sta baseSta,
+                                     List<List<Obsd>> baseEpochs, Nav nav) {
+        switch (refpos) {
+            case Constants.POSOPT_POS_LLH:
+            case Constants.POSOPT_POS_XYZ:
+                if (optRb != null && (optRb[0] != 0.0 || optRb[1] != 0.0 || optRb[2] != 0.0)) {
+                    log.info("Base pos from opt.rb (POSOPT_POS_XYZ/LLH): ({}, {}, {})", optRb[0], optRb[1], optRb[2]);
+                    return optRb.clone();
+                }
+                log.warn("opt.rb is zero, fallback to RINEX header");
+                return posFromSta(baseSta);
+            case Constants.POSOPT_SINGLE:
+                double[] avePos = avepos(2, baseEpochs, nav);
+                if (avePos != null) {
+                    log.info("Base pos from SPP average (POSOPT_SINGLE): ({}, {}, {})", avePos[0], avePos[1], avePos[2]);
+                    return avePos;
+                }
+                log.warn("SPP average failed, fallback to RINEX header");
+                return posFromSta(baseSta);
+            case Constants.POSOPT_RINEX:
+                double[] rinexPos = posFromSta(baseSta);
+                if (rinexPos != null) {
+                    log.info("Base pos from RINEX header (POSOPT_RINEX): ({}, {}, {})", rinexPos[0], rinexPos[1], rinexPos[2]);
+                }
+                return rinexPos;
+            case Constants.POSOPT_FILE:
+                log.warn("POSOPT_FILE not yet supported, fallback to RINEX header");
+                return posFromSta(baseSta);
+            case Constants.POSOPT_RTCM:
+                log.warn("POSOPT_RTCM is for realtime only, fallback to RINEX header");
+                return posFromSta(baseSta);
+            default:
+                return posFromSta(baseSta);
+        }
+    }
+
+    private double[] resolveRoverPos(int rovpos, double[] optRu, Sta roverSta,
+                                      List<List<Obsd>> roverEpochs, Nav nav) {
+        switch (rovpos) {
+            case Constants.POSOPT_POS_LLH:
+            case Constants.POSOPT_POS_XYZ:
+                if (optRu != null && (optRu[0] != 0.0 || optRu[1] != 0.0 || optRu[2] != 0.0)) {
+                    return optRu.clone();
+                }
+                return posFromSta(roverSta);
+            case Constants.POSOPT_SINGLE:
+                double[] avePos = avepos(1, roverEpochs, nav);
+                if (avePos != null) return avePos;
+                return posFromSta(roverSta);
+            case Constants.POSOPT_RINEX:
+                return posFromSta(roverSta);
+            default:
+                return posFromSta(roverSta);
+        }
+    }
+
+    private static double[] posFromSta(Sta sta) {
+        if (sta == null || sta.pos == null
+                || (sta.pos[0] == 0.0 && sta.pos[1] == 0.0 && sta.pos[2] == 0.0)) {
+            return null;
+        }
+        double[] rr = sta.pos.clone();
+
+        if (sta.del != null && (sta.del[0] != 0.0 || sta.del[1] != 0.0 || sta.del[2] != 0.0)) {
+            double[] pos = new double[3];
+            CoordTransform.ecef2pos(rr, pos);
+            double[] del_enu = new double[]{sta.del[1], sta.del[0], sta.del[2] + sta.hgt};
+            double[] dr = new double[3];
+            CoordTransform.enu2ecef(pos, del_enu, dr);
+            for (int i = 0; i < 3; i++) rr[i] += dr[i];
+        }
+
+        return rr;
+    }
+
+    private double[] avepos(int rcv, List<List<Obsd>> epochs, Nav nav) {
+        if (epochs == null || epochs.isEmpty()) return null;
+
+        PrcOpt sppOpt = new PrcOpt(opt);
+        sppOpt.mode = Constants.PMODE_SINGLE;
+        sppOpt.ionoopt = Constants.IONOOPT_BRDC;
+        sppOpt.tropopt = Constants.TROPOPT_SAAS;
+
+        Sol sol = new Sol();
+        double[] ra = new double[3];
+        int n = 0;
+
+        for (List<Obsd> epoch : epochs) {
+            List<Obsd> filtered = new ArrayList<>();
+            for (Obsd o : epoch) {
+                o.rcv = rcv;
+                if ((SatUtils.satsys(o.sat, null) & sppOpt.navsys) != 0
+                        && (sppOpt.exsats == null || o.sat <= 0 || o.sat > Constants.MAXSAT || sppOpt.exsats[o.sat - 1] != 1)) {
+                    filtered.add(o);
+                }
+            }
+            if (filtered.isEmpty()) continue;
+
+            Obsd[] obsData = filtered.toArray(new Obsd[0]);
+            int m = obsData.length;
+
+            int result = PntPos.pntpos(obsData, m, nav, sppOpt, sol, null, null);
+            if (result == 1 && sol.stat != Constants.SOLQ_NONE) {
+                ra[0] += sol.rr[0];
+                ra[1] += sol.rr[1];
+                ra[2] += sol.rr[2];
+                n++;
+            }
+        }
+
+        if (n <= 0) {
+            log.warn("avepos: no valid SPP solutions for rcv={}", rcv);
+            return null;
+        }
+        ra[0] /= n;
+        ra[1] /= n;
+        ra[2] /= n;
+        log.info("avepos: rcv={}, n={}, pos=({},{},{})", rcv, n, ra[0], ra[1], ra[2]);
+        return ra;
     }
 
     public static class PostPosResult {

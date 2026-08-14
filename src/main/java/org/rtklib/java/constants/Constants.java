@@ -490,15 +490,6 @@ public final class Constants {
     public static final int POSOPT_RINEX = 4;
     public static final int POSOPT_RTCM = 5;
 
-    // Processing mode (library-level)
-    public static final int PROCMODE_REALTIME = 0;
-    public static final int PROCMODE_POST = 1;
-
-    // Reference station position mode (library-level)
-    public static final int REFPOS_FIXED = 0;
-    public static final int REFPOS_SPP_AVERAGE = 1;
-    public static final int REFPOS_RTCM = 2;
-
     // Stream types
     public static final int STR_NONE = 0;
     public static final int STR_SERIAL = 1;

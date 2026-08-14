@@ -12,6 +12,7 @@ org\rtklib\java\data\Eph.class
 org\rtklib\java\data\Velocity.class
 org\rtklib\java\trace\TraceCallback.class
 org\rtklib\java\rtcm\RtcmDataHandler.class
+org\rtklib\java\ephemeris\PcvReader.class
 org\rtklib\java\trace\PppTrace.class
 org\rtklib\java\data\CoordType.class
 org\rtklib\java\data\Pcv.class
@@ -19,6 +20,7 @@ org\rtklib\java\pntpos\SppProcessor.class
 org\rtklib\java\data\SolutionStatus.class
 org\rtklib\java\rinex\RtcmFileToRinexConverter.class
 org\rtklib\java\common\ObsCode.class
+org\rtklib\java\rtkpos\Tides$AdmintResult.class
 org\rtklib\java\rinex\RinexSppProcessor.class
 org\rtklib\java\rtkpos\Tides.class
 org\rtklib\java\data\SbsIgp.class
@@ -40,6 +42,7 @@ org\rtklib\java\rinex\RinexNavWriter.class
 org\rtklib\java\rinex\RtcmToRinexConverter.class
 org\rtklib\java\rtkpos\RtkPos.class
 org\rtklib\java\data\PepH.class
+org\rtklib\java\ephemeris\DcbReader.class
 org\rtklib\java\rtkpos\RtkCore.class
 org\rtklib\java\data\SolData.class
 org\rtklib\java\rtcm\MsmH.class
@@ -53,6 +56,7 @@ org\rtklib\java\common\CrcUtils.class
 org\rtklib\java\data\SbsLCorr.class
 org\rtklib\java\ephemeris\Sp3Reader.class
 org\rtklib\java\kalman\KalmanFilter.class
+org\rtklib\java\ephemeris\OtlReader.class
 org\rtklib\java\rtcm\Rtcm.class
 org\rtklib\java\data\Seph.class
 org\rtklib\java\rtkpos\RtkProcessor.class
@@ -76,6 +80,7 @@ org\rtklib\java\data\SolOpt.class
 org\rtklib\java\data\Sta.class
 org\rtklib\java\common\CompatFileIO.class
 org\rtklib\java\rtcm\MsmSig.class
+org\rtklib\java\rtkpos\IddData.class
 org\rtklib\java\config\RtkConfig.class
 org\rtklib\java\troposphere\TroposphereModel.class
 org\rtklib\java\data\PrcOpt.class

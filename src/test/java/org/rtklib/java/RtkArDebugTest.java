@@ -46,8 +46,7 @@ public class RtkArDebugTest {
         opt.thresar[0] = 1.5; // 降低阈值更容易Fix
         opt.minfix = 1;
         opt.dynamics = 0;
-        opt.refposmode = Constants.REFPOS_RTCM;
-        opt.procmode = Constants.PROCMODE_POST;
+        opt.refpos = Constants.POSOPT_RTCM;
 
         // 先测试基础配置（无优化）
         RtkConfig config = new RtkConfig();
