@@ -1,6 +1,0 @@
-build*/
-.qtc_clangd
-*.swp
-lib/
-*.pro.user
-Makefile
