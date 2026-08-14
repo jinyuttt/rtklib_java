@@ -231,6 +231,22 @@ public class RinexRtkProcessor {
         return process(roverObsPath, baseObsPath, null);
     }
 
+    public PostPosProcessor.PostPosResult processBidirectional(
+            String roverObsPath, String baseObsPath, String navPath, int soltype) {
+        PrcOpt procOpt = new PrcOpt(opt);
+        procOpt.soltype = soltype;
+        if (rtk.rb[0] != 0.0 || rtk.rb[1] != 0.0 || rtk.rb[2] != 0.0) {
+            procOpt.rb = new double[]{rtk.rb[0], rtk.rb[1], rtk.rb[2]};
+        }
+        PostPosProcessor proc = new PostPosProcessor(procOpt, new SolOpt());
+        return proc.process(roverObsPath, baseObsPath, navPath);
+    }
+
+    public PostPosProcessor.PostPosResult processBidirectional(
+            String roverObsPath, String baseObsPath, int soltype) {
+        return processBidirectional(roverObsPath, baseObsPath, null, soltype);
+    }
+
     public static RtkProcessor.RtkResult processRinex(String roverObsPath, String baseObsPath,
                                                        String navPath, PrcOpt opt) {
         RinexRtkProcessor processor = new RinexRtkProcessor(opt);

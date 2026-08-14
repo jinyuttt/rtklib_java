@@ -182,6 +182,14 @@ public class RinexSppProcessor {
         return processRinex(obsFilePath, navFilePath, createDefaultOpt());
     }
 
+    public PostPosProcessor.PostPosResult processBidirectional(
+            String obsFilePath, String navFilePath, int soltype) {
+        PrcOpt procOpt = new PrcOpt(opt);
+        procOpt.soltype = soltype;
+        PostPosProcessor proc = new PostPosProcessor(procOpt, new SolOpt());
+        return proc.process(obsFilePath, null, navFilePath);
+    }
+
     private List<List<Obsd>> groupObsByEpoch(Obsd[] data, int n) {
         List<List<Obsd>> groups = new ArrayList<>();
         if (n == 0) return groups;

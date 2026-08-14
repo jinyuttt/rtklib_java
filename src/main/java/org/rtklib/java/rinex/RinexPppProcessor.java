@@ -129,6 +129,15 @@ public class RinexPppProcessor {
         return buildResult();
     }
 
+    public PostPosProcessor.PostPosResult processBidirectional(
+            String obsFilePath, String navFilePath,
+            String sp3FilePath, String clkFilePath, int soltype) {
+        PrcOpt procOpt = new PrcOpt(opt);
+        procOpt.soltype = soltype;
+        PostPosProcessor proc = new PostPosProcessor(procOpt, new SolOpt());
+        return proc.process(obsFilePath, null, navFilePath, sp3FilePath, clkFilePath);
+    }
+
     private void processEpoch(Obsd[] obs, int n, Nav nav) {
         totalEpochs++;
 
