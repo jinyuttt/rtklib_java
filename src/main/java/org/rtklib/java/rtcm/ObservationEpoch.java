@@ -10,10 +10,18 @@ import java.util.List;
 public class ObservationEpoch {
 
     public GTime time;
+    public String sourceId;
     public final List<Obsd> obsList;
 
     public ObservationEpoch(GTime time) {
         this.time = new GTime(time);
+        this.sourceId = null;
+        this.obsList = new ArrayList<>();
+    }
+
+    public ObservationEpoch(GTime time, String sourceId) {
+        this.time = new GTime(time);
+        this.sourceId = sourceId;
         this.obsList = new ArrayList<>();
     }
 
