@@ -10,7 +10,7 @@
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/
 
-# Package Files #
+# Package Files
 *.jar
 *.war
 *.nar
@@ -19,22 +19,30 @@
 *.tar.gz
 *.rar
 *ps1
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+
+# Virtual machine crash logs
 hs_err_pid*
 replay_pid*
-"RTKLIB_EX_2.5.0/"
-"RTKLIB_2.5.0/"
-target/ 
-*.trace 
-*.pos 
+
+# RTKLIB C source reference (not part of Java project)
+RTKLIB-2.5.0/
+RTKLIB_2.5.0/
+RTKLIB_EX-2.5.0/
+RTKLIB_EX_2.5.0/
+
+# Build output
+target/
+
+# IDE
+.idea/
+*.iml
+
+# Trace/output files
+*.trace
+*.pos
+*.Log
+
+# Script files
 *.py
 *.js
 *.txt
-*.Log
-".idea"
-.idea/
-*.iml
-target/
-RTKLIB_EX_2.5.0/
-RTKLIB_2.5.0/
-

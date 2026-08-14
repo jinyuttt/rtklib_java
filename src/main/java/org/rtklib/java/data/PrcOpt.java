@@ -142,6 +142,11 @@ public class PrcOpt {
     /** Position output format mask (bitwise OR of POS_ECEF/POS_LLH/POS_ENU) */
     public int posMask;
 
+    /** Enable epoch cache for bidirectional filtering (false:off, true:on) */
+    public boolean cacheEnabled = false;
+    /** Max cached epochs per source (0:unlimited) */
+    public int cacheMaxEpochs = 1000;
+
     /**
      * Default constructor with RTKLIB default values.
      */
