@@ -170,7 +170,7 @@ public class SppProcessor {
     }
 
     private void initCache() {
-        if (opt.cacheEnabled) {
+        if (opt.cacheMaxEpochs > 0) {
             this.epochCache = new InMemoryEpochCache(opt.cacheMaxEpochs);
         }
     }

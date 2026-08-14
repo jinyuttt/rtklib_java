@@ -18,6 +18,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -161,7 +162,7 @@ public class RtkProcessor {
     }
 
     private void initCache() {
-        if (opt.cacheEnabled) {
+        if (opt.cacheMaxEpochs > 0) {
             this.epochCache = new InMemoryEpochCache(opt.cacheMaxEpochs);
         }
     }
@@ -431,7 +432,80 @@ public class RtkProcessor {
     private void cacheEpoch(String sourceId, Obsd[] obs, int n, GTime time) {
         if (epochCache != null && sourceId != null) {
             epochCache.put(sourceId, obs, n, time);
+            if (epochCache.size(sourceId) >= opt.cacheMaxEpochs && opt.cacheMaxEpochs > 0) {
+                onCacheFull(sourceId);
+            }
         }
+    }
+
+    private void onCacheFull(String sourceId) {
+        log.info("Cache full for sourceId={}, size={}, triggering backward pass",
+                sourceId, epochCache.size(sourceId));
+        RtkResult backwardResult = reprocess(sourceId);
+        if (handler != null && backwardResult != null) {
+            handler.onBackwardResult(sourceId, backwardResult);
+        }
+    }
+
+    public RtkResult reprocess(String sourceId) {
+        if (epochCache == null || sourceId == null) return null;
+
+        List<EpochCache.CachedEpoch> cached = epochCache.query(sourceId, null, null);
+        if (cached.isEmpty()) return null;
+
+        log.info("Reprocess: sourceId={}, epochs={}", sourceId, cached.size());
+
+        Rtk rtkB = new Rtk();
+        rtkB.opt = this.opt;
+        if (hasBasePos) {
+            System.arraycopy(rtk.rb, 0, rtkB.rb, 0, 3);
+        }
+
+        List<Sol> backwardSols = new ArrayList<>();
+        int bSuccess = 0, bFail = 0;
+
+        Nav nav = rtcmRover.nav;
+        mergeNav(rtcmBase.nav, nav);
+
+        for (int i = cached.size() - 1; i >= 0; i--) {
+            EpochCache.CachedEpoch ce = cached.get(i);
+            int result = RtkCore.rtkpos(rtkB, ce.obs, ce.n, nav);
+            if (result == 1 && rtkB.sol.stat != Constants.SOLQ_NONE) {
+                backwardSols.add(new Sol(rtkB.sol));
+                bSuccess++;
+            } else {
+                backwardSols.add(null);
+                bFail++;
+            }
+        }
+        Collections.reverse(backwardSols);
+
+        List<Sol> forwardSols = new ArrayList<>();
+        for (Sol s : solutions) {
+            forwardSols.add(s);
+        }
+
+        Sol[] solf = forwardSols.toArray(new Sol[0]);
+        Sol[] solb = backwardSols.toArray(new Sol[0]);
+        double[][] rbf = new double[solf.length][];
+        double[][] rbb = new double[solb.length][];
+        for (int i = 0; i < solf.length; i++) {
+            rbf[i] = solf[i] != null ? new double[]{rtk.rb[0], rtk.rb[1], rtk.rb[2]} : null;
+        }
+        for (int i = 0; i < solb.length; i++) {
+            rbb[i] = solb[i] != null ? new double[]{rtk.rb[0], rtk.rb[1], rtk.rb[2]} : null;
+        }
+
+        List<Sol> combined = CombinedFilter.combine(solf, solb, rbf, rbb, opt, null);
+
+        epochCache.clear(sourceId);
+        log.info("Reprocess done: backward success={}, fail={}, combined={}", bSuccess, bFail, combined.size());
+
+        List<SolData> solDataList = combined.stream()
+                .filter(s -> s != null)
+                .map(sol -> new SolData(sol, opt.posMask, null))
+                .toList();
+        return new RtkResult(combined.size(), bSuccess, bFail, solDataList);
     }
 
     private void updateBasePosFromRtcm(double[] staPos, int type, String source) {
