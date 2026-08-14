@@ -4,7 +4,9 @@ RTKLIB 的 Java 移植版本，基于 [RTKLIB 2.5.0](https://github.com/tomojita
 
 ## 项目简介
 
-RTKLIB-Java 将 C 语言编写的 RTKLIB 核心 GNSS 定位算法移植为 Java 实现，提供与原版功能对齐的卫星定位计算能力。项目定位为**库（Library）**而非独立软件，可嵌入 Java 应用中实现 GNSS 数据处理与定位解算。
+RTKLIB-Java 将 C 语言编写的 RTKLIB 核心 GNSS 定位算法移植为 Java 实现，提供与原版功能对齐的卫星定位计算能力。项目定位为**算法引擎库（Library）**而非独立软件，可嵌入 Java 应用中实现 GNSS 数据处理与定位解算。
+
+> **功能边界**：Java版专注核心定位算法（SPP/RTK/PPP），不包含C版的网络通信（NTRIP/TCP/串口）、接收机原始协议（u-blox/NovAtel等）、NMEA输出等功能。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
 ### 支持的定位模式
 
@@ -19,6 +21,25 @@ RTKLIB-Java 将 C 语言编写的 RTKLIB 核心 GNSS 定位算法移植为 Java 
 | PPP Kinematic | `PMODE_PPP_KINEMA` | PPP动态定位 |
 | PPP Static | `PMODE_PPP_STATIC` | PPP静态定位 |
 | PPP Fixed | `PMODE_PPP_FIXED` | PPP固定坐标 |
+
+### PPP 关键改正项
+
+| 改正项 | 读取器 | 文件格式 | 影响量级 |
+|--------|--------|----------|----------|
+| 天线相位中心偏差 (PCV) | `PcvReader` | ANTEX (.atx), NGS (.pcv) | 10-15 cm |
+| 差分码偏差 (DCB) | `DcbReader` | BIA, BSX, DCB | 几十 cm（伪距） |
+| 海潮负荷 (OTL) | `OtlReader` | BLQ | 1-5 cm（沿海站） |
+| 固体潮 | `Tides.tidedisp()` | 内置模型 | ~30 cm |
+| 极潮 | `Tides.tidePole()` | ERP文件 | ~1-2 cm |
+
+### 数据输入格式
+
+| 格式 | 读写 | 说明 |
+|------|------|------|
+| RTCM 3 | 解码 ✅ | MSM4/5/6、多系统星历、SSR改正 |
+| RINEX 3.x | 读写 ✅ | OBS/NAV/CLK/SP3 |
+| 接收机原始协议 | ❌ | u-blox/NovAtel/Septentrio等，需先用convbin转换 |
+| NMEA 0183 | ❌ | 仅定义常量，无编解码实现 |
 
 ### 库级参数体系
 
@@ -48,14 +69,14 @@ org.rtklib.java
 ├── constants/     常量定义（物理常数、模式常量、卡方分布表）
 ├── coord/         坐标变换（ECEF↔LLH、ENU变换）
 ├── data/          数据结构（观测值、星历、导航、解算结果等）
-├── ephemeris/     星历计算（卫星位置与钟差）
+├── ephemeris/     星历计算（卫星位置与钟差）、PCV/DCB/OTL读取
 ├── ionosphere/    电离层延迟模型
 ├── kalman/        Kalman滤波器
 ├── pntpos/        单点定位（SPP、RAIM FDE、速度估计）
 ├── ppp/           精密单点定位（PPP动态、静态、固定坐标）
 ├── rinex/         RINEX 文件读写与处理
 ├── rtcm/          RTCM 数据解码
-├── rtkpos/        RTK 相对定位核心（含周跳检测）
+├── rtkpos/        RTK 相对定位核心（含周跳检测、潮汐改正）
 ├── time/          时间系统（GPS时、UTC转换）
 ├── trace/         追踪日志系统（RtkTrace/PppTrace）
 └── troposphere/   对流层延迟模型
