@@ -180,7 +180,7 @@ public class RtkOptimizationIndividualTest {
         opt.std[0] = 30.0;
         opt.std[1] = 0.03;
         opt.std[2] = 0.3;
-        opt.refposmode = Constants.REFPOS_RTCM;
+        opt.refpos = Constants.POSOPT_RTCM;
         return opt;
     }
 

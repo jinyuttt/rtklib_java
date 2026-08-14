@@ -70,12 +70,8 @@ public class PrcOpt {
     public int sbassatsel;
     /** Rover position for fixed mode (0:pos in prcopt, 1:avg of single, 2:file, 3:rinex, 4:rtcm) */
     public int rovpos;
-    /** Base position for relative mode */
+    /** Base position for relative mode (POSOPT_???) */
     public int refpos;
-    /** Processing mode: PROCMODE_REALTIME or PROCMODE_POST */
-    public int procmode;
-    /** Reference station position mode: REFPOS_FIXED, REFPOS_SPP_AVERAGE, or REFPOS_RTCM */
-    public int refposmode;
     /** Code/phase error ratio */
     public double[] eratio;
     /** Observation error terms (8 entries) */
@@ -179,9 +175,7 @@ public class PrcOpt {
         this.sbascorr = 0;
         this.sbassatsel = 0;
         this.rovpos = 0;
-        this.refpos = 0;
-        this.procmode = Constants.PROCMODE_POST;
-        this.refposmode = Constants.REFPOS_FIXED;
+        this.refpos = Constants.POSOPT_POS_XYZ;
         this.eratio = new double[Constants.MAXFREQ];
         for (int i = 0; i < Constants.MAXFREQ; i++) this.eratio[i] = 300.0;
         this.err = new double[8];
@@ -281,8 +275,6 @@ public class PrcOpt {
         this.sbassatsel = other.sbassatsel;
         this.rovpos = other.rovpos;
         this.refpos = other.refpos;
-        this.procmode = other.procmode;
-        this.refposmode = other.refposmode;
         this.eratio = other.eratio.clone();
         this.err = other.err.clone();
         this.freq = other.freq.clone();

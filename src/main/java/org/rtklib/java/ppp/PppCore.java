@@ -881,20 +881,7 @@ public final class PppCore {
 
     private static void tidedisp(GTime tutc, double[] rr, int opt, Erp erp,
                                   double[][][] odisp, double[] dr) {
-        dr[0] = dr[1] = dr[2] = 0.0;
-        if (RtklibCommon.norm(rr, 3) <= 0.0) return;
-
-        if ((opt & 1) != 0) {
-            double[] erpv = new double[4];
-            if (Tides.geterp(erp, tutc, erpv) == 0) {
-                erpv[0] = erpv[1] = erpv[2] = erpv[3] = 0.0;
-            }
-            double[] rsun = new double[3], rmoon = new double[3];
-            Tides.sunmoonpos(tutc, erpv, rsun, rmoon, null);
-            double[] drt = new double[3];
-            Tides.dehanttideinel(tutc, rr, rsun, rmoon, drt);
-            for (int i = 0; i < 3; i++) dr[i] += drt[i];
-        }
+        Tides.tidedisp(tutc, rr, opt, erp, odisp, dr);
     }
 
     private static void windupcorr(GTime time, double[] rs, double[] rr, Ssat ssat) {

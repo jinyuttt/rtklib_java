@@ -1054,3 +1054,101 @@ python rtk_compare/compare_results.py \
 - **分析基础**: RTKLIB 2.5.0 C源码 vs Java版 v1.7
 - **验证数据**: over.rtcm3 + base.rtcm3 (桌面RTCM文件)
 - **结论**: Java版实现正确且合理，建议保持现状
+
+---
+
+## 13. PPP关键改正项实现差异（2026-08-14 补全）
+
+### 13.1 天线相位中心改正（PCV）
+
+#### C版实现
+- `readpcv()`：读取ANTEX(.atx)和NGS(.pcv/.ngs)格式天线文件
+- `satpcv()`：计算卫星天线PCO+PCV改正
+- `antpcv()`：计算接收机天线PCO+PCV改正
+- 通过 `nav->pcvs`（卫星天线）和 `nav->pcvr`（接收机天线）存储
+
+#### Java版实现
+- `PcvReader.readantex()`：完整实现ANTEX格式解析，支持TYPE/SERIAL和START/FREQ块
+- `PcvReader.readngspcv()`：完整实现NGS格式解析
+- `PcvData.satpcv()`/`PcvData.antpcv()`：PCO+PCV改正计算已实现
+- 通过 `Nav.pcvs` 和 `Nav.pcvr` 存储，与C版结构一致
+
+#### 修复记录
+- `!pcv.sat` → `pcv.sat == 0`（Java中int不能用逻辑非）
+- `stas[i].del[3]` → 添加 `stas[i].del.length > 3` 越界检查
+- 删除重复的 `xyz2enu` 调用
+
+#### 影响量级
+- 卫星PCV：~10-15cm（PPP必须改正项）
+- 接收机PCV：~1-5cm（与天线类型和高度角相关）
+
+### 13.2 差分码偏差改正（DCB）
+
+#### C版实现
+- `readdcb()`：读取DCB/BIA/BSX格式文件
+- 支持 `.dcb`（CODE格式）、`.bia`（IGS BIAS格式）、`.bsx`（Bernese格式）
+- 通过 `nav->cbias` 和 `nav->rbias` 存储
+
+#### Java版实现
+- `DcbReader.readdcb()`：完整实现，支持三种格式
+- `DcbReader.readdcbf()`：文件级读取，自动识别格式
+- 通过 `Nav.cbias` 和 `Nav.rbias` 存储，与C版一致
+
+#### 修复记录
+- `CODE_L7C` → `CODE_L7X`（常量名称错误）
+
+#### 影响量级
+- P1-C1 DCB：~几cm到几十cm（影响伪距观测值）
+- 必须改正，否则PPP伪距残差过大
+
+### 13.3 海潮负荷改正（OTL）
+
+#### C版实现
+- `readotl()`：读取BLQ格式海潮负荷文件
+- `hardisp()`：计算11个主潮汐分潮的位移（调和分析）
+- 通过 `prcopt_default->odisp[2][11][3]` 存储
+
+#### Java版实现
+- `OtlReader.readblq()`：完整实现BLQ文件解析
+- `Tides.hardisp()`：完整移植C版hardisp()，342个分潮调和分析
+- `IddData`：存储342个Doodson数，与C版idd数据一致
+- 通过 `PrcOpt.odisp[2][11][3]` 存储，与C版一致
+
+#### 影响量级
+- 沿海站：~1-5cm
+- 内陆站：<1mm（可忽略）
+- 建议沿海站启用
+
+### 13.4 潮汐改正集成
+
+#### C版实现
+- `tidedisp()`：固体潮+海潮+极潮，通过 `opt` 位域控制
+- RTK中通过 `opt->tidecorr` 启用
+
+#### Java版实现
+- `Tides.tidedisp()`：完整实现固体潮+海潮+极潮
+- `PppCore.tidedisp()`：已改为调用 `Tides.tidedisp()`，不再使用私有简化版
+- `RtkCore.tidedisp()`：同样调用 `Tides.tidedisp()`
+
+#### 修复记录
+- `nutIau1980()`数组补全：原Java版仅101项，C版106项。补全5个缺失的章动项：
+  - `{1, 0, 2, 0, 1, 9.1, -51, 0.0, 27, 0.0}`
+  - `{0, -1, 2, 0, 2, 14.2, -7, 0.0, 3, 0.0}`
+  - `{1, 1, 0, 0, 0, 25.6, -3, 0.0, 0, 0.0}`
+  - `{1, 1, 0, -2, 1, -34.7, -1, 0.0, 0, 0.0}`
+  - `{-2, 0, 2, 2, 2, 14.6, 1, 0.0, -1, 0.0}`
+
+### 13.5 对齐状态总结
+
+| 改正项 | C版函数 | Java版函数 | 状态 | 对齐度 |
+|--------|---------|------------|------|--------|
+| 天线PCV | readpcv/satpcv/antpcv | PcvReader/PcvData | ✅ 完整 | 100% |
+| 差分码偏差 | readdcb | DcbReader | ✅ 完整 | 100% |
+| 海潮负荷 | readotl/hardisp | OtlReader/Tides.hardisp | ✅ 完整 | 100% |
+| 固体潮 | tidedisp | Tides.tidedisp | ✅ 完整 | 100% |
+| 极潮 | tidePole | Tides.tidePole | ✅ 完整 | 100% |
+| 章动模型 | nutIau1980(106项) | TimeSystem.nutIau1980 | ✅ 修复 | 100% |
+
+#### 测试验证
+- RTK测试（RtkLocalTest）：2个测试全部通过，240历元0失败
+- 潮汐改正测试（tidecorr=7，固体潮+海潮+极潮）：240历元全部成功

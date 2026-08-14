@@ -159,6 +159,13 @@ public class RtkProcessor {
         if (opt != null) {
             this.sleepInterval = opt.outputThrottleInterval;
             this.sleepMs = opt.outputThrottleSleepMs;
+            if ((opt.refpos == Constants.POSOPT_POS_XYZ || opt.refpos == Constants.POSOPT_POS_LLH)
+                    && opt.rb != null
+                    && (opt.rb[0] != 0.0 || opt.rb[1] != 0.0 || opt.rb[2] != 0.0)) {
+                System.arraycopy(opt.rb, 0, rtk.rb, 0, 3);
+                hasBasePos = true;
+                log.info("Base pos from opt.rb (init): ({}, {}, {})", rtk.rb[0], rtk.rb[1], rtk.rb[2]);
+            }
         }
     }
 
@@ -171,8 +178,7 @@ public class RtkProcessor {
         opt.ionoopt = Constants.IONOOPT_BRDC;
         opt.tropopt = Constants.TROPOPT_EST;
         opt.modear = Constants.ARMODE_OFF;
-        opt.refposmode = Constants.REFPOS_RTCM;
-        opt.procmode = Constants.PROCMODE_POST;
+        opt.refpos = Constants.POSOPT_RTCM;
         opt.intpref = 1;
         opt.maxtdiff = 30.0;
         opt.outsingle = 1;
@@ -215,9 +221,7 @@ public class RtkProcessor {
 
     public void setArMode(int modear) { opt.modear = modear; rtk.opt.modear = modear; }
 
-    public void setRefPosMode(int refposmode) { opt.refposmode = refposmode; rtk.opt.refposmode = refposmode; }
-
-    public void setProcMode(int procmode) { opt.procmode = procmode; rtk.opt.procmode = procmode; }
+    public void setRefPos(int refpos) { opt.refpos = refpos; rtk.opt.refpos = refpos; }
 
     public void setDynamics(int dynamics) { opt.dynamics = dynamics; rtk.opt.dynamics = dynamics; }
 
@@ -348,12 +352,7 @@ public class RtkProcessor {
         ephReady = true;
     }
     if ((type == 1005 || type == 1006) && rtcmRover.sta != null) {
-        if (!hasBasePos) {
-            System.arraycopy(rtcmRover.sta.pos, 0, rtk.rb, 0, 3);
-            hasBasePos = true;
-            log.info("Base station position from rover RTCM {} (single-stream): ({}, {}, {})",
-                    type, rtk.rb[0], rtk.rb[1], rtk.rb[2]);
-        }
+        updateBasePosFromRtcm(rtcmRover.sta.pos, type, "rover");
     }
     if (isObsType(type) && rtcmRover.obs.n > 0 && rtcmRover.obsflag == 1) {
             int n = rtcmRover.obs.n;
@@ -375,12 +374,7 @@ public class RtkProcessor {
             ephReady = true;
         }
         if ((type == 1005 || type == 1006) && rtcmBase.sta != null) {
-            if (!hasBasePos) {
-                System.arraycopy(rtcmBase.sta.pos, 0, rtk.rb, 0, 3);
-                hasBasePos = true;
-                log.info("Base station position from RTCM {}: ({}, {}, {})",
-                        type, rtk.rb[0], rtk.rb[1], rtk.rb[2]);
-            }
+            updateBasePosFromRtcm(rtcmBase.sta.pos, type, "base");
         }
         if (isObsType(type) && rtcmBase.obs.n > 0 && rtcmBase.obsflag == 1) {
             int n = rtcmBase.obs.n;
@@ -392,6 +386,38 @@ public class RtkProcessor {
             pendingBaseObsList.add(obsCopy);
             pendingBaseObsCountList.add(n);
             pendingBaseObsTimeList.add(rtcmBase.obs.data[0].time);
+        }
+    }
+
+    private void updateBasePosFromRtcm(double[] staPos, int type, String source) {
+        if (staPos == null) return;
+        switch (opt.refpos) {
+            case Constants.POSOPT_RTCM:
+                System.arraycopy(staPos, 0, rtk.rb, 0, 3);
+                hasBasePos = true;
+                log.info("Base pos from {} RTCM {} (POSOPT_RTCM): ({}, {}, {})",
+                        source, type, rtk.rb[0], rtk.rb[1], rtk.rb[2]);
+                break;
+            case Constants.POSOPT_POS_XYZ:
+            case Constants.POSOPT_POS_LLH:
+                if (!hasBasePos && opt.rb != null
+                        && (opt.rb[0] != 0.0 || opt.rb[1] != 0.0 || opt.rb[2] != 0.0)) {
+                    System.arraycopy(opt.rb, 0, rtk.rb, 0, 3);
+                    hasBasePos = true;
+                    log.info("Base pos from opt.rb (POSOPT_POS_XYZ/LLH): ({}, {}, {})",
+                            rtk.rb[0], rtk.rb[1], rtk.rb[2]);
+                }
+                break;
+            case Constants.POSOPT_SINGLE:
+                break;
+            default:
+                if (!hasBasePos) {
+                    System.arraycopy(staPos, 0, rtk.rb, 0, 3);
+                    hasBasePos = true;
+                    log.info("Base pos from {} RTCM {} (fallback): ({}, {}, {})",
+                            source, type, rtk.rb[0], rtk.rb[1], rtk.rb[2]);
+                }
+                break;
         }
     }
 

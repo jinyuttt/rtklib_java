@@ -162,8 +162,7 @@ public class RtkOptimizationTest {
             opt.tropopt = Constants.TROPOPT_SAAS;
             opt.modear = Constants.ARMODE_FIXHOLD;
             opt.dynamics = 0;
-            opt.refposmode = Constants.REFPOS_RTCM;
-            opt.procmode = Constants.PROCMODE_POST;
+            opt.refpos = Constants.POSOPT_RTCM;
 
             RtkConfig config = new RtkConfig();
             configurer.accept(config);

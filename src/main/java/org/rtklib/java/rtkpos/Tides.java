@@ -656,4 +656,429 @@ public class Tides {
         step2lon_(xsta, t, xcorsta);
         for (int i = 0; i < 3; i++) dxtide[i] += xcorsta[i];
     }
+
+    private static final int NTIN = 11;
+    private static final int NT = 342;
+    private static final int NCON = 20;
+    private static final int NL_OTL = 8;
+
+    public static void tidedisp(GTime tutc, double[] rr, int opt, Erp erp,
+                                 double[][][] odisp, double[] dr) {
+        dr[0] = dr[1] = dr[2] = 0.0;
+        if (norm(rr, 3) <= 0.0) return;
+
+        double[] erpv = new double[5];
+        if (erp != null) {
+            if (geterp(erp, TimeSystem.utc2gpst(tutc), erpv) == 0) {
+                erpv[0] = erpv[1] = erpv[2] = erpv[3] = erpv[4] = 0.0;
+            }
+        }
+
+        if ((opt & 1) != 0) {
+            double[] rsun = new double[3], rmoon = new double[3];
+            sunmoonpos(tutc, erpv, rsun, rmoon, null);
+            double[] drt = new double[3];
+            dehanttideinel(tutc, rr, rsun, rmoon, drt);
+            for (int i = 0; i < 3; i++) dr[i] += drt[i];
+        }
+
+        double[] pos = new double[3], E = new double[9];
+        if (((opt & 2) != 0 && odisp != null) || ((opt & 4) != 0 && erp != null)) {
+            org.rtklib.java.coord.CoordTransform.ecef2pos(rr, pos);
+            org.rtklib.java.coord.CoordTransform.xyz2enu(pos, E);
+        }
+
+        if ((opt & 2) != 0 && odisp != null) {
+            GTime tut = TimeSystem.timeadd(tutc, erpv[2]);
+            double[] otlDisp = hardisp(tut, odisp);
+            double[] denu = new double[]{-otlDisp[1], -otlDisp[2], otlDisp[0]};
+            double[] drt = new double[3];
+            matmulTN3x1(E, denu, drt);
+            for (int i = 0; i < 3; i++) dr[i] += drt[i];
+        }
+
+        if ((opt & 4) != 0 && erp != null) {
+            double[] denu = new double[3];
+            tidePole(tutc, pos, erpv, denu);
+            double[] drt = new double[3];
+            matmulTN3x1(E, denu, drt);
+            for (int i = 0; i < 3; i++) dr[i] += drt[i];
+        }
+    }
+
+    private static void matmulTN3x1(double[] E, double[] v, double[] out) {
+        for (int i = 0; i < 3; i++) {
+            out[i] = E[0 * 3 + i] * v[0] + E[1 * 3 + i] * v[1] + E[2 * 3 + i] * v[2];
+        }
+    }
+
+    static void tidePole(GTime tutc, double[] pos, double[] erpv, double[] denu) {
+        final double[] ep2000 = {2000, 1, 1, 11, 59, 08.816};
+        GTime tgps = TimeSystem.utc2gpst(tutc);
+        double y = TimeSystem.timediff(tgps, TimeSystem.epoch2time(ep2000)) / 86400.0 / 365.25;
+        double xpBar = 55.0 + 1.677 * y;
+        double ypBar = 320.5 + 3.460 * y;
+        double m1 = erpv[0] / Constants.AS2R - xpBar * 1E-3;
+        double m2 = -erpv[1] / Constants.AS2R + ypBar * 1E-3;
+        double cosl = Math.cos(pos[1]);
+        double sinl = Math.sin(pos[1]);
+        denu[0] = 9E-3 * Math.sin(pos[0]) * (m1 * sinl - m2 * cosl);
+        denu[1] = -9E-3 * Math.cos(2.0 * pos[0]) * (m1 * cosl + m2 * sinl);
+        denu[2] = -33E-3 * Math.sin(2.0 * pos[0]) * (m1 * cosl + m2 * sinl);
+    }
+
+    static double[] hardisp(GTime time, double[][][] odisp) {
+        int[][] idt = {
+            {2, 0, 0, 0, 0, 0}, {2, 2, -2, 0, 0, 0}, {2, -1, 0, 1, 0, 0},
+            {2, 2, 0, 0, 0, 0}, {1, 1, 0, 0, 0, 0}, {1, -1, 0, 0, 0, 0},
+            {1, 1, -2, 0, 0, 0}, {1, -2, 0, 1, 0, 0}, {0, 2, 0, 0, 0, 0},
+            {0, 1, 0, -1, 0, 0}, {0, 0, 2, 0, 0, 0}
+        };
+        double[] tamp0 = new double[NTIN], tph0 = new double[NTIN];
+        double[] tamp1 = new double[NTIN], tph1 = new double[NTIN];
+        double[] tamp2 = new double[NTIN], tph2 = new double[NTIN];
+        for (int i = 0; i < NTIN; i++) {
+            tamp0[i] = odisp[0][i][0]; tph0[i] = odisp[1][i][0];
+            tamp1[i] = odisp[0][i][1]; tph1[i] = odisp[1][i][1];
+            tamp2[i] = odisp[0][i][2]; tph2[i] = odisp[1][i][2];
+        }
+        AdmintResult r0 = admint(time, tamp0, idt, tph0);
+        AdmintResult r1 = admint(time, tamp1, idt, tph1);
+        AdmintResult r2 = admint(time, tamp2, idt, tph2);
+        int ntout = r0.nout;
+        double[] az = r0.amp, pz = r0.p, aw = r1.amp, pw = r1.p, as_ = r2.amp, ps = r2.p;
+        double[] f = r0.f;
+        double[] wf = new double[ntout];
+        for (int i = 0; i < ntout; i++) {
+            pz[i] = Constants.D2R * pz[i];
+            ps[i] = Constants.D2R * ps[i];
+            pw[i] = Constants.D2R * pw[i];
+            f[i] = 1.0 * Math.PI * f[i] / 43200.0;
+            wf[i] = f[i];
+        }
+        double[] hcz = new double[NT * 2], hcs = new double[NT * 2], hcw = new double[NT * 2];
+        for (int i = 0; i < ntout; i++) {
+            hcz[i * 2] = az[i] * Math.cos(pz[i]);
+            hcz[i * 2 + 1] = -az[i] * Math.sin(pz[i]);
+            hcs[i * 2] = as_[i] * Math.cos(ps[i]);
+            hcs[i * 2 + 1] = -as_[i] * Math.sin(ps[i]);
+            hcw[i * 2] = aw[i] * Math.cos(pw[i]);
+            hcw[i * 2 + 1] = -aw[i] * Math.sin(pw[i]);
+        }
+        double dz = recursSingle(hcz, ntout, wf);
+        double ds = recursSingle(hcs, ntout, wf);
+        double dw = recursSingle(hcw, ntout, wf);
+        return new double[]{dz, ds, dw};
+    }
+
+    private static double recursSingle(double[] hc, int nf, double[] om) {
+        double[] scr = new double[nf * 3];
+        for (int i = 0; i < nf; i++) {
+            scr[i * 3] = hc[i * 2];
+            scr[i * 3 + 1] = hc[i * 2] * Math.cos(om[i]) - hc[i * 2 + 1] * Math.sin(om[i]);
+            scr[i * 3 + 2] = Math.cos(om[i]) * 2;
+        }
+        double x = 0;
+        for (int j = 0; j < nf; j++) {
+            double sc = scr[j * 3];
+            x += sc;
+            scr[j * 3] = scr[j * 3 + 2] * sc - scr[j * 3 + 1];
+            scr[j * 3 + 1] = sc;
+        }
+        return x;
+    }
+
+    private static class AdmintResult {
+        int nout;
+        double[] amp, f, p;
+        AdmintResult(int nout, double[] amp, double[] f, double[] p) {
+            this.nout = nout; this.amp = amp; this.f = f; this.p = p;
+        }
+    }
+
+    private static AdmintResult admint(GTime time, double[] ampin, int[][] idtin, double[] phin) {
+        double[] tampArr = getTampArray();
+        int[][] iddArr = getIddArray();
+        double[] rl = new double[NCON], aim = new double[NCON], rf = new double[NCON];
+        int k = 0;
+        for (int ll = 0; ll < NTIN && k < NCON; ll++) {
+            int kk, ii = 0;
+            for (kk = 0; kk < NT; kk++) {
+                ii = 0;
+                for (int i = 0; i < 6; i++) ii += Math.abs(iddArr[kk][i] - idtin[ll][i]);
+                if (ii == 0) break;
+            }
+            if (ii == 0) {
+                rl[k] = ampin[ll] * Math.cos(phin[ll] * Constants.D2R) / Math.abs(tampArr[kk]);
+                aim[k] = ampin[ll] * Math.sin(phin[ll] * Constants.D2R) / Math.abs(tampArr[kk]);
+                double[] fp = tdfrph(time, iddArr[kk]);
+                rf[k] = fp[0];
+                k++;
+            }
+        }
+        int[] key = new int[k];
+        shellSortStable(rf, key, k);
+        int nlp = 0, ndi = 0, nsd = 0;
+        for (int i = 0; i < k; i++) {
+            if (rf[i] < 0.5) nlp++;
+            if (rf[i] < 1.5 && rf[i] > 0.5) ndi++;
+            if (rf[i] < 2.5 && rf[i] > 1.5) nsd++;
+        }
+        double[] scr = new double[NCON];
+        for (int i = 0; i < k; i++) scr[i] = rl[key[i]];
+        for (int i = 0; i < k; i++) rl[i] = scr[i];
+        for (int i = 0; i < k; i++) scr[i] = aim[key[i]];
+        for (int i = 0; i < k; i++) aim[i] = scr[i];
+        double[] zdr = new double[NCON], zdi = new double[NCON];
+        if (nlp != 0) {
+            cubicSpline(nlp, rf, rl, zdr, scr);
+            cubicSpline(nlp, rf, aim, zdi, scr);
+        }
+        double[] dr = new double[NCON], di = new double[NCON], sdr = new double[NCON], sdi = new double[NCON];
+        cubicSpline(ndi, rf, nlp, rl, dr, scr);
+        cubicSpline(ndi, rf, nlp, aim, di, scr);
+        cubicSpline(nsd, rf, nlp + ndi, rl, sdr, scr);
+        cubicSpline(nsd, rf, nlp + ndi, aim, sdi, scr);
+        double[] amp = new double[NT], f = new double[NT], p = new double[NT];
+        int nout = 0;
+        for (int i = 0; i < NT; i++) {
+            if (iddArr[i][0] == 0 && nlp == 0) continue;
+            double[] fp = tdfrph(time, iddArr[i]);
+            f[nout] = fp[0]; p[nout] = fp[1];
+            int c = iddArr[i][0];
+            double sf = f[nout], re, am;
+            if (c == 0) {
+                p[nout] += 180;
+                re = cubicSplineEval(sf, nlp, rf, rl, zdr);
+                am = cubicSplineEval(sf, nlp, rf, aim, zdi);
+            } else if (c == 1) {
+                p[nout] += 90;
+                re = cubicSplineEval(sf, ndi, rf, nlp, rl, dr);
+                am = cubicSplineEval(sf, ndi, rf, nlp, aim, di);
+            } else if (c == 2) {
+                re = cubicSplineEval(sf, nsd, rf, nlp + ndi, rl, sdr);
+                am = cubicSplineEval(sf, nsd, rf, nlp + ndi, aim, sdi);
+            } else {
+                continue;
+            }
+            amp[nout] = tampArr[i] * Math.sqrt(re * re + am * am);
+            p[nout] += Math.atan2(am, re) * Constants.R2D;
+            if (p[nout] > 180) p[nout] -= 360;
+            nout++;
+        }
+        return new AdmintResult(nout, amp, f, p);
+    }
+
+    private static GTime ctimeCache = null;
+    private static double[] dCache = new double[6], ddCache = new double[6];
+
+    private static double[] tdfrph(GTime tut, int[] idood) {
+        if (ctimeCache == null || Math.abs(TimeSystem.timediff(tut, ctimeCache)) > 0.001) {
+            double[] ep = new double[6];
+            TimeSystem.time2epoch(tut, ep);
+            double dayfr = ep[3] / 24.0 + ep[4] / 1440.0 + ep[5] / 86400.0;
+            GTime tgps = TimeSystem.utc2gpst(tut);
+            final double[] ep2000 = {2000, 1, 1, 11, 59, 08.816};
+            double t = TimeSystem.timediff(tgps, TimeSystem.epoch2time(ep2000)) / 86400.0 / 36525.0;
+            ctimeCache = new GTime(tut);
+            double f1 = t * (t * (t * (t * -6.8e-8 + 1.43431e-5) + 0.0088553333) + 477198.8675605) + 134.96340251;
+            double f2 = t * (t * (t * (t * -3.2e-9 + 3.78e-8) - 1.536667e-4) + 35999.0502911389) + 357.5291091806;
+            double f3 = t * (t * (t * (t * 1.2e-9 - 2.881e-7) - 0.003542) + 483202.0174577222) + 93.27209062;
+            double f4 = t * (t * (t * (t * -8.8e-9 + 1.8314e-6) - 0.0017696111) + 445267.1114469445) + 297.8501954694;
+            double f5 = t * (t * (t * (t * -1.65e-8 + 2.1394e-6) + 0.0020756111) - 1934.1362619722) + 125.04455501;
+            dCache[0] = dayfr * 360 - f4;
+            dCache[1] = f3 + f5;
+            dCache[2] = dCache[1] - f4;
+            dCache[3] = dCache[1] - f1;
+            dCache[4] = -f5;
+            dCache[5] = dCache[2] - f2;
+            double fd1 = t * 1.3e-9 + 0.0362916471;
+            double fd2 = 0.0027377786;
+            double fd3 = 0.0367481951 - t * 5e-10;
+            double fd4 = 0.033863192 - t * 3e-10;
+            double fd5 = t * 3e-10 - 1.470938e-4;
+            ddCache[0] = 1 - fd4;
+            ddCache[1] = fd3 + fd5;
+            ddCache[2] = ddCache[1] - fd4;
+            ddCache[3] = ddCache[1] - fd1;
+            ddCache[4] = -fd5;
+            ddCache[5] = ddCache[2] - fd2;
+        }
+        double freq = 0, phase = 0;
+        for (int i = 0; i < 6; i++) {
+            freq += idood[i] * ddCache[i];
+            phase += idood[i] * dCache[i];
+        }
+        phase = phase % 360;
+        if (phase < 0) phase += 360;
+        return new double[]{freq, phase};
+    }
+
+    private static void shellSortStable(double[] x, int[] k, int n) {
+        for (int i = 0; i < n; ++i) k[i] = i;
+        int igap = n;
+        while (igap > 1) {
+            igap /= 2;
+            int imax = n - igap, iex;
+            do {
+                iex = 0;
+                for (int i = 0; i < imax; i++) {
+                    int ipl = i + igap;
+                    if (x[i] <= x[ipl]) continue;
+                    double sv = x[i]; int ik = k[i];
+                    x[i] = x[ipl]; k[i] = k[ipl];
+                    x[ipl] = sv; k[ipl] = ik;
+                    iex++;
+                }
+            } while (iex > 0);
+        }
+        for (int j = 0; j + 1 < n; j++) {
+            if (x[j] != x[j + 1]) continue;
+            int l = j + 1;
+            while (l + 1 < n) { if (x[l] != x[l + 1]) break; l++; }
+            int nj = l - j + 1;
+            igap = nj;
+            while (igap > 1) {
+                igap /= 2;
+                int imax2 = nj - igap, iex2;
+                do {
+                    iex2 = 0;
+                    for (int i = 0; i < imax2; i++) {
+                        int ipl = j + i + igap;
+                        if (k[j + i] <= k[ipl]) continue;
+                        int ik2 = k[j + i]; k[j + i] = k[ipl]; k[ipl] = ik2;
+                        iex2++;
+                    }
+                } while (iex2 > 0);
+            }
+            j = l;
+        }
+    }
+
+    private static void cubicSpline(int nn, double[] x, double[] u, double[] s, double[] a) {
+        cubicSpline(nn, x, 0, u, s, a);
+    }
+
+    private static void cubicSpline(int nn, double[] x, int xOff, double[] u, double[] s, double[] a) {
+        int n = Math.abs(nn);
+        if (n <= 3) { for (int i = 0; i < n; i++) s[i] = 0; return; }
+        double q1 = cubicSplineQ(u[xOff + 1] - u[xOff], x[xOff + 1] - x[xOff], u[xOff + 2] - u[xOff], x[xOff + 2] - x[xOff]);
+        int n1 = n - 1;
+        double qn = cubicSplineQ(u[xOff + n1 - 1] - u[xOff + n - 1], x[xOff + n1 - 1] - x[xOff + n - 1],
+                                  u[xOff + n - 3] - u[xOff + n - 1], x[xOff + n - 3] - x[xOff + n - 1]);
+        if (nn <= 0) { q1 = s[0]; qn = s[1]; }
+        s[0] = ((u[xOff + 1] - u[xOff]) / (x[xOff + 1] - x[xOff]) - q1) * 6;
+        for (int i = 1; i < n1; i++) {
+            s[i] = (u[xOff + i - 1] / (x[xOff + i] - x[xOff + i - 1]) - u[xOff + i] * (1.0 / (x[xOff + i] - x[xOff + i - 1]) + 1.0 / (x[xOff + i + 1] - x[xOff + i])) + u[xOff + i + 1] / (x[xOff + i + 1] - x[xOff + i])) * 6;
+        }
+        s[n - 1] = (qn + (u[xOff + n1 - 1] - u[xOff + n - 1]) / (x[xOff + n - 1] - x[xOff + n1 - 1])) * 6;
+        a[0] = (x[xOff + 1] - x[xOff]) * 2;
+        a[1] = (x[xOff + 1] - x[xOff]) * 1.5 + (x[xOff + 2] - x[xOff + 1]) * 2;
+        s[1] -= s[0] * 0.5;
+        for (int i = 2; i < n1; i++) {
+            double c = (x[xOff + i] - x[xOff + i - 1]) / a[i - 1];
+            a[i] = (x[xOff + i + 1] - x[xOff + i - 1]) * 2 - c * (x[xOff + i] - x[xOff + i - 1]);
+            s[i] -= c * s[i - 1];
+        }
+        double c = (x[xOff + n - 1] - x[xOff + n1 - 1]) / a[n1 - 1];
+        a[n - 1] = (2 - c) * (x[xOff + n - 1] - x[xOff + n1 - 1]);
+        s[n - 1] -= c * s[n1 - 1];
+        s[n - 1] /= a[n - 1];
+        for (int i = n1 - 1; i >= 0; i--) s[i] = (s[i] - (x[xOff + i + 1] - x[xOff + i]) * s[i + 1]) / a[i];
+    }
+
+    private static double cubicSplineQ(double u1, double x1, double u2, double x2) {
+        return (u1 / (x1 * x1) - u2 / (x2 * x2)) / (1.0 / x1 - 1.0 / x2);
+    }
+
+    private static double cubicSplineEval(double y, int nn, double[] x, double[] u, double[] s) {
+        return cubicSplineEval(y, nn, x, 0, u, s);
+    }
+
+    private static double cubicSplineEval(double y, int nn, double[] x, int xOff, double[] u, double[] s) {
+        int n = Math.abs(nn);
+        if (n <= 0) return 0;
+        if (n == 1) return u[xOff];
+        if (y <= x[xOff]) return u[xOff];
+        if (y >= x[xOff + n - 1]) return u[xOff + n - 1];
+        int k1 = 0, k2 = 0;
+        for (int k = 1; k < n; k++) {
+            if (x[xOff + k - 1] < y && x[xOff + k] >= y) { k1 = k - 1; k2 = k; }
+        }
+        double dy = x[xOff + k2] - y, dy1 = y - x[xOff + k1], dk = x[xOff + k2] - x[xOff + k1];
+        double f1 = (s[k1] * dy * dy * dy + s[k2] * dy1 * dy1 * dy1) / (dk * 6);
+        double f2 = dy1 * (u[xOff + k2] / dk - s[k2] * dk / 6);
+        double f3 = dy * (u[xOff + k1] / dk - s[k1] * dk / 6);
+        return f1 + f2 + f3;
+    }
+
+    private static double[] tampCache;
+    private static int[][] iddCache;
+
+    private static double[] getTampArray() {
+        if (tampCache != null) return tampCache;
+        double[] t = new double[NT];
+        int idx = 0;
+        double[] v = {
+            0.632208,0.294107,0.121046,0.079915,0.023818,-0.023589,0.022994,0.019333,
+            -0.017871,0.017192,0.016018,0.004671,-0.004662,-0.004519,0.00447,0.004467,
+            0.002589,-0.002455,-0.002172,0.001972,0.001947,0.001914,-0.001898,0.001802,
+            0.001304,0.00117,0.00113,0.001061,-0.001022,-0.001017,0.001014,9.01e-4,
+            -8.57e-4,8.55e-4,8.55e-4,7.72e-4,7.41e-4,7.41e-4,-7.21e-4,6.98e-4,
+            6.58e-4,6.54e-4,-6.53e-4,6.33e-4,6.26e-4,-5.98e-4,5.9e-4,5.44e-4,
+            4.79e-4,-4.64e-4,4.13e-4,-3.9e-4,3.73e-4,3.66e-4,3.66e-4,-3.6e-4,
+            -3.55e-4,3.54e-4,3.29e-4,3.28e-4,3.19e-4,3.02e-4,2.79e-4,-2.74e-4,
+            -2.72e-4,2.48e-4,-2.25e-4,2.24e-4,-2.23e-4,-2.16e-4,2.11e-4,2.09e-4,
+            1.94e-4,1.85e-4,-1.74e-4,-1.71e-4,1.59e-4,1.31e-4,1.27e-4,1.2e-4,
+            1.18e-4,1.17e-4,1.08e-4,1.07e-4,1.05e-4,-1.02e-4,1.02e-4,9.9e-5,
+            -9.6e-5,9.5e-5,-8.9e-5,-8.5e-5,-8.4e-5,-8.1e-5,-7.7e-5,-7.2e-5,
+            -6.7e-5,6.6e-5,6.4e-5,6.3e-5,6.3e-5,6.3e-5,6.2e-5,6.2e-5,
+            -6e-5,5.6e-5,5.3e-5,5.1e-5,5e-5
+        };
+        System.arraycopy(v, 0, t, idx, v.length); idx += v.length;
+        double[] v2 = {
+            0.368645,-0.262232,-0.121995,-0.050208,0.050031,-0.04947,0.02062,0.020613,
+            0.011279,-0.00953,-0.009469,-0.008012,0.007414,-0.0073,0.007227,-0.007131,
+            -0.006644,0.005249,0.004137,0.004087,0.003944,0.003943,0.00342,0.003418,
+            0.002416,0.002416,0.002885,0.002884,0.00216,-0.001936,0.001934,-0.001798,
+            0.00169,0.001689,0.001516,0.001514,-0.001511,0.001383,0.001372,0.001371,
+            -0.001253,-0.001075,0.00102,9.01e-4,8.65e-4,-7.94e-4,7.88e-4,7.82e-4,
+            -7.47e-4,-7.45e-4,6.7e-4,-6.03e-4,-5.97e-4,5.42e-4,5.42e-4,-5.41e-4,
+            -4.69e-4,-4.4e-4,4.38e-4,4.22e-4,4.1e-4,-3.74e-4,-3.65e-4,3.45e-4,
+            3.35e-4,-3.21e-4,-3.19e-4,3.07e-4,2.91e-4,2.9e-4,-2.89e-4,2.86e-4,
+            2.75e-4,2.71e-4,2.63e-4,-2.45e-4,2.25e-4,2.25e-4,2.21e-4,-2.02e-4,
+            -2e-4,-1.99e-4,1.92e-4,1.83e-4,1.83e-4,1.83e-4,-1.7e-4,1.69e-4,
+            1.68e-4,1.62e-4,1.49e-4,-1.47e-4,-1.41e-4,1.38e-4,1.36e-4,1.36e-4,
+            1.27e-4,1.27e-4,-1.26e-4,-1.21e-4,-1.21e-4,1.17e-4,-1.16e-4,-1.14e-4,
+            -1.14e-4,-1.14e-4,1.14e-4,1.13e-4,1.09e-4,1.08e-4,1.06e-4,
+            -1.06e-4,-1.06e-4,1.05e-4,1.04e-4,-1.03e-4,-1e-4,-1e-4,-1e-4,
+            9.9e-5,-9.8e-5,9.3e-5,9.3e-5,9e-5,-8.8e-5,8.3e-5,-8.3e-5,
+            -8.2e-5,-8.1e-5,-7.9e-5,-7.7e-5,-7.5e-5,-7.5e-5,-7.5e-5,7.1e-5,
+            7.1e-5,-7.1e-5,6.8e-5,6.8e-5,6.5e-5,6.5e-5,6.4e-5,6.4e-5,
+            6.4e-5,-6.4e-5,-6e-5,5.6e-5,5.6e-5,5.3e-5,5.3e-5,5.3e-5,
+            -5.3e-5,5.3e-5,5.3e-5,5.2e-5,5e-5
+        };
+        System.arraycopy(v2, 0, t, idx, v2.length); idx += v2.length;
+        double[] v3 = {
+            -0.066607,-0.035184,-0.030988,0.027929,-0.027616,-0.012753,-0.006728,-0.005837,
+            -0.005286,-0.004921,-0.002884,-0.002583,-0.002422,0.00231,0.002283,-0.002037,
+            0.001883,-0.001811,-0.001687,-0.001004,-9.25e-4,-8.44e-4,7.66e-4,7.66e-4,
+            -7e-4,-4.95e-4,-4.92e-4,4.91e-4,4.83e-4,4.37e-4,-4.16e-4,-3.84e-4,
+            3.74e-4,-3.12e-4,-2.88e-4,-2.73e-4,2.59e-4,2.45e-4,-2.32e-4,2.29e-4,
+            -2.16e-4,2.06e-4,-2.04e-4,-2.02e-4,2e-4,1.95e-4,-1.9e-4,1.87e-4,
+            1.8e-4,-1.79e-4,1.7e-4,1.53e-4,-1.37e-4,-1.19e-4,-1.19e-4,-1.12e-4,
+            -1.1e-4,-1.1e-4,1.07e-4,-9.5e-5,-9.5e-5,-9.1e-5,-9e-5,-8.1e-5,
+            -7.9e-5,-7.9e-5,7.7e-5,-7.3e-5,6.9e-5,-6.7e-5,-6.6e-5,6.5e-5,
+            6.4e-5,-6.2e-5,6e-5,5.9e-5,-5.6e-5,5.5e-5,-5.1e-5
+        };
+        System.arraycopy(v3, 0, t, idx, v3.length);
+        tampCache = t;
+        return t;
+    }
+
+    private static int[][] getIddArray() {
+        if (iddCache != null) return iddCache;
+        iddCache = IddData.IDD;
+        return iddCache;
+    }
 }
