@@ -11,6 +11,7 @@ import org.rtklib.java.ionosphere.SbasCorrection;
 import org.rtklib.java.kalman.KalmanFilter;
 import org.rtklib.java.pntpos.PntPos;
 import org.rtklib.java.pntpos.SppCore;
+import org.rtklib.java.ppp.PppCore;
 import org.rtklib.java.rtkpos.Tides;
 import org.rtklib.java.time.TimeSystem;
 import org.rtklib.java.coord.CoordTransform;
@@ -60,6 +61,15 @@ public final class RtkCore {
         }
 
         if (opt.mode == Constants.PMODE_SINGLE) {
+            return 1;
+        }
+
+        if (opt.outsingle == 0) {
+            rtk.sol.stat = Constants.SOLQ_NONE;
+        }
+
+        if (opt.mode >= Constants.PMODE_PPP_KINEMA) {
+            PppCore.pppos(rtk, obs, nu, nav);
             return 1;
         }
 
