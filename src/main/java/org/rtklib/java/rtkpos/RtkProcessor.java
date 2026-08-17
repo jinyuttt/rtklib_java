@@ -1002,6 +1002,25 @@ public class RtkProcessor {
         finished = false;
     }
 
+    public void resetForNextBatch() {
+        finished = false;
+        totalEpochs = 0;
+        successCount = 0;
+        failCount = 0;
+        outputCount = 0;
+        solutions.clear();
+        ephTypeCount.clear();
+        pendingRoverObsList.clear();
+        pendingRoverObsCountList.clear();
+        pendingRoverObsTimeList.clear();
+        pendingBaseObsList.clear();
+        pendingBaseObsCountList.clear();
+        pendingBaseObsTimeList.clear();
+        pendingRoverLen = 0;
+        pendingBaseLen = 0;
+        ephReady = false;
+    }
+
     public Rtk getRtk() {
         return rtk;
     }
