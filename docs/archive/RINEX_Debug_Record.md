@@ -383,5 +383,5 @@ System.arraycopy(basePos, 0, rtk.rb, 0, 3);
 1. **仅支持 RINEX 3.05/3.06**: 2.x 版本已在代码入口拒绝
 2. **BDS GEO 卫星**: 5° 旋转矩阵处理，与 RTKLIB C 版本一致
 3. **GLONASS**: 使用数值积分法计算卫星位置，精度受积分步长影响
-4. **电离层模型**: 仅实现 Klobuchar，未实现 NeQuick-G（Galileo）
-5. **对流层模型**: 仅实现 Saastamoinen，未实现 GMF/VMF
+4. ~~**电离层模型**: 仅实现 Klobuchar，未实现 NeQuick-G（Galileo）~~ → ✅ NeQuick 已实现
+5. ~~**对流层模型**: 仅实现 Saastamoinen，未实现 GMF/VMF~~ → ✅ GMF 已实现

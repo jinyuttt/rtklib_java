@@ -471,12 +471,15 @@ BASE_PATH  = "<base_rtcm3_file_path>";
 ## 9. 待完善项
 
 ### 9.1 中优先级
-- [ ] **基准站位置自动获取**：部分已实现（RINEX头 `APPROX POSITION XYZ` 自动读取、MOVEB模式SPP平均），缺失 `POSOPT_SINGLE`（非MOVEB模式SPP取平均）和 `POSOPT_FILE`（位置文件读取）
+- [ ] **基准站位置自动获取**：部分已实现（RINEX头 `APPROX POSITION XYZ` 自动读取、MOVEB模式SPP平均），缺失 `POSOPT_SINGLE`（RtkProcessor实时流中空实现，PostPosProcessor批处理已有avepos()）和 `POSOPT_FILE`（位置文件读取，PostPosProcessor中fallback到RINEX header）
+- [ ] **SSR相位偏差改正**：SSR解码已实现（RTCM 1057-1068），但 `corr_phase_bias_ssr()` 未实现，SSR改正仅含轨道/钟差，不含相位偏差
 
 ### 9.2 低优先级
 
 - [ ] **Static Start长延迟恢复**：边界场景，`tt>300`时重置状态
 - [ ] **多系统PPP验证**：GPS+BDS联合PPP，需多系统精密星历
+- [ ] **CombinedFilter速度smoother**：C版 `combres()` 对速度也做RTS平滑，Java版仅对位置做smoother，速度直接取正向值
+- [ ] **udtrop()冻结**：`atmFrozenNsThresh` 仅在 `udion()` 中实现冻结逻辑，`udtrop()` 尚未实现冻结
 
 ---
 
@@ -1523,6 +1526,10 @@ static String formatSolDataLine(SolData solData) {
 |------|--------|------|
 | Static Start长延迟恢复 | 低 | 边界场景，`tt>300`时重置状态 |
 | 多系统PPP验证 | 中 | GPS+BDS联合PPP，需多系统精密星历 |
+| SSR相位偏差改正 | 中 | `corr_phase_bias_ssr()` 未实现，SSR改正仅含轨道/钟差 |
+| CombinedFilter速度smoother | 低 | C版 `combres()` 对速度做RTS平滑，Java版仅位置 |
+| POSOPT_FILE | 低 | 位置文件读取，PostPosProcessor中fallback到RINEX header |
+| udtrop()冻结 | 低 | `atmFrozenNsThresh` 仅在 `udion()` 中实现 |
 
 ---
 
@@ -1574,7 +1581,7 @@ PPP 定位精度依赖多种外部改正数据，以下为 Java 版支持的改�
 
 ---
 
-*文档版本：v2.3*
+*文档版本：v2.4*
 *最后更新：2026-08-20*
-*变更：RtkProcessor/PppProcessor新增solstatic支持（Finish模式+窗口模式+双向合并），SolOpt新增solStaticWindow字段，与C版procpos()+combres()对齐*
+*变更：文档勘误（NEXOBS=2非26），补充待完善项（SSR相位偏差、速度smoother、udtrop冻结），archive过时标记*
 *维护者：RTKLIB Java移植团队*
