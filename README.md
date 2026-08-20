@@ -93,7 +93,7 @@ opt.cacheMaxEpochs = 240;                     // 实时双向：缓存满240历�
 | 电离层梯度估计 | `ionoGradient` | `true` / `false` | `false` | false=仅VTEC，true=VTEC+Gn+Ge逐星估计 |
 | 位置输出格式 | `posMask` | `POS_ECEF` / `POS_LLH` / `POS_ENU` 位组合 | `ECEF\|LLH` | 控制SolData输出哪些坐标系 |
 | 参考站位置模式 | `refpos` | `POSOPT_POS_XYZ` / `POSOPT_RTCM` 等 | `POSOPT_POS_XYZ` | 固定值 / RTCM动态 / SPP均值 |
-| 静态单解输出 | `SolOpt.solstatic` | `0` / `1` | `0` | 0=逐历元输出，1=只输出最优解（需mode=STATIC） |
+| 静态单解输出 | `SolOpt.solstatic` | `0` / `1` | `0` | 0=逐历元输出，1=只输出最优解（需mode=STATIC或PPP_STATIC） |
 | 静态输出窗口 | `SolOpt.solStaticWindow` | `0` / `>0` | `0` | 0=finish时输出，>0=每N个历元输出1个bestSol |
 
 ## 文档
@@ -250,8 +250,11 @@ RtkProcessor.RtkResult improved = rtk.reprocess("rover_device_001");
 
 ### 静态模式单解输出
 
+RTK 和 PPP 静态模式均支持，机制一致：所有历元参与滤波，只输出1个最优解。
+`solstatic=1` 仅在 `mode=PMODE_STATIC`/`PMODE_STATIC_START`/`PMODE_PPP_STATIC` 时生效。
+
 ```java
-// 1小时RTCM文件，600个历元全参与滤波，只输出1个最优解
+// RTK：1小时RTCM文件，600个历元全参与滤波，只输出1个最优解
 PrcOpt opt = RtkProcessor.createDefaultOpt();
 opt.mode = Constants.PMODE_STATIC;
 
@@ -262,6 +265,14 @@ solOpt.solStaticWindow = 0;        // 0=finish时输出
 RtkProcessor rtk = new RtkProcessor(opt, solOpt, handler, null);
 RtkProcessor.RtkResult result = rtk.process("rover.rtcm3", "base.rtcm3");
 // result.solutions 只有1个SolData（质量最好的历元）
+
+// PPP：同理
+PrcOpt pppOpt = PppProcessor.createDefaultOpt();
+pppOpt.mode = Constants.PMODE_PPP_STATIC;
+
+PppProcessor ppp = new PppProcessor(pppOpt, solOpt, handler, null);
+ppp.loadSp3("igs.sp3"); ppp.loadClk("igs.clk");
+PppProcessor.PppResult result = ppp.process("rover.rtcm3");
 
 // 流水窗口模式：每360个历元自动输出1个bestSol
 solOpt.solStaticWindow = 360;

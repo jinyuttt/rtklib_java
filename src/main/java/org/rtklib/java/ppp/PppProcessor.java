@@ -81,7 +81,12 @@ public class PppProcessor {
             "# PPP (Precise Point Positioning) Result (EXPERIMENTAL)\n" +
             "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
 
+    private static final int[] SOL_PRIO = {6, 1, 2, 3, 4, 5, 1, 6};
+    private static final int[] COMBINED_SOL_PRIO = {7, 1, 2, 3, 4, 5, 1, 6};
+
     private final PrcOpt opt;
+    private final boolean solstatic;
+    private final int solStaticWindow;
     private final PosHandler handler;
     private final Writer writer;
 
@@ -100,12 +105,19 @@ public class PppProcessor {
     private int successCount = 0;
     private int failCount = 0;
     private final List<Sol> solutions = new ArrayList<>();
+    private Sol bestSol = null;
+    private GTime bestTime = null;
+    private int windowCount = 0;
+    private final List<Sol> solStaticOutputs = new ArrayList<>();
 
     private byte[] pending = new byte[4096];
     private int pendingLen = 0;
 
-    public PppProcessor(PrcOpt opt, PosHandler handler, OutputStream outputStream) {
+    public PppProcessor(PrcOpt opt, SolOpt solOpt, PosHandler handler, OutputStream outputStream) {
         this.opt = new PrcOpt(opt);
+        this.solstatic = solOpt != null && solOpt.solstatic != 0 &&
+                (opt.mode == Constants.PMODE_PPP_STATIC);
+        this.solStaticWindow = solOpt != null ? solOpt.solStaticWindow : 0;
         this.handler = handler;
         this.rtk = new Rtk();
         this.rtk.opt = this.opt;
@@ -126,16 +138,20 @@ public class PppProcessor {
         }
     }
 
+    public PppProcessor(PrcOpt opt, PosHandler handler, OutputStream outputStream) {
+        this(opt, null, handler, outputStream);
+    }
+
     public PppProcessor(PrcOpt opt, PosHandler handler) {
-        this(opt, handler, null);
+        this(opt, null, handler, null);
     }
 
     public PppProcessor(PrcOpt opt) {
-        this(opt, null, null);
+        this(opt, null, null, null);
     }
 
     public PppProcessor() {
-        this(createDefaultOpt(), null, null);
+        this(createDefaultOpt(), null, null, null);
     }
 
     public static PrcOpt createDefaultOpt() {
@@ -244,6 +260,10 @@ public class PppProcessor {
         successCount = 0;
         failCount = 0;
         solutions.clear();
+        bestSol = null;
+        bestTime = null;
+        windowCount = 0;
+        solStaticOutputs.clear();
 
         pendingLen = 0;
         finished = false;
@@ -522,16 +542,29 @@ public class PppProcessor {
             Sol solCopy = new Sol(rtk.sol);
             solutions.add(solCopy);
 
-            if (handler != null) {
-                handler.onSolution(new Sol(rtk.sol), copySsatArray(rtk.ssat));
-                handler.onResult(new SolData(solCopy, opt.posMask));
-            }
-            if (writer != null) {
-                try {
-                    writer.write(formatSolutionLine(solCopy));
-                    writer.flush();
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
+            if (solstatic) {
+                if (bestSol == null || SOL_PRIO[solCopy.stat] <= SOL_PRIO[bestSol.stat]) {
+                    bestSol = solCopy;
+                    if (bestTime == null || TimeSystem.timediff(solCopy.time, bestTime) < 0.0) {
+                        bestTime = new GTime(solCopy.time);
+                    }
+                }
+                windowCount++;
+                if (solStaticWindow > 0 && windowCount >= solStaticWindow) {
+                    outputBestSol();
+                }
+            } else {
+                if (handler != null) {
+                    handler.onSolution(new Sol(rtk.sol), copySsatArray(rtk.ssat));
+                    handler.onResult(new SolData(solCopy, opt.posMask));
+                }
+                if (writer != null) {
+                    try {
+                        writer.write(formatSolutionLine(solCopy));
+                        writer.flush();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
                 }
             }
         } else {
@@ -543,6 +576,10 @@ public class PppProcessor {
     }
 
     private PppResult finishInternal() {
+        if (solstatic && bestSol != null) {
+            outputBestSol();
+        }
+
         log.info("PPP complete: total={}, success={}, fail={}, ephTypes={}",
                 totalEpochs, successCount, failCount, ephTypeCount);
 
@@ -561,6 +598,29 @@ public class PppProcessor {
         }
 
         return buildResult();
+    }
+
+    private void outputBestSol() {
+        if (bestSol == null) return;
+        bestSol.time = bestTime != null ? bestTime : bestSol.time;
+        solStaticOutputs.add(bestSol);
+
+        if (handler != null) {
+            handler.onSolution(new Sol(bestSol), copySsatArray(rtk.ssat));
+            handler.onResult(new SolData(bestSol, opt.posMask));
+        }
+        if (writer != null) {
+            try {
+                writer.write(formatSolutionLine(bestSol));
+                writer.flush();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        bestSol = null;
+        bestTime = null;
+        windowCount = 0;
     }
 
     private int findEphWeek(Nav nav) {
@@ -731,13 +791,53 @@ public class PppProcessor {
         double[][] rbf = rbfList.toArray(new double[0][]);
         double[][] rbb = rbbList.toArray(new double[0][]);
 
-        List<Sol> combined = CombinedFilter.combine(solf, solb, rbf, rbb, opt, null);
+        List<Sol> combined = CombinedFilter.combine(solf, solb, rbf, rbb, opt,
+                solstatic ? new SolOpt() {{ solstatic = 1; }} : null);
         log.info("PPP Batch combined: {} solutions", combined.size());
 
         finished = true;
 
         int cSuccess = (int) combined.stream().filter(s -> s != null && s.stat != Constants.SOLQ_NONE).count();
         int cFail = combined.size() - cSuccess;
+
+        if (solstatic) {
+            Sol combinedBest = null;
+            GTime combinedBestTime = null;
+            for (Sol s : combined) {
+                if (s == null || s.stat == Constants.SOLQ_NONE) continue;
+                if (combinedBest == null || COMBINED_SOL_PRIO[s.stat] <= COMBINED_SOL_PRIO[combinedBest.stat]) {
+                    combinedBest = s;
+                    if (combinedBestTime == null || TimeSystem.timediff(s.time, combinedBestTime) < 0.0) {
+                        combinedBestTime = new GTime(s.time);
+                    }
+                }
+            }
+            if (combinedBest != null) {
+                combinedBest.time = combinedBestTime != null ? combinedBestTime : combinedBest.time;
+                solStaticOutputs.add(combinedBest);
+                SolData sd = new SolData(combinedBest, opt.posMask);
+                if (handler != null) {
+                    handler.onResult(sd);
+                }
+                if (writer != null) {
+                    try {
+                        writer.write(formatSolutionLine(combinedBest));
+                        writer.flush();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                }
+            }
+            cSuccess = combinedBest != null ? 1 : 0;
+            cFail = 0;
+            if (handler != null) {
+                handler.onFinish(totalEpochs, cSuccess, cFail);
+            }
+            List<SolData> solDataList = solStaticOutputs.stream()
+                    .map(sol -> new SolData(sol, opt.posMask))
+                    .toList();
+            return new PppResult(totalEpochs, cSuccess, cFail, solDataList);
+        }
 
         List<SolData> solDataList = combined.stream()
                 .filter(s -> s != null)
@@ -755,7 +855,8 @@ public class PppProcessor {
     }
 
     private PppResult buildResult() {
-        List<SolData> solDataList = solutions.stream()
+        List<Sol> outputSource = solstatic ? solStaticOutputs : solutions;
+        List<SolData> solDataList = outputSource.stream()
                 .map(sol -> new SolData(sol, opt.posMask))
                 .toList();
         return new PppResult(totalEpochs, successCount, failCount, solDataList);
