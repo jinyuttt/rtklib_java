@@ -618,6 +618,8 @@ public class RtkProcessor {
         totalEpochs++;
         rtk.epoch++;
 
+        RtklibCommon.corrPhaseBiasSsr(obs, n, nav, opt.pppopt);
+
         int result = RtkCore.rtkpos(rtk, obs, n, nav);
 
         if (result == 1 && rtk.sol.stat != Constants.SOLQ_NONE) {

@@ -7,6 +7,7 @@ import org.rtklib.java.data.*;
 import org.rtklib.java.ephemeris.ClkReader;
 import org.rtklib.java.ephemeris.Sp3Reader;
 import org.rtklib.java.pntpos.PntPos;
+import org.rtklib.java.common.RtklibCommon;
 import org.rtklib.java.pntpos.PosHandler;
 import org.rtklib.java.ppp.PppCore;
 import org.rtklib.java.rtkpos.CombinedFilter;
@@ -172,6 +173,7 @@ public class PostPosProcessor {
             Obsd[] obs = buildEpochObs(roverEpoch, baseEpochsCopy);
             if (obs.length == 0) continue;
             totalEpochs++;
+            RtklibCommon.corrPhaseBiasSsr(obs, obs.length, nav, opt.pppopt);
             int result = RtkCore.rtkpos(rtk, obs, obs.length, nav);
             if (result == 1 && rtk.sol.stat != Constants.SOLQ_NONE) {
                 successCount++;
@@ -227,6 +229,7 @@ public class PostPosProcessor {
             Obsd[] obs = buildEpochObs(roverEpoch, reversedBase);
             if (obs.length == 0) continue;
             totalEpochs++;
+            RtklibCommon.corrPhaseBiasSsr(obs, obs.length, nav, opt.pppopt);
             int result = RtkCore.rtkpos(rtk, obs, obs.length, nav);
             if (result == 1 && rtk.sol.stat != Constants.SOLQ_NONE) {
                 successCount++;
@@ -274,6 +277,7 @@ public class PostPosProcessor {
                 rbfList.add(null);
                 continue;
             }
+            RtklibCommon.corrPhaseBiasSsr(obs, obs.length, nav, opt.pppopt);
             int result = RtkCore.rtkpos(rtkF, obs, obs.length, nav);
             if (result == 1 && rtkF.sol.stat != Constants.SOLQ_NONE) {
                 solfList.add(new Sol(rtkF.sol));
