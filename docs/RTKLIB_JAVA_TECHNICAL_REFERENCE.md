@@ -1574,7 +1574,7 @@ PPP 定位精度依赖多种外部改正数据，以下为 Java 版支持的改�
 
 ---
 
-*文档版本：v2.2*
+*文档版本：v2.3*
 *最后更新：2026-08-20*
-*变更：RtkProcessor新增solstatic支持（Finish模式+窗口模式），SolOpt新增solStaticWindow字段*
+*变更：RtkProcessor/PppProcessor新增solstatic支持（Finish模式+窗口模式+双向合并），SolOpt新增solStaticWindow字段，与C版procpos()+combres()对齐*
 *维护者：RTKLIB Java移植团队*

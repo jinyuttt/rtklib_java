@@ -1298,22 +1298,27 @@ SPP为绝对定位，每历元独立求解，双向无意义。RTK/PPP批处理�
 ### 14.9 solstatic 静态单解输出（Java版扩展至实时流）
 
 C版RTKLIB的 `solstatic` 仅在 `PostPosProcessor`（事后批处理）中实现：
-`sopt.solstatic=1` + `mode=PMODE_STATIC` 时，所有历元参与滤波但只输出1个最优解。
+`sopt.solstatic=1` + `mode=PMODE_STATIC/PMODE_PPP_STATIC` 时，所有历元参与滤波但只输出1个最优解。
+C版在 `procpos()`（单方向）和 `combres()`（双向合并）两个函数中分别独立实现 solstatic 逻辑，
+合并时使用更高的 FIX 优先级（`pri[]={7,1,2,3,4,5,1,6}` vs 单方向 `{6,...}`）。
 
-Java版将此能力扩展到 `RtkProcessor`（实时RTCM流式处理），并新增窗口模式：
+Java版将此能力扩展到实时流处理器，并新增窗口模式：
 
-| 特性 | C版（PostPosProcessor） | Java版（RtkProcessor） |
-|------|------------------------|----------------------|
+| 特性 | C版（PostPosProcessor） | Java版（RtkProcessor/PppProcessor） |
+|------|------------------------|--------------------------------------|
 | solstatic 支持 | ✅ 事后批处理 | ✅ 实时流+批处理 |
 | 输出时机 | 文件处理完 | finish()时 或 窗口满时 |
 | 窗口模式 | ❌ 无 | ✅ `solStaticWindow>0` 时每N历元输出1个 |
 | 滤波中断 | 不适用（批处理） | ❌ 窗口输出后不重置滤波器 |
-| bestSol选择 | pri[]优先级+最早时间 | 同C版，SOL_PRIO数组 |
+| bestSol选择 | pri[]优先级+最早时间 | 同C版，SOL_PRIO/COMBINED_SOL_PRIO |
+| 双向合并+solstatic | ✅ combres()内独立实现 | ✅ processBatchCombined()内独立实现 |
+| PPP实时流 | ❌ 不存在 | ✅ PppProcessor支持solstatic |
 
 **新增字段**：
 - `SolOpt.solStaticWindow`：0=finish时输出（与C版一致），>0=每N个历元输出1个bestSol
 
 **新增构造函数**：
 - `RtkProcessor(PrcOpt, SolOpt, PosHandler, OutputStream)`
+- `PppProcessor(PrcOpt, SolOpt, PosHandler, OutputStream)`
 
 **向后兼容**：原有构造函数委托到新构造函数（`SolOpt=null`），`solstatic=false`，行为不变。

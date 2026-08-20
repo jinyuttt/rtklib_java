@@ -79,6 +79,7 @@ public class RtkProcessor {
             "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
 
     private static final int[] SOL_PRIO = {6, 1, 2, 3, 4, 5, 1, 6};
+    private static final int[] COMBINED_SOL_PRIO = {7, 1, 2, 3, 4, 5, 1, 6};
 
     private PrcOpt opt;
     private final boolean solstatic;
@@ -984,6 +985,46 @@ public class RtkProcessor {
 
         double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
         String sourceId = lastRoverSourceId;
+
+        if (solstatic) {
+            Sol combinedBest = null;
+            GTime combinedBestTime = null;
+            for (Sol s : combined) {
+                if (s == null || s.stat == Constants.SOLQ_NONE) continue;
+                if (combinedBest == null || COMBINED_SOL_PRIO[s.stat] <= COMBINED_SOL_PRIO[combinedBest.stat]) {
+                    combinedBest = s;
+                    if (combinedBestTime == null || TimeSystem.timediff(s.time, combinedBestTime) < 0.0) {
+                        combinedBestTime = new GTime(s.time);
+                    }
+                }
+            }
+            if (combinedBest != null) {
+                combinedBest.time = combinedBestTime != null ? combinedBestTime : combinedBest.time;
+                solStaticOutputs.add(combinedBest);
+                SolData sd = new SolData(sourceId, combinedBest, opt.posMask, rb);
+                if (handler != null) {
+                    handler.onResult(sd);
+                }
+                if (writer != null) {
+                    try {
+                        writer.write(formatSolutionLine(combinedBest));
+                        writer.flush();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                }
+            }
+            cSuccess = combinedBest != null ? 1 : 0;
+            cFail = 0;
+            if (handler != null) {
+                handler.onFinish(totalEpochs, cSuccess, cFail);
+            }
+            List<SolData> solDataList = solStaticOutputs.stream()
+                    .map(sol -> new SolData(sourceId, sol, opt.posMask, rb))
+                    .toList();
+            return new RtkResult(totalEpochs, cSuccess, cFail, solDataList);
+        }
+
         List<SolData> solDataList = combined.stream()
                 .filter(s -> s != null)
                 .map(sol -> new SolData(sourceId, sol, opt.posMask, rb))

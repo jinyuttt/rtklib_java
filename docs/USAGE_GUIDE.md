@@ -312,6 +312,10 @@ RtkProcessor.RtkResult result = rtk.finish();
 RTK 静态定位场景下，所有历元参与卡尔曼滤波平滑，但只需输出1个最优结果。
 通过 `SolOpt.solstatic` 和 `SolOpt.solStaticWindow` 控制。
 
+solstatic 在**单方向**和**双向合并**两种滤波路径下均生效（与 C 版 `procpos()` + `combres()` 对齐）：
+- 单方向：从正向/反向结果中追踪 bestSol
+- 双向合并：从合并结果中追踪 bestSol（优先级数组 FIX=7，比单方向的 6 更高，因为合并后 FIX 更可靠）
+
 #### 4.3.1 两种输出模式
 
 | 模式 | `solstatic` | `solStaticWindow` | 触发时机 | 适用场景 |
@@ -469,6 +473,37 @@ while (running) {
 
 PppProcessor.PppResult result = ppp.finish();
 ```
+
+### 6.4 PPP 静态模式单解输出（solstatic）
+
+PPP 静态定位同样支持 solstatic，机制与 RTK 完全一致。
+`solstatic=1` 仅在 `mode=PMODE_PPP_STATIC` 时生效。
+
+```java
+PrcOpt opt = PppProcessor.createDefaultOpt();
+opt.mode = Constants.PMODE_PPP_STATIC;
+
+// Finish模式：全部历元滤波，finish()时输出1个最优解
+SolOpt solOpt = new SolOpt();
+solOpt.solstatic = 1;
+solOpt.solStaticWindow = 0;
+
+PppProcessor ppp = new PppProcessor(opt, solOpt, handler, null);
+ppp.loadSp3("igs.sp3");
+ppp.loadClk("igs.clk");
+PppProcessor.PppResult result = ppp.process("rover.rtcm3");
+// → result.solutions 只有1个SolData（质量最好的那个历元）
+
+// 窗口模式：每360个历元自动输出1个最优解
+solOpt.solStaticWindow = 360;
+PppProcessor ppp = new PppProcessor(opt, solOpt, handler, null);
+while (running) {
+    ppp.feed(chunk);
+}
+ppp.finish();
+```
+
+bestSol 选择逻辑与 RTK 相同（§4.3.3），双向合并时同样使用 `COMBINED_SOL_PRIO`（FIX=7）。
 
 ---
 
