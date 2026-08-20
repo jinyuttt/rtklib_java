@@ -31,6 +31,8 @@ public class SolOpt {
     public int geoid;
     /** Solution of static mode (0:all, 1:single) */
     public int solstatic;
+    /** solstatic window size in epochs (0:output on finish only, >0:output every N epochs) */
+    public int solStaticWindow;
     /** Solution statistics level (0:off, 1:states, 2:residuals) */
     public int sstat;
     /** Debug trace level (0:off, 1-5:debug) */
@@ -60,6 +62,7 @@ public class SolOpt {
         this.height = 0;
         this.geoid = 0;
         this.solstatic = 0;
+        this.solStaticWindow = 0;
         this.sstat = 0;
         this.trace = 0;
         this.nmeaintv = new double[]{0.0, 0.0};
@@ -85,6 +88,7 @@ public class SolOpt {
         this.height = other.height;
         this.geoid = other.geoid;
         this.solstatic = other.solstatic;
+        this.solStaticWindow = other.solStaticWindow;
         this.sstat = other.sstat;
         this.trace = other.trace;
         this.nmeaintv = other.nmeaintv.clone();

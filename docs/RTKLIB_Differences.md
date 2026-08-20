@@ -1294,3 +1294,26 @@ SPP为绝对定位，每历元独立求解，双向无意义。RTK/PPP批处理�
 | 数据源标识 | 无（文件名隐含） | sourceId（调用方注入） |
 | 缓存方式 | 无（全量内存） | 内存环形缓冲/外部接口 |
 | 触发方式 | 自动（文件读完） | 缓存满自动/手动reprocess() |
+
+### 14.9 solstatic 静态单解输出（Java版扩展至实时流）
+
+C版RTKLIB的 `solstatic` 仅在 `PostPosProcessor`（事后批处理）中实现：
+`sopt.solstatic=1` + `mode=PMODE_STATIC` 时，所有历元参与滤波但只输出1个最优解。
+
+Java版将此能力扩展到 `RtkProcessor`（实时RTCM流式处理），并新增窗口模式：
+
+| 特性 | C版（PostPosProcessor） | Java版（RtkProcessor） |
+|------|------------------------|----------------------|
+| solstatic 支持 | ✅ 事后批处理 | ✅ 实时流+批处理 |
+| 输出时机 | 文件处理完 | finish()时 或 窗口满时 |
+| 窗口模式 | ❌ 无 | ✅ `solStaticWindow>0` 时每N历元输出1个 |
+| 滤波中断 | 不适用（批处理） | ❌ 窗口输出后不重置滤波器 |
+| bestSol选择 | pri[]优先级+最早时间 | 同C版，SOL_PRIO数组 |
+
+**新增字段**：
+- `SolOpt.solStaticWindow`：0=finish时输出（与C版一致），>0=每N个历元输出1个bestSol
+
+**新增构造函数**：
+- `RtkProcessor(PrcOpt, SolOpt, PosHandler, OutputStream)`
+
+**向后兼容**：原有构造函数委托到新构造函数（`SolOpt=null`），`solstatic=false`，行为不变。
