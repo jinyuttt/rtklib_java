@@ -35,17 +35,17 @@
 `src/main/java/org/rtklib/java/rtkpos/RtkCore.java` — `udbias()` 方法
 
 ### 问题
-C 版 `udbias()` 中调用了 4 个周跳检测函数，Java 版一个都没调用：
+C 版 `udbias()` 中调用了 4 个周跳检测函数，Java 版最初一个都没调用：
 
 | C 版函数 | 功能 | Java 版状态 |
 |----------|------|-------------|
-| `detslp_ll()` | LLI 标志检测周跳 | ❌ 未调用 |
-| `detslp_gf()` | 几何无关组合检测周跳 | ❌ 未调用 |
-| `detslp_code()` | 码类型变化检测周跳 | ❌ 未调用 |
-| `detslp_dop()` | 多普勒-相位差检测周跳 | ❌ 未调用 |
+| `detslp_ll()` | LLI 标志检测周跳 | ✅ 已实现（RtkCore.detslpLl） |
+| `detslp_gf()` | 几何无关组合检测周跳 | ✅ 已实现（RtkCore.detslpGf） |
+| `detslp_code()` | 码类型变化检测周跳 | ✅ 已实现（RtkCore.detslpCode） |
+| `detslp_dop()` | 多普勒-相位差检测周跳 | ✅ 已实现（RtkCore.detslpDop） |
 
-Java 版有 `CycleDetect` 类（`src/main/java/org/rtklib/java/cycle/CycleDetect.java`）实现了部分功能，
-但 `RtkCore.udbias()` 中没有调用它。
+~~Java 版有 `CycleDetect` 类（`src/main/java/org/rtklib/java/cycle/CycleDetect.java`）实现了部分功能，
+但 `RtkCore.udbias()` 中没有调用它。~~ → ✅ 已在 RtkCore.udbias() 中调用4个detslp函数
 
 ### C 版参考代码（rtkpos.c）
 ```c

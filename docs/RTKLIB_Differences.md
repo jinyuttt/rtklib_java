@@ -418,21 +418,21 @@ C版RTKLIB的质量控制分两层，Java版原始移植时遗漏了前端剔除
 
 ```java
 public static final int NFREQ  = 6;   // 主频率数
-public static final int NEXOBS = 26;  // 扩展观测数
+public static final int NEXOBS = 2;   // 扩展观测数
 ```
 
 **Java版配置**：
 - **NFREQ = 6** （6个主频率槽位）
-- **NEXOBS = 26** （26个扩展槽位）
-- **总槽数**: 32个/卫星
+- **NEXOBS = 2** （2个扩展槽位）
+- **总槽数**: 8个/卫星
 
 #### 内存占用对比
 
 | 指标 | C版本 | Java版 | 倍数 |
 |------|-------|--------|------|
-| **总槽数/卫星** | 3个 | 32个 | **10.67x** |
-| **内存/Obsd对象** | ~150 bytes | ~864 bytes | **5.76x** |
-| **MAXSAT=228时的总内存** | ~34 KB | ~197 KB | **5.79x** |
+| **总槽数/卫星** | 3个 | 8个 | **2.67x** |
+| **内存/Obsd对象** | ~150 bytes | ~264 bytes | **1.76x** |
+| **MAXSAT=228时的总内存** | ~34 KB | ~60 KB | **1.76x** |
 
 ---
 
@@ -528,7 +528,7 @@ public static void sigindex(int sys, int[] code, int n, int[] idx) {
     for (i = 0; i < n; i++) {
         if (ex[i] == 0) {
             // keep idx[i] as is
-        } else if (nex < Constants.NEXOBS) {  // ✅ NEXOBS=26，有足够空间!
+        } else if (nex < Constants.NEXOBS) {  // ✅ NEXOBS=2，有限扩展空间
             idx[i] = Constants.NFREQ + nex;
             nex++;
         } else {
@@ -540,7 +540,7 @@ public static void sigindex(int sys, int[] code, int n, int[] idx) {
 
 **Java版特点**：
 1. **无opt参数**: 使用固定优先级表（`getcodepri()`），不支持命令行覆盖
-2. **NEXOBS=26**: 被挤出的信号可以放入扩展槽位，不会被丢弃
+2. **NEXOBS=2**: 被挤出的信号可放入2个扩展槽位，超出部分仍会被丢弃
 3. **公共方法**: 定义在 `ObsCode.java` 中，RINEX和RTCM解码共用
 
 #### 差异总结表
@@ -549,7 +549,7 @@ public static void sigindex(int sys, int[] code, int n, int[] idx) {
 |------|-------|--------|
 | **函数可见性** | `static` (rtcm3.c内部) | `public static` (ObsCode类) |
 | **opt参数** | ✅ 支持（可覆盖优先级） | ❌ 不支持 |
-| **NEXOBS处理** | =0 → 直接丢弃 | =26 → 存入扩展区 |
+| **NEXOBS处理** | =0 → 直接丢弃 | =2 → 有限扩展，超出仍丢弃 |
 | **适用范围** | 仅RTCM解码 | RINEX + RTCM |
 
 ---
@@ -1241,10 +1241,21 @@ python rtk_compare/compare_results.py \
 
 | C版功能 | Java版状态 | 说明 |
 |---------|------------|------|
-| SBAS改正 | ⚠️ 部分实现 | SbasCorrection/SbsIgpBand存在，但未完整集成 |
-| SBAS电离层 | ⚠️ 部分实现 | 数据结构已定义，算法未完整 |
+| SBAS改正 | ⚠️ 部分实现 | SbasCorrection有sbsioncorr/sbstropcorr/sbssatcorr/sbsupdatecorr，但未完整集成到定位流程 |
+| SBAS电离层 | ⚠️ 部分实现 | sbsioncorr存在，算法可能不完整 |
 
-### 14.7 功能边界总结
+### 14.7 算法细节未对齐项
+
+| C版功能 | C版源码 | Java版状态 | 说明 |
+|---------|---------|------------|------|
+| SSR相位偏差改正 | `corr_phase_bias_ssr()` | ❌ 未实现 | SSR解码有，改正未应用到定位计算 |
+| 合并速度smoother | `combres()` 中对vr做RTS平滑 | ❌ 未实现 | CombinedFilter仅对位置做smoother |
+| POSOPT_SINGLE（实时流） | `antpos()` | ❌ 空实现 | RtkProcessor中case分支为空，PostPosProcessor已有avepos() |
+| POSOPT_FILE | `antpos()` | ⚠️ fallback | PostPosProcessor中fallback到RINEX header |
+| udtrop()冻结 | `udtrop()` + atmFrozenNsThresh | ❌ 未实现 | 仅udion()有冻结逻辑 |
+| Static Start长延迟恢复 | `udpos()` 中tt>300重置 | ❌ 未实现 | 边界场景 |
+
+### 14.8 功能边界总结
 
 **Java版定位目标**：作为GNSS定位算法引擎，提供SPP/RTK/PPP核心解算能力，
 不包含C版的网络通信、GUI、实时流服务等功能。
@@ -1262,7 +1273,7 @@ python rtk_compare/compare_results.py \
 - 网络数据获取（NTRIP/TCP/串口）→ 通过feed(sourceId, data)注入
 - NMEA输出 → 通过SolData自行编码
 - 实时流管理 → 自行组合Processor实例
-### 14.8 实时流双向缓存系统（Java版新增，C版无对应）
+### 14.9 实时流双向缓存系统（Java版新增，C版无对应）
 
 C版RTKLIB的反向滤波仅支持事后批处理（读完文件→正向→反向→合并→输出），
 Java版新增实时流场景下的双向缓存能力。
@@ -1295,7 +1306,7 @@ SPP为绝对定位，每历元独立求解，双向无意义。RTK/PPP批处理�
 | 缓存方式 | 无（全量内存） | 内存环形缓冲/外部接口 |
 | 触发方式 | 自动（文件读完） | 缓存满自动/手动reprocess() |
 
-### 14.9 solstatic 静态单解输出（Java版扩展至实时流）
+### 14.10 solstatic 静态单解输出（Java版扩展至实时流）
 
 C版RTKLIB的 `solstatic` 仅在 `PostPosProcessor`（事后批处理）中实现：
 `sopt.solstatic=1` + `mode=PMODE_STATIC/PMODE_PPP_STATIC` 时，所有历元参与滤波但只输出1个最优解。
