@@ -307,7 +307,72 @@ while (running) {
 RtkProcessor.RtkResult result = rtk.finish();
 ```
 
-### 4.3 配置选项
+### 4.3 静态模式单解输出（solstatic）
+
+RTK 静态定位场景下，所有历元参与卡尔曼滤波平滑，但只需输出1个最优结果。
+通过 `SolOpt.solstatic` 和 `SolOpt.solStaticWindow` 控制。
+
+#### 4.3.1 两种输出模式
+
+| 模式 | `solstatic` | `solStaticWindow` | 触发时机 | 适用场景 |
+|------|-------------|-------------------|----------|----------|
+| 逐历元输出（默认） | 0 | — | 每个历元 | 动态监测 |
+| Finish模式 | 1 | 0 | `finish()` 时输出1个bestSol | 批处理/外部控制结束 |
+| 窗口模式 | 1 | >0 | 每 N 个历元自动输出1个bestSol | 流水定期出结果 |
+
+#### 4.3.2 使用示例
+
+```java
+PrcOpt opt = RtkProcessor.createDefaultOpt();
+opt.mode = Constants.PMODE_STATIC;       // 静态模式（必须）
+opt.modear = Constants.ARMODE_FIXHOLD;
+
+// Finish模式：全部历元滤波，finish()时输出1个最优解
+SolOpt solOpt = new SolOpt();
+solOpt.solstatic = 1;
+solOpt.solStaticWindow = 0;
+
+RtkProcessor rtk = new RtkProcessor(opt, solOpt, handler, null);
+rtk.process("rover.rtcm3", "base.rtcm3");
+// → result.solutions 只有1个SolData（质量最好的那个历元）
+
+// 窗口模式：每360个历元自动输出1个最优解，滤波不中断
+SolOpt solOpt = new SolOpt();
+solOpt.solstatic = 1;
+solOpt.solStaticWindow = 360;
+
+RtkProcessor rtk = new RtkProcessor(opt, solOpt, handler, null);
+while (running) {
+    rtk.feedRover(roverData);
+    rtk.feedBase(baseData);
+}
+rtk.finish();
+// → 每360个历元输出1个bestSol，finish时输出剩余不完整窗口的bestSol
+```
+
+#### 4.3.3 bestSol 选择逻辑
+
+与 RTKLIB C 版 `PostPosProcessor` 一致，按解质量优先级选择：
+
+| 优先级 | 解状态 | 值 |
+|--------|--------|-----|
+| 1（最优） | FIX（固定解） | 1 |
+| 2 | FLOAT（浮点解） | 2 |
+| 3 | SBAS | 3 |
+| 4 | DGPS | 4 |
+| 5 | SINGLE（单点解） | 5 |
+| 6（最差） | NONE（无解） | 0 |
+
+同优先级时，选择时间最早的解（`timediff < 0`）。
+
+#### 4.3.4 关键行为
+
+- **滤波不中断**：窗口模式输出 bestSol 后，只重置 bestSol 追踪，**不重置**卡尔曼滤波器状态（`rtk.x`、`rtk.P` 等），滤波器持续收敛
+- **solutions 列表**：所有历元的 Sol 仍记录在 `solutions` 中（供双向组合滤波使用），`solStaticOutputs` 只记录输出的 bestSol
+- **buildResult()**：solstatic 时 `RtkResult.solutions` 来自 `solStaticOutputs`（只含 bestSol），否则来自 `solutions`（全部历元）
+- **前提条件**：`solstatic=1` 仅在 `mode=PMODE_STATIC` 或 `mode=PMODE_STATIC_START` 时生效，其他模式自动退化为逐历元输出
+
+### 4.4 配置选项
 
 ```java
 PrcOpt opt = RtkProcessor.createDefaultOpt();
