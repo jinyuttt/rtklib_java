@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory;
 
 import org.rtklib.java.common.CompatFileIO;
 import org.rtklib.java.common.RtklibCommon;
+import org.rtklib.java.ionosphere.SbasCorrection;
+import org.rtklib.java.ionosphere.SbsMsgReader;
 import org.rtklib.java.rtkpos.EpochCache;
 import org.rtklib.java.rtkpos.InMemoryEpochCache;
 
@@ -92,6 +94,9 @@ public class SppProcessor {
     private int sleepMs = 10;
     private final List<Sol> solutions = new ArrayList<>();
 
+    private final int sppSmoothWindow;
+    private final List<double[]> sppSmoothBuf = new ArrayList<>();
+
     private byte[] pending = new byte[4096];
     private int pendingLen = 0;
 
@@ -109,6 +114,7 @@ public class SppProcessor {
     public SppProcessor(PrcOpt opt, PosHandler handler, OutputStream outputStream) {
         this.opt = new PrcOpt(opt);
         this.handler = handler;
+        this.sppSmoothWindow = this.opt.sppsmooth;
         for (int i = 0; i < Constants.MAXSAT; i++) ssat[i] = new Ssat();
         initFromOpt();
         initCache();
@@ -360,6 +366,11 @@ public class SppProcessor {
      * @param data RTCM原始字节数据
      * @return 定位结果
      */
+    public void loadSbs(String sbsFilePath) {
+        int count = SbsMsgReader.readsbsmsgAndApply(sbsFilePath, rtcm.nav);
+        log.info("Loaded SBAS messages: {} corrections applied", count);
+    }
+
     public SppResult process(byte[] data) {
         if (finished) {
             throw new IllegalStateException("Processor already finished");
@@ -597,6 +608,15 @@ public class SppProcessor {
             Sol solCopy = new Sol(sol);
             solutions.add(solCopy);
 
+            if (sppSmoothWindow > 0) {
+                sppSmoothBuf.add(new double[]{sol.rr[0], sol.rr[1], sol.rr[2]});
+                if (sppSmoothBuf.size() > sppSmoothWindow) sppSmoothBuf.remove(0);
+                double[] avg = computeSppAverage();
+                solCopy.rr[0] = avg[0];
+                solCopy.rr[1] = avg[1];
+                solCopy.rr[2] = avg[2];
+            }
+
             if (handler != null) {
                 handler.onSolution(new Sol(sol), copySsatArray(ssat));
                 handler.onResult(new SolData(lastSourceId, solCopy, opt.posMask, null));
@@ -633,6 +653,28 @@ public class SppProcessor {
             }
         }
         return -1;
+    }
+
+    private double[] computeSppAverage() {
+        double[] avg = new double[3];
+        for (double[] pos : sppSmoothBuf) {
+            avg[0] += pos[0];
+            avg[1] += pos[1];
+            avg[2] += pos[2];
+        }
+        int n = sppSmoothBuf.size();
+        avg[0] /= n;
+        avg[1] /= n;
+        avg[2] /= n;
+        return avg;
+    }
+
+    public void feedSbsMsg(SbsMsg msg) {
+        if (msg == null || msg.week == 0) return;
+        int type = SbasCorrection.sbsupdatecorr(msg, rtcm.nav);
+        if (type >= 0) {
+            log.debug("SBAS correction updated: type={}, prn={}", type, msg.prn);
+        }
     }
 
     static String formatSolDataLine(SolData solData) {

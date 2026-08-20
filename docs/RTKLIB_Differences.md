@@ -1243,12 +1243,13 @@ python rtk_compare/compare_results.py \
 |---------|------------|------|
 | SBAS改正算法 | ✅ 完整实现 | `SbasCorrection`有完整的`sbsioncorr`/`sbstropcorr`/`sbssatcorr`/`sbsupdatecorr`，算法与C版一致 |
 | SBAS改正集成 | ✅ 已集成 | `IONOOPT_SBAS`→`sbsioncorr()`，`TROPOPT_SBAS`→`sbstropcorr()`，`SYS_SBS`星历→`sbssatcorr()`，均已集成到定位流程 |
-| SBAS消息输入 | ❌ 未集成 | `sbsupdatecorr()`存在但无调用方。C版中SBAS消息来自接收机原始数据（ublox等）、RTCM流、RINEX SBAS消息文件；Java版RTCM解码不处理SBAS消息，RinexParser只解析SBAS星历(seph)不解析改正消息。结果：`nav.sbssat`/`nav.sbsion`无数据，改正函数返回0 |
+| SBAS消息输入 | ✅ 已实现 | `SbsMsgReader`读取.sbs文件，各Processor提供`feedSbsMsg()`实时注入和`loadSbs()`文件加载，自动调用`sbsupdatecorr()`更新nav改正量 |
 
 ### 14.7 算法细节未对齐项
 
 | C版功能 | C版源码 | Java版状态 | 说明 |
 |---------|---------|------------|------|
+| SPP实时均值平滑 | — | ✅ 已实现 | `PrcOpt.sppsmooth`配置滑动窗口大小，`SppProcessor`对连续SPP结果取均值输出，提高实时SPP精度 |
 | SSR相位偏差改正 | `corr_phase_bias_ssr()` | ✅ 已实现 | `RtklibCommon.corrPhaseBiasSsr()`，在rtkpos/pppos前改正obs.L，支持-ENA_FCB/-DIS_FCB跳过 |
 | 合并速度smoother | `combres()` 中对vr做RTS平滑 | ✅ 已实现 | `CombinedFilter.combine()`中`popt.dynamics!=0`时对速度做RTS平滑，与C版一致 |
 | POSOPT_SINGLE（实时流） | `antpos()` | ⚠️ 空实现 | RtkProcessor中case分支为空，实时流默认用POSOPT_RTCM从RTCM获取；PostPosProcessor批处理已有avepos() |

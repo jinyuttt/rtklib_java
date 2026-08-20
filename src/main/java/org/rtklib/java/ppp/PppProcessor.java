@@ -15,6 +15,8 @@ import org.slf4j.LoggerFactory;
 
 import org.rtklib.java.common.CompatFileIO;
 import org.rtklib.java.common.RtklibCommon;
+import org.rtklib.java.ionosphere.SbasCorrection;
+import org.rtklib.java.ionosphere.SbsMsgReader;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -200,6 +202,19 @@ public class PppProcessor {
     public void loadClk(String clkFilePath) {
         ClkReader.readclk(clkFilePath, rtcm.nav);
         log.info("Loaded CLK: {} records", rtcm.nav.nc);
+    }
+
+    public void loadSbs(String sbsFilePath) {
+        int count = SbsMsgReader.readsbsmsgAndApply(sbsFilePath, rtcm.nav);
+        log.info("Loaded SBAS messages: {} corrections applied", count);
+    }
+
+    public void feedSbsMsg(SbsMsg msg) {
+        if (msg == null || msg.week == 0) return;
+        int type = SbasCorrection.sbsupdatecorr(msg, rtcm.nav);
+        if (type >= 0) {
+            log.debug("SBAS correction updated: type={}, prn={}", type, msg.prn);
+        }
     }
 
     public void feed(byte[] data, int offset, int length) {
