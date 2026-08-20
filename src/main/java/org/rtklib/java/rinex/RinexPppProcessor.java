@@ -23,6 +23,7 @@ public class RinexPppProcessor {
             "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
 
     private final PrcOpt opt;
+    private final SolOpt solOpt;
     private final Writer writer;
 
     private int totalEpochs = 0;
@@ -44,22 +45,35 @@ public class RinexPppProcessor {
         return opt;
     }
 
-    public RinexPppProcessor(PrcOpt opt) {
-        this(opt, null);
-    }
-
-    public RinexPppProcessor(PrcOpt opt, OutputStream outputStream) {
+    public RinexPppProcessor(PrcOpt opt, SolOpt solOpt, OutputStream outputStream) {
         this.opt = new PrcOpt(opt);
+        this.solOpt = solOpt != null ? new SolOpt(solOpt) : null;
         if (outputStream != null) {
             this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
             try { this.writer.write(POS_HEADER); this.writer.flush(); } catch (IOException e) { throw new UncheckedIOException(e); }
         } else { this.writer = null; }
     }
 
+    public RinexPppProcessor(PrcOpt opt, OutputStream outputStream) {
+        this(opt, null, outputStream);
+    }
+
+    public RinexPppProcessor(PrcOpt opt, SolOpt solOpt) {
+        this(opt, solOpt, null);
+    }
+
+    public RinexPppProcessor(PrcOpt opt) {
+        this(opt, null, null);
+    }
+
     public PppResult process(String obsFilePath, String navFilePath,
                              String sp3FilePath, String clkFilePath) {
         PrcOpt procOpt = new PrcOpt(opt);
-        PostPosProcessor proc = new PostPosProcessor(procOpt, new SolOpt());
+        SolOpt effectiveSolOpt = solOpt != null ? new SolOpt(solOpt) : new SolOpt();
+        if (isStaticMode(procOpt.mode) && effectiveSolOpt.solstatic == 0) {
+            effectiveSolOpt.solstatic = 1;
+        }
+        PostPosProcessor proc = new PostPosProcessor(procOpt, effectiveSolOpt);
         PostPosProcessor.PostPosResult result = proc.process(obsFilePath, null, navFilePath, sp3FilePath, clkFilePath);
 
         totalEpochs = result.totalEpochs;
@@ -83,6 +97,10 @@ public class RinexPppProcessor {
                 .map(sol -> new SolData(sol, opt.posMask))
                 .toList();
         return new PppResult(totalEpochs, successCount, failCount, solDataList);
+    }
+
+    private static boolean isStaticMode(int mode) {
+        return mode == Constants.PMODE_PPP_STATIC;
     }
 
     public static class PppResult {

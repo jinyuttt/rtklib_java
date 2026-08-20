@@ -40,6 +40,7 @@ public class RinexRtkProcessor {
             "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
 
     private final PrcOpt opt;
+    private final SolOpt solOpt;
     private final PosHandler handler;
     private final Writer writer;
 
@@ -49,8 +50,9 @@ public class RinexRtkProcessor {
     private int failCount = 0;
     private final List<Sol> solutions = new ArrayList<>();
 
-    public RinexRtkProcessor(PrcOpt opt, PosHandler handler, OutputStream outputStream) {
+    public RinexRtkProcessor(PrcOpt opt, SolOpt solOpt, PosHandler handler, OutputStream outputStream) {
         this.opt = new PrcOpt(opt);
+        this.solOpt = solOpt != null ? new SolOpt(solOpt) : null;
         this.handler = handler;
         this.rtk = new Rtk();
         this.rtk.opt = this.opt;
@@ -68,12 +70,16 @@ public class RinexRtkProcessor {
         }
     }
 
+    public RinexRtkProcessor(PrcOpt opt, PosHandler handler, OutputStream outputStream) {
+        this(opt, null, handler, outputStream);
+    }
+
     public RinexRtkProcessor(PrcOpt opt, PosHandler handler) {
-        this(opt, handler, null);
+        this(opt, null, handler, null);
     }
 
     public RinexRtkProcessor(PrcOpt opt) {
-        this(opt, null, null);
+        this(opt, null, null, null);
     }
 
     public RinexRtkProcessor() {
@@ -121,7 +127,11 @@ public class RinexRtkProcessor {
         if (rtk.rb[0] != 0.0 || rtk.rb[1] != 0.0 || rtk.rb[2] != 0.0) {
             procOpt.rb = new double[]{rtk.rb[0], rtk.rb[1], rtk.rb[2]};
         }
-        PostPosProcessor proc = new PostPosProcessor(procOpt, new SolOpt());
+        SolOpt effectiveSolOpt = solOpt != null ? new SolOpt(solOpt) : new SolOpt();
+        if (isStaticMode(procOpt.mode) && effectiveSolOpt.solstatic == 0) {
+            effectiveSolOpt.solstatic = 1;
+        }
+        PostPosProcessor proc = new PostPosProcessor(procOpt, effectiveSolOpt);
         PostPosProcessor.PostPosResult result = proc.process(roverObsPath, baseObsPath, navPath);
 
         totalEpochs = result.totalEpochs;
@@ -172,5 +182,9 @@ public class RinexRtkProcessor {
                 .map(sol -> new SolData(sol, opt.posMask, rb))
                 .toList();
         return new RtkProcessor.RtkResult(totalEpochs, successCount, failCount, solDataList);
+    }
+
+    private static boolean isStaticMode(int mode) {
+        return mode == Constants.PMODE_STATIC || mode == Constants.PMODE_STATIC_START;
     }
 }
