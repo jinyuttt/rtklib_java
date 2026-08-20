@@ -1241,16 +1241,17 @@ python rtk_compare/compare_results.py \
 
 | C版功能 | Java版状态 | 说明 |
 |---------|------------|------|
-| SBAS改正 | ⚠️ 部分实现 | SbasCorrection有sbsioncorr/sbstropcorr/sbssatcorr/sbsupdatecorr，但未完整集成到定位流程 |
-| SBAS电离层 | ⚠️ 部分实现 | sbsioncorr存在，算法可能不完整 |
+| SBAS改正算法 | ✅ 完整实现 | `SbasCorrection`有完整的`sbsioncorr`/`sbstropcorr`/`sbssatcorr`/`sbsupdatecorr`，算法与C版一致 |
+| SBAS改正集成 | ✅ 已集成 | `IONOOPT_SBAS`→`sbsioncorr()`，`TROPOPT_SBAS`→`sbstropcorr()`，`SYS_SBS`星历→`sbssatcorr()`，均已集成到定位流程 |
+| SBAS消息输入 | ❌ 未集成 | `sbsupdatecorr()`存在但无调用方。C版中SBAS消息来自接收机原始数据（ublox等）、RTCM流、RINEX SBAS消息文件；Java版RTCM解码不处理SBAS消息，RinexParser只解析SBAS星历(seph)不解析改正消息。结果：`nav.sbssat`/`nav.sbsion`无数据，改正函数返回0 |
 
 ### 14.7 算法细节未对齐项
 
 | C版功能 | C版源码 | Java版状态 | 说明 |
 |---------|---------|------------|------|
-| SSR相位偏差改正 | `corr_phase_bias_ssr()` | ❌ 未实现 | SSR解码有，改正未应用到定位计算 |
-| 合并速度smoother | `combres()` 中对vr做RTS平滑 | ❌ 未实现 | CombinedFilter仅对位置做smoother |
-| POSOPT_SINGLE（实时流） | `antpos()` | ❌ 空实现 | RtkProcessor中case分支为空，PostPosProcessor已有avepos() |
+| SSR相位偏差改正 | `corr_phase_bias_ssr()` | ✅ 已实现 | `RtklibCommon.corrPhaseBiasSsr()`，在rtkpos/pppos前改正obs.L，支持-ENA_FCB/-DIS_FCB跳过 |
+| 合并速度smoother | `combres()` 中对vr做RTS平滑 | ✅ 已实现 | `CombinedFilter.combine()`中`popt.dynamics!=0`时对速度做RTS平滑，与C版一致 |
+| POSOPT_SINGLE（实时流） | `antpos()` | ⚠️ 空实现 | RtkProcessor中case分支为空，实时流默认用POSOPT_RTCM从RTCM获取；PostPosProcessor批处理已有avepos() |
 | POSOPT_FILE | `antpos()` | ⚠️ fallback | PostPosProcessor中fallback到RINEX header |
 | udtrop()冻结 | `udtrop()` + atmFrozenNsThresh | ❌ 未实现 | 仅udion()有冻结逻辑 |
 | Static Start长延迟恢复 | `udpos()` 中tt>300重置 | ❌ 未实现 | 边界场景 |

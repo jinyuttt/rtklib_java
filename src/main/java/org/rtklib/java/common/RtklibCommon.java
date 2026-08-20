@@ -309,4 +309,47 @@ public final class RtklibCommon {
 
         return newN;
     }
+
+    /**
+     * SSR carrier-phase bias correction.
+     * Aligned with RTKLIB postpos.c corr_phase_bias_ssr() and rtksvr.c corr_phase_bias().
+     *
+     * <p>Corrects carrier-phase observations by subtracting SSR phase biases.
+     * Formula: obs[i].L[j] -= nav.ssr[sat-1].pbias[code-1] * freq / CLIGHT
+     * (converts phase bias from meters to cycles and subtracts from carrier phase)</p>
+     *
+     * <p>Called before rtkpos()/pppos() in both real-time and batch processing.
+     * Skipped if pppopt contains "-ENA_FCB" or "-DIS_FCB" (FCB estimation mode).</p>
+     *
+     * @param obs observation array
+     * @param n number of observations
+     * @param nav navigation data with SSR corrections
+     * @param pppopt PPP options string, checked for FCB flags
+     */
+    public static void corrPhaseBiasSsr(Obsd[] obs, int n, Nav nav, String pppopt) {
+        if (nav == null || nav.ssr == null) return;
+        if (pppopt != null && (pppopt.contains("-ENA_FCB") || pppopt.contains("-DIS_FCB"))) return;
+
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < Constants.NFREQ; j++) {
+                int code = obs[i].code[j];
+                if (code == 0) continue;
+
+                double freq = SatUtils.sat2freq(obs[i].sat, code, nav);
+                if (freq == 0.0) continue;
+
+                int satIdx = obs[i].sat - 1;
+                if (satIdx < 0 || satIdx >= nav.ssr.length) continue;
+                if (nav.ssr[satIdx] == null) continue;
+
+                int codeIdx = code - 1;
+                if (codeIdx < 0 || codeIdx >= nav.ssr[satIdx].pbias.length) continue;
+
+                double pbias = nav.ssr[satIdx].pbias[codeIdx];
+                if (pbias == 0.0) continue;
+
+                obs[i].L[j] -= pbias * freq / Constants.CLIGHT;
+            }
+        }
+    }
 }

@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.rtklib.java.common.CompatFileIO;
+import org.rtklib.java.common.RtklibCommon;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -534,6 +535,8 @@ public class PppProcessor {
         } else {
             rtk.tt = 0.0;
         }
+
+        RtklibCommon.corrPhaseBiasSsr(obsData, n, nav, opt.pppopt);
 
         PppCore.pppos(rtk, obsData, n, nav);
 
