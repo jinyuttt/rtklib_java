@@ -516,7 +516,7 @@ public final class RtkCore {
                 udion(rtk, bl, sat, ns);
             }
             if (opt.tropopt >= Constants.TROPOPT_EST) {
-                udtrop(rtk, bl);
+                udtrop(rtk, bl, ns);
             }
         }
 
@@ -709,11 +709,15 @@ public final class RtkCore {
         }
     }
 
-    private static void udtrop(Rtk rtk, double bl) {
+    private static void udtrop(Rtk rtk, double bl, int ns) {
         PrcOpt opt = rtk.opt;
         double[] x = rtk.x;
         double[] P = rtk.P;
         int nx = rtk.nx;
+
+        if (rtk.rtkConfig.atmFrozenNsThresh > 0 && ns < rtk.rtkConfig.atmFrozenNsThresh) {
+            return;
+        }
 
         for (int i = 0; i < 2; i++) {
             int j = IT(i, opt);
@@ -1067,7 +1071,7 @@ public final class RtkCore {
 
     private static double varerr(int sat, int sys, double el, double snr_rover,
                                  double snr_base, double bl, double dt, int f,
-                                 PrcOpt opt, Obsd obs) {
+                                 PrcOpt opt, Obsd obs, Rtk rtk) {
         double a, b, c, d;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
         int frq = f % nf;
@@ -1102,8 +1106,13 @@ public final class RtkCore {
 
         if (opt.err[6] > 0.0) {
             double e = fact * opt.err[6];
-            var += SQR(e) * (Math.pow(10, 0.1 * Math.max(opt.err[5] - snr_rover, 0.0)) +
-                             Math.pow(10, 0.1 * Math.max(opt.err[5] - snr_base, 0.0)));
+            double snrRef = opt.err[5];
+            if (rtk != null && rtk.rtkConfig.enableSnrMedian && frq < rtk.snrMedian.length
+                && rtk.snrMedian[frq] > Double.NEGATIVE_INFINITY) {
+                snrRef = rtk.snrMedian[frq];
+            }
+            var += SQR(e) * (Math.pow(10, 0.1 * Math.max(snrRef - snr_rover, 0.0)) +
+                             Math.pow(10, 0.1 * Math.max(snrRef - snr_base, 0.0)));
         }
         if (opt.err[7] > 0.0) {
             if (code) var += SQR(opt.err[7] * obs.Pstd[frq]);
@@ -1132,8 +1141,8 @@ public final class RtkCore {
         }
     }
 
-    private static void prectrop(Rtk rtk, double[] rr, double[] azel, int i,
-                                 double[] dtdx, int nx) {
+    private static void prectrop(Rtk rtk, double[] rr, int r,
+                                 double[] azel, double[] dtdx, int nx) {
         PrcOpt opt = rtk.opt;
         double[] pos = new double[3];
         CoordTransform.ecef2pos(rr, pos);
@@ -1142,10 +1151,17 @@ public final class RtkCore {
         TroposphereModel.tropmapf(rtk.sol.time, pos, azel, mapWet);
 
         for (int k = 0; k < nx; k++) dtdx[k] = 0.0;
-        int it = NT(rtk);
-        if (it > 0) {
-            int idx = NP(rtk) + NI(rtk);
-            if (idx < nx) dtdx[idx] = mapWet[0];
+
+        int it = IT(r, opt);
+        if (it >= 0 && it < nx) {
+            dtdx[it] = mapWet[0];
+            if (opt.tropopt >= Constants.TROPOPT_ESTG && azel[1] > 0.0) {
+                double cotz = 1.0 / Math.tan(azel[1]);
+                double grad_n = mapWet[0] * cotz * Math.cos(azel[0]);
+                double grad_e = mapWet[0] * cotz * Math.sin(azel[0]);
+                if (it + 1 < nx) dtdx[it + 1] = grad_n * rtk.x[it];
+                if (it + 2 < nx) dtdx[it + 2] = grad_e * rtk.x[it];
+            }
         }
     }
 
@@ -1162,6 +1178,9 @@ public final class RtkCore {
         for (i = 0; i < 3; i++) rr_f[i] = rtk.rb[i] + x[i];
         double[] pos = new double[3];
         CoordTransform.ecef2pos(rr_f, pos);
+        double[] rr_r = rtk.rb;
+        double[] pos_r = new double[3];
+        CoordTransform.ecef2pos(rr_r, pos_r);
 
         double bl = RtklibCommon.norm(x, 3);
 
@@ -1187,14 +1206,28 @@ public final class RtkCore {
                 boolean code = f >= nf;
 
                 int refIdx = -1;
+                double bestRefScore = Double.NEGATIVE_INFINITY;
                 for (j = 0; j < ns; j++) {
                     int sysj = SatUtils.satsys(sat[j], null);
                     if ((sysj & sysMap[m]) == 0) continue;
                     if (sysj == Constants.SYS_SBS) continue;
                     if (!validobs(iu[j], ir[j], f, nf, y)) continue;
                     if (refIdx >= 0 && (rtk.ssat[sat[j] - 1].slip[frq] & Constants.LLI_SLIP) != 0) continue;
-                    if (refIdx < 0 || azel[1 + iu[j] * 2] >= azel[1 + iu[refIdx] * 2]) {
-                        refIdx = j;
+                    double el_j = azel[1 + iu[j] * 2];
+                    if (rtk.rtkConfig.enableSnrMedian && frq < rtk.snrMedian.length
+                        && rtk.snrMedian[frq] > Double.NEGATIVE_INFINITY) {
+                        double snr_j = rtk.ssat[sat[j] - 1].snrRover[frq];
+                        double snrMedianVal = rtk.snrMedian[frq];
+                        double snrScore = 1.0 - Math.abs(snr_j - snrMedianVal) / Math.max(snrMedianVal, 1.0);
+                        double score = el_j + snrScore * rtk.rtkConfig.snrMedianKPhase;
+                        if (refIdx < 0 || score > bestRefScore) {
+                            refIdx = j;
+                            bestRefScore = score;
+                        }
+                    } else {
+                        if (refIdx < 0 || el_j >= azel[1 + iu[refIdx] * 2]) {
+                            refIdx = j;
+                        }
                     }
                 }
                 if (refIdx < 0) {
@@ -1258,14 +1291,37 @@ public final class RtkCore {
                         int ii_m = II(sat[j], opt);
                         int ii_r = II(sat[refIdx], opt);
                         if (ii_m >= 0 && ii_r >= 0 && ii_m < nx && ii_r < nx) {
-                            double im_m = IonosphereModel.ionmapf(pos, new double[]{azel[iu[j] * 2], azel[iu[j] * 2 + 1]});
-                            double im_r = IonosphereModel.ionmapf(pos, new double[]{azel[iu[refIdx] * 2], azel[iu[refIdx] * 2 + 1]});
-                            double didx_m = im_m * SQR(Constants.FREQL1 / freqj);
-                            double didx_r = im_r * SQR(Constants.FREQL1 / freqi);
+                            double az_m = azel[iu[j] * 2];
+                            double el_m = azel[iu[j] * 2 + 1];
+                            double az_r = azel[iu[refIdx] * 2];
+                            double el_r = azel[iu[refIdx] * 2 + 1];
+                            double im_m = IonosphereModel.ionmapf(pos, new double[]{az_m, el_m});
+                            double im_r = IonosphereModel.ionmapf(pos, new double[]{az_r, el_r});
+                            double freqRatio_m = SQR(Constants.FREQL1 / freqj);
+                            double freqRatio_r = SQR(Constants.FREQL1 / freqi);
+                            double didx_m = im_m * freqRatio_m;
+                            double didx_r = im_r * freqRatio_r;
                             v[nv] += didx_m * x[ii_m] - didx_r * x[ii_r];
                             if (H != null) {
                                 H[nv * nx + ii_m] += didx_m;
                                 H[nv * nx + ii_r] -= didx_r;
+                                if (opt.ionoGradient && el_m > 0.0 && el_r > 0.0) {
+                                    double cotz_m = 1.0 / Math.tan(el_m);
+                                    double grad_n_m = im_m * cotz_m * Math.cos(az_m);
+                                    double grad_e_m = im_m * cotz_m * Math.sin(az_m);
+                                    double didxGn_m = x[ii_m] * grad_n_m * freqRatio_m;
+                                    double didxGe_m = x[ii_m] * grad_e_m * freqRatio_m;
+                                    if (ii_m + 1 < nx) H[nv * nx + ii_m + 1] += didxGn_m;
+                                    if (ii_m + 2 < nx) H[nv * nx + ii_m + 2] += didxGe_m;
+
+                                    double cotz_r = 1.0 / Math.tan(el_r);
+                                    double grad_n_r = im_r * cotz_r * Math.cos(az_r);
+                                    double grad_e_r = im_r * cotz_r * Math.sin(az_r);
+                                    double didxGn_r = x[ii_r] * grad_n_r * freqRatio_r;
+                                    double didxGe_r = x[ii_r] * grad_e_r * freqRatio_r;
+                                    if (ii_r + 1 < nx) H[nv * nx + ii_r + 1] -= didxGn_r;
+                                    if (ii_r + 2 < nx) H[nv * nx + ii_r + 2] -= didxGe_r;
+                                }
                             }
                         }
                     }
@@ -1273,8 +1329,8 @@ public final class RtkCore {
                     if (opt.tropopt == Constants.TROPOPT_EST || opt.tropopt == Constants.TROPOPT_ESTG) {
                         double[] dtdx_m = new double[nx];
                         double[] dtdx_r = new double[nx];
-                        prectrop(rtk, rr_f, new double[]{azel[iu[j] * 2], azel[iu[j] * 2 + 1]}, j, dtdx_m, nx);
-                        prectrop(rtk, rr_f, new double[]{azel[iu[refIdx] * 2], azel[iu[refIdx] * 2 + 1]}, refIdx, dtdx_r, nx);
+                        prectrop(rtk, rr_f, 0, new double[]{azel[iu[j] * 2], azel[iu[j] * 2 + 1]}, dtdx_m, nx);
+                        prectrop(rtk, rr_r, 1, new double[]{azel[iu[refIdx] * 2], azel[iu[refIdx] * 2 + 1]}, dtdx_r, nx);
                         for (k = 0; k < nx; k++) {
                             if (H != null) H[nv * nx + k] += dtdx_m[k] - dtdx_r[k];
                         }
@@ -1308,8 +1364,8 @@ public final class RtkCore {
                     int sysRef = SatUtils.satsys(sat[refIdx], null);
                     int sysJ = SatUtils.satsys(sat[j], null);
                     if (Ri != null) {
-                        Ri[nv] = varerr(sat[refIdx], sysRef, eli, rtk.ssat[sat[refIdx]-1].snrRover[frq], rtk.ssat[sat[refIdx]-1].snrBase[frq], bl, dt, f, opt, obs[iu[refIdx]]);
-                        Rj[nv] = varerr(sat[j], sysJ, elj, rtk.ssat[sat[j]-1].snrRover[frq], rtk.ssat[sat[j]-1].snrBase[frq], bl, dt, f, opt, obs[iu[j]]);
+                        Ri[nv] = varerr(sat[refIdx], sysRef, eli, rtk.ssat[sat[refIdx]-1].snrRover[frq], rtk.ssat[sat[refIdx]-1].snrBase[frq], bl, dt, f, opt, obs[iu[refIdx]], rtk);
+                        Rj[nv] = varerr(sat[j], sysJ, elj, rtk.ssat[sat[j]-1].snrRover[frq], rtk.ssat[sat[j]-1].snrBase[frq], bl, dt, f, opt, obs[iu[j]], rtk);
                         if (!code) {
                             if ((obs[iu[refIdx]].LLI[frq] & Constants.LLI_HALFC) != 0) Ri[nv] += 0.01;
                             if ((obs[iu[j]].LLI[frq] & Constants.LLI_HALFC) != 0) Rj[nv] += 0.01;

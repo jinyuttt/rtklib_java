@@ -304,8 +304,9 @@ udion() 入口:
   if atmFrozenNsThresh > 0 && ns < atmFrozenNsThresh:
       return    // 跳过整个udion，不更新电离层参数
 
-udtrop() 冻结:
-  当前仅 udion() 有冻结逻辑，udtrop() 尚未实现冻结
+udtrop() 入口:
+  if atmFrozenNsThresh > 0 && ns < atmFrozenNsThresh:
+      return    // 跳过整个udtrop，不更新对流层参数
 ```
 
 ### 3.4 配置参数
@@ -319,6 +320,7 @@ udtrop() 冻结:
 | 函数 | 文件 | 说明 |
 |------|------|------|
 | `udion()` | RtkCore.java | 入口检查 ns < atmFrozenNsThresh 时 return |
+| `udtrop()` | RtkCore.java | 入口检查 ns < atmFrozenNsThresh 时 return |
 
 ---
 
@@ -442,11 +444,13 @@ C版RTKLIB参考星仅按高度角选择，不考虑信号质量。
 ### 5.2 解决方案
 
 计算各频点SNR中值，用于改进参考星选择和观测权重。
-SNR中值作为该频点的信号质量基准，可用于：
-- 参考星选择时偏好高SNR卫星
-- 观测权重调整时考虑SNR偏离
+SNR中值作为该频点的信号质量基准，用于：
+- 观测方差计算时用SNR中值替代固定参考值，弱信号卫星方差增大
+- 参考星选择时综合考虑高度角和SNR中值接近度
 
 ### 5.3 核心算法
+
+#### 5.3.1 SNR中值计算
 
 ```
 对每个频点 f:
@@ -464,6 +468,35 @@ SNR中值作为该频点的信号质量基准，可用于：
   3. 存储:
      rtk.snrMedian[f] = 中值
 ```
+
+#### 5.3.2 观测方差调整
+
+```
+varerr() 中:
+  snrRef = opt.err[5]                          // 默认: 固定参考SNR
+  if enableSnrMedian && snrMedian[frq] 有效:
+      snrRef = rtk.snrMedian[frq]              // 替换: 中值参考SNR
+
+  var += e² * (10^(0.1*(snrRef - snr_rover)) + 10^(0.1*(snrRef - snr_base)))
+```
+
+SNR低于中值的卫星，`snrRef - snr_rover` 更大，方差更大，等效降权。
+
+#### 5.3.3 参考星选择
+
+```
+ddres() 中参考星选择:
+  if enableSnrMedian && snrMedian[frq] 有效:
+      snrScore = 1 - |snr_j - snrMedian| / max(snrMedian, 1)
+      score = el_j + snrScore * snrMedianKPhase
+      选 score 最大的卫星为参考星
+  else:
+      选高度角最大的卫星为参考星（原始策略）
+```
+
+评分策略：高度角为主（弧度值约0~1.57），SNR中值接近度为辅（0~1），
+`snrMedianKPhase`(0.5) 控制SNR权重。SNR越接近中值的卫星评分越高，
+避免选择SNR异常（过高或过低）的卫星作为参考星。
 
 ### 5.4 配置参数
 
@@ -494,8 +527,10 @@ SNR中值作为该频点的信号质量基准，可用于：
 
 | 函数 | 文件 | 说明 |
 |------|------|------|
-| `computeSnrMedian()` | RtkOptimizations.java | 完整实现 |
-| `relpos()` | RtkCore.java | 在udstate之前调用 |
+| `computeSnrMedian()` | RtkOptimizations.java | SNR中值计算 |
+| `varerr()` | RtkCore.java | 用snrMedian替代opt.err[5]作为SNR参考值 |
+| `ddres()` | RtkCore.java | 参考星选择综合评分（高度角+SNR中值接近度） |
+| `relpos()` | RtkCore.java | 在udstate之前调用computeSnrMedian |
 
 ---
 
@@ -639,17 +674,31 @@ relpos() 入口同步:
   NI = MAXSAT * 3 (每星 VTEC + Gn + Ge)
   II(sat, opt) = NP + (sat-1)*3
 
-ddres() 中梯度对双差残差的贡献:
-  v[i] -= scaleI * cot(elI) * cos(azI) * xState[iiI+1]   // Gn 北向梯度
-        + scaleJ * cot(elJ) * cos(azJ) * xState[iiJ+1]
-  v[i] -= scaleI * cot(elI) * sin(azI) * xState[iiI+2]   // Ge 东向梯度
-        + scaleJ * cot(elJ) * sin(azJ) * xState[iiJ+2]
+ddres() 中电离层梯度H矩阵偏导数:
+  对流动星 j 和参考星 refIdx:
+    // VTEC偏导数（原有）
+    H[nv*nx + ii_m] += im_m * freqRatio_m
+    H[nv*nx + ii_r] -= im_r * freqRatio_r
 
-H矩阵对应偏导数:
-  H[nvOut*nx + iiI+1] += scaleI * cot(elI) * cos(azI)
-  H[nvOut*nx + iiI+2] += scaleI * cot(elI) * sin(azI)
-  H[nvOut*nx + iiJ+1] -= scaleJ * cot(elJ) * cos(azJ)
-  H[nvOut*nx + iiJ+2] -= scaleJ * cot(elJ) * sin(azJ)
+    // Gn 北向梯度偏导数（新增）
+    cotz = 1/tan(el)
+    grad_n = im * cotz * cos(az)
+    didxGn = x[ii] * grad_n * freqRatio
+    H[nv*nx + ii_m+1] += didxGn_m
+    H[nv*nx + ii_r+1] -= didxGn_r
+
+    // Ge 东向梯度偏导数（新增）
+    grad_e = im * cotz * sin(az)
+    didxGe = x[ii] * grad_e * freqRatio
+    H[nv*nx + ii_m+2] += didxGe_m
+    H[nv*nx + ii_r+2] -= didxGe_r
+
+prectrop() 中对流层梯度偏导数（TROPOPT_ESTG模式）:
+  对流层延迟 = ZWD × m_w + Gn × m_w × cot(el) × cos(az) + Ge × m_w × cot(el) × sin(az)
+  dtdx[IT(r)]   = m_w              // ZWD偏导数
+  dtdx[IT(r)+1] = m_w × cot(el) × cos(az) × x[IT(r)]  // Gn偏导数
+  dtdx[IT(r)+2] = m_w × cot(el) × sin(az) × x[IT(r)]  // Ge偏导数
+  其中 r=0 为流动站, r=1 为基准站
 ```
 
 ### 7.4 梯度参数的物理意义
@@ -679,7 +728,8 @@ H矩阵对应偏导数:
 |------|------|------|
 | `relpos()` | RtkCore.java | 同步开关 |
 | `NI()/II()` | RtkCore.java | 维度和索引计算 |
-| `ddres()` | RtkCore.java | 梯度残差和H矩阵 |
+| `ddres()` | RtkCore.java | 电离层梯度H矩阵偏导数（Gn/Ge） |
+| `prectrop()` | RtkCore.java | 对流层梯度偏导数（TROPOPT_ESTG模式） |
 | `udion()` | RtkCore.java | 梯度参数过程噪声 |
 
 ### 7.7 ⚠️ 已知代码问题：梯度参数未初始化/未更新（已修复 2026-07-19）

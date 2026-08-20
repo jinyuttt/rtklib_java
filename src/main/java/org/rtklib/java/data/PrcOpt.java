@@ -62,6 +62,8 @@ public class PrcOpt {
     public int niter;
     /** Code smoothing window size (0:none) */
     public int codesmooth;
+    /** SPP position averaging window size (0:none, >0: sliding window epochs) */
+    public int sppsmooth;
     /** Interpolate reference obs (post mission) */
     public int intpref;
     /** SBAS correction options */
@@ -174,6 +176,7 @@ public class PrcOpt {
         this.tidecorr = 0;
         this.niter = 1;
         this.codesmooth = 0;
+        this.sppsmooth = 0;
         this.intpref = 0;
         this.sbascorr = 0;
         this.sbassatsel = 0;
@@ -273,6 +276,7 @@ public class PrcOpt {
         this.tidecorr = other.tidecorr;
         this.niter = other.niter;
         this.codesmooth = other.codesmooth;
+        this.sppsmooth = other.sppsmooth;
         this.intpref = other.intpref;
         this.sbascorr = other.sbascorr;
         this.sbassatsel = other.sbassatsel;

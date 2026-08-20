@@ -8,6 +8,9 @@ import org.rtklib.java.ephemeris.ClkReader;
 import org.rtklib.java.ephemeris.Sp3Reader;
 import org.rtklib.java.pntpos.PntPos;
 import org.rtklib.java.common.RtklibCommon;
+import org.rtklib.java.data.SbsMsg;
+import org.rtklib.java.ionosphere.SbasCorrection;
+import org.rtklib.java.ionosphere.SbsMsgReader;
 import org.rtklib.java.pntpos.PosHandler;
 import org.rtklib.java.ppp.PppCore;
 import org.rtklib.java.rtkpos.CombinedFilter;
@@ -35,6 +38,9 @@ public class PostPosProcessor {
     private final SolOpt sopt;
     private final PosHandler handler;
     private final Writer writer;
+
+    private List<SbsMsg> sbsMsgs = Collections.emptyList();
+    private int sbsMsgIdx;
 
     public PostPosProcessor(PrcOpt opt, SolOpt sopt, PosHandler handler, OutputStream outputStream) {
         this.opt = new PrcOpt(opt);
@@ -67,7 +73,8 @@ public class PostPosProcessor {
     }
 
     public PostPosResult process(String roverObsPath, String baseObsPath,
-                                 String navPath, String sp3Path, String clkPath) {
+                                 String navPath, String sp3Path, String clkPath,
+                                 String sbsPath) {
         RinexParser roverParser = new RinexParser();
         boolean roverOk = roverParser.parseObs(roverObsPath);
         if (!roverOk) {
@@ -93,6 +100,10 @@ public class PostPosProcessor {
         if (clkPath != null) {
             ClkReader.readclk(clkPath, nav);
             log.info("Loaded CLK: {} records", nav.nc);
+        }
+        if (sbsPath != null) {
+            sbsMsgs = SbsMsgReader.readsbsmsg(sbsPath);
+            log.info("Loaded {} SBAS messages for epoch-by-epoch application", sbsMsgs.size());
         }
 
         if (roverParser.obs.n == 0) {
@@ -145,12 +156,17 @@ public class PostPosProcessor {
         }
     }
 
+    public PostPosResult process(String roverObsPath, String baseObsPath,
+                                 String navPath, String sp3Path, String clkPath) {
+        return process(roverObsPath, baseObsPath, navPath, sp3Path, clkPath, null);
+    }
+
     public PostPosResult process(String roverObsPath, String baseObsPath, String navPath) {
-        return process(roverObsPath, baseObsPath, navPath, null, null);
+        return process(roverObsPath, baseObsPath, navPath, null, null, null);
     }
 
     public PostPosResult process(String roverObsPath, String navPath) {
-        return process(roverObsPath, null, navPath, null, null);
+        return process(roverObsPath, null, navPath, null, null, null);
     }
 
     private PostPosResult processForward(List<List<Obsd>> roverEpochs,
@@ -159,6 +175,7 @@ public class PostPosProcessor {
         Rtk rtk = createRtk(approxPos, basePos);
         int totalEpochs = 0, successCount = 0, failCount = 0;
         List<Sol> solutions = new ArrayList<>();
+        sbsMsgIdx = 0;
 
         boolean solstatic = sopt != null && sopt.solstatic != 0 &&
                 (opt.mode == Constants.PMODE_STATIC || opt.mode == Constants.PMODE_STATIC_START
@@ -173,6 +190,7 @@ public class PostPosProcessor {
             Obsd[] obs = buildEpochObs(roverEpoch, baseEpochsCopy);
             if (obs.length == 0) continue;
             totalEpochs++;
+            applySbsUpTo(obs[0].time, nav);
             RtklibCommon.corrPhaseBiasSsr(obs, obs.length, nav, opt.pppopt);
             int result = RtkCore.rtkpos(rtk, obs, obs.length, nav);
             if (result == 1 && rtk.sol.stat != Constants.SOLQ_NONE) {
@@ -209,6 +227,8 @@ public class PostPosProcessor {
         Rtk rtk = createRtk(approxPos, basePos);
         int totalEpochs = 0, successCount = 0, failCount = 0;
         List<Sol> solutions = new ArrayList<>();
+        sbsMsgIdx = 0;
+        applyAllSbs(nav);
 
         boolean solstatic = sopt != null && sopt.solstatic != 0 &&
                 (opt.mode == Constants.PMODE_STATIC || opt.mode == Constants.PMODE_STATIC_START
@@ -267,6 +287,7 @@ public class PostPosProcessor {
         Rtk rtkF = createRtk(approxPos, basePos);
         List<Sol> solfList = new ArrayList<>();
         List<double[]> rbfList = new ArrayList<>();
+        sbsMsgIdx = 0;
 
         List<List<Obsd>> baseEpochsFwd = copyBaseEpochs(baseEpochs);
 
@@ -277,6 +298,7 @@ public class PostPosProcessor {
                 rbfList.add(null);
                 continue;
             }
+            applySbsUpTo(obs[0].time, nav);
             RtklibCommon.corrPhaseBiasSsr(obs, obs.length, nav, opt.pppopt);
             int result = RtkCore.rtkpos(rtkF, obs, obs.length, nav);
             if (result == 1 && rtkF.sol.stat != Constants.SOLQ_NONE) {
@@ -481,6 +503,30 @@ public class PostPosProcessor {
         return mode == Constants.PMODE_DGPS || mode == Constants.PMODE_KINEMA
                 || mode == Constants.PMODE_STATIC || mode == Constants.PMODE_STATIC_START
                 || mode == Constants.PMODE_MOVEB || mode == Constants.PMODE_FIXED;
+    }
+
+    private void applySbsUpTo(GTime time, Nav nav) {
+        while (sbsMsgIdx < sbsMsgs.size()) {
+            SbsMsg msg = sbsMsgs.get(sbsMsgIdx);
+            GTime msgTime = TimeSystem.gpst2time(msg.week, msg.tow);
+            if (TimeSystem.timediff(msgTime, time) > 0.0) break;
+            int type = SbasCorrection.sbsupdatecorr(msg, nav);
+            if (type >= 0) {
+                log.debug("SBAS correction applied: type={}, prn={}, tow={}", type, msg.prn, msg.tow);
+            }
+            sbsMsgIdx++;
+        }
+    }
+
+    private void applyAllSbs(Nav nav) {
+        while (sbsMsgIdx < sbsMsgs.size()) {
+            SbsMsg msg = sbsMsgs.get(sbsMsgIdx);
+            int type = SbasCorrection.sbsupdatecorr(msg, nav);
+            if (type >= 0) {
+                log.debug("SBAS correction applied: type={}, prn={}, tow={}", type, msg.prn, msg.tow);
+            }
+            sbsMsgIdx++;
+        }
     }
 
     private double[] resolveBasePos(int refpos, double[] optRb, Sta baseSta,
