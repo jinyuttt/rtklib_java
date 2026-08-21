@@ -97,7 +97,7 @@ public class RinexSppProcessor {
         if (handler != null) {
             handler.onFinish(totalEpochs, successCount, failCount);
         }
-        return buildResult();
+        return new SppResult(totalEpochs, successCount, failCount, result.solutions);
     }
 
     public static SppResult processRinex(String obsFilePath, String navFilePath, PrcOpt opt) {

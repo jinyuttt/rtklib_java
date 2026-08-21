@@ -89,19 +89,29 @@ public class SolData {
 
     public final double[] clockBias;
 
+    public final List<SatObsData> satObsList;
+
     public final double gdop;
     public final double pdop;
     public final double hdop;
     public final double vdop;
 
-    public SolData(Sol sol, int posMask) {this(null, sol, posMask, null);
+    public SolData(Sol sol, int posMask) {this(null, sol, posMask, null, null);
     }
 
     public SolData(Sol sol, int posMask, double[] rb) {
-        this(null, sol, posMask, rb);
+        this(null, sol, posMask, rb, null);
     }
 
     public SolData(String sourceId, Sol sol, int posMask, double[] rb) {
+        this(sourceId, sol, posMask, rb, null);
+    }
+
+    public SolData(Sol sol, int posMask, double[] rb, Ssat[] ssat) {
+        this(null, sol, posMask, rb, ssat);
+    }
+
+    public SolData(String sourceId, Sol sol, int posMask, double[] rb, Ssat[] ssat) {
         this.sourceId = sourceId;
         this.time = new GTime(sol.time);
         this.timeUtc = toLocalDateTime(sol.time);
@@ -123,6 +133,7 @@ public class SolData {
         this.age = sol.age;
         this.ratio = sol.ratio;
         this.clockBias = sol.dtr.clone();
+        this.satObsList = (ssat != null) ? SatObsData.fromSsat(ssat, 1) : List.of();
         this.gdop = sol.gdop;
         this.pdop = sol.pdop;
         this.hdop = sol.hdop;

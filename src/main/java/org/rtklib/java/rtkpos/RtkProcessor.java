@@ -115,6 +115,7 @@ public class RtkProcessor {
     private int successCount = 0;
     private int failCount = 0;
     private int outputCount = 0;
+    private final List<Ssat[]> solutionSsatList = new ArrayList<>();
     private int sleepInterval = 100;
     private int sleepMs = 10;
     private final List<Sol> solutions = new ArrayList<>();
@@ -642,6 +643,7 @@ public class RtkProcessor {
             successCount++;
             Sol solCopy = new Sol(rtk.sol);
             solutions.add(solCopy);
+            solutionSsatList.add(copySsatArray(rtk.ssat));
 
             if (solstatic) {
                 if (bestSol == null || SOL_PRIO[solCopy.stat] <= SOL_PRIO[bestSol.stat]) {
@@ -658,7 +660,7 @@ public class RtkProcessor {
                 if (handler != null) {
                     handler.onSolution(new Sol(rtk.sol), copySsatArray(rtk.ssat));
                     double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
-                    handler.onResult(new SolData(lastRoverSourceId, solCopy, opt.posMask, rb));
+                    handler.onResult(new SolData(lastRoverSourceId, solCopy, opt.posMask, rb, rtk.ssat));
                 }
                 if (writer != null) {
                     try {
@@ -1111,6 +1113,7 @@ public class RtkProcessor {
         successCount = 0;
         failCount = 0;
         solutions.clear();
+        solutionSsatList.clear();
         bestSol = null;
         bestTime = null;
         windowCount = 0;
@@ -1128,6 +1131,7 @@ public class RtkProcessor {
         failCount = 0;
         outputCount = 0;
         solutions.clear();
+        solutionSsatList.clear();
         bestSol = null;
         bestTime = null;
         windowCount = 0;
@@ -1291,6 +1295,8 @@ public class RtkProcessor {
             System.arraycopy(src.resp, 0, dst.resp, 0, src.resp.length);
             System.arraycopy(src.resc, 0, dst.resc, 0, src.resc.length);
             System.arraycopy(src.vsat, 0, dst.vsat, 0, src.vsat.length);
+            System.arraycopy(src.snrRover, 0, dst.snrRover, 0, src.snrRover.length);
+            System.arraycopy(src.snrBase, 0, dst.snrBase, 0, src.snrBase.length);
             System.arraycopy(src.fix, 0, dst.fix, 0, src.fix.length);
             System.arraycopy(src.slip, 0, dst.slip, 0, src.slip.length);
             System.arraycopy(src.amb, 0, dst.amb, 0, src.amb.length);
@@ -1301,9 +1307,12 @@ public class RtkProcessor {
     private RtkResult buildResult() {
         double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
         List<Sol> outputSource = solstatic ? solStaticOutputs : solutions;
-        List<SolData> solDataList = outputSource.stream()
-                .map(sol -> new SolData(sol, opt.posMask, rb))
-                .toList();
+        List<Ssat[]> ssatSource = solstatic ? List.of() : solutionSsatList;
+        List<SolData> solDataList = new ArrayList<>(outputSource.size());
+        for (int i = 0; i < outputSource.size(); i++) {
+            Ssat[] ssat = (i < ssatSource.size()) ? ssatSource.get(i) : null;
+            solDataList.add(new SolData(outputSource.get(i), opt.posMask, rb, ssat));
+        }
         return new RtkResult(totalEpochs, successCount, failCount, solDataList);
     }
 

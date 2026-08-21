@@ -175,6 +175,7 @@ public class PostPosProcessor {
         Rtk rtk = createRtk(approxPos, basePos);
         int totalEpochs = 0, successCount = 0, failCount = 0;
         List<Sol> solutions = new ArrayList<>();
+        List<Ssat[]> ssatList = new ArrayList<>();
         sbsMsgIdx = 0;
 
         boolean solstatic = sopt != null && sopt.solstatic != 0 &&
@@ -196,9 +197,11 @@ public class PostPosProcessor {
             if (result == 1 && rtk.sol.stat != Constants.SOLQ_NONE) {
                 successCount++;
                 Sol solCopy = new Sol(rtk.sol);
+                Ssat[] ssatCopy = copySsatArray(rtk.ssat);
                 if (!solstatic) {
                     solutions.add(solCopy);
-                    outputSolution(solCopy);
+                    ssatList.add(ssatCopy);
+                    outputSolution(solCopy, ssatCopy);
                 } else {
                     if (bestSol == null || pri[solCopy.stat] <= pri[bestSol.stat]) {
                         bestSol = solCopy;
@@ -215,11 +218,13 @@ public class PostPosProcessor {
         if (solstatic && bestSol != null) {
             bestSol.time = bestTime != null ? bestTime : bestSol.time;
             solutions.add(bestSol);
-            outputSolution(bestSol);
+            Ssat[] lastSsat = copySsatArray(rtk.ssat);
+            ssatList.add(lastSsat);
+            outputSolution(bestSol, lastSsat);
         }
 
         finishOutput(totalEpochs, successCount, failCount);
-        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions), solutions);
+        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions, ssatList), solutions);
     }
 
     private PostPosResult processBackward(List<List<Obsd>> roverEpochs, List<List<Obsd>> baseEpochs,
@@ -227,6 +232,7 @@ public class PostPosProcessor {
         Rtk rtk = createRtk(approxPos, basePos);
         int totalEpochs = 0, successCount = 0, failCount = 0;
         List<Sol> solutions = new ArrayList<>();
+        List<Ssat[]> ssatList = new ArrayList<>();
         sbsMsgIdx = 0;
         applyAllSbs(nav);
 
@@ -254,8 +260,10 @@ public class PostPosProcessor {
             if (result == 1 && rtk.sol.stat != Constants.SOLQ_NONE) {
                 successCount++;
                 Sol solCopy = new Sol(rtk.sol);
+                Ssat[] ssatCopy = copySsatArray(rtk.ssat);
                 if (!solstatic) {
                     solutions.add(solCopy);
+                    ssatList.add(ssatCopy);
                 } else {
                     if (bestSol == null || pri[solCopy.stat] <= pri[bestSol.stat]) {
                         bestSol = solCopy;
@@ -271,14 +279,19 @@ public class PostPosProcessor {
 
         if (!solstatic) {
             Collections.reverse(solutions);
+            Collections.reverse(ssatList);
         } else if (bestSol != null) {
             bestSol.time = bestTime != null ? bestTime : bestSol.time;
             solutions.add(bestSol);
+            ssatList.add(copySsatArray(rtk.ssat));
         }
 
-        for (Sol sol : solutions) { outputSolution(sol); }
+        for (int i = 0; i < solutions.size(); i++) {
+            Ssat[] ssat = (i < ssatList.size()) ? ssatList.get(i) : null;
+            outputSolution(solutions.get(i), ssat);
+        }
         finishOutput(totalEpochs, successCount, failCount);
-        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions), solutions);
+        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions, ssatList), solutions);
     }
 
     private PostPosResult processCombined(List<List<Obsd>> roverEpochs,
@@ -362,12 +375,12 @@ public class PostPosProcessor {
 
         for (Sol sol : combined) {
             if (sol != null) {
-                outputSolution(sol);
+                outputSolution(sol, null);
             }
         }
 
         finishOutput(totalEpochs, successCount, failCount);
-        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(combined), combined);
+        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(combined, null), combined);
     }
 
     private Rtk createRtk(double[] approxPos, double[] basePos) {
@@ -460,10 +473,10 @@ public class PostPosProcessor {
         return groups;
     }
 
-    private void outputSolution(Sol sol) {
+    private void outputSolution(Sol sol, Ssat[] ssat) {
         if (handler != null) {
-            handler.onSolution(new Sol(sol), null);
-            handler.onResult(new SolData(sol, opt.posMask));
+            handler.onSolution(new Sol(sol), ssat);
+            handler.onResult(new SolData(sol, opt.posMask, null, ssat));
         }
         if (writer != null) {
             try {
@@ -489,14 +502,37 @@ public class PostPosProcessor {
         }
     }
 
-    private List<SolData> toSolDataList(List<Sol> solutions) {
+    private List<SolData> toSolDataList(List<Sol> solutions, List<Ssat[]> ssatList) {
         List<SolData> list = new ArrayList<>();
-        for (Sol sol : solutions) {
+        for (int i = 0; i < solutions.size(); i++) {
+            Sol sol = solutions.get(i);
             if (sol != null) {
-                list.add(new SolData(sol, opt.posMask));
+                Ssat[] ssat = (ssatList != null && i < ssatList.size()) ? ssatList.get(i) : null;
+                list.add(new SolData(sol, opt.posMask, null, ssat));
             }
         }
         return list;
+    }
+
+    private static Ssat[] copySsatArray(Ssat[] ssat) {
+        Ssat[] copy = new Ssat[ssat.length];
+        for (int i = 0; i < ssat.length; i++) {
+            copy[i] = new Ssat();
+            Ssat src = ssat[i];
+            Ssat dst = copy[i];
+            dst.sys = src.sys;
+            dst.vs = src.vs;
+            System.arraycopy(src.azel, 0, dst.azel, 0, src.azel.length);
+            System.arraycopy(src.resp, 0, dst.resp, 0, src.resp.length);
+            System.arraycopy(src.resc, 0, dst.resc, 0, src.resc.length);
+            System.arraycopy(src.vsat, 0, dst.vsat, 0, src.vsat.length);
+            System.arraycopy(src.snrRover, 0, dst.snrRover, 0, src.snrRover.length);
+            System.arraycopy(src.snrBase, 0, dst.snrBase, 0, src.snrBase.length);
+            System.arraycopy(src.fix, 0, dst.fix, 0, src.fix.length);
+            System.arraycopy(src.slip, 0, dst.slip, 0, src.slip.length);
+            System.arraycopy(src.amb, 0, dst.amb, 0, src.amb.length);
+        }
+        return copy;
     }
 
     private static boolean isRelativeMode(int mode) {

@@ -154,7 +154,7 @@ public class RinexRtkProcessor {
         if (handler != null) {
             handler.onFinish(totalEpochs, successCount, failCount);
         }
-        return buildResult();
+        return new RtkProcessor.RtkResult(totalEpochs, successCount, failCount, result.solutions);
     }
 
     public RtkProcessor.RtkResult process(String roverObsPath, String baseObsPath) {

@@ -90,6 +90,7 @@ public class SppProcessor {
     private int successCount = 0;
     private int failCount = 0;
     private int outputCount = 0;
+    private final List<Ssat[]> solutionSsatList = new ArrayList<>();
     private int sleepInterval = 100;
     private int sleepMs = 10;
     private final List<Sol> solutions = new ArrayList<>();
@@ -299,6 +300,7 @@ public class SppProcessor {
         successCount = 0;
         failCount = 0;
         solutions.clear();
+        solutionSsatList.clear();
 
         pendingLen = 0;
         finished = false;
@@ -607,6 +609,7 @@ public class SppProcessor {
             successCount++;
             Sol solCopy = new Sol(sol);
             solutions.add(solCopy);
+            solutionSsatList.add(copySsatArray(ssat));
 
             if (sppSmoothWindow > 0) {
                 sppSmoothBuf.add(new double[]{sol.rr[0], sol.rr[1], sol.rr[2]});
@@ -619,7 +622,7 @@ public class SppProcessor {
 
             if (handler != null) {
                 handler.onSolution(new Sol(sol), copySsatArray(ssat));
-                handler.onResult(new SolData(lastSourceId, solCopy, opt.posMask, null));
+                handler.onResult(new SolData(lastSourceId, solCopy, opt.posMask, null, ssat));
             }
             if (writer != null) {
                 try {
@@ -757,6 +760,8 @@ public class SppProcessor {
             System.arraycopy(src.resp, 0, dst.resp, 0, src.resp.length);
             System.arraycopy(src.resc, 0, dst.resc, 0, src.resc.length);
             System.arraycopy(src.vsat, 0, dst.vsat, 0, src.vsat.length);
+            System.arraycopy(src.snrRover, 0, dst.snrRover, 0, src.snrRover.length);
+            System.arraycopy(src.snrBase, 0, dst.snrBase, 0, src.snrBase.length);
             System.arraycopy(src.fix, 0, dst.fix, 0, src.fix.length);
             System.arraycopy(src.slip, 0, dst.slip, 0, src.slip.length);
             System.arraycopy(src.amb, 0, dst.amb, 0, src.amb.length);
@@ -771,9 +776,11 @@ public class SppProcessor {
     }
 
     private SppResult buildResult() {
-        List<SolData> solDataList = solutions.stream()
-                .map(sol -> new SolData(sol, opt.posMask))
-                .toList();
+        List<SolData> solDataList = new ArrayList<>(solutions.size());
+        for (int i = 0; i < solutions.size(); i++) {
+            Ssat[] ssat = (i < solutionSsatList.size()) ? solutionSsatList.get(i) : null;
+            solDataList.add(new SolData(solutions.get(i), opt.posMask, null, ssat));
+        }
         return new SppResult(totalEpochs, successCount, failCount, solDataList);
     }
 
