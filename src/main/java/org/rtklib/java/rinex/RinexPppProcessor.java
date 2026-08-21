@@ -89,7 +89,7 @@ public class RinexPppProcessor {
                 writer.flush();
             } catch (IOException e) { throw new UncheckedIOException(e); }
         }
-        return buildResult();
+        return new PppResult(totalEpochs, successCount, failCount, result.solutions);
     }
 
     private PppResult buildResult() {
