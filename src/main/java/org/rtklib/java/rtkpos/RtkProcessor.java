@@ -98,6 +98,7 @@ public class RtkProcessor {
     private boolean finished = false;
 
     private Sol bestSol = null;
+    private Ssat[] bestSsat = null;
     private GTime bestTime = null;
     private int windowCount = 0;
     private final List<Sol> solStaticOutputs = new ArrayList<>();
@@ -648,6 +649,7 @@ public class RtkProcessor {
             if (solstatic) {
                 if (bestSol == null || SOL_PRIO[solCopy.stat] <= SOL_PRIO[bestSol.stat]) {
                     bestSol = solCopy;
+                    bestSsat = copySsatArray(rtk.ssat);
                     if (bestTime == null || TimeSystem.timediff(solCopy.time, bestTime) < 0.0) {
                         bestTime = new GTime(solCopy.time);
                     }
@@ -709,7 +711,7 @@ public class RtkProcessor {
 
         if (handler != null) {
             double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
-            handler.onResult(new SolData(lastRoverSourceId, bestSol, opt.posMask, rb));
+            handler.onResult(new SolData(lastRoverSourceId, bestSol, opt.posMask, rb, bestSsat));
         }
         if (writer != null) {
             try {
@@ -721,6 +723,7 @@ public class RtkProcessor {
         }
 
         bestSol = null;
+        bestSsat = null;
         bestTime = null;
         windowCount = 0;
     }
@@ -1115,6 +1118,7 @@ public class RtkProcessor {
         solutions.clear();
         solutionSsatList.clear();
         bestSol = null;
+        bestSsat = null;
         bestTime = null;
         windowCount = 0;
         solStaticOutputs.clear();
@@ -1133,6 +1137,7 @@ public class RtkProcessor {
         solutions.clear();
         solutionSsatList.clear();
         bestSol = null;
+        bestSsat = null;
         bestTime = null;
         windowCount = 0;
         solStaticOutputs.clear();
