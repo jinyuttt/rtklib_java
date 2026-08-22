@@ -1,6 +1,9 @@
 package org.rtklib.java.config;
 
-public class RtkConfig {
+import java.io.Serializable;
+
+public class RtkConfig implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     public boolean enableParRefReselect = false;
     public boolean enableAdaptiveQ = false;

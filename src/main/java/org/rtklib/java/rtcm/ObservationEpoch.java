@@ -3,11 +3,13 @@ package org.rtklib.java.rtcm;
 import org.rtklib.java.data.GTime;
 import org.rtklib.java.data.Obsd;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class ObservationEpoch {
+public class ObservationEpoch implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     public GTime time;
     public String sourceId;

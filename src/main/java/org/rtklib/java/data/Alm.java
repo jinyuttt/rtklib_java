@@ -1,10 +1,13 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
+
 /**
  * Almanac data class.
  * Aligned with RTKLIB alm_t structure.
  */
-public class Alm {
+public class Alm implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** Satellite number */
     public int sat;
     

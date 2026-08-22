@@ -1,10 +1,13 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
+
 /**
  * DGPS/GNSS correction class.
  * Aligned with RTKLIB dgps_t structure.
  */
-public class Dgps {
+public class Dgps implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** Correction time */
     public GTime t0;
     

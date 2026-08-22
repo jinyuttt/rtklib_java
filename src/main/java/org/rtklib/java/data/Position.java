@@ -1,5 +1,7 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
+
 /**
  * 位置数据，3个分量 + 坐标系类型。
  *
@@ -13,7 +15,8 @@ package org.rtklib.java.data;
  * <p>与 {@link Sol} 内部始终 ECEF 不同，
  * 本类是输出封装，根据 {@link PrcOpt#posMask} 配置在构造时已完成坐标转换。</p>
  */
-public class Position {
+public class Position implements Serializable {
+    private static final long serialVersionUID = 1L;
     public final CoordType type;
     public final double v1;
     public final double v2;

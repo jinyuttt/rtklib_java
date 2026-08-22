@@ -1,10 +1,13 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
+
 /**
  * Station information class.
  * Aligned with RTKLIB sta_t structure.
  */
-public class Sta {
+public class Sta implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** Station marker name */
     public String name;
     

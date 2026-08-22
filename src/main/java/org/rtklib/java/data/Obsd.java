@@ -1,5 +1,6 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import org.rtklib.java.constants.Constants;
 
 /**
@@ -26,7 +27,8 @@ import org.rtklib.java.constants.Constants;
  *   <li>rcv=2：基准站观测</li>
  * </ul>
  */
-public class Obsd {
+public class Obsd implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** 观测时间（GPST） */
     public GTime time;
 

@@ -1,8 +1,10 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import org.rtklib.java.constants.Constants;
 
-public class Pcv {
+public class Pcv implements Serializable {
+    private static final long serialVersionUID = 1L;
     public int sat;
     public String type;
     public String code;

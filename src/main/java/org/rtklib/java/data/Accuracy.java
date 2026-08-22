@@ -1,5 +1,7 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
+
 /**
  * 精度数据，3个对角标准差 + 3个互协方差 + 坐标系类型。
  *
@@ -16,7 +18,8 @@ package org.rtklib.java.data;
  * <p>注意：LLH 和 ENU 方向的精度表示完全相同（都是 ENU 方向），
  * 故统一用 {@link CoordType#ENU}，不再区分。</p>
  */
-public class Accuracy {
+public class Accuracy implements Serializable {
+    private static final long serialVersionUID = 1L;
     public final CoordType type;
     public final double s1;
     public final double s2;

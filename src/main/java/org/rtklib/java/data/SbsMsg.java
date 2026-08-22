@@ -1,6 +1,9 @@
 package org.rtklib.java.data;
 
-public class SbsMsg {
+import java.io.Serializable;
+
+public class SbsMsg implements Serializable {
+    private static final long serialVersionUID = 1L;
     public int week;
     public int tow;
     public int prn;

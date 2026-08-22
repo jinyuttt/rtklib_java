@@ -1,6 +1,9 @@
 package org.rtklib.java.trace;
 
-public class TraceControl {
+import java.io.Serializable;
+
+public class TraceControl implements Serializable {
+    private static final long serialVersionUID = 1L;
     public static final int STAGE_INPUT   = 1 << 0;
     public static final int STAGE_SATPOS  = 1 << 1;
     public static final int STAGE_UDSTATE = 1 << 2;

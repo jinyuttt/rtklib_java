@@ -1,12 +1,14 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import org.rtklib.java.constants.Constants;
 
 /**
  * SNR mask class.
  * Aligned with RTKLIB snrmask_t.
  */
-public class SnrMask {
+public class SnrMask implements Serializable {
+    private static final long serialVersionUID = 1L;
     public int ena0;
     public int ena1;
     public double[] mask;

@@ -14,7 +14,8 @@
 6. [PPP 精密单点定位](#6-ppp-精密单点定位)
 7. [输出字段含义](#7-输出字段含义)
 8. [观测值字段统一语义](#8-观测值字段统一语义)
-9. [实时流双向缓存](#9-实时流双向缓存)
+9. [模糊度状态缓存](#9-模糊度状态缓存)
+10. [实时流双向缓存](#10-实时流双向缓存)
 
 ---
 
@@ -736,7 +737,67 @@ RtkProcessor.RtkResult result = rtk.process(roverData, baseData);
 
 触发条件：`cacheMaxEpochs > 0` 且正向成功历元数 > 10。不满足条件时退化为纯正向。
 
-### 9.8 适用范围
+---
+
+## 9. 模糊度状态缓存
+
+RTK/PPP 处理过程中，模糊度需要一定时间收敛（RTK 数分钟，PPP 数十分钟）。
+通过缓存 `Rtk` 对象，可在处理中断后恢复模糊度状态，避免重新收敛。
+
+### 10.1 设计原则
+
+库只提供对 `Rtk` 对象的获取和应用能力，不提供序列化方法。
+是否需要持久化、如何持久化（Kryo/JSON/Protobuf/Java原生等），由外部决定。
+
+### 10.2 使用方法
+
+```java
+// 保存：获取当前 Rtk 状态
+Rtk rtk = processor.getRtk();
+
+// 外部自行序列化（示例：Kryo）
+byte[] data = kryo.serialize(rtk);
+redis.set("rtk:state:" + deviceId, data);
+
+// 恢复：外部反序列化后，应用到新处理器
+byte[] data = redis.get("rtk:state:" + deviceId);
+Rtk saved = kryo.deserialize(data, Rtk.class);
+
+RtkProcessor newProcessor = new RtkProcessor(opt);
+newProcessor.applyRtkState(saved);  // 将缓存的状态应用到新处理器
+```
+
+### 10.3 适用范围
+
+| 处理器 | 方法 | 说明 |
+|--------|------|------|
+| `RtkProcessor` | `getRtk()` / `applyRtkState(Rtk)` | RTK 模糊度缓存 |
+| `PppProcessor` | `getRtk()` / `applyRtkState(Rtk)` | PPP 模糊度缓存 |
+| `SppProcessor` | 无 | SPP 无模糊度，不需要缓存 |
+
+### 10.4 中断时间的影响
+
+| 中断时长 | 影响 | 说明 |
+|-----------|------|------|
+| < 1分钟 | ✅ 可恢复 | 模糊度方差略增，通常仍为固定解 |
+| 1~5分钟 | ⚠️ 部分恢复 | 协方差增大，可能退化为浮点解，但比冷启动收敛快 |
+| > 5分钟 | ❌ 基本无效 | GF周滑检测将标记几乎所有卫星周滑，模糊度被重置 |
+
+长时间中断后，`tt`（时间间隔）会导致：
+- 位置/模糊度协方差暴增（`P += Q·tt`），LAMBDA 无法固定
+- GF 组合值差异巨大，触发周滑检测，模糊度被重置
+- `lock` 计数器与接收机不匹配
+
+**建议**：模糊度缓存主要用于短时间中断（信号短暂丢失、进程重启等场景）。
+
+### 10.5 Rtk 对象序列化能力
+
+所有数据类（`Rtk`, `Sol`, `Ssat`, `Ambc`, `PrcOpt`, `RtkConfig` 等）均实现了 `Serializable` 接口，
+外部可使用任何 Java 序列化框架处理。
+
+---
+
+## 10. 实时流双向缓存
 
 | 场景 | SPP | RTK | PPP |
 |------|:---:|:---:|:---:|

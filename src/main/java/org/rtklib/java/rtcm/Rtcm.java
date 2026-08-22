@@ -10,12 +10,15 @@ import org.rtklib.java.time.TimeSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
+
 /**
  * RTCM3 message decoder.
  * Aligned with RTKLIB rtcm3.c structure.
  * Supports the main observation (legacy + MSM), ephemeris, station, and SSR messages.
  */
-public class Rtcm {
+public class Rtcm implements Serializable {
+    private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(Rtcm.class);
 
     /** Maximum number of signals per GNSS system for MSM */

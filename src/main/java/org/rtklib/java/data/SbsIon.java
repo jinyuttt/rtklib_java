@@ -1,8 +1,10 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import org.rtklib.java.constants.Constants;
 
-public class SbsIon {
+public class SbsIon implements Serializable {
+    private static final long serialVersionUID = 1L;
     public int iodi;
     public int nigp;
     public SbsIgp[] igp;

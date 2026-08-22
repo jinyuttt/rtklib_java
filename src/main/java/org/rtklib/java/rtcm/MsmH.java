@@ -1,10 +1,13 @@
 package org.rtklib.java.rtcm;
 
+import java.io.Serializable;
+
 /**
  * MSM (Multiple Signal Message) header structure.
  * Aligned with RTKLIB's msm_h_t struct.
  */
-public class MsmH {
+public class MsmH implements Serializable {
+    private static final long serialVersionUID = 1L;
     public int nsat;
     public int nsig;
     public int[] sats = new int[64];

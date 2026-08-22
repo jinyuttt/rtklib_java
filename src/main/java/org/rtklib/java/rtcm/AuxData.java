@@ -1,6 +1,9 @@
 package org.rtklib.java.rtcm;
 
-public class AuxData {
+import java.io.Serializable;
+
+public class AuxData implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     public final int msgType;
     public final String antdes;

@@ -1,12 +1,14 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import org.rtklib.java.constants.Constants;
 
 /**
  * Processing options class.
  * Aligned with RTKLIB prcopt_t.
  */
-public class PrcOpt {
+public class PrcOpt implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** Position output format mask (bitwise OR of POS_ECEF/POS_LLH/POS_ENU) */
     public static final int POS_ECEF = 1;
     public static final int POS_LLH  = 2;

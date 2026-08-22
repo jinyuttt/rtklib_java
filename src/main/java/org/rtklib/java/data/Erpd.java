@@ -1,6 +1,9 @@
 package org.rtklib.java.data;
 
-public class Erpd {
+import java.io.Serializable;
+
+public class Erpd implements Serializable {
+    private static final long serialVersionUID = 1L;
     public double mjd;
     public double xp;
     public double yp;

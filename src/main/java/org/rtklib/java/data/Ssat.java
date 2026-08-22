@@ -1,5 +1,6 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import org.rtklib.java.constants.Constants;
 
 /**
@@ -17,7 +18,8 @@ import org.rtklib.java.constants.Constants;
  *   <li>resc[f]：载波相位残差（米）</li>
  * </ul>
  */
-public class Ssat {
+public class Ssat implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** 卫星系统 (SYS_???) */
     public int sys;
 

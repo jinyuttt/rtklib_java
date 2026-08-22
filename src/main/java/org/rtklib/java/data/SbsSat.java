@@ -1,8 +1,10 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import org.rtklib.java.constants.Constants;
 
-public class SbsSat {
+public class SbsSat implements Serializable {
+    private static final long serialVersionUID = 1L;
     public int iodp;
     public int nsat;
     public int tlat;

@@ -1,12 +1,14 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import org.rtklib.java.constants.Constants;
 
 /**
  * Ambiguity control class.
  * Aligned with RTKLIB ambc_t.
  */
-public class Ambc {
+public class Ambc implements Serializable {
+    private static final long serialVersionUID = 1L;
     public GTime[] epoch;
     public int[] n;
     public double[] LC;

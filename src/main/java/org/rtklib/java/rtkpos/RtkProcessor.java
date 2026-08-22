@@ -72,7 +72,9 @@ import java.util.TreeMap;
  * RtkResult result = rtk.process(roverBytes, baseBytes);
  * </pre>
  */
-public class RtkProcessor {
+public class RtkProcessor implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private static final Logger log = LoggerFactory.getLogger(RtkProcessor.class);
 
@@ -1157,6 +1159,57 @@ public class RtkProcessor {
         return rtk;
     }
 
+    public boolean applyRtkState(Rtk saved) {
+        if (saved == null) return false;
+        copyRtkState(saved, rtk);
+        rtk.opt = this.opt;
+        log.info("Rtk state applied: epoch={}, nfix={}, na={}, nx={}",
+                rtk.epoch, rtk.nfix, rtk.na, rtk.nx);
+        return true;
+    }
+
+    private static void copyRtkState(Rtk src, Rtk dst) {
+        dst.sol = src.sol;
+        dst.rb = src.rb;
+        dst.nx = src.nx;
+        dst.na = src.na;
+        dst.x = src.x;
+        dst.P = src.P;
+        dst.xa = src.xa;
+        dst.Pa = src.Pa;
+        dst.nfix = src.nfix;
+        dst.tt = src.tt;
+        dst.nband = src.nband;
+        dst.nepoch = src.nepoch;
+        dst.epoch = src.epoch;
+        dst.intpres_nb = src.intpres_nb;
+        dst.intpres_obsb = src.intpres_obsb;
+        dst.ssat = src.ssat;
+        dst.ambc = src.ambc;
+        dst.nb_ar = src.nb_ar;
+        dst.excsat = src.excsat;
+        dst.holdambFlag = src.holdambFlag;
+        dst.initialMode = src.initialMode;
+        dst.rtkConfig = src.rtkConfig;
+        dst.qScale = src.qScale;
+        dst.snrMedian = src.snrMedian;
+        dst.snrMedianHistory = src.snrMedianHistory;
+        dst.snrMedianHistoryCount = src.snrMedianHistoryCount;
+        dst.consecutiveZeroVelEpochs = src.consecutiveZeroVelEpochs;
+        dst.prevPosForZeroVel = src.prevPosForZeroVel;
+        dst.parConsecutiveReselectCount = src.parConsecutiveReselectCount;
+        dst.parExcludedSats = src.parExcludedSats;
+        dst.parExcludedSatCount = src.parExcludedSatCount;
+        dst.parPrevRefSat = src.parPrevRefSat;
+        dst.xOld = src.xOld;
+        dst.posWin = src.posWin;
+        dst.winIdx = src.winIdx;
+        dst.winCnt = src.winCnt;
+        dst.ambAnchored = src.ambAnchored;
+        dst.ambAnchorCount = src.ambAnchorCount;
+        dst.traceControl = src.traceControl;
+    }
+
     private void parseRtcmBatch(byte[] data, Rtcm rtcm,
                                 List<Obsd[]> obsList, List<Integer> obsCountList,
                                 List<GTime> obsTimeList,
@@ -1345,7 +1398,8 @@ public class RtkProcessor {
                 || type == 1044 || type == 1045 || type == 1046;
     }
 
-    public static class RtkResult {
+    public static class RtkResult implements Serializable {
+        private static final long serialVersionUID = 1L;
         public final int totalEpochs;
         public final int successCount;
         public final int failCount;

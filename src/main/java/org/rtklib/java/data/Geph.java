@@ -1,10 +1,13 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
+
 /**
  * GLONASS broadcast ephemeris class.
  * Aligned with RTKLIB geph_t structure.
  */
-public class Geph {
+public class Geph implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** Satellite number */
     public int sat;
     

@@ -1,12 +1,14 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import org.rtklib.java.constants.Constants;
 
 /**
  * Solution output options class.
  * Aligned with RTKLIB solopt_t.
  */
-public class SolOpt {
+public class SolOpt implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** Solution format (SOLF_???) */
     public int posf;
     /** Time system (TIMES_???) */
