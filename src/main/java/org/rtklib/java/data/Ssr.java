@@ -1,12 +1,14 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import org.rtklib.java.constants.Constants;
 
 /**
  * SSR (State Space Representation) correction class.
  * Aligned with RTKLIB ssr_t structure.
  */
-public class Ssr {
+public class Ssr implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** Epoch time (GPST) {eph, clk, hrclk, ura, bias, pbias} */
     public GTime[] t0;
     

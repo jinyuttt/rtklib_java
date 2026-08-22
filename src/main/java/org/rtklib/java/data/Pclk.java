@@ -1,9 +1,11 @@
 
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import org.rtklib.java.constants.Constants;
 
-public class Pclk {
+public class Pclk implements Serializable {
+    private static final long serialVersionUID = 1L;
     public GTime time;
     public int index;
     public double[][] clk;

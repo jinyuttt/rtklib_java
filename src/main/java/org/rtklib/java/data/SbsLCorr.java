@@ -1,6 +1,9 @@
 package org.rtklib.java.data;
 
-public class SbsLCorr {
+import java.io.Serializable;
+
+public class SbsLCorr implements Serializable {
+    private static final long serialVersionUID = 1L;
     public GTime t0;
     public int iode;
     public double[] dpos;

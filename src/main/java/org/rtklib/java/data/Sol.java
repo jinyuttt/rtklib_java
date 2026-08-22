@@ -1,10 +1,13 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
+
 /**
  * Solution data class.
  * Aligned with RTKLIB sol_t structure.
  */
-public class Sol {
+public class Sol implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** Time (GPST) */
     public GTime time;
     

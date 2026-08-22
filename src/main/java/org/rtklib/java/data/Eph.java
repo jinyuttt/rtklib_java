@@ -1,12 +1,14 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import org.rtklib.java.constants.Constants;
 
 /**
  * GPS/QZS/GAL/BDS/IRN broadcast ephemeris class.
  * Aligned with RTKLIB eph_t structure.
  */
-public class Eph {
+public class Eph implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** Satellite number */
     public int sat;
     

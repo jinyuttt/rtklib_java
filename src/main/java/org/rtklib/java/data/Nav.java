@@ -1,5 +1,6 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import org.rtklib.java.constants.Constants;
 
@@ -7,7 +8,8 @@ import org.rtklib.java.constants.Constants;
  * Navigation data container class.
  * Aligned with RTKLIB nav_t structure.
  */
-public class Nav {
+public class Nav implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** Number of broadcast ephemeris */
     public int n, nmax;
     

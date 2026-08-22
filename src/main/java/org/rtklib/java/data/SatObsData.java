@@ -1,5 +1,6 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.constants.Constants;
 
@@ -21,7 +22,8 @@ import org.rtklib.java.constants.Constants;
  *   <li>{@code fixState}：模糊度固定状态（0=未固定, 1=浮点, 2=固定）</li>
  * </ul>
  */
-public class SatObsData {
+public class SatObsData implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     public final String satPrn;
 

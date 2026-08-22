@@ -1,5 +1,7 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
+
 /**
  * GPS时间结构体。
  *
@@ -16,7 +18,8 @@ package org.rtklib.java.data;
  * <p><b>注意</b>：GTime 内部统一以 GPST 存储，
  * 不同时间系统的转换由 {@link org.rtklib.java.time.TimeSystem} 处理。</p>
  */
-public class GTime {
+public class GTime implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** 整秒部分（自1970-01-01 00:00:00 UTC以来的秒数） */
     public long time;
 

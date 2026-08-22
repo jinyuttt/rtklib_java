@@ -195,6 +195,57 @@ public class PppProcessor {
 
     public Rtk getRtk() { return rtk; }
 
+    public boolean applyRtkState(Rtk saved) {
+        if (saved == null) return false;
+        copyRtkState(saved, rtk);
+        rtk.opt = this.opt;
+        log.info("PPP rtk state applied: epoch={}, na={}, nx={}",
+                rtk.epoch, rtk.na, rtk.nx);
+        return true;
+    }
+
+    private static void copyRtkState(Rtk src, Rtk dst) {
+        dst.sol = src.sol;
+        dst.rb = src.rb;
+        dst.nx = src.nx;
+        dst.na = src.na;
+        dst.x = src.x;
+        dst.P = src.P;
+        dst.xa = src.xa;
+        dst.Pa = src.Pa;
+        dst.nfix = src.nfix;
+        dst.tt = src.tt;
+        dst.nband = src.nband;
+        dst.nepoch = src.nepoch;
+        dst.epoch = src.epoch;
+        dst.intpres_nb = src.intpres_nb;
+        dst.intpres_obsb = src.intpres_obsb;
+        dst.ssat = src.ssat;
+        dst.ambc = src.ambc;
+        dst.nb_ar = src.nb_ar;
+        dst.excsat = src.excsat;
+        dst.holdambFlag = src.holdambFlag;
+        dst.initialMode = src.initialMode;
+        dst.rtkConfig = src.rtkConfig;
+        dst.qScale = src.qScale;
+        dst.snrMedian = src.snrMedian;
+        dst.snrMedianHistory = src.snrMedianHistory;
+        dst.snrMedianHistoryCount = src.snrMedianHistoryCount;
+        dst.consecutiveZeroVelEpochs = src.consecutiveZeroVelEpochs;
+        dst.prevPosForZeroVel = src.prevPosForZeroVel;
+        dst.parConsecutiveReselectCount = src.parConsecutiveReselectCount;
+        dst.parExcludedSats = src.parExcludedSats;
+        dst.parExcludedSatCount = src.parExcludedSatCount;
+        dst.parPrevRefSat = src.parPrevRefSat;
+        dst.xOld = src.xOld;
+        dst.posWin = src.posWin;
+        dst.winIdx = src.winIdx;
+        dst.winCnt = src.winCnt;
+        dst.ambAnchored = src.ambAnchored;
+        dst.ambAnchorCount = src.ambAnchorCount;
+        dst.traceControl = src.traceControl;
+    }
+
     public void loadSp3(String sp3FilePath) {
         Sp3Reader.readsp3(sp3FilePath, rtcm.nav, 0);
         log.info("Loaded SP3: {} ephemerides", rtcm.nav.ne);

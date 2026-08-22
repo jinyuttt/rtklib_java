@@ -1,6 +1,9 @@
 package org.rtklib.java.data;
 
-public class SbsSatP {
+import java.io.Serializable;
+
+public class SbsSatP implements Serializable {
+    private static final long serialVersionUID = 1L;
     public int sat;
     public SbsFCorr fcorr;
     public SbsLCorr lcorr;

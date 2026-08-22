@@ -1,6 +1,9 @@
 package org.rtklib.java.ionosphere;
 
-public class SbsIgpBand {
+import java.io.Serializable;
+
+public class SbsIgpBand implements Serializable {
+    private static final long serialVersionUID = 1L;
     public short x;
     public short[] y;
     public short bits;

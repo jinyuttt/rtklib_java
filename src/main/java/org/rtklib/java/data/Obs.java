@@ -1,12 +1,14 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
 import org.rtklib.java.constants.Constants;
 
 /**
  * Observation data container class.
  * Aligned with RTKLIB obs_t structure.
  */
-public class Obs {
+public class Obs implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** Number of observation data records */
     public int n;
     

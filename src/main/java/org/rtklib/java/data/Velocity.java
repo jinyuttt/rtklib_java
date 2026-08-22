@@ -1,5 +1,7 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
+
 /**
  * 速度数据，3个分量 + 坐标系类型。
  *
@@ -12,7 +14,8 @@ package org.rtklib.java.data;
  * <p>注意：LLH 和 ENU 对速度的表示相同（都是 ENU 方向 {ve,vn,vu}），
  * 因为速度不存在"经纬度"表示。故 LLH 和 ENU 统一用 {@link CoordType#ENU}。</p>
  */
-public class Velocity {
+public class Velocity implements Serializable {
+    private static final long serialVersionUID = 1L;
     public final CoordType type;
     public final double v1;
     public final double v2;

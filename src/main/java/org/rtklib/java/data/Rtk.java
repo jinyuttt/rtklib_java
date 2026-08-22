@@ -4,9 +4,11 @@ import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.trace.TraceControl;
 import org.rtklib.java.trace.TraceCallback;
+import java.io.Serializable;
 import java.util.Arrays;
 
-public class Rtk {
+public class Rtk implements Serializable {
+    private static final long serialVersionUID = 1L;
     public Sol sol;
 
     public double[] rb;
@@ -43,7 +45,7 @@ public class Rtk {
 
     public TraceControl traceControl;
 
-    public TraceCallback traceCallback;
+    public transient TraceCallback traceCallback;
 
     public Ambc ambc;
 

@@ -1,10 +1,13 @@
 package org.rtklib.java.data;
 
+import java.io.Serializable;
+
 /**
  * SBAS ephemeris class.
  * Aligned with RTKLIB seph_t structure.
  */
-public class Seph {
+public class Seph implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** Satellite number */
     public int sat;
     

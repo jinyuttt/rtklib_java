@@ -4,6 +4,7 @@ import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.time.TimeSystem;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,7 +45,8 @@ import java.util.List;
  * LLH 和 ENU 对速度的表示相同（都是 ENU 方向 {ve,vn,vu}），
  * 故 Velocity.type 只有 0(ECEF) 和 1(ENU) 两种。</p>
  */
-public class SolData {
+public class SolData implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     private static final int POS_ECEF = PrcOpt.POS_ECEF;
     private static final int POS_LLH  = PrcOpt.POS_LLH;

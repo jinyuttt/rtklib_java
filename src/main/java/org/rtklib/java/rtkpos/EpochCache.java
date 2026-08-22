@@ -3,6 +3,7 @@ package org.rtklib.java.rtkpos;
 import org.rtklib.java.data.GTime;
 import org.rtklib.java.data.Obsd;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
@@ -64,7 +65,8 @@ public interface EpochCache {
     /**
      * 缓存的历元数据。
      */
-    class CachedEpoch {
+    class CachedEpoch implements Serializable {
+        private static final long serialVersionUID = 1L;
         public final Obsd[] obs;
         public final int n;
         public final GTime time;
