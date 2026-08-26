@@ -27,9 +27,12 @@ replay_pid*
 # RTKLIB C source reference (not part of Java project)
 RTKLIB-2.5.0/
 RTKLIB_2.5.0/
+RTKLIB-2.5.1/
+RTKLIB_2.5.1/
 RTKLIB_EX-2.5.0/
 RTKLIB_EX_2.5.0/
-
+RTKLIB_EX-2.5.1/
+RTKLIB_EX_2.5.1/
 # Build output
 target/
 

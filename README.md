@@ -248,6 +248,37 @@ rtk.feedBase("base_BJFS", baseData);
 RtkProcessor.RtkResult improved = rtk.reprocess("rover_device_001");
 ```
 
+### RTK 状态持久化
+
+RTK/PPP 的模糊度需要数分钟至数十分钟收敛。利用 Java `Serializable` 特性持久化 `Rtk` 对象，可在进程重启后恢复模糊度状态，跳过重新收敛。
+
+```java
+// ---- 保存状态 ----
+Rtk rtkState = processor.getRtk();
+
+// Java 原生序列化
+try (var bos = new ByteArrayOutputStream();
+     var oos = new ObjectOutputStream(bos)) {
+    oos.writeObject(rtkState);
+    byte[] data = bos.toByteArray();
+    Files.write(Path.of("rtk_state.bin"), data);
+}
+
+// ---- 恢复状态 ----
+byte[] data = Files.readAllBytes(Path.of("rtk_state.bin"));
+Rtk saved;
+try (var bis = new ByteArrayInputStream(data);
+     var ois = new ObjectInputStream(bis)) {
+    saved = (Rtk) ois.readObject();
+}
+
+RtkProcessor newProcessor = new RtkProcessor(opt);
+newProcessor.applyRtkState(saved);  // 恢复模糊度，继续解算
+```
+
+> 也支持 Kryo / Protobuf / JSON 等第三方序列化框架，所有数据类均实现 `Serializable`。
+> 适用于短时间中断（< 1 分钟效果最佳，1~5 分钟部分恢复，> 5 分钟基本无效）。详见 [使用指南](docs/USAGE_GUIDE.md)。
+
 ### 静态模式单解输出
 
 RTK 和 PPP 静态模式均支持，机制一致：所有历元参与滤波，只输出1个最优解。
