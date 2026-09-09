@@ -186,7 +186,7 @@ public class SolData implements Serializable {
             double c23 = Math.sqrt(Math.abs(Q[5]));
             double c31 = Math.sqrt(Math.abs(Q[2]));
             if ((posMask & POS_LLH) != 0) {
-                list.add(new Accuracy(CoordType.ENU, s1, s2, s3, c12, c23, c31));
+                list.add(new Accuracy(CoordType.LLH, s1, s2, s3, c12, c23, c31));
             }
             if ((posMask & POS_ENU) != 0) {
                 list.add(new Accuracy(CoordType.ENU, s1, s2, s3, c12, c23, c31));
