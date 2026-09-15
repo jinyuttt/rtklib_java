@@ -198,7 +198,7 @@ Java版：`x = b = p_r - p_b`，zdres 传入 `rb + x = p_b + (p_r - p_b) = p_r`
 
 Java版 `rtkpos()` 中有相同的逻辑：
 ```java
-if (opt.refposmode != Constants.REFPOS_RTCM && opt.mode != Constants.PMODE_SINGLE &&
+if (opt.refpos != Constants.POSOPT_RTCM && opt.mode != Constants.PMODE_SINGLE &&
         opt.mode != Constants.PMODE_MOVEB) {
     for (i = 0; i < 6; i++) rtk.rb[i] = i < 3 ? opt.rb[i] : 0.0;
 }
@@ -432,7 +432,7 @@ public static final int NEXOBS = 2;   // 扩展观测数
 |------|-------|--------|------|
 | **总槽数/卫星** | 3个 | 8个 | **2.67x** |
 | **内存/Obsd对象** | ~150 bytes | ~264 bytes | **1.76x** |
-| **MAXSAT=228时的总内存** | ~34 KB | ~60 KB | **1.76x** |
+| **MAXSAT=214时的总内存** | ~32 KB | ~56 KB | **1.76x** |
 
 ---
 
@@ -833,7 +833,7 @@ for (int f = 0; f < NFREQ; f++) {           // 外层循环: ≤6次
 
 | 劣势 | 影响程度 | 缓解措施 |
 |------|---------|---------|
-| **内存占用较高** | 中 (5.76x) | 对于MAXSAT=228，约多163KB |
+| **内存占用较高** | 中 (5.76x) | 对于MAXSAT=214，约多152KB |
 | **代码复杂度增加** | 低 | promoteExtSig逻辑简单清晰 |
 | **性能开销** | 极低 (0.15%) | 可忽略不计 |
 
@@ -1004,7 +1004,7 @@ python rtk_compare/compare_results.py \
 | [rtkcmn.c](file:///D:/code/rtklib_java/RTKLIB-2.5.0/src/rtkcmn.c#L681-L694) | 681-694 | **code2freq_BDS() 函数** |
 | [rtkcmn.c](file:///D:/code/rtklib_java/RTKLIB-2.5.0/src/rtkcmn.c#L722-L736) | 722-736 | **code2idx() 函数** |
 | **Java源码** | | |
-| [Constants.java](file:///D:/code/rtklib_java/src/main/java/org/rtklib/java/constants/Constants.java) | 全文 | **NFREQ=6, NEXOBS=26 定义** |
+| [Constants.java](file:///D:/code/rtklib_java/src/main/java/org/rtklib/java/constants/Constants.java) | 全文 | **NFREQ=6, NEXOBS=2 定义** |
 | [Rtcm.java](file:///D:/code/rtklib_java/src/main/java/org/rtklib/java/rtcm/Rtcm.java#L1747-L1773) | 1747-1773 | **promoteExtSig() 实现** |
 | [Rtcm.java](file:///D:/code/rtklib_java/src/main/java/org/rtklib/java/rtcm/Rtcm.java#L1630-L1750) | 1630-1750 | **saveMsmObs() 调用promoteExtSig** |
 | [ObsCode.java](file:///D:/code/rtklib_java/src/main/java/org/rtklib/java/common/ObsCode.java#L354-L399) | 354-399 | **sigindex() 实现** |
@@ -1025,7 +1025,7 @@ python rtk_compare/compare_results.py \
    - 不需要promoteExtSig
 
 2. **Java版采用"冗余策略"**:
-   - NFREQ=6, NEXOBS=26
+   - NFREQ=6, NEXOBS=2
    - 保存所有信号 + promoteExtSig优化
    - 提供更强鲁棒性和扩展性
 
@@ -1057,101 +1057,11 @@ python rtk_compare/compare_results.py \
 
 ---
 
-## 13. PPP关键改正项实现差异（2026-08-14 补全）
+## 13. PPP关键改正项（已与C版对齐，已移至技术参考）
 
-### 13.1 天线相位中心改正（PCV）
+所有PPP改正项（天线PCV、DCB、海潮OTL、固体潮、极潮、章动模型）均已完整实现，对齐度100%。
 
-#### C版实现
-- `readpcv()`：读取ANTEX(.atx)和NGS(.pcv/.ngs)格式天线文件
-- `satpcv()`：计算卫星天线PCO+PCV改正
-- `antpcv()`：计算接收机天线PCO+PCV改正
-- 通过 `nav->pcvs`（卫星天线）和 `nav->pcvr`（接收机天线）存储
-
-#### Java版实现
-- `PcvReader.readantex()`：完整实现ANTEX格式解析，支持TYPE/SERIAL和START/FREQ块
-- `PcvReader.readngspcv()`：完整实现NGS格式解析
-- `PcvData.satpcv()`/`PcvData.antpcv()`：PCO+PCV改正计算已实现
-- 通过 `Nav.pcvs` 和 `Nav.pcvr` 存储，与C版结构一致
-
-#### 修复记录
-- `!pcv.sat` → `pcv.sat == 0`（Java中int不能用逻辑非）
-- `stas[i].del[3]` → 添加 `stas[i].del.length > 3` 越界检查
-- 删除重复的 `xyz2enu` 调用
-
-#### 影响量级
-- 卫星PCV：~10-15cm（PPP必须改正项）
-- 接收机PCV：~1-5cm（与天线类型和高度角相关）
-
-### 13.2 差分码偏差改正（DCB）
-
-#### C版实现
-- `readdcb()`：读取DCB/BIA/BSX格式文件
-- 支持 `.dcb`（CODE格式）、`.bia`（IGS BIAS格式）、`.bsx`（Bernese格式）
-- 通过 `nav->cbias` 和 `nav->rbias` 存储
-
-#### Java版实现
-- `DcbReader.readdcb()`：完整实现，支持三种格式
-- `DcbReader.readdcbf()`：文件级读取，自动识别格式
-- 通过 `Nav.cbias` 和 `Nav.rbias` 存储，与C版一致
-
-#### 修复记录
-- `CODE_L7C` → `CODE_L7X`（常量名称错误）
-
-#### 影响量级
-- P1-C1 DCB：~几cm到几十cm（影响伪距观测值）
-- 必须改正，否则PPP伪距残差过大
-
-### 13.3 海潮负荷改正（OTL）
-
-#### C版实现
-- `readotl()`：读取BLQ格式海潮负荷文件
-- `hardisp()`：计算11个主潮汐分潮的位移（调和分析）
-- 通过 `prcopt_default->odisp[2][11][3]` 存储
-
-#### Java版实现
-- `OtlReader.readblq()`：完整实现BLQ文件解析
-- `Tides.hardisp()`：完整移植C版hardisp()，342个分潮调和分析
-- `IddData`：存储342个Doodson数，与C版idd数据一致
-- 通过 `PrcOpt.odisp[2][11][3]` 存储，与C版一致
-
-#### 影响量级
-- 沿海站：~1-5cm
-- 内陆站：<1mm（可忽略）
-- 建议沿海站启用
-
-### 13.4 潮汐改正集成
-
-#### C版实现
-- `tidedisp()`：固体潮+海潮+极潮，通过 `opt` 位域控制
-- RTK中通过 `opt->tidecorr` 启用
-
-#### Java版实现
-- `Tides.tidedisp()`：完整实现固体潮+海潮+极潮
-- `PppCore.tidedisp()`：已改为调用 `Tides.tidedisp()`，不再使用私有简化版
-- `RtkCore.tidedisp()`：同样调用 `Tides.tidedisp()`
-
-#### 修复记录
-- `nutIau1980()`数组补全：原Java版仅101项，C版106项。补全5个缺失的章动项：
-  - `{1, 0, 2, 0, 1, 9.1, -51, 0.0, 27, 0.0}`
-  - `{0, -1, 2, 0, 2, 14.2, -7, 0.0, 3, 0.0}`
-  - `{1, 1, 0, 0, 0, 25.6, -3, 0.0, 0, 0.0}`
-  - `{1, 1, 0, -2, 1, -34.7, -1, 0.0, 0, 0.0}`
-  - `{-2, 0, 2, 2, 2, 14.6, 1, 0.0, -1, 0.0}`
-
-### 13.5 对齐状态总结
-
-| 改正项 | C版函数 | Java版函数 | 状态 | 对齐度 |
-|--------|---------|------------|------|--------|
-| 天线PCV | readpcv/satpcv/antpcv | PcvReader/PcvData | ✅ 完整 | 100% |
-| 差分码偏差 | readdcb | DcbReader | ✅ 完整 | 100% |
-| 海潮负荷 | readotl/hardisp | OtlReader/Tides.hardisp | ✅ 完整 | 100% |
-| 固体潮 | tidedisp | Tides.tidedisp | ✅ 完整 | 100% |
-| 极潮 | tidePole | Tides.tidePole | ✅ 完整 | 100% |
-| 章动模型 | nutIau1980(106项) | TimeSystem.nutIau1980 | ✅ 修复 | 100% |
-
-#### 测试验证
-- RTK测试（RtkLocalTest）：2个测试全部通过，240历元0失败
-- 潮汐改正测试（tidecorr=7，固体潮+海潮+极潮）：240历元全部成功
+详见 [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第15章。
 
 ---
 
@@ -1197,17 +1107,15 @@ python rtk_compare/compare_results.py \
 
 **Java版数据格式**：仅支持 **RTCM3**（完整解码）和 **RINEX 3.x**（读写）。
 接收机原始协议需先用convbin转为RTCM3/RINEX后使用。
-
-### 14.3 解算输出格式
+### 14.3 解算输出格式（未实现项）
 
 | C版格式 | C版函数 | Java版状态 | 说明 |
 |---------|---------|------------|------|
-| LLH (.pos) | outsols() | ✅ 已实现 | 默认输出格式 |
-| XYZ ECEF | outsols() | ✅ 已实现 | 通过posMask配置 |
-| ENU基线 | outsols() | ✅ 已实现 | 通过posMask配置 |
 | NMEA 0183 | outnmea_rmc/gga/gsa/gsv() | ❌ 未实现 | 常量SOLF_NMEA已定义，但无编码实现 |
 | Solution Status | outsols() | ❌ 未实现 | 常量SOLF_STAT已定义 |
 | GSI F1/F2 | outsols() | ❌ 未实现 | 常量SOLF_GSIF已定义 |
+
+LLH/XYZ/ENU格式已实现（通过posMask配置）。
 
 ### 14.4 坐标转换与格式
 
@@ -1222,40 +1130,30 @@ python rtk_compare/compare_results.py \
 | IONEX电离层 | ionex.c | ❌ 未实现 | IGS IONEX文件读取 |
 | 下载功能 | download.c | ❌ 未实现 | IGS数据自动下载 |
 
-### 14.5 定位模式
+### 14.5 定位模式（未完整对齐项）
 
 | C版模式 | 常量 | Java版状态 | 说明 |
 |---------|------|------------|------|
-| SPP单点定位 | PMODE_SINGLE | ✅ 已实现 | SppProcessor |
 | DGPS差分 | PMODE_DGPS | ⚠️ 部分 | RTK框架内，modear=OFF时等效 |
-| Kinematic | PMODE_KINEMA | ✅ 已实现 | RtkProcessor |
-| Static | PMODE_STATIC | ✅ 已实现 | RtkProcessor |
-| Static-Start | PMODE_STATIC_START | ✅ 已实现 | RtkProcessor |
 | Moving-Base | PMODE_MOVEB | ⚠️ 部分 | 常量已定义，核心逻辑未完整验证 |
-| Fixed | PMODE_FIXED | ✅ 已实现 | RtkProcessor |
-| PPP-Kinematic | PMODE_PPP_KINEMA | ✅ 已实现 | PppProcessor |
-| PPP-Static | PMODE_PPP_STATIC | ✅ 已实现 | PppProcessor |
-| PPP-Fixed | PMODE_PPP_FIXED | ✅ 已实现 | PppProcessor |
 
-### 14.6 SBAS
+其余定位模式（SPP/Kinematic/Static/Static-Start/Fixed/PPP-Kinematic/PPP-Static/PPP-Fixed）均已完整实现，详见 [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第12章。
 
-| C版功能 | Java版状态 | 说明 |
-|---------|------------|------|
-| SBAS改正算法 | ✅ 完整实现 | `SbasCorrection`有完整的`sbsioncorr`/`sbstropcorr`/`sbssatcorr`/`sbsupdatecorr`，算法与C版一致 |
-| SBAS改正集成 | ✅ 已集成 | `IONOOPT_SBAS`→`sbsioncorr()`，`TROPOPT_SBAS`→`sbstropcorr()`，`SYS_SBS`星历→`sbssatcorr()`，均已集成到定位流程 |
-| SBAS消息输入 | ✅ 已实现 | `SbsMsgReader`读取.sbs文件，各Processor提供`feedSbsMsg()`实时注入和`loadSbs()`文件加载，自动调用`sbsupdatecorr()`更新nav改正量 |
+### 14.6 SBAS（已与C版对齐，已移至技术参考）
+
+SBAS改正算法、集成、消息输入均已完整实现，与C版一致。
+
+详见 [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第16章。
 
 ### 14.7 算法细节未对齐项
 
 | C版功能 | C版源码 | Java版状态 | 说明 |
 |---------|---------|------------|------|
-| SPP实时均值平滑 | — | ✅ 已实现 | `PrcOpt.sppsmooth`配置滑动窗口大小，`SppProcessor`对连续SPP结果取均值输出，提高实时SPP精度 |
-| SSR相位偏差改正 | `corr_phase_bias_ssr()` | ✅ 已实现 | `RtklibCommon.corrPhaseBiasSsr()`，在rtkpos/pppos前改正obs.L，支持-ENA_FCB/-DIS_FCB跳过 |
-| 合并速度smoother | `combres()` 中对vr做RTS平滑 | ✅ 已实现 | `CombinedFilter.combine()`中`popt.dynamics!=0`时对速度做RTS平滑，与C版一致 |
 | POSOPT_SINGLE（实时流） | `antpos()` | ⚠️ 空实现 | RtkProcessor中case分支为空，实时流默认用POSOPT_RTCM从RTCM获取；PostPosProcessor批处理已有avepos() |
 | POSOPT_FILE | `antpos()` | ⚠️ fallback | PostPosProcessor中fallback到RINEX header |
-| udtrop()冻结 | `udtrop()` + atmFrozenNsThresh | ❌ 未实现 | 仅udion()有冻结逻辑 |
 | Static Start长延迟恢复 | `udpos()` 中tt>300重置 | ❌ 未实现 | 边界场景 |
+
+已对齐项（SPP实时均值平滑、SSR相位偏差改正、合并速度smoother、udtrop()冻结）详见 [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第12章。
 
 ### 14.8 功能边界总结
 

@@ -14,8 +14,9 @@
 6. [PPP 精密单点定位](#6-ppp-精密单点定位)
 7. [输出字段含义](#7-输出字段含义)
 8. [观测值字段统一语义](#8-观测值字段统一语义)
-9. [模糊度状态缓存](#9-模糊度状态缓存)
+9. [多基站多测站连续处理](#9-多基站多测站连续处理)
 10. [实时流双向缓存](#10-实时流双向缓存)
+11. [模糊度状态缓存](#11-模糊度状态缓存)
 
 ---
 
@@ -623,12 +624,317 @@ bestSol 选择逻辑与 RTK 相同（§4.3.3），双向合并时同样使用 `C
 
 ---
 
-## 9. 实时流双向缓存
+## 9. 多基站多测站连续处理
+
+实际应用中常见场景：程序长期运行，按时间分片接收数据文件（如每小时一个RTCM文件），
+每个点位包含1个基站和多个测站，需要跨文件保持模糊度连续性。
+
+### 9.1 场景描述
+
+```
+点位1: 基站A → 测站B, 测站C, 测站D
+点位2: 基站M → 测站E, 测站F
+...
+
+数据到达方式:
+  - 每小时第0分，生成前1小时的RTCM文件
+  - 程序7×24运行，持续处理
+```
+
+核心问题：RTK模糊度需要5~15分钟收敛才能达到FIX解。
+如果每批数据都从零开始，每批开头5~15分钟精度差（FLOAT或SINGLE）。
+**跨批保持模糊度连续性是关键。**
+
+### 9.2 RtkProcessor 生命周期
+
+`RtkProcessor` 有以下生命周期约束：
+
+| 方法 | 调用后状态 | 能否继续使用 |
+|------|-----------|:-----------:|
+| `process()` | `finished = true` | ❌ 不可再调用任何方法 |
+| `finish()` | `finished = true` | ❌ 不可再调用任何方法 |
+| `feedRover/feedBase` | 未结束 | ✅ 可继续投喂数据 |
+| `resetForNextBatch()` | `finished = false`，模糊度保留 | ✅ 可再次 `process()` |
+| `reset()` | `finished = false`，模糊度清零 | ✅ 可再次 `process()`，但等于冷启动 |
+
+### 9.3 四种处理方式
+
+#### 方式一：每次新建 RtkProcessor（模糊度不连续）
+
+最简单，但每批数据开头都要重新收敛模糊度。
+
+```java
+PrcOpt opt = RtkProcessor.createDefaultOpt();
+opt.modear = Constants.ARMODE_FIXHOLD;
+
+while (running) {
+    Map<String, String> hourFiles = waitForNextHourFiles();
+    // hourFiles: {"A" → "A_10.rtcm3", "B" → "B_10.rtcm3", "C" → "C_10.rtcm3"}
+
+    // 每条基线新建处理器
+    RtkProcessor rtkAB = new RtkProcessor(opt);
+    RtkProcessor.RtkResult resultAB = rtkAB.process(hourFiles.get("B"), hourFiles.get("A"));
+
+    RtkProcessor rtkAC = new RtkProcessor(opt);
+    RtkProcessor.RtkResult resultAC = rtkAC.process(hourFiles.get("C"), hourFiles.get("A"));
+
+    // 处理结果...
+    // ⚠️ 下一批数据时，rtkAB/rtkAC 已 finished，必须新建
+    // ⚠️ 模糊度从零开始，前5~15分钟为FLOAT/SINGLE
+}
+```
+
+#### 方式二：新建 + 状态传递（模糊度连续）
+
+利用 `getRtk()` / `applyRtkState()` 在批间传递模糊度状态。
+
+```java
+PrcOpt opt = RtkProcessor.createDefaultOpt();
+opt.modear = Constants.ARMODE_FIXHOLD;
+
+Map<String, Rtk> baselineStates = new HashMap<>();
+
+while (running) {
+    Map<String, String> hourFiles = waitForNextHourFiles();
+
+    // 基线 A→B
+    RtkProcessor rtkAB = new RtkProcessor(opt);
+    Rtk prevAB = baselineStates.get("A→B");
+    if (prevAB != null) {
+        rtkAB.applyRtkState(prevAB);  // 恢复上一批的模糊度
+    }
+    RtkProcessor.RtkResult resultAB = rtkAB.process(hourFiles.get("B"), hourFiles.get("A"));
+    baselineStates.put("A→B", rtkAB.getRtk());  // 保存给下一批
+
+    // 基线 A→C
+    RtkProcessor rtkAC = new RtkProcessor(opt);
+    Rtk prevAC = baselineStates.get("A→C");
+    if (prevAC != null) {
+        rtkAC.applyRtkState(prevAC);
+    }
+    RtkProcessor.RtkResult resultAC = rtkAC.process(hourFiles.get("C"), hourFiles.get("A"));
+    baselineStates.put("A→C", rtkAC.getRtk());
+}
+```
+
+#### 方式三：复用 RtkProcessor + resetForNextBatch()（模糊度连续，推荐 ✅）
+
+同一个 `RtkProcessor` 对象长驻内存，通过 `resetForNextBatch()` 重置批处理状态但保留模糊度。
+
+```java
+PrcOpt opt = RtkProcessor.createDefaultOpt();
+opt.modear = Constants.ARMODE_FIXHOLD;
+
+// 每条基线一个RtkProcessor，长驻内存
+Map<String, RtkProcessor> processors = new HashMap<>();
+processors.put("A→B", new RtkProcessor(opt));
+processors.put("A→C", new RtkProcessor(opt));
+
+while (running) {
+    Map<String, String> hourFiles = waitForNextHourFiles();
+
+    // 同一个对象，模糊度自然延续
+    RtkProcessor.RtkResult resultAB =
+        processors.get("A→B").process(hourFiles.get("B"), hourFiles.get("A"));
+    RtkProcessor.RtkResult resultAC =
+        processors.get("A→C").process(hourFiles.get("C"), hourFiles.get("A"));
+
+    // 处理结果...
+
+    // 重置批处理状态，保留模糊度，准备下一批
+    processors.get("A→B").resetForNextBatch();
+    processors.get("A→C").resetForNextBatch();
+}
+```
+
+`resetForNextBatch()` 内部行为：
+- `finished = false` — 允许再次调用 `process()`
+- `solutions.clear()` — 清空上一批结果
+- `pendingRoverObsList.clear()` 等 — 清空待处理缓存
+- **不修改 `rtk.x`, `rtk.P`, `rtk.ssat`** — 模糊度完整保留
+
+#### 方式四：feedRover/feedBase 流式模式（模糊度连续，推荐实时场景 ✅）
+
+不使用 `process()` 批量接口，而是用 `feedRover/feedBase` 流式投喂数据。
+流式模式下 `RtkProcessor` 不会自动结束，模糊度自然延续。
+
+```java
+PrcOpt opt = RtkProcessor.createDefaultOpt();
+opt.modear = Constants.ARMODE_FIXHOLD;
+
+PosHandler handlerB = new PosHandler() {
+    @Override public void onSolution(Sol sol, Ssat[] ssat) {
+        // 实时处理测站B的定位结果
+    }
+    @Override public void onPosFail(GTime time, String msg) {}
+    @Override public void onFinish(int total, int success, int fail) {}
+};
+
+PosHandler handlerC = new PosHandler() {
+    @Override public void onSolution(Sol sol, Ssat[] ssat) {
+        // 实时处理测站C的定位结果
+    }
+    @Override public void onPosFail(GTime time, String msg) {}
+    @Override public void onFinish(int total, int success, int fail) {}
+};
+
+// 每条基线一个RtkProcessor，长驻内存
+RtkProcessor rtkAB = new RtkProcessor(opt, handlerB);
+RtkProcessor rtkAC = new RtkProcessor(opt, handlerC);
+
+while (running) {
+    Map<String, byte[]> hourData = waitForNextHourData();
+    // hourData: {"A" → baseA字节数组, "B" → roverB字节数组, "C" → roverC字节数组}
+
+    byte[] baseA = hourData.get("A");
+
+    // 同一份基站数据投喂给两个处理器（各自独立解码，互不干扰）
+    rtkAB.feedRover("B", hourData.get("B"));
+    rtkAB.feedBase("A", baseA);
+
+    rtkAC.feedRover("C", hourData.get("C"));
+    rtkAC.feedBase("A", baseA);
+
+    // 结果通过handler实时回调，无需调用process()
+}
+
+// 程序退出时
+rtkAB.finish();
+rtkAC.finish();
+```
+
+### 9.4 四种方式对比
+
+| | 方式一<br>每次新建 | 方式二<br>新建+状态传递 | 方式三<br>resetForNextBatch | 方式四<br>feedRover/feedBase |
+|---|:---:|:---:|:---:|:---:|
+| **模糊度连续** | ❌ 每批重新收敛 | ✅ 跨批延续 | ✅ 自然延续 | ✅ 自然延续 |
+| **对象复用** | ❌ 每批新建 | ❌ 每批新建 | ✅ 同一对象 | ✅ 同一对象 |
+| **结果获取** | 返回值 | 返回值 | 返回值 | PosHandler回调 |
+| **代码复杂度** | 最低 | 中 | **低** | 中 |
+| **内存管理** | 每批新建GC | 需维护状态Map | 对象长驻 | 对象长驻 |
+| **适合场景** | 一次性处理 | 需持久化状态 | **分片文件模式** ✅ | **实时流模式** ✅ |
+
+### 9.5 进程重启恢复
+
+方式二、三、四的模糊度状态都在内存中，进程重启后丢失。
+如需重启后也能恢复，可将 `Rtk` 对象序列化到磁盘：
+
+```java
+// 方式三 + 持久化示例
+Map<String, RtkProcessor> processors = new HashMap<>();
+Path stateDir = Path.of("rtk_states");
+
+// 启动时：从磁盘恢复
+for (String key : List.of("A→B", "A→C")) {
+    RtkProcessor rtk = new RtkProcessor(opt);
+    Path stateFile = stateDir.resolve(key + ".bin");
+    if (Files.exists(stateFile)) {
+        byte[] data = Files.readAllBytes(stateFile);
+        try (var ois = new ObjectInputStream(new ByteArrayInputStream(data))) {
+            rtk.applyRtkState((Rtk) ois.readObject());
+        }
+    }
+    processors.put(key, rtk);
+}
+
+// 每批处理后：持久化到磁盘
+while (running) {
+    // ... 处理数据 ...
+    for (var entry : processors.entrySet()) {
+        Path stateFile = stateDir.resolve(entry.getKey() + ".bin");
+        try (var bos = new ByteArrayOutputStream();
+             var oos = new ObjectOutputStream(bos)) {
+            oos.writeObject(entry.getValue().getRtk());
+            Files.write(stateFile, bos.toByteArray());
+        }
+        entry.getValue().resetForNextBatch();
+    }
+}
+```
+
+> 中断时间对恢复效果的影响：\<1分钟可恢复，1~5分钟部分恢复，\>5分钟基本无效。
+> 详见 [11.4 中断时间的影响](#114-中断时间的影响)。
+
+### 9.6 基站数据共享说明
+
+同一基站的RTCM数据被多个测站的处理器使用时，每个处理器会**独立解码**一份，
+内部各自维护独立的 `Rtcm` 解码器和 `Nav` 导航数据，保证基线之间完全隔离。
+
+| 模式 | 基站数据处理 | 说明 |
+|------|-------------|------|
+| 文件路径 `process("B.rtcm3", "A.rtcm3")` | 每个处理器各自 `readAllBytes` | 文件I/O做N次 |
+| byte[] `process(roverBytes, baseBytes)` | 共享同一个byte[]引用 | 文件I/O做1次，内部解析做N次 |
+| 流式 `feedBase("A", baseChunk)` | 同一份byte[]投喂给多个处理器 | I/O做1次，内部解码做N次 |
+
+> 内部解析做N次是正确行为——每条基线需要独立的导航数据和观测匹配状态。
+
+### 9.7 完整示例：1基站3测站 + resetForNextBatch
+
+```java
+public class MultiBaselineContinuousRtk {
+
+    public static void main(String[] args) throws Exception {
+        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        opt.modear = Constants.ARMODE_FIXHOLD;
+        opt.navsys = Constants.SYS_GPS | Constants.SYS_GLO | Constants.SYS_GAL | Constants.SYS_CMP;
+        opt.nf = 3;
+
+        String baseId = "A";
+        String[] roverIds = {"B", "C", "D"};
+
+        Map<String, RtkProcessor> processors = new LinkedHashMap<>();
+        for (String roverId : roverIds) {
+            processors.put(roverId,
+                new RtkProcessor(opt, new PosHandler() {
+                    @Override public void onSolution(Sol sol, Ssat[] ssat) {
+                        // 可选：实时回调处理
+                    }
+                    @Override public void onPosFail(GTime time, String msg) {}
+                    @Override public void onFinish(int total, int success, int fail) {}
+                }));
+        }
+
+        // 模拟：每小时一批文件
+        for (int hour = 0; hour < 24; hour++) {
+            String baseFile = String.format("data/%s_%02d.rtcm3", baseId, hour);
+
+            for (String roverId : roverIds) {
+                String roverFile = String.format("data/%s_%02d.rtcm3", roverId, hour);
+                RtkProcessor rtk = processors.get(roverId);
+
+                RtkProcessor.RtkResult result = rtk.process(roverFile, baseFile);
+
+                int fix = 0, total = result.solutions.size();
+                for (SolData sd : result.solutions) {
+                    if (sd.status == SolutionStatus.FIX) fix++;
+                    Position llh = sd.getPosition(CoordType.LLH);
+                    // 处理定位结果...
+                }
+                System.out.printf(" Hour%02d 基线%s→%s: total=%d, FIX=%d%n",
+                    hour, baseId, roverId, total, fix);
+
+                rtk.resetForNextBatch();  // 保留模糊度，准备下一批
+            }
+        }
+
+        // 统计
+        for (String roverId : roverIds) {
+            Rtk rtkState = processors.get(roverId).getRtk();
+            System.out.printf("基线A→%s: 最终nfix=%d, epoch=%d%n",
+                roverId, rtkState.nfix, rtkState.epoch);
+        }
+    }
+}
+```
+
+---
+
+## 10. 实时流双向缓存
 
 RTK 实时流场景下，通过缓存观测数据实现双向滤波（正向+反向），合并后提升定位精度。
 C 版 RTKLIB 的反向滤波仅支持事后批处理（文件读完→正向→反向→合并），Java 版扩展到实时流场景。
 
-### 9.1 基本原理
+### 10.1 基本原理
 
 ```
 正向滤波：  epoch1 → epoch2 → ... → epochN  （实时逐历元处理）
@@ -639,7 +945,7 @@ C 版 RTKLIB 的反向滤波仅支持事后批处理（文件读完→正向→�
 反向滤波利用后续历元的信息修正前期模糊度未收敛时的精度损失，
 对 RTK 初始化阶段和周跳恢复阶段效果显著。
 
-### 9.2 配置与使用
+### 10.2 配置与使用
 
 ```java
 PrcOpt opt = RtkProcessor.createDefaultOpt();
@@ -665,7 +971,7 @@ rtk.feedBase("base_BJFS", baseData);
 // 缓存满240历元时自动触发：反向处理 → CombinedFilter合并 → handler.onResult()输出
 ```
 
-### 9.3 触发机制
+### 10.3 触发机制
 
 | 条件 | 行为 |
 |------|------|
@@ -673,7 +979,7 @@ rtk.feedBase("base_BJFS", baseData);
 | `cacheMaxEpochs > 0` 且缓存满 | 自动触发反向滤波 → 合并 → 通过 `handler.onResult()` 输出 → 清空缓存 |
 | 手动调用 `reprocess(sourceId)` | 立即对指定数据源的缓存数据执行反向+合并 |
 
-### 9.4 数据源标识 (sourceId)
+### 10.4 数据源标识 (sourceId)
 
 `sourceId` 由调用方定义，用于区分不同测站/设备的数据：
 
@@ -687,7 +993,7 @@ rtk.feedRover("station_B", roverDataB);  // 互不干扰
 
 `sourceId` 可为 null（向后兼容 `feed(data)` 等价于 `feed(null, data)`），但 null 不参与缓存。
 
-### 9.5 缓存实现
+### 10.5 缓存实现
 
 | 实现 | 类 | 说明 |
 |------|------|------|
@@ -701,7 +1007,7 @@ EpochCache externalCache = new ExternalEpochCache(provider, 240);
 rtk.setEpochCache(externalCache);
 ```
 
-### 9.6 事后双向滤波
+### 10.6 事后双向滤波
 
 事后处理（RINEX文件）通过 `PostPosProcessor` + `soltype` 配置实现双向，RTK 和 PPP 均支持：
 
@@ -721,9 +1027,9 @@ PostPosProcessor.PostPosResult result = post.process("rover.obs", "base.obs", "n
 | 2 | `SOLTYPE_COMBINED` | 正向+反向+合并（反向独立初始化） |
 | 3 | `SOLTYPE_COMBINED_NORESET` | 正向+反向+合并（反向复用正向状态） |
 
-### 9.7 批处理双向
+### 10.7 批处理双向
 
-RtkProcessor/PppProcessor 的 `process()` 批处理方法支持双向滤波（SPP不支持，见9.8）：
+RtkProcessor/PppProcessor 的 `process()` 批处理方法支持双向滤波（SPP不支持，见10.8）：
 
 ```java
 PrcOpt opt = new PrcOpt();
@@ -737,19 +1043,30 @@ RtkProcessor.RtkResult result = rtk.process(roverData, baseData);
 
 触发条件：`cacheMaxEpochs > 0` 且正向成功历元数 > 10。不满足条件时退化为纯正向。
 
+### 10.8 双向滤波支持范围
+
+| 场景 | SPP | RTK | PPP |
+|------|:---:|:---:|:---:|
+| 实时正向 | ✅ | ✅ | ✅ |
+| 批处理双向（process方法） | ❌ | ✅ | ✅ |
+| 实时双向（缓存触发） | ❌ | ✅ | ❌ |
+| 事后双向（soltype配置） | — | ✅ | ✅ |
+
+SPP为绝对定位，每历元独立求解，正反向结果相同，双向无意义。
+
 ---
 
-## 9. 模糊度状态缓存
+## 11. 模糊度状态缓存
 
 RTK/PPP 处理过程中，模糊度需要一定时间收敛（RTK 数分钟，PPP 数十分钟）。
 通过缓存 `Rtk` 对象，可在处理中断后恢复模糊度状态，避免重新收敛。
 
-### 10.1 设计原则
+### 11.1 设计原则
 
 库只提供对 `Rtk` 对象的获取和应用能力，不提供序列化方法。
 是否需要持久化、如何持久化（Kryo/JSON/Protobuf/Java原生等），由外部决定。
 
-### 10.2 使用方法
+### 11.2 使用方法
 
 ```java
 // 保存：获取当前 Rtk 状态
@@ -767,7 +1084,7 @@ RtkProcessor newProcessor = new RtkProcessor(opt);
 newProcessor.applyRtkState(saved);  // 将缓存的状态应用到新处理器
 ```
 
-### 10.3 适用范围
+### 11.3 适用范围
 
 | 处理器 | 方法 | 说明 |
 |--------|------|------|
@@ -775,7 +1092,7 @@ newProcessor.applyRtkState(saved);  // 将缓存的状态应用到新处理器
 | `PppProcessor` | `getRtk()` / `applyRtkState(Rtk)` | PPP 模糊度缓存 |
 | `SppProcessor` | 无 | SPP 无模糊度，不需要缓存 |
 
-### 10.4 中断时间的影响
+### 11.4 中断时间的影响
 
 | 中断时长 | 影响 | 说明 |
 |-----------|------|------|
@@ -790,23 +1107,10 @@ newProcessor.applyRtkState(saved);  // 将缓存的状态应用到新处理器
 
 **建议**：模糊度缓存主要用于短时间中断（信号短暂丢失、进程重启等场景）。
 
-### 10.5 Rtk 对象序列化能力
+### 11.5 Rtk 对象序列化能力
 
 所有数据类（`Rtk`, `Sol`, `Ssat`, `Ambc`, `PrcOpt`, `RtkConfig` 等）均实现了 `Serializable` 接口，
 外部可使用任何 Java 序列化框架处理。
-
----
-
-## 10. 实时流双向缓存
-
-| 场景 | SPP | RTK | PPP |
-|------|:---:|:---:|:---:|
-| 实时正向 | ✅ | ✅ | ✅ |
-| 批处理双向（process方法） | ❌ | ✅ | ✅ |
-| 实时双向（缓存触发） | ❌ | ✅ | ❌ |
-| 事后双向（soltype配置） | — | ✅ | ✅ |
-
-SPP为绝对定位，每历元独立求解，正反向结果相同，双向无意义。
 
 ---
 
