@@ -21,10 +21,24 @@ import java.util.Set;
 /**
  * RINEX observation file writer.
  * Supports RINEX 3.05/3.06 format only.
- * Aligned with RTKLIB rnxout.c.
+ * Aligned with RTKLIB rnxout.c / convrnx.c.
+ *
+ * <p>Observation type output is controlled by {@link #obstype} bitmask.
+ * Default is {@link #OBSTYPE_ALL} (CLDS), aligned with RTKLIB rtkconv GUI default.</p>
  */
 public class RinexObsWriter {
     private static final Logger log = LoggerFactory.getLogger(RinexObsWriter.class);
+
+    /** Pseudorange (C/P) output flag, aligned with RTKLIB OBSTYPE_PR */
+    public static final int OBSTYPE_PR  = 0x01;
+    /** Carrier phase (L) output flag, aligned with RTKLIB OBSTYPE_CP */
+    public static final int OBSTYPE_CP  = 0x02;
+    /** Doppler (D) output flag, aligned with RTKLIB OBSTYPE_DOP */
+    public static final int OBSTYPE_DOP = 0x04;
+    /** Signal-to-noise ratio (S) output flag, aligned with RTKLIB OBSTYPE_SNR */
+    public static final int OBSTYPE_SNR = 0x08;
+    /** All observation types (CLDS), aligned with RTKLIB OBSTYPE_ALL */
+    public static final int OBSTYPE_ALL = 0x0F;
 
     private double version;
 
@@ -39,6 +53,9 @@ public class RinexObsWriter {
     private int navsys;
 
     private Set<String> obsCodes;
+
+    /** Observation type bitmask, default CLDS (all). Aligned with RTKLIB obstype option. */
+    private int obstype = OBSTYPE_ALL;
 
     /**
      * Constructor.
@@ -61,6 +78,22 @@ public class RinexObsWriter {
 
     public void setObsData(Obs obs) {
         this.obs = obs;
+    }
+
+    /**
+     * Set observation type bitmask.
+     * Controls which observation types (C/L/D/S) are included in the output.
+     * Default is {@link #OBSTYPE_ALL} (CLDS).
+     *
+     * <p>Example: output only pseudorange and carrier phase (aligned with convbin CLI default):</p>
+     * <pre>
+     *   writer.setObstype(RinexObsWriter.OBSTYPE_PR | RinexObsWriter.OBSTYPE_CP);
+     * </pre>
+     *
+     * @param obstype bitmask of OBSTYPE_PR, OBSTYPE_CP, OBSTYPE_DOP, OBSTYPE_SNR
+     */
+    public void setObstype(int obstype) {
+        this.obstype = obstype;
     }
 
     public boolean write() {
@@ -259,7 +292,7 @@ public class RinexObsWriter {
             java.util.Set<String> sysObs = sysObsMap.get(sysChar);
             int sys = ObsCode.charToSys(sysChar);
             for (int j = 0; j < Constants.NFREQ + Constants.NEXOBS; j++) {
-                if (o.P[j] != 0.0 || o.L[j] != 0.0) {
+                if (o.P[j] != 0.0 || o.L[j] != 0.0 || o.D[j] != 0.0 || o.SNR[j] != 0.0) {
                     String obsType = ObsCode.code2obs(o.code[j]);
                     if (!obsType.isEmpty()) {
                         int freqIdx = ObsCode.code2idx(sys, o.code[j]);
@@ -270,7 +303,12 @@ public class RinexObsWriter {
             }
         }
 
-        String[] typePrefixes = new String[]{"C", "L"};
+        java.util.List<String> typePrefixes = new java.util.ArrayList<>();
+        if ((obstype & OBSTYPE_PR)  != 0) typePrefixes.add("C");
+        if ((obstype & OBSTYPE_CP)  != 0) typePrefixes.add("L");
+        if ((obstype & OBSTYPE_DOP) != 0) typePrefixes.add("D");
+        if ((obstype & OBSTYPE_SNR) != 0) typePrefixes.add("S");
+
         for (String sysChar : sysObsMap.keySet()) {
             java.util.Set<String> sysObs = sysObsMap.get(sysChar);
             java.util.List<String> sortedKeys = new java.util.ArrayList<>(sysObs);

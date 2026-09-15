@@ -29,6 +29,7 @@ public class RtcmFileToRinexConverter {
     private final double version;
     private final String outputDir;
     private final String stationName;
+    private int obstype = RinexObsWriter.OBSTYPE_ALL;
 
     /**
      * 构造RTCM文件转RINEX转换器。
@@ -41,6 +42,17 @@ public class RtcmFileToRinexConverter {
         this.version = version;
         this.outputDir = outputDir;
         this.stationName = stationName;
+    }
+
+    /**
+     * Set observation type bitmask, passed to internal {@link RinexObsWriter}.
+     * Must be called before {@link #convert(String)}.
+     *
+     * @param obstype bitmask of {@link RinexObsWriter#OBSTYPE_PR}, {@link RinexObsWriter#OBSTYPE_CP},
+     *                {@link RinexObsWriter#OBSTYPE_DOP}, {@link RinexObsWriter#OBSTYPE_SNR}
+     */
+    public void setObstype(int obstype) {
+        this.obstype = obstype;
     }
 
     /**
@@ -57,6 +69,7 @@ public class RtcmFileToRinexConverter {
         CompatFileIO.createDirectories(outputDir);
 
         RtcmToRinexConverter converter = new RtcmToRinexConverter(version, outputDir, stationName);
+        converter.setObstype(this.obstype);
         boolean ok = converter.convert(rtcmData, rtcmData.length);
 
         if (ok) {
