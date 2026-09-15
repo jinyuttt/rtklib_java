@@ -24,17 +24,17 @@
 ```
 na = NR(opt) = NP + NI + NT + NL = 3 + 0 + 0 + 2 = 5
 
-状态向量 x[461] 布局（使用 IB(sat,f,opt) 按卫星号索引）：
+状态向量 x[433] 布局（使用 IB(sat,f,opt) 按卫星号索引）：
 ┌─────────────────────────────────────────────────────────────┐
 │ 索引范围      │ 状态类型          │ 数量 │ 说明             │
 ├───────────────┼──────────────────┼──────┼───────────────────┤
 │ [0..2]        │ 位置 (X,Y,Z)      │ 3    │ Static模式无速度 │
 │ [3..4]        │ GLO IC bias L1/L2 │ 2    │ NL=NFREQGLO=2   │
-│ [5..232]      │ 模糊度 L1         │ 228  │ na + 0*MAXSAT    │
-│ [233..460]    │ 模糊度 L2         │ 228  │ na + 1*MAXSAT    │
-└───────────────┴──────────────────┴──────┴───────────────────┘
+│ [5..218]      │ 模糊度 L1         │ 214  │ na + 0*MAXSAT    │
+│ [219..432]    │ 模糊度 L2         │ 214  │ na + 1*MAXSAT    │
+└───────────────────┴──────────────────┴──────┴───────────────────┘
 
-nx = NR(opt) + NB(opt) = 5 + 228 * 2 = 461
+nx = NR(opt) + NB(opt) = 5 + 214 * 2 = 433
 
 ⚠️ 模糊度使用 IB(sat,f,opt) = NR + MAXSAT*f + (sat-1) 按卫星号索引，
 同一卫星在不同历元的模糊度索引固定不变。
@@ -44,13 +44,13 @@ nx = NR(opt) + NB(opt) = 5 + 228 * 2 = 461
 
 ```java
 // BDS C02 (sat=107) 的L1模糊度索引:
-IB(107, 0, opt) = 5 + 228 * 0 + (107 - 1) = 111
+IB(107, 0, opt) = 5 + 214 * 0 + (107 - 1) = 111
 
 // BDS C08 (sat=113) 的L1模糊度索引:
-IB(113, 0, opt) = 5 + 228 * 0 + (113 - 1) = 117
+IB(113, 0, opt) = 5 + 214 * 0 + (113 - 1) = 117
 
 // BDS C10 (sat=115) 的L2模糊度索引:
-IB(115, 1, opt) = 5 + 228 * 1 + (115 - 1) = 348
+IB(115, 1, opt) = 5 + 214 * 1 + (115 - 1) = 334
 ```
 
 ---
@@ -63,13 +63,13 @@ IB(115, 1, opt) = 5 + 228 * 1 + (115 - 1) = 348
 |------|--------|-----|---------|
 | `NFREQ` | **6** | **3** | ⚠️ Java版Obsd数组大小=6, 但opt.nf=2 |
 | `NFREQGLO` | 2 | 2 | ✅ 一致 |
-| `MAXSAT` | 228 | 228 | ✅ 一致 |
+| `MAXSAT` | 214 | 214 | ✅ 一致（C版RTKLIB 2.5.0同样包含LEO系统） |
 
 ### 2.2 MAXSAT 计算明细
 
 ```
 MAXSAT = NSATGPS + NSATGLO + NSATGAL + NSATQZS + NSATCMP + NSATIRN + NSATSBS + NSATLEO
-       = 32 + 27 + 36 + 10 + 46 + 14 + 39 + 10 = 228
+       = 32 + 27 + 36 + 10 + 46 + 14 + 39 + 10 = 214
 ```
 
 | 系统 | PRN范围 | 卫星数 |
@@ -97,19 +97,19 @@ MAXSAT = NSATGPS + NSATGLO + NSATGAL + NSATQZS + NSATCMP + NSATIRN + NSATSBS + N
 
 | 常量 | 值 | 说明 |
 |------|-----|------|
-| `NX_RTK` | 1385 | 状态向量数组最大分配大小 |
+| `NX_RTK` | 1301 | 状态向量数组最大分配大小 |
 
 ```
 NX_RTK = NP_max + NI_max + NT_max + NL_max + NB_max
-       = 9       + 684      + 6      + 2       + 684
-       = 1385
+       = 9       + 642      + 6      + 2       + 642
+       = 1301
 
 其中:
 - NP_max = 9 (dynamics模式: 3位置 + 3速度 + 3加速度)
-- NI_max = MAXSAT * 3 = 228 * 3 = 684 (ionoGradient模式: 每星3个电离层参数)
+- NI_max = MAXSAT * 3 = 214 * 3 = 642 (ionoGradient模式: 每星3个电离层参数)
 - NT_max = 6 (TROPOPT_ESTG模式: 流动站3 + 基准站3)
 - NL_max = NFREQGLO = 2 (GLONASS IC bias)
-- NB_max = MAXSAT * 3 = 684 (3频点模糊度)
+- NB_max = MAXSAT * 3 = 642 (3频点模糊度)
 
 ⚠️ NX_RTK 定义必须在 MAXSAT 之后（Java static final 前向引用限制）
 实际使用的 nx = NR(rtk) + NB(rtk)，通常远小于 NX_RTK
@@ -472,14 +472,11 @@ BASE_PATH  = "<base_rtcm3_file_path>";
 
 ### 9.1 中优先级
 - [ ] **基准站位置自动获取**：部分已实现（RINEX头 `APPROX POSITION XYZ` 自动读取、MOVEB模式SPP平均），缺失 `POSOPT_SINGLE`（RtkProcessor实时流中空实现，但实时流默认用POSOPT_RTCM从RTCM获取，C版也无实时流POSOPT_SINGLE；PostPosProcessor批处理已有avepos()）和 `POSOPT_FILE`（位置文件读取，PostPosProcessor中fallback到RINEX header）
-- [x] **SSR相位偏差改正**：已实现 `RtklibCommon.corrPhaseBiasSsr()`，在rtkpos/pppos前改正obs.L，支持-ENA_FCB/-DIS_FCB跳过。SSR解码（RTCM 1057-1068）已有，pbias数据结构已有，改正公式：`obs.L[j] -= nav.ssr[sat-1].pbias[code-1] * freq / CLIGHT`
 
 ### 9.2 低优先级
 
 - [ ] **Static Start长延迟恢复**：边界场景，`tt>300`时重置状态
 - [ ] **多系统PPP验证**：GPS+BDS联合PPP，需多系统精密星历
-- [x] **CombinedFilter速度smoother**：已实现，`CombinedFilter.combine()`中`popt.dynamics!=0`时对速度做RTS平滑，与C版`combres()`一致
-- [ ] **udtrop()冻结**：`atmFrozenNsThresh` 仅在 `udion()` 中实现冻结逻辑，`udtrop()` 尚未实现冻结
 
 ---
 
@@ -987,7 +984,7 @@ public class Obsd {
 
 **内存开销**:
 - 每个Obsd对象: ~32 * (8+8+4+2+4+1) = **864 bytes**
-- MAXSAT=228个卫星: **197 KB** (单历元)
+- MAXSAT=214个卫星: **185 KB** (单历元)
 - 可接受的开销换取灵活性
 
 ### 13.7 典型应用场景
@@ -1386,72 +1383,7 @@ private RtkResult buildResult() {
 
 **回调调用顺序**：`onSolution(Sol, Ssat[])` → `onResult(SolData)`，每个历元依次调用。
 
-### 12.6 使用示例
-
-#### 12.6.1 基本使用
-
-```java
-// 配置输出格式
-opt.posMask = PrcOpt.POS_ECEF | PrcOpt.POS_LLH | PrcOpt.POS_ENU;
-
-// 运行RTK
-RtkProcessor.RtkResult result = RtkProcessor.process(opt, nav, roverObs, baseObs);
-
-// 遍历结果
-for (SolData sd : result.solutions) {
-    // 直接按类型获取，无需遍历过滤
-    Position ecef = sd.getPosition(CoordType.ECEF);
-    Position llh  = sd.getPosition(CoordType.LLH);
-    Position enu  = sd.getPosition(CoordType.ENU);
-    Accuracy acc  = sd.getAccuracy(CoordType.ENU);
-    Velocity vel  = sd.getVelocity(CoordType.ECEF);
-
-    System.out.printf("%s %s lat=%.9f lon=%.9f h=%.4f ns=%d%n",
-            sd.timeStr, sd.status,
-            llh.v1, llh.v2, llh.v3, sd.numSat);
-}
-```
-
-#### 12.6.2 回调方式
-
-每个历元定位成功后，`onResult(SolData)` 会自动被调用（在 `onSolution` 之后），
-应用层只需实现 `onResult` 即可实时接收结构化定位结果：
-
-```java
-PosHandler handler = new PosHandler() {
-    @Override
-    public void onSolution(Sol sol, Ssat[] ssat) {
-        // 内部回调，一般不需要实现
-    }
-    @Override
-    public void onResult(SolData solData) {
-        // 输出回调，每个历元自动调用
-        Position llh = solData.getPosition(CoordType.LLH);
-        if (llh != null && solData.status == SolutionStatus.FIX) {
-            System.out.printf("FIX: %.9f %.9f %.4f%n", llh.v1, llh.v2, llh.v3);
-        }
-    }
-};
-```
-
-#### 12.6.3 .pos 文件格式输出
-
-```java
-// 与RTKLIB C版 .pos文件格式兼容
-static String formatSolDataLine(SolData solData) {
-    Position llh = solData.getPosition(CoordType.LLH);
-    Accuracy acc = solData.getAccuracy(CoordType.ENU);
-    if (llh == null || acc == null) return "";
-
-    return String.format("%s %s %14.9f %14.9f %10.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %d %d",
-            solData.timeStr, solData.status,
-            llh.v1, llh.v2, llh.v3,
-            acc.s1, acc.s2, acc.s3, acc.c12, acc.c23, acc.c31,
-            solData.numSat, 0);
-}
-```
-
-### 12.7 SolutionStatus 枚举映射
+### 12.6 SolutionStatus 枚举映射
 
 | 枚举值 | C版常量 | 值 | 说明 |
 |--------|---------|-----|------|
@@ -1522,15 +1454,7 @@ static String formatSolDataLine(SolData solData) {
 
 ### 12.3 未移植项
 
-| 功能 | 优先级 | 原因 |
-|------|--------|------|
-| Static Start长延迟恢复 | 低 | 边界场景，`tt>300`时重置状态 |
-| 多系统PPP验证 | 中 | GPS+BDS联合PPP，需多系统精密星历 |
-| SSR相位偏差改正 | ~~中~~ ✅已实现 | `RtklibCommon.corrPhaseBiasSsr()` 已实现，在rtkpos/pppos前改正obs.L |
-| CombinedFilter速度smoother | ~~低~~ ✅已实现 | `CombinedFilter.combine()`中`popt.dynamics!=0`时对速度做RTS平滑 |
-| POSOPT_SINGLE（实时流） | 低 | RtkProcessor空实现，但实时流默认用POSOPT_RTCM，C版也无实时流POSOPT_SINGLE |
-| POSOPT_FILE | 低 | 位置文件读取，PostPosProcessor中fallback到RINEX header |
-| udtrop()冻结 | 低 | `atmFrozenNsThresh` 仅在 `udion()` 中实现 |
+详见第9章"待完善项"。
 
 ---
 
@@ -1568,17 +1492,62 @@ Java版方法名遵循以下规则，在保持Java驼峰命名的同时保留C�
 
 ---
 
-## 15. PPP 关键改正项
+## 15. PPP 关键改正项（已与C版对齐）
 
-PPP 定位精度依赖多种外部改正数据，以下为 Java 版支持的改正项及其读取器：
+### 15.1 天线相位中心改正（PCV）
 
-| 改正项 | 读取器 | 文件格式 | 影响量级 |
-|--------|--------|----------|----------|
-| 天线相位中心偏差 (PCV) | `PcvReader` | ANTEX (.atx), NGS (.pcv) | 10-15 cm |
-| 差分码偏差 (DCB) | `DcbReader` | BIA, BSX, DCB | 几十 cm（伪距） |
-| 海潮负荷 (OTL) | `OtlReader` | BLQ | 1-5 cm（沿海站） |
-| 固体潮 | `Tides.tidedisp()` | 内置模型 | ~30 cm |
-| 极潮 | `Tides.tidePole()` | ERP文件 | ~1-2 cm |
+- `PcvReader.readantex()`：完整实现ANTEX格式解析，支持TYPE/SERIAL和START/FREQ块
+- `PcvReader.readngspcv()`：完整实现NGS格式解析
+- `PcvData.satpcv()`/`PcvData.antpcv()`：PCO+PCV改正计算已实现
+- 通过 `Nav.pcvs` 和 `Nav.pcvr` 存储，与C版结构一致
+- 修复记录：`!pcv.sat` → `pcv.sat == 0`（Java中int不能用逻辑非）；`stas[i].del[3]` → 添加越界检查
+- 影响量级：卫星PCV ~10-15cm，接收机PCV ~1-5cm
+
+### 15.2 差分码偏差改正（DCB）
+
+- `DcbReader.readdcb()`：完整实现，支持 `.dcb`（CODE）、`.bia`（IGS BIAS）、`.bsx`（Bernese）三种格式
+- `DcbReader.readdcbf()`：文件级读取，自动识别格式
+- 通过 `Nav.cbias` 和 `Nav.rbias` 存储，与C版一致
+- 修复记录：`CODE_L7C` → `CODE_L7X`（常量名称错误）
+- 影响量级：P1-C1 DCB ~几cm到几十cm（影响伪距观测值）
+
+### 15.3 海潮负荷改正（OTL）
+
+- `OtlReader.readblq()`：完整实现BLQ文件解析
+- `Tides.hardisp()`：完整移植C版hardisp()，342个分潮调和分析
+- `IddData`：存储342个Doodson数，与C版idd数据一致
+- 通过 `PrcOpt.odisp[2][11][3]` 存储，与C版一致
+- 影响量级：沿海站 ~1-5cm，内陆站 <1mm
+
+### 15.4 潮汐改正集成
+
+- `Tides.tidedisp()`：完整实现固体潮+海潮+极潮
+- `PppCore.tidedisp()`：已改为调用 `Tides.tidedisp()`，不再使用私有简化版
+- `RtkCore.tidedisp()`：同样调用 `Tides.tidedisp()`
+- 修复记录：`nutIau1980()`数组补全：原Java版仅101项，C版106项，补全5个缺失章动项
+
+### 15.5 对齐状态总结
+
+| 改正项 | C版函数 | Java版函数 | 状态 | 对齐度 |
+|--------|---------|------------|------|--------|
+| 天线PCV | readpcv/satpcv/antpcv | PcvReader/PcvData | ✅ 完整 | 100% |
+| 差分码偏差 | readdcb | DcbReader | ✅ 完整 | 100% |
+| 海潮负荷 | readotl/hardisp | OtlReader/Tides.hardisp | ✅ 完整 | 100% |
+| 固体潮 | tidedisp | Tides.tidedisp | ✅ 完整 | 100% |
+| 极潮 | tidePole | Tides.tidePole | ✅ 完整 | 100% |
+| 章动模型 | nutIau1980(106项) | TimeSystem.nutIau1980 | ✅ 修复 | 100% |
+
+测试验证：RTK测试（RtkLocalTest）2个测试全部通过，240历元0失败；潮汐改正测试（tidecorr=7）240历元全部成功。
+
+---
+
+## 16. SBAS改正（已与C版对齐）
+
+| 功能 | Java版实现 | 状态 |
+|------|-----------|------|
+| SBAS改正算法 | `SbasCorrection`有完整的`sbsioncorr`/`sbstropcorr`/`sbssatcorr`/`sbsupdatecorr`，算法与C版一致 | ✅ |
+| SBAS改正集成 | `IONOOPT_SBAS`→`sbsioncorr()`，`TROPOPT_SBAS`→`sbstropcorr()`，`SYS_SBS`星历→`sbssatcorr()`，均已集成到定位流程 | ✅ |
+| SBAS消息输入 | `SbsMsgReader`读取.sbs文件，各Processor提供`feedSbsMsg()`实时注入和`loadSbs()`文件加载，自动调用`sbsupdatecorr()`更新nav改正量 | ✅ |
 
 ---
 
