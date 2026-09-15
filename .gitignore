@@ -49,3 +49,13 @@ target/
 *.py
 *.js
 *.txt
+
+# Test output directories
+test_results/
+test_output*
+
+# rtk_compare intermediate data (keep .md reports)
+rtk_compare/*.nav
+rtk_compare/*.obs
+rtk_compare/*.conf
+rtk_compare/*.pos

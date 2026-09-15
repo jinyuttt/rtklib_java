@@ -1,16 +1,28 @@
 # RTKLIB Java 项目规则
 
-## 项目结构
-- 源码：src/main/java/org/rtklib/java/
-- 测试：src/test/java/org/rtklib/java/
+## 项目结构（多模块）
+- 父POM：pom.xml（packaging=pom，聚合rtklib-core + rtklib-adjust）
+- rtklib-core：src/main/java/org/rtklib/java/（核心定位算法）
+- rtklib-adjust：src/main/java/org/rtklib/java/adjust/（多基线间接平差）
+- 测试：各模块 src/test/java/
 - 文档：docs/
 - 数据：data/
 
 ## 构建与测试
-- 编译：mvn compile
-- 运行测试：mvn test
-- 运行单个测试：mvn test -Dtest=RtkRinexCompareTest
+- 编译全部：mvn compile
+- 编译core：mvn compile -pl rtklib-core
+- 编译adjust：mvn compile -pl rtklib-adjust
+- 运行全部测试：mvn test
+- 运行core测试：mvn test -pl rtklib-core
+- 运行adjust测试：mvn test -pl rtklib-adjust -Dtest=GnssBaselineAdjustTest
 - 打包：mvn package
+- 安装父POM：mvn install -N
+- 安装core到本地仓库：mvn install -pl rtklib-core -DskipTests
+
+## 依赖关系
+- rtklib-adjust → rtklib-core（单向依赖，core不依赖adjust）
+- rtklib-core → ejml-simple:0.41, slf4j, logback
+- rtklib-adjust → ejml-all:0.41, junit
 
 ## 测试数据
 - RINEX 观测文件：data/*.obs

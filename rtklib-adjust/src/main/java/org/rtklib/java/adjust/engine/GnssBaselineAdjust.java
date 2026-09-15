@@ -1,5 +1,7 @@
 package org.rtklib.java.adjust.engine;
 
+import org.ejml.data.DMatrixRMaj;
+import org.ejml.dense.row.decomposition.chol.CholeskyDecompositionInner_DDRM;
 import org.ejml.simple.SimpleMatrix;
 import org.rtklib.java.adjust.covariance.CovAssembler;
 import org.rtklib.java.adjust.model.AdjustResult;
@@ -32,9 +34,6 @@ import org.rtklib.java.adjust.model.BaselineEpoch;
  */
 public class GnssBaselineAdjust {
 
-    /** 矩阵奇异判断阈值 */
-    private static final double SINGULAR_THRESH = 1e-30;
-
     /**
      * 对单历元多基线执行间接平差。
      *
@@ -56,8 +55,9 @@ public class GnssBaselineAdjust {
             SimpleMatrix H = CovAssembler.assembleDesignMatrix(k);
             SimpleMatrix R = CovAssembler.assembleGlobalR(epoch);
 
-            if (Math.abs(R.determinant()) < SINGULAR_THRESH) {
-                return AdjustResult.failure(epoch.epochTag, k, "全局协方差矩阵R奇异");
+            if (!isPositiveDefinite(R)) {
+                return AdjustResult.failure(epoch.epochTag, k,
+                        "全局协方差矩阵R非正定，det=" + R.determinant());
             }
 
             SimpleMatrix RInv = R.invert();
@@ -65,8 +65,9 @@ public class GnssBaselineAdjust {
             SimpleMatrix Ht = H.transpose();
             SimpleMatrix N = Ht.mult(RInv).mult(H);
 
-            if (Math.abs(N.determinant()) < SINGULAR_THRESH) {
-                return AdjustResult.failure(epoch.epochTag, k, "法方程系数矩阵N奇异");
+            if (!isPositiveDefinite(N)) {
+                return AdjustResult.failure(epoch.epochTag, k,
+                        "法方程系数矩阵N非正定，det=" + N.determinant());
             }
 
             SimpleMatrix NInv = N.invert();
@@ -81,7 +82,7 @@ public class GnssBaselineAdjust {
             double[] v = new double[m];
             for (int i = 0; i < m; i++) v[i] = vMat.get(i, 0);
 
-            double[] p01Xyz = computeP01(epoch, dx);
+            double[] p01Xyz = new double[]{dx[0], dx[1], dx[2]};
 
             if (df == 0) {
                 double[][] Dx = simpleMatrixTo2d(NInv);
@@ -117,24 +118,20 @@ public class GnssBaselineAdjust {
     }
 
     /**
-     * 计算平差后P01坐标。
+     * Cholesky分解判断正定性。
      *
-     * <p>P01 = Base_k + l_k + dx，取第一条基线计算。</p>
-     * <p>其中 Base_k = Rover_k - dXyz_k（从SolData的ECEF坐标反算基站坐标），
-     *   然后 P01 = Base_k + (dXyz_k + dx) = Rover_k + dx。</p>
+     * <p>比行列式阈值更稳健：不依赖矩阵维度，对协方差类矩阵（对角~1e-6）可靠。</p>
      */
-    private static double[] computeP01(BaselineEpoch epoch, double[] dx) {
-        BaselineEpoch.BaselineEntry b0 = epoch.baselines[0];
-        double roverX = b0.solData.getPosition(org.rtklib.java.data.CoordType.ECEF).v1;
-        double roverY = b0.solData.getPosition(org.rtklib.java.data.CoordType.ECEF).v2;
-        double roverZ = b0.solData.getPosition(org.rtklib.java.data.CoordType.ECEF).v3;
-        return new double[]{roverX + dx[0], roverY + dx[1], roverZ + dx[2]};
+    private static boolean isPositiveDefinite(SimpleMatrix mat) {
+        DMatrixRMaj drm = mat.getDDRM().copy();
+        CholeskyDecompositionInner_DDRM chol = new CholeskyDecompositionInner_DDRM(true);
+        return chol.decompose(drm);
     }
 
     private static double[][] simpleMatrixTo2d(SimpleMatrix sm) {
-        double[][] arr = new double[sm.getNumRows()][sm.getNumCols()];
-        for (int i = 0; i < sm.getNumRows(); i++) {
-            for (int j = 0; j < sm.getNumCols(); j++) {
+        double[][] arr = new double[sm.numRows()][sm.numCols()];
+        for (int i = 0; i < sm.numRows(); i++) {
+            for (int j = 0; j < sm.numCols(); j++) {
                 arr[i][j] = sm.get(i, j);
             }
         }
