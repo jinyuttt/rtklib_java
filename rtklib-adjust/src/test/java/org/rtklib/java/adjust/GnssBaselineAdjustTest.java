@@ -159,14 +159,14 @@ public class GnssBaselineAdjustTest {
     void testDesignMatrix() {
         SimpleMatrix h1 = CovAssembler.assembleDesignMatrix(1);
         assertEquals(3, h1.numRows());
-        assertEquals(3, h1.getNumCols());
+        assertEquals(3, h1.numCols());
         assertEquals(1.0, h1.get(0, 0), 1e-10);
         assertEquals(1.0, h1.get(1, 1), 1e-10);
         assertEquals(1.0, h1.get(2, 2), 1e-10);
 
         SimpleMatrix h3 = CovAssembler.assembleDesignMatrix(3);
         assertEquals(9, h3.numRows());
-        assertEquals(3, h3.getNumCols());
+        assertEquals(3, h3.numCols());
         assertEquals(1.0, h3.get(6, 0), 1e-10);
         assertEquals(1.0, h3.get(7, 1), 1e-10);
         assertEquals(1.0, h3.get(8, 2), 1e-10);

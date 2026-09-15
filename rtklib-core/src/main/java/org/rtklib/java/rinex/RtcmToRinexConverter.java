@@ -17,6 +17,7 @@ public class RtcmToRinexConverter {
     private double version;
     private String outputDir;
     private String stationName;
+    private int obstype = RinexObsWriter.OBSTYPE_ALL;
     private final List<ObservationEpoch> epochList = new ArrayList<>();
     private final List<Eph> ephList = new ArrayList<>();
     private final List<Geph> gephList = new ArrayList<>();
@@ -26,6 +27,17 @@ public class RtcmToRinexConverter {
         this.version = version;
         this.outputDir = outputDir;
         this.stationName = stationName;
+    }
+
+    /**
+     * Set observation type bitmask, passed to {@link RinexObsWriter} on initialization.
+     * Must be called before {@link #convert(byte[], int)}.
+     *
+     * @param obstype bitmask of {@link RinexObsWriter#OBSTYPE_PR}, {@link RinexObsWriter#OBSTYPE_CP},
+     *                {@link RinexObsWriter#OBSTYPE_DOP}, {@link RinexObsWriter#OBSTYPE_SNR}
+     */
+    public void setObstype(int obstype) {
+        this.obstype = obstype;
     }
 
     public boolean convert(byte[] rtcmData, int len) {
@@ -111,6 +123,7 @@ public class RtcmToRinexConverter {
 
         String obsFile = CompatFileIO.joinPath(outputDir, stationName + ".obs");
         obsWriter = new RinexObsWriter(version, obsFile, sta);
+        obsWriter.setObstype(this.obstype);
 
         String navFile = CompatFileIO.joinPath(outputDir, stationName + ".nav");
         navWriter = new RinexNavWriter(version, navFile);
