@@ -158,14 +158,14 @@ public class GnssBaselineAdjustTest {
     @DisplayName("CovAssembler: 设计矩阵H动态构造验证")
     void testDesignMatrix() {
         SimpleMatrix h1 = CovAssembler.assembleDesignMatrix(1);
-        assertEquals(3, h1.getNumRows());
+        assertEquals(3, h1.numRows());
         assertEquals(3, h1.getNumCols());
         assertEquals(1.0, h1.get(0, 0), 1e-10);
         assertEquals(1.0, h1.get(1, 1), 1e-10);
         assertEquals(1.0, h1.get(2, 2), 1e-10);
 
         SimpleMatrix h3 = CovAssembler.assembleDesignMatrix(3);
-        assertEquals(9, h3.getNumRows());
+        assertEquals(9, h3.numRows());
         assertEquals(3, h3.getNumCols());
         assertEquals(1.0, h3.get(6, 0), 1e-10);
         assertEquals(1.0, h3.get(7, 1), 1e-10);
@@ -173,15 +173,15 @@ public class GnssBaselineAdjustTest {
     }
 
     @Test
-    @DisplayName("k=3无噪声: dx应接近0，sigma0接近0")
+    @DisplayName("k=3无噪声: dx即P01坐标估计，应接近真值，sigma0接近0")
     void testThreeBaselinesNoNoise() {
         BaselineEpoch epoch = buildEpoch(3, 0.0);
         AdjustResult result = GnssBaselineAdjust.adjust(epoch);
         assertTrue(result.success);
 
-        for (int i = 0; i < 3; i++) {
-            assertEquals(0.0, result.dx[i], 1e-8, "无噪声时dx应接近0");
-        }
+        assertEquals(P01_X, result.dx[0], 1e-6, "无噪声时dx[0]应接近P01_X");
+        assertEquals(P01_Y, result.dx[1], 1e-6, "无噪声时dx[1]应接近P01_Y");
+        assertEquals(P01_Z, result.dx[2], 1e-6, "无噪声时dx[2]应接近P01_Z");
 
         assertEquals(P01_X, result.p01Xyz[0], 1e-6, "P01 X");
         assertEquals(P01_Y, result.p01Xyz[1], 1e-6, "P01 Y");
@@ -231,21 +231,21 @@ public class GnssBaselineAdjustTest {
 
     private SolData buildMockSolData(double x, double y, double z, SolutionStatus status) {
         Sol sol = new Sol();
-        sol.time = new GTime(2026, 1, 1, 0, 0, 0.0);
+        sol.time = new GTime();
         sol.rr = new double[]{x, y, z, 0, 0, 0};
         sol.qr = new float[]{
                 (float) COV_DIAG, (float) COV_DIAG, (float) COV_DIAG,
                 (float) COV_OFF, (float) COV_OFF, (float) COV_OFF
         };
-        sol.type = 0;
+        sol.type = (byte) 0;
         sol.stat = (byte) status.code;
-        sol.ns = 10;
-        sol.age = 0;
+        sol.ns = (byte) 10;
+        sol.age = 0.0f;
         sol.ratio = 5.0f;
         sol.dtr = new double[]{0};
         sol.qv = new float[]{0, 0, 0, 0, 0, 0};
 
-        int posMask = PrcOpt.POS_ECEF | PrcOpt.POS_LLH | PrcOpt.POS_ENU;
+        int posMask = PrcOpt.POS_ECEF | PrcOpt.POS_LLH;
         return new SolData(sol, posMask);
     }
 

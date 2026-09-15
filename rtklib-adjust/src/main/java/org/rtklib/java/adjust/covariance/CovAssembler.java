@@ -150,16 +150,20 @@ public class CovAssembler {
 
     /**
      * 组装观测向量l (3k x 1)。
+     *
+     * <p>观测向量为各基线估计的Rover ECEF位置（基线增量+基站坐标），
+     * 而非基线增量本身。因为观测方程 l_i = P01 - Base_i + v_i，
+     * 等价于 (l_i + Base_i) = P01 + v_i，有效观测是Rover位置。</p>
      */
     public static SimpleMatrix assembleObservationVector(BaselineEpoch epoch) {
         int k = epoch.count;
         int m = 3 * k;
         SimpleMatrix l = new SimpleMatrix(m, 1);
         for (int i = 0; i < k; i++) {
-            double[] dxyz = epoch.baselines[i].dXyz;
-            l.set(i * 3, 0, dxyz[0]);
-            l.set(i * 3 + 1, 0, dxyz[1]);
-            l.set(i * 3 + 2, 0, dxyz[2]);
+            Position ecef = epoch.baselines[i].solData.getPosition(CoordType.ECEF);
+            l.set(i * 3, 0, ecef.v1);
+            l.set(i * 3 + 1, 0, ecef.v2);
+            l.set(i * 3 + 2, 0, ecef.v3);
         }
         return l;
     }
@@ -191,9 +195,9 @@ public class CovAssembler {
     }
 
     private static double[][] fromSimpleMatrix(SimpleMatrix sm) {
-        double[][] mat = new double[sm.getNumRows()][sm.getNumCols()];
-        for (int i = 0; i < sm.getNumRows(); i++) {
-            for (int j = 0; j < sm.getNumCols(); j++) {
+        double[][] mat = new double[sm.numRows()][sm.numCols()];
+        for (int i = 0; i < sm.numRows(); i++) {
+            for (int j = 0; j < sm.numCols(); j++) {
                 mat[i][j] = sm.get(i, j);
             }
         }
