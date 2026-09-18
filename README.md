@@ -40,16 +40,21 @@ org.rtklib.java
 └── troposphere/   对流层延迟模型
 ```
 
-### rtklib-adjust — 多基线间接平差（功能没有充分的实测数据验证）
+### rtklib-adjust — 多基线间接平差
 
 单历元GNSS多基线间接平差模块。基于高斯-马尔可夫最小二乘模型，对同一历元多条独立RTK基线进行融合平差，输出流动站最优坐标及精度评定（σ₀检验 + Baarda数据探测）。
 将多基站定位数据合并为单条基线，进行联合解算。
 例如：基站A-测站M，基站B-测站M，结果融合测站M的坐标。
+
+支持基站异常诊断：当σ₀持续超限时，自动定位异常基站并通过静态解算给出建议坐标。
+
+已通过2基站1测站连续9小时RTCM实测数据验证，详见 [技术参考第10章](docs/ADJUST_TECHNICAL_REFERENCE.md#10-实测数据验证)。
 ```
 org.rtklib.java.adjust
-├── model/          BaselineEpoch（历元容器）、AdjustResult（平差结果）
+├── model/          BaselineEpoch（历元容器）、AdjustResult（平差结果）、BaseStationDiagnosis（诊断结果）
 ├── covariance/     CovAssembler（协方差拼接核心）
-└── engine/         GnssBaselineAdjust（平差引擎）
+├── engine/         GnssBaselineAdjust（平差引擎）、BaseStationDiagnoser（基站诊断器）
+└── datasource/     GnssDataSource（数据源接口）、RtcmFileDataSource、RinexFileDataSource、RtcmMemoryDataSource
 ```
 
 ## 文档

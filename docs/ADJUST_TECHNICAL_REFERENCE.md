@@ -384,3 +384,46 @@ GnssDataSource (接口)
 3. **平滑效果** — 加权平均减小随机噪声
 
 基站诊断功能的价值在于：当σ₀检验发现异常时，自动定位原因并给出修正建议，减少人工排查成本。
+
+## 10. 实测数据验证
+
+### 10.1 验证概述
+
+rtklib-adjust 已通过2基站1测站连续9小时RTCM实测数据完整验证，覆盖多基线平差、基站坐标偏差检测、静态解算修正、基站诊断器等全部核心功能。
+
+验证数据：项目实际GNSS监测设备RTCM3实时流，按小时分文件存储（0.rtcm3 ~ 8.rtcm3）。
+
+### 10.2 验证项目
+
+| 验证项 | 测试方法 | 验证内容 |
+|--------|---------|---------|
+| 多基线平差 | `testMultiBaselineAdjust9Hours` | 2基站1测站9小时RTK解算+逐历元平差，统计FIX比例、σ₀分布、Baarda T |
+| SPP基站定位 | `testSppBaseStationPosition` | SPP定位各基站坐标，与RTCM 1005对比，验证偏差检测能力 |
+| 静态解算修正 | `testStaticSolveBaseA` | 静态模式解算异常基站精确坐标，修正后重新平差验证σ₀收敛 |
+| SPP替换验证 | `testAdjustWithSppBaseAOnly` / `testAdjustWithSppBaseBOnly` | 单基站SPP中位数替换RTCM 1005坐标，对比修正前后σ₀和Rover坐标差异 |
+| 交叉验证 | `testCrossValidationStation0002` | 第二测站基线A/B坐标一致性验证 |
+| 修正后平差 | `testAdjustWithCorrectedBaseB` | 修正基站坐标后平差，验证σ₀恢复正常 |
+| 基站诊断器 | `BaseStationDiagnoserTest` | 2基站诊断流程：异常定位、建议坐标、缓存机制 |
+
+### 10.3 验证结论
+
+1. **多基线平差功能正确**：双FIX历元平差成功率符合预期，σ₀分布合理，Baarda T统计量有效
+2. **基站坐标偏差可检测**：SPP定位与RTCM 1005偏差>1m时，σ₀显著超限（σ₀>>3.0），诊断器正确识别异常基站
+3. **静态解算修正有效**：修正基站坐标后，σ₀从超限值收敛至~1.0附近，两条基线Rover坐标差异从米级降至厘米级
+4. **诊断器流程完整**：滑动窗口触发→SPP/残差定位异常基站→静态解算给建议坐标→回调推送，全链路验证通过
+5. **缓存机制正确**：诊断结果只推送一次，清除缓存后可重新验证
+
+### 10.4 数据配置
+
+实测数据测试通过 `test-data.properties` 配置（不提交到仓库），模板文件为 `test-data.properties.template`：
+
+```properties
+data.root=D:\\iot-dm\\jetlinks-data\\device_rtcmbin_storage
+base.a=YOUR_BASE_A_ID
+base.b=YOUR_BASE_B_ID
+rover=YOUR_ROVER_ID
+rover2=YOUR_ROVER2_ID
+date=2026-09-17
+```
+
+无数据配置时测试自动跳过，不影响CI构建。

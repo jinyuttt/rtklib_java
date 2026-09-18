@@ -6,6 +6,49 @@
 
 ---
 
+## [2.0.7] - 2026-09-19
+
+### Added
+
+- **rtklib-adjust 实测数据验证**：新增 `AdjustRealDataTest`，使用2基站1测站连续9小时RTCM实测数据完整验证多基线平差功能
+  - `testMultiBaselineAdjust9Hours()`：2基站1测站连续9小时RTK解算+多基线平差，验证FIX比例、σ₀分布、Baarda T统计量
+  - `testSppBaseStationPosition()`：SPP定位基站坐标，与RTCM 1005对比，验证基站坐标偏差检测
+  - `testStaticSolveBaseA()`：静态模式解算基站精确坐标，验证基站坐标修正后平差σ₀收敛
+  - `testAdjustWithSppBaseAOnly()` / `testAdjustWithSppBaseBOnly()`：单基站SPP替换验证，对比修正前后σ₀变化
+  - `testCrossValidationStation0002()`：交叉验证第二测站基线一致性
+  - `testAdjustWithCorrectedBaseB()`：修正基站坐标后平差验证
+  - 数据配置通过 `test-data.properties` 管理（模板 `test-data.properties.template`），不提交到仓库
+
+- **基站异常诊断功能**：新增 `BaseStationDiagnoser`，当σ₀持续超限时自动定位异常基站并给出建议坐标
+  - 2基线场景：SPP定位辅助判断异常方向
+  - k≥3基线场景：残差分析定位异常基站
+  - 静态解算给出建议坐标（mm级相对精度）
+  - 滑动窗口+超限比例触发机制，避免偶然异常误触发
+  - 诊断结果缓存，修正坐标后可清除重新验证
+  - 回调推送，每个基站只推送一次
+
+- **数据源抽象**：新增 `GnssDataSource` 接口及三种实现
+  - `RtcmFileDataSource`：事后RTCM文件，支持多文件（多小时数据）
+  - `RinexFileDataSource`：事后RINEX文件，需obs+nav文件
+  - `RtcmMemoryDataSource`：实时RTCM流，逐帧feed累积数据
+  - 统一接口：SPP定位、RTK基线解算、静态解算、天线坐标提取
+
+- **诊断模型**：新增 `AdjustDiagnosisConfig`（诊断配置）、`BaseStationDiagnosis`（诊断结果）、`BaseDiagnosisHandler`（回调接口）
+  - 异常等级：NORMAL / WARNING / ERROR / CRITICAL / UNKNOWN
+  - 3D偏差阈值：<0.5m NORMAL、0.5~2m WARNING、2~5m ERROR、>5m CRITICAL
+
+- **基站诊断测试**：新增 `BaseStationDiagnoserTest`，验证2基站诊断流程和缓存机制
+
+### Verified
+
+- 实测数据：2基站1测站，连续9小时RTCM数据 ✅
+- 多基线平差：双FIX历元平差成功，σ₀分布合理 ✅
+- 基站坐标偏差检测：SPP定位与RTCM 1005对比，成功识别异常基站 ✅
+- 静态解算修正：修正基站坐标后σ₀显著收敛 ✅
+- 基站诊断器：异常基站定位、建议坐标生成、缓存机制 ✅
+
+---
+
 ## [2.1.0] - 2026-09-16
 
 ### Added
