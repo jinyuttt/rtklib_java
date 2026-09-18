@@ -70,6 +70,31 @@ public class Sol implements Serializable {
     public float vdop;
 
     /**
+     * [Java扩展] H矩阵位置分量等效设计矩阵(3x3，行优先9个元素)。
+     * 由relpos()中H[:,0:3]和R计算得到，diagMask & DIAG_HPOS时有效。
+     * null表示未计算或计算失败。
+     */
+    public double[] hPos = null;
+
+    /**
+     * [Java扩展] 新息向量RMS = sqrt(v^T R^{-1} v / nv)。
+     * diagMask & DIAG_INNOVATION时有效，NaN表示未计算。
+     */
+    public double innovRms = Double.NaN;
+
+    /**
+     * [Java扩展] 最大标准化新息 = max(|v_i| / sqrt(R_ii))。
+     * diagMask & DIAG_INNOVATION时有效，NaN表示未计算。
+     */
+    public double innovMax = Double.NaN;
+
+    /**
+     * [Java扩展] 双差观测数nv。
+     * diagMask & DIAG_INNOVATION时有效，0表示未计算。
+     */
+    public int ddObsCount = 0;
+
+    /**
      * Default constructor.
      */
     public Sol() {
@@ -118,5 +143,9 @@ public class Sol implements Serializable {
         this.pdop = other.pdop;
         this.hdop = other.hdop;
         this.vdop = other.vdop;
+        this.hPos = other.hPos != null ? other.hPos.clone() : null;
+        this.innovRms = other.innovRms;
+        this.innovMax = other.innovMax;
+        this.ddObsCount = other.ddObsCount;
     }
 }

@@ -427,3 +427,127 @@ date=2026-09-17
 ```
 
 无数据配置时测试自动跳过，不影响CI构建。
+
+## 11. 结构化信息提取与平差优化（P0~P3）
+
+### 11.1 问题背景
+
+RTK解算内部拥有丰富的结构化信息（逐卫星残差、模糊度、H矩阵等），但传递到SolData时几乎全部被压缩为"位置+3×3协方差"。rtklib-adjust在结果空间融合时，无法利用这些信息做更精确的互协方差建模和基线质量评估。
+
+### 11.2 优化层次总览
+
+| 层次 | 名称 | 修改范围 | 核心收益 | 状态 |
+|------|------|---------|---------|------|
+| P0 | 基线质量加权 | 仅adjust | σ₀更稳健，假固定污染↓ | ✅ 已实现 |
+| P1 | 逐卫星残差提取 | core(小)+adjust | σ₀精度评定偏差±20%→±10% | ✅ 已实现 |
+| P2 | 基于残差的互协方差建模 | 仅adjust | 短基线互协方差更诚实 | 待实现 |
+| P3 | H矩阵位置分量提取 | core(中)+adjust | 非对称卫星几何场景改善 | ✅ 已实现 |
+
+### 11.3 P0：基线质量加权
+
+**原理**：FIX解本身有质量差异（ratio、numSat、age、DOP），这些指标反映协方差模型未捕获的额外不确定性。
+
+**实现**：`BaselineEntry.qualityFactor`（0.01~1.0），通过缩放R矩阵对角块实现降权：
+
+```
+R_effective_ii = C_ii / w_i    （w_i = qualityFactor_i）
+```
+
+**质量因子计算**（`BaselineEntry.computeQualityFactor`）：
+
+| 指标 | 阈值 | 降权方式 | 物理含义 |
+|------|------|---------|---------|
+| ratio < 3.0 | 3.0 | w *= ratio/3.0 | 低ratio FIX可能假固定 |
+| numSat < 6 | 6 | w *= numSat/6.0 | 卫星数少→几何弱 |
+| age > 5.0s | 5.0 | w *= 5.0/age | 差分龄期大→时效差 |
+| hdop > 3.0 | 3.0 | w *= 3.0/hdop | HDOP大→水平几何差 |
+
+**向后兼容**：`GnssBaselineAdjust.adjust(epoch)` 默认不启用质量加权（qualityWeight=false），与修改前行为一致。
+
+### 11.4 P1：逐卫星诊断数据提取
+
+**原理**：同一颗卫星在两条基线上的载波残差，Rover端分量完全相同（同一接收机、同一信号路径）。提取残差后可做跨基线相关性分析。
+
+**实现**：扩展 `SatObsData`，新增8个诊断字段，由 `PrcOpt.diagMask` 位掩码控制：
+
+| 掩码 | 常量 | 提取字段 | 来源(Ssat) |
+|------|------|---------|-----------|
+| 1 | `DIAG_SAT_RESIDUAL` | resp, resc | ssat.resp[0], ssat.resc[0] |
+| 2 | `DIAG_SAT_AMBIGUITY` | amb, stdA | ssat.amb[0], ssat.stdA[0] |
+| 4 | `DIAG_SAT_CYCLESLIP` | slip, gf, mw, rejc | ssat.slip[0], ssat.gf[0], ssat.mw[0], ssat.rejc[0] |
+
+**内存增量**：每卫星+53B，12颗卫星+636B/历元/基线。9小时1Hz 3基线约+59MB（+40%）。
+
+**向后兼容**：diagMask=0（默认）时，诊断字段为NaN/0，与修改前完全一致。
+
+### 11.5 P3：H矩阵位置分量等效设计矩阵
+
+**原理**：当前设计矩阵 H = [I₃; I₃; I₃] 假设各基线对Rover坐标的灵敏度相同。实际上不同基线的卫星几何、权重、模糊度固定状态不同，灵敏度也不同。
+
+**实现**：从relpos()中提取H[:,0:3]和R，计算等效设计矩阵：
+
+```
+H_pos = H[:, 0:3]                    （nv×3位置分量子矩阵）
+W = diag(R)^{-1}                     （对角加权）
+N = H_pos^T × W × H_pos             （3×3法方程）
+hPos = N^{-1} × H_pos^T × W         （3×3等效设计矩阵）
+```
+
+存入 `Sol.hPos[9]`（行优先），`CovAssembler.assembleDesignMatrix(epoch)` 使用hPos替代I₃。
+
+**内存增量**：每历元每基线+73B（hPos）+20B（新息摘要）=+93B。9小时1Hz 3基线约+9MB。
+
+**向后兼容**：hPos=null时退化为I₃，与修改前行为一致。
+
+### 11.6 新息向量摘要
+
+| 字段 | 计算公式 | 含义 |
+|------|---------|------|
+| `innovRms` | √(vᵀR⁻¹v / nv) | 新息RMS，模型拟合度指标 |
+| `innovMax` | max(\|v_i\| / √R_ii) | 最大标准化新息，粗差检测指标 |
+| `ddObsCount` | nv | 双差观测数，冗余度指标 |
+
+### 11.7 配置使用
+
+```java
+// 启用全部诊断数据（P1+P3全量）
+PrcOpt opt = RtkProcessor.createDefaultOpt();
+opt.diagMask = PrcOpt.DIAG_SAT_RESIDUAL   // 1: 逐卫星残差
+             | PrcOpt.DIAG_SAT_AMBIGUITY  // 2: 模糊度
+             | PrcOpt.DIAG_SAT_CYCLESLIP  // 4: 周跳/GF/MW
+             | PrcOpt.DIAG_HPOS           // 8: H矩阵位置分量
+             | PrcOpt.DIAG_INNOVATION;    // 16: 新息摘要
+// opt.diagMask = 31;  // 等价写法
+
+// 启用基线质量加权（P0）
+AdjustResult result = GnssBaselineAdjust.adjust(epoch, true);
+
+// 检查诊断数据是否可用
+SolData sol = ...;
+if (sol.hPos != null) {
+    // hPos可用，设计矩阵使用实际灵敏度
+}
+for (SatObsData sat : sol.satObsList) {
+    if (!Double.isNaN(sat.resc)) {
+        // 载波残差可用
+    }
+}
+```
+
+### 11.8 内存影响
+
+| 场景 | 当前 | diagMask=7(P1) | diagMask=31(P3全量) |
+|------|------|----------------|-------------------|
+| SolData/历元/基线 | 1.5 KB | 2.1 KB | 2.2 KB |
+| 9h×3基线存储 | 146 MB | 205 MB | 214 MB |
+| Rtk运行时 | 2.5 MB | 2.5 MB | 2.5 MB |
+
+P3全量比当前多68MB（+46%），其中P1占59MB，P3仅占9MB。
+
+### 11.9 向后兼容保证
+
+| 配置 | 行为 |
+|------|------|
+| `diagMask=0`（默认） | SolData与修改前完全一致，诊断字段为null/NaN/0 |
+| `qualityWeight=false`（adjust默认） | R矩阵不缩放，与修改前一致 |
+| `hPos=null` | 设计矩阵退化为I₃，与修改前一致 |

@@ -48,7 +48,13 @@ org.rtklib.java
 
 支持基站异常诊断：当σ₀持续超限时，自动定位异常基站并通过静态解算给出建议坐标。
 
-已通过2基站1测站连续9小时RTCM实测数据验证，详见 [技术参考第10章](docs/ADJUST_TECHNICAL_REFERENCE.md#10-实测数据验证)。
+**P0~P3优化**（v2.1.1新增）：
+- **P0 基线质量加权**：根据ratio/numSat/age/DOP对低质量FIX基线降权，σ₀更稳健
+- **P1 逐卫星残差提取**：从Ssat提取伪距/载波残差、模糊度、周跳等结构化信息到SolData
+- **P3 H矩阵位置分量提取**：提取设计矩阵中位置分量，反映基线对Rover坐标的实际灵敏度
+- 通过 `PrcOpt.diagMask` 位掩码控制输出，默认关闭，零开销向后兼容
+
+已通过2基站1测站连续9小时RTCM实测数据验证，详见 [技术参考第10~11章](docs/ADJUST_TECHNICAL_REFERENCE.md#10-实测数据验证)。
 ```
 org.rtklib.java.adjust
 ├── model/          BaselineEpoch（历元容器）、AdjustResult（平差结果）、BaseStationDiagnosis（诊断结果）

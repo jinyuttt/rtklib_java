@@ -110,11 +110,31 @@ public class CovAssembler {
      * @throws RuntimeException 如果矩阵奇异
      */
     public static SimpleMatrix assembleGlobalR(BaselineEpoch epoch) {
+        return assembleGlobalR(epoch, false);
+    }
+
+    /**
+     * [Java扩展] 组装全局观测协方差矩阵R (mxm)，可选启用基线质量加权(P0)。
+     *
+     * <p>启用质量加权时，对角块C_ii按qualityFactor缩放：
+     * R_effective_ii = C_ii / w_i，等效于将该基线的权重乘以w_i。
+     * 非对角块(Pr_fused)不缩放，因为互协方差是物理量。</p>
+     *
+     * @param epoch         包含有效基线的历元数据
+     * @param qualityWeight 是否启用基线质量加权
+     * @return 全局R矩阵 (3k x 3k)
+     * @throws RuntimeException 如果矩阵奇异
+     */
+    public static SimpleMatrix assembleGlobalR(BaselineEpoch epoch, boolean qualityWeight) {
         int k = epoch.count;
         int m = 3 * k;
 
         if (k == 1) {
-            return toSimpleMatrix(epoch.baselines[0].cBaseline);
+            SimpleMatrix R = toSimpleMatrix(epoch.baselines[0].cBaseline);
+            if (qualityWeight && epoch.baselines[0].qualityFactor < 1.0) {
+                R = R.scale(1.0 / epoch.baselines[0].qualityFactor);
+            }
+            return R;
         }
 
         double[][][] pRovers = new double[k][][];
@@ -127,9 +147,10 @@ public class CovAssembler {
         SimpleMatrix R = new SimpleMatrix(m, m);
         for (int i = 0; i < k; i++) {
             SimpleMatrix cKk = toSimpleMatrix(epoch.baselines[i].cBaseline);
+            double w = qualityWeight ? epoch.baselines[i].qualityFactor : 1.0;
             for (int r = 0; r < 3; r++) {
                 for (int c = 0; c < 3; c++) {
-                    R.set(i * 3 + r, i * 3 + c, cKk.get(r, c));
+                    R.set(i * 3 + r, i * 3 + c, cKk.get(r, c) / w);
                 }
             }
         }
@@ -180,6 +201,37 @@ public class CovAssembler {
             H.set(i * 3, 0, 1.0);
             H.set(i * 3 + 1, 1, 1.0);
             H.set(i * 3 + 2, 2, 1.0);
+        }
+        return H;
+    }
+
+    /**
+     * [Java扩展] 动态构造设计矩阵H (3k x 3)，支持hPos等效设计矩阵(P3)。
+     *
+     * <p>如果基线SolData中携带hPos(3x3行优先)，则使用hPos替代I₃，
+     * 反映该基线对Rover坐标的实际灵敏度（由卫星几何和权重决定）。
+     * 无hPos时退化为I₃，与当前行为一致。</p>
+     *
+     * @param epoch 包含有效基线的历元数据
+     * @return 设计矩阵H (3k x 3)
+     */
+    public static SimpleMatrix assembleDesignMatrix(BaselineEpoch epoch) {
+        int k = epoch.count;
+        int m = 3 * k;
+        SimpleMatrix H = new SimpleMatrix(m, 3);
+        for (int i = 0; i < k; i++) {
+            double[] hPos = epoch.baselines[i].solData.hPos;
+            if (hPos != null && hPos.length == 9) {
+                for (int r = 0; r < 3; r++) {
+                    for (int c = 0; c < 3; c++) {
+                        H.set(i * 3 + r, c, hPos[r * 3 + c]);
+                    }
+                }
+            } else {
+                H.set(i * 3, 0, 1.0);
+                H.set(i * 3 + 1, 1, 1.0);
+                H.set(i * 3 + 2, 2, 1.0);
+            }
         }
         return H;
     }

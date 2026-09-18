@@ -1064,7 +1064,7 @@ public class AdjustRealDataTest {
                 BaselineEpoch epoch = new BaselineEpoch(ep.epochTag,
                         new BaselineEpoch.BaselineEntry[]{entryA, entryB});
 
-                AdjustResult result = GnssBaselineAdjust.adjust(epoch);
+                AdjustResult result = GnssBaselineAdjust.adjust(epoch, true);
 
                 if (result.success) {
                     stats.adjustSuccess++;
@@ -1118,7 +1118,8 @@ public class AdjustRealDataTest {
 
         if (dXyz == null || cBaseline == null || pRover == null) return null;
 
-        return new BaselineEpoch.BaselineEntry(baseId, solData, dXyz, cBaseline, pRover);
+        double qf = BaselineEpoch.BaselineEntry.computeQualityFactor(solData);
+        return new BaselineEpoch.BaselineEntry(baseId, solData, dXyz, cBaseline, pRover, qf);
     }
 
     private void printStats(AdjustStats stats) {

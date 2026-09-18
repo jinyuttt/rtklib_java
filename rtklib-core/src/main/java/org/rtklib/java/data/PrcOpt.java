@@ -14,6 +14,18 @@ public class PrcOpt implements Serializable {
     public static final int POS_LLH  = 2;
     public static final int POS_ENU  = 4;
 
+    /**
+     * [Java扩展] 诊断数据输出掩码（位或组合）。
+     * 控制SolData中是否携带逐卫星残差、模糊度、H矩阵等结构化信息，
+     * 供rtklib-adjust模块做基线质量加权(P0)和互协方差建模(P2)。
+     * RTKLIB C原版无此配置，默认0=不输出，零开销向后兼容。
+     */
+    public static final int DIAG_SAT_RESIDUAL  = 1;  // 逐卫星伪距/载波残差(resp/resc)
+    public static final int DIAG_SAT_AMBIGUITY = 2;  // 逐卫星模糊度浮点值及标准差(amb/stdA)
+    public static final int DIAG_SAT_CYCLESLIP = 4;  // 逐卫星周跳标志及GF/MW组合(slip/gf/mw/rejc)
+    public static final int DIAG_HPOS          = 8;  // H矩阵位置分量等效设计矩阵(3x3 hPos)
+    public static final int DIAG_INNOVATION    = 16; // 新息向量摘要(innovRms/innovMax/ddObsCount)
+
     /** Positioning mode (PMODE_???) */
     public int mode;
     /** Solution type (SOLTYPE_???) */
@@ -148,6 +160,21 @@ public class PrcOpt implements Serializable {
 
     /** Max cached epochs per source (0:no cache/forward-only, >0:cache+backward trigger) */
     public int cacheMaxEpochs = 0;
+
+    /**
+     * [Java扩展] 诊断数据输出掩码（位或DIAG_???常量）。
+     * 默认0=不输出任何诊断数据，与RTKLIB C行为一致。
+     * 启用后SolData将携带对应的结构化信息，供rtklib-adjust使用。
+     */
+    public int diagMask = 0;
+
+    /**
+     * [Java扩展] 是否在平差中启用基线质量加权（P0优化）。
+     * 启用后根据ratio/numSat/age/DOP对低质量FIX基线降权，
+     * 使σ₀更稳健，减少假固定对平差结果的污染。
+     * RTKLIB C原版无此功能。
+     */
+    public boolean qualityWeight = true;
 
     /**
      * Default constructor with RTKLIB default values.
@@ -322,5 +349,7 @@ public class PrcOpt implements Serializable {
         this.outputThrottleSleepMs = other.outputThrottleSleepMs;
         this.ionoGradient = other.ionoGradient;
         this.posMask = other.posMask;
+        this.diagMask = other.diagMask;
+        this.qualityWeight = other.qualityWeight;
     }
 }

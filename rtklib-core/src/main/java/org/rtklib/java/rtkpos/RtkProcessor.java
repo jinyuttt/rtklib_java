@@ -543,7 +543,7 @@ public class RtkProcessor implements Serializable {
 
         List<SolData> solDataList = combined.stream()
                 .filter(s -> s != null)
-                .map(sol -> new SolData(sourceId, sol, opt.posMask, null))
+                .map(sol -> new SolData(sourceId, sol, opt.posMask, null, null, opt.diagMask))
                 .toList();
         return new RtkResult(combined.size(), bSuccess, bFail, solDataList);
     }
@@ -664,7 +664,7 @@ public class RtkProcessor implements Serializable {
                 if (handler != null) {
                     handler.onSolution(new Sol(rtk.sol), copySsatArray(rtk.ssat));
                     double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
-                    handler.onResult(new SolData(lastRoverSourceId, solCopy, opt.posMask, rb, rtk.ssat));
+                    handler.onResult(new SolData(lastRoverSourceId, solCopy, opt.posMask, rb, rtk.ssat, opt.diagMask));
                 }
                 if (writer != null) {
                     try {
@@ -713,7 +713,7 @@ public class RtkProcessor implements Serializable {
 
         if (handler != null) {
             double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
-            handler.onResult(new SolData(lastRoverSourceId, bestSol, opt.posMask, rb, bestSsat));
+            handler.onResult(new SolData(lastRoverSourceId, bestSol, opt.posMask, rb, bestSsat, opt.diagMask));
         }
         if (writer != null) {
             try {
@@ -1026,7 +1026,7 @@ public class RtkProcessor implements Serializable {
             if (combinedBest != null) {
                 combinedBest.time = combinedBestTime != null ? combinedBestTime : combinedBest.time;
                 solStaticOutputs.add(combinedBest);
-                SolData sd = new SolData(sourceId, combinedBest, opt.posMask, rb);
+                SolData sd = new SolData(sourceId, combinedBest, opt.posMask, rb, null, opt.diagMask);
                 if (handler != null) {
                     handler.onResult(sd);
                 }
@@ -1045,14 +1045,14 @@ public class RtkProcessor implements Serializable {
                 handler.onFinish(totalEpochs, cSuccess, cFail);
             }
             List<SolData> solDataList = solStaticOutputs.stream()
-                    .map(sol -> new SolData(sourceId, sol, opt.posMask, rb))
+                    .map(sol -> new SolData(sourceId, sol, opt.posMask, rb, null, opt.diagMask))
                     .toList();
             return new RtkResult(totalEpochs, cSuccess, cFail, solDataList);
         }
 
         List<SolData> solDataList = combined.stream()
                 .filter(s -> s != null)
-                .map(sol -> new SolData(sourceId, sol, opt.posMask, rb))
+                .map(sol -> new SolData(sourceId, sol, opt.posMask, rb, null, opt.diagMask))
                 .toList();
 
         if (handler != null) {
@@ -1369,7 +1369,7 @@ public class RtkProcessor implements Serializable {
         List<SolData> solDataList = new ArrayList<>(outputSource.size());
         for (int i = 0; i < outputSource.size(); i++) {
             Ssat[] ssat = (i < ssatSource.size()) ? ssatSource.get(i) : null;
-            solDataList.add(new SolData(outputSource.get(i), opt.posMask, rb, ssat));
+            solDataList.add(new SolData(outputSource.get(i), opt.posMask, rb, ssat, opt.diagMask));
         }
         return new RtkResult(totalEpochs, successCount, failCount, solDataList);
     }
