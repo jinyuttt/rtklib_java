@@ -1,0 +1,17 @@
+# rtklib-adjust 实测数据测试配置
+# 复制此文件为 test-data.properties，填入真实值
+# test-data.properties 已加入 .gitignore，不会提交到仓库
+
+# 数据根目录
+data.root=D:\\iot-dm\\jetlinks-data\\device_rtcmbin_storage
+
+# 基站设备ID
+base.a=YOUR_BASE_A_ID
+base.b=YOUR_BASE_B_ID
+
+# 测站设备ID
+rover=YOUR_ROVER_ID
+rover2=YOUR_ROVER2_ID
+
+# 数据日期
+date=2026-09-17

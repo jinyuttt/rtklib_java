@@ -54,6 +54,9 @@ target/
 test_results/
 test_output*
 
+# Local test data config (contains device IDs, not for open source)
+**/test-data.properties
+
 # rtk_compare intermediate data (keep .md reports)
 rtk_compare/*.nav
 rtk_compare/*.obs
