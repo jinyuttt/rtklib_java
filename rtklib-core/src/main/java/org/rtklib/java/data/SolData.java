@@ -98,22 +98,46 @@ public class SolData implements Serializable {
     public final double hdop;
     public final double vdop;
 
-    public SolData(Sol sol, int posMask) {this(null, sol, posMask, null, null);
+    /** [Java扩展] H矩阵位置分量等效设计矩阵(3x3行优先)，null=未启用 */
+    public final double[] hPos;
+
+    /** [Java扩展] 新息向量RMS，NaN=未启用 */
+    public final double innovRms;
+
+    /** [Java扩展] 最大标准化新息，NaN=未启用 */
+    public final double innovMax;
+
+    /** [Java扩展] 双差观测数，0=未启用 */
+    public final int ddObsCount;
+
+    public SolData(Sol sol, int posMask) {this(null, sol, posMask, null, null, 0);
     }
 
     public SolData(Sol sol, int posMask, double[] rb) {
-        this(null, sol, posMask, rb, null);
+        this(null, sol, posMask, rb, null, 0);
     }
 
     public SolData(String sourceId, Sol sol, int posMask, double[] rb) {
-        this(sourceId, sol, posMask, rb, null);
+        this(sourceId, sol, posMask, rb, null, 0);
     }
 
     public SolData(Sol sol, int posMask, double[] rb, Ssat[] ssat) {
-        this(null, sol, posMask, rb, ssat);
+        this(null, sol, posMask, rb, ssat, 0);
     }
 
     public SolData(String sourceId, Sol sol, int posMask, double[] rb, Ssat[] ssat) {
+        this(sourceId, sol, posMask, rb, ssat, 0);
+    }
+
+    /** [Java扩展] 构造函数，支持diagMask控制诊断数据提取 */
+    public SolData(Sol sol, int posMask, double[] rb, Ssat[] ssat, int diagMask) {
+        this(null, sol, posMask, rb, ssat, diagMask);
+    }
+
+    /**
+     * [Java扩展] 完整构造函数，支持diagMask控制诊断数据提取。
+     */
+    public SolData(String sourceId, Sol sol, int posMask, double[] rb, Ssat[] ssat, int diagMask) {
         this.sourceId = sourceId;
         this.time = new GTime(sol.time);
         this.timeUtc = toLocalDateTime(sol.time);
@@ -135,11 +159,15 @@ public class SolData implements Serializable {
         this.age = sol.age;
         this.ratio = sol.ratio;
         this.clockBias = sol.dtr.clone();
-        this.satObsList = (ssat != null) ? SatObsData.fromSsat(ssat, 1) : List.of();
+        this.satObsList = (ssat != null) ? SatObsData.fromSsat(ssat, 1, diagMask) : List.of();
         this.gdop = sol.gdop;
         this.pdop = sol.pdop;
         this.hdop = sol.hdop;
         this.vdop = sol.vdop;
+        this.hPos = sol.hPos;
+        this.innovRms = sol.innovRms;
+        this.innovMax = sol.innovMax;
+        this.ddObsCount = sol.ddObsCount;
     }
 
     private static List<Position> buildPositions(Sol sol, int posMask,

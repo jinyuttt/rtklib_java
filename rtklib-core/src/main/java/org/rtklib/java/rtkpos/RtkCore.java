@@ -374,6 +374,8 @@ public final class RtkCore {
 
         rtk.sol.stat = (byte) stat;
 
+        computeDiagData(rtk, opt, v, H, R, vflg, nv, nx);
+
         double[] dopAzel = new double[Constants.MAXSAT * 2];
         int dopNs = 0;
         for (i = 0; i < Constants.MAXSAT; i++) {
@@ -2102,5 +2104,120 @@ public final class RtkCore {
                 }
             }
         }
+    }
+
+    /**
+     * [Java扩展] 计算诊断数据：hPos等效设计矩阵和新息向量摘要。
+     * 由diagMask控制，未启用的项不计算，零开销。
+     *
+     * <p>hPos = (H_pos^T W H_pos)^{-1} H_pos^T W，其中 H_pos = H[:,0:3]，W = diag(R)^{-1}</p>
+     * <p>innovRms = sqrt(v^T R^{-1} v / nv)，innovMax = max(|v_i| / sqrt(R_ii))</p>
+     */
+    private static void computeDiagData(Rtk rtk, PrcOpt opt,
+                                        double[] v, double[] H, double[] R, int[] vflg,
+                                        int nv, int nx) {
+        int diagMask = opt.diagMask;
+        if (diagMask == 0) return;
+
+        if ((diagMask & PrcOpt.DIAG_HPOS) != 0 && nv >= 4 && nx >= 3) {
+            try {
+                double[] hPos = computeHPos(H, R, nv, nx);
+                rtk.sol.hPos = hPos;
+            } catch (Exception e) {
+                rtk.sol.hPos = null;
+            }
+        }
+
+        if ((diagMask & PrcOpt.DIAG_INNOVATION) != 0 && nv > 0) {
+            try {
+                double vRv = 0.0;
+                double maxNorm = 0.0;
+                for (int i = 0; i < nv; i++) {
+                    double ri = R[i * nv + i];
+                    if (ri <= 0.0) continue;
+                    double wi = 1.0 / ri;
+                    vRv += v[i] * v[i] * wi;
+                    double normI = Math.abs(v[i]) / Math.sqrt(ri);
+                    if (normI > maxNorm) maxNorm = normI;
+                }
+                rtk.sol.innovRms = Math.sqrt(Math.max(vRv / nv, 0.0));
+                rtk.sol.innovMax = maxNorm;
+                rtk.sol.ddObsCount = nv;
+            } catch (Exception e) {
+                rtk.sol.innovRms = Double.NaN;
+                rtk.sol.innovMax = Double.NaN;
+                rtk.sol.ddObsCount = 0;
+            }
+        }
+    }
+
+    /**
+     * [Java扩展] 从H[nv×nx]和R[nv×nv]计算位置分量等效设计矩阵hPos[9]。
+     *
+     * <p>hPos = N^{-1} × H_pos^T × W，其中：</p>
+     * <ul>
+     *   <li>H_pos = H[:, 0:3]（nv×3位置分量子矩阵）</li>
+     *   <li>W = diag(R)^{-1}（对角加权）</li>
+     *   <li>N = H_pos^T × W × H_pos（3×3法方程）</li>
+     * </ul>
+     *
+     * @param H  设计矩阵（行优先，nv×nx）
+     * @param R  观测噪声矩阵（行优先，nv×nv）
+     * @param nv 双差观测数
+     * @param nx 状态向量维度
+     * @return hPos[9]（3×3行优先），null如果计算失败
+     */
+    private static double[] computeHPos(double[] H, double[] R, int nv, int nx) {
+        double[] hPos = new double[9];
+
+        double[] HposT_W = new double[3 * nv];
+        for (int j = 0; j < nv; j++) {
+            double rjj = R[j * nv + j];
+            if (rjj <= 0.0) return null;
+            double wj = 1.0 / rjj;
+            for (int col = 0; col < 3; col++) {
+                HposT_W[col * nv + j] = H[j * nx + col] * wj;
+            }
+        }
+
+        double[] N = new double[9];
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j <= i; j++) {
+                double sum = 0.0;
+                for (int k = 0; k < nv; k++) {
+                    sum += HposT_W[i * nv + k] * H[k * nx + j];
+                }
+                N[i * 3 + j] = sum;
+                N[j * 3 + i] = sum;
+            }
+        }
+
+        double det = N[0] * (N[4] * N[8] - N[5] * N[5])
+                   - N[1] * (N[1] * N[8] - N[2] * N[5])
+                   + N[2] * (N[1] * N[5] - N[2] * N[4]);
+        if (Math.abs(det) < 1e-30) return null;
+
+        double[] NInv = new double[9];
+        NInv[0] = (N[4] * N[8] - N[5] * N[5]) / det;
+        NInv[1] = (N[2] * N[5] - N[1] * N[8]) / det;
+        NInv[2] = (N[1] * N[5] - N[2] * N[4]) / det;
+        NInv[3] = NInv[1];
+        NInv[4] = (N[0] * N[8] - N[2] * N[2]) / det;
+        NInv[5] = (N[1] * N[2] - N[0] * N[5]) / det;
+        NInv[6] = NInv[2];
+        NInv[7] = NInv[5];
+        NInv[8] = (N[0] * N[4] - N[1] * N[1]) / det;
+
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                double sum = 0.0;
+                for (int k = 0; k < nv; k++) {
+                    sum += NInv[i * 3 + k] * HposT_W[k * nv + j];
+                }
+                hPos[i * 3 + j] = sum;
+            }
+        }
+
+        return hPos;
     }
 }

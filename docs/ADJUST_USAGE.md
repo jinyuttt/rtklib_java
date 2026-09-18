@@ -65,6 +65,89 @@ if (result.success) {
 
 ---
 
+## 基线质量加权（P0）
+
+### 概述
+
+FIX解本身有质量差异（ratio、numSat、age、DOP），低质量FIX基线（如ratio<3、卫星数<6）的协方差可能偏乐观。启用质量加权后，低质量基线自动降权，使σ₀更稳健。
+
+### 使用
+
+```java
+// 启用质量加权
+AdjustResult result = GnssBaselineAdjust.adjust(epoch, true);
+
+// 不启用（默认，与修改前行为一致）
+AdjustResult result = GnssBaselineAdjust.adjust(epoch);
+AdjustResult result = GnssBaselineAdjust.adjust(epoch, false);
+```
+
+### 质量因子
+
+`BaselineEntry.qualityFactor`（0.01~1.0），1=最优。计算逻辑：
+
+| 指标 | 阈值 | 降权方式 |
+|------|------|---------|
+| ratio < 3.0 | 3.0 | w *= ratio/3.0 |
+| numSat < 6 | 6 | w *= numSat/6.0 |
+| age > 5.0s | 5.0 | w *= 5.0/age |
+| hdop > 3.0 | 3.0 | w *= 3.0/hdop |
+
+---
+
+## 诊断数据配置（P1/P3）
+
+### 概述
+
+RTK解算内部有逐卫星残差、模糊度、H矩阵等结构化信息，默认不输出到SolData。通过 `PrcOpt.diagMask` 位掩码控制提取，供rtklib-adjust做更精确的平差。
+
+### 配置
+
+```java
+PrcOpt opt = RtkProcessor.createDefaultOpt();
+
+// 按需启用（位或组合）
+opt.diagMask = PrcOpt.DIAG_SAT_RESIDUAL   // 1:  逐卫星伪距/载波残差
+             | PrcOpt.DIAG_SAT_AMBIGUITY  // 2:  逐卫星模糊度及标准差
+             | PrcOpt.DIAG_SAT_CYCLESLIP  // 4:  逐卫星周跳/GF/MW组合
+             | PrcOpt.DIAG_HPOS           // 8:  H矩阵位置分量(3×3)
+             | PrcOpt.DIAG_INNOVATION;    // 16: 新息向量摘要
+
+// opt.diagMask = 0;  // 默认，不输出任何诊断数据
+// opt.diagMask = 31; // 全量启用
+```
+
+### 诊断字段
+
+**SolData新增字段**：
+
+| 字段 | 类型 | diagMask | 含义 |
+|------|------|----------|------|
+| `hPos` | double[9] | DIAG_HPOS | 3×3等效设计矩阵（行优先） |
+| `innovRms` | double | DIAG_INNOVATION | 新息RMS |
+| `innovMax` | double | DIAG_INNOVATION | 最大标准化新息 |
+| `ddObsCount` | int | DIAG_INNOVATION | 双差观测数 |
+
+**SatObsData新增字段**：
+
+| 字段 | 类型 | diagMask | 含义 |
+|------|------|----------|------|
+| `resp` | double | DIAG_SAT_RESIDUAL | 伪距残差(m) |
+| `resc` | double | DIAG_SAT_RESIDUAL | 载波残差(m) |
+| `amb` | double | DIAG_SAT_AMBIGUITY | 模糊度浮点值(cycle) |
+| `stdA` | double | DIAG_SAT_AMBIGUITY | 模糊度标准差(cycle) |
+| `slip` | int | DIAG_SAT_CYCLESLIP | 周跳标志(0=无) |
+| `gf` | double | DIAG_SAT_CYCLESLIP | GF组合(m) |
+| `mw` | double | DIAG_SAT_CYCLESLIP | MW组合(cycle) |
+| `rejc` | int | DIAG_SAT_CYCLESLIP | 拒绝计数 |
+
+### 向后兼容
+
+- `diagMask=0`（默认）：所有诊断字段为null/NaN/0，与修改前完全一致
+- `hPos=null`：设计矩阵退化为I₃，平差行为不变
+
+---
+
 ## 基站异常诊断
 
 ### 概述

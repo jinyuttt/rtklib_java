@@ -41,6 +41,23 @@ public class GnssBaselineAdjust {
      * @return 平差结果
      */
     public static AdjustResult adjust(BaselineEpoch epoch) {
+        return adjust(epoch, false);
+    }
+
+    /**
+     * [Java扩展] 对单历元多基线执行间接平差，可选启用基线质量加权(P0)。
+     *
+     * <p>启用质量加权时：</p>
+     * <ul>
+     *   <li>R矩阵对角块按qualityFactor缩放（低质量基线降权）</li>
+     *   <li>设计矩阵H使用各基线的hPos（如有），替代I₃</li>
+     * </ul>
+     *
+     * @param epoch         包含有效FIX基线的历元数据
+     * @param qualityWeight 是否启用基线质量加权
+     * @return 平差结果
+     */
+    public static AdjustResult adjust(BaselineEpoch epoch, boolean qualityWeight) {
         int k = epoch.count;
         if (k == 0) {
             return AdjustResult.failure(epoch.epochTag, 0, "无有效FIX基线");
@@ -52,8 +69,8 @@ public class GnssBaselineAdjust {
 
         try {
             SimpleMatrix l = CovAssembler.assembleObservationVector(epoch);
-            SimpleMatrix H = CovAssembler.assembleDesignMatrix(k);
-            SimpleMatrix R = CovAssembler.assembleGlobalR(epoch);
+            SimpleMatrix H = CovAssembler.assembleDesignMatrix(epoch);
+            SimpleMatrix R = CovAssembler.assembleGlobalR(epoch, qualityWeight);
 
             if (!isPositiveDefinite(R)) {
                 return AdjustResult.failure(epoch.epochTag, k,

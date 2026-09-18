@@ -34,13 +34,58 @@ public class BaselineEpoch {
         /** Rover位置3x3协方差 (m^2)，行优先存储 */
         public final double[][] pRover;
 
+        /**
+         * [Java扩展] 基线质量因子(0~1)，1=最优。
+         * 由ratio/numSat/age/DOP综合计算，用于P0基线质量加权。
+         * 值越小，该基线在平差中的权重越低。
+         */
+        public final double qualityFactor;
+
         public BaselineEntry(String baseId, SolData solData,
                              double[] dXyz, double[][] cBaseline, double[][] pRover) {
+            this(baseId, solData, dXyz, cBaseline, pRover, 1.0);
+        }
+
+        public BaselineEntry(String baseId, SolData solData,
+                             double[] dXyz, double[][] cBaseline, double[][] pRover,
+                             double qualityFactor) {
             this.baseId = baseId;
             this.solData = solData;
             this.dXyz = dXyz;
             this.cBaseline = cBaseline;
             this.pRover = pRover;
+            this.qualityFactor = qualityFactor;
+        }
+
+        /**
+         * [Java扩展] 根据SolData中的质量指标计算基线质量因子。
+         *
+         * <p>综合ratio(模糊度固定可靠性)、numSat(卫星数)、age(差分龄期)、hdop(水平精度因子)，
+         * 对低质量FIX基线降权，使σ₀更稳健，减少假固定对平差结果的污染。</p>
+         *
+         * @param solData 解算结果
+         * @return 质量因子(0.01~1.0)，1.0=最优
+         */
+        public static double computeQualityFactor(SolData solData) {
+            double w = 1.0;
+
+            if (solData.ratio < 3.0 && solData.ratio > 0.0) {
+                w *= solData.ratio / 3.0;
+            }
+
+            if (solData.numSat < 6 && solData.numSat > 0) {
+                w *= solData.numSat / 6.0;
+            }
+
+            if (solData.age > 5.0 && solData.age < 3600.0) {
+                w *= 5.0 / solData.age;
+            }
+
+            if (solData.hdop > 3.0 && solData.hdop < 99.0) {
+                w *= 3.0 / solData.hdop;
+            }
+
+            return Math.max(w, 0.01);
         }
     }
 

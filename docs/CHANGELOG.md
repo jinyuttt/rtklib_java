@@ -6,6 +6,49 @@
 
 ---
 
+## [2.1.1] - 2026-09-19
+
+### Added
+
+- **P0 基线质量加权**：`BaselineEntry.qualityFactor`，根据ratio/numSat/age/DOP对低质量FIX基线降权
+  - `BaselineEntry.computeQualityFactor(SolData)`：综合质量因子计算（0.01~1.0）
+  - `CovAssembler.assembleGlobalR(epoch, qualityWeight)`：R矩阵对角块按qualityFactor缩放
+  - `GnssBaselineAdjust.adjust(epoch, qualityWeight)`：启用质量加权的平差重载
+  - 效果：σ₀更稳健，减少假固定对平差结果的污染
+
+- **P1 逐卫星诊断数据提取**：扩展 `SatObsData`，按 `PrcOpt.diagMask` 位掩码控制输出
+  - `DIAG_SAT_RESIDUAL`(1)：逐卫星伪距残差resp、载波残差resc
+  - `DIAG_SAT_AMBIGUITY`(2)：逐卫星模糊度浮点值amb、标准差stdA
+  - `DIAG_SAT_CYCLESLIP`(4)：逐卫星周跳标志slip、GF/MW组合值、拒绝计数rejc
+  - `SatObsData.fromSsat(ssat, nf, diagMask)`：按掩码提取诊断字段
+  - 未启用时字段为NaN/0，零开销向后兼容
+
+- **P3 H矩阵位置分量提取**：`Sol.hPos`（3×3等效设计矩阵）
+  - `DIAG_HPOS`(8)：从relpos()中H[:,0:3]和R计算hPos = (HᵀWH)⁻¹HᵀW
+  - `CovAssembler.assembleDesignMatrix(epoch)`：使用各基线hPos替代I₃
+  - 无hPos时退化为I₃，与修改前行为一致
+
+- **新息向量摘要提取**：`Sol.innovRms`/`innovMax`/`ddObsCount`
+  - `DIAG_INNOVATION`(16)：新息RMS = √(vᵀR⁻¹v/nv)，最大标准化新息，双差观测数
+
+- **PrcOpt新增字段**：`diagMask`（诊断掩码，默认0）、`qualityWeight`（质量加权开关，默认true）
+
+### Changed
+
+- `SolData` 新增 `hPos`/`innovRms`/`innovMax`/`ddObsCount` 字段，新增 `diagMask` 构造函数
+- `RtkProcessor` 所有 `new SolData` 调用传入 `opt.diagMask`
+- `AdjustRealDataTest.buildBaselineEntry()` 计算qualityFactor，平差启用qualityWeight
+
+### Verified
+
+- rtklib-core 编译通过 ✅
+- rtklib-adjust 编译通过 ✅
+- GnssBaselineAdjustTest 8 tests passed ✅
+- AdjustRealDataTest 8 tests passed ✅
+- diagMask=0 时行为与修改前完全一致 ✅
+
+---
+
 ## [2.0.7] - 2026-09-19
 
 ### Added
