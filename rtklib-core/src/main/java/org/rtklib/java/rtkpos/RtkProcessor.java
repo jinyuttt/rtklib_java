@@ -1,5 +1,6 @@
 package org.rtklib.java.rtkpos;
 
+import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
@@ -290,6 +291,14 @@ public class RtkProcessor implements Serializable {
     public void setElMaskHold(double elmaskholdDeg) {
         opt.elmaskhold = elmaskholdDeg * Constants.D2R;
         rtk.opt.elmaskhold = opt.elmaskhold;
+    }
+
+    public void setRtkConfig(RtkConfig rtkConfig) {
+        this.rtk.rtkConfig = rtkConfig;
+    }
+
+    public RtkConfig getRtkConfig() {
+        return this.rtk.rtkConfig;
     }
 
     public void setMaxOutage(int maxout) { opt.maxout = maxout; rtk.opt.maxout = maxout; }

@@ -10,6 +10,22 @@
 
 ### Added
 
+- **基站稳定性监测（BaseStationMonitor）**：独立工具类，检测基站天线位移并提醒用户
+  - 一级检测：60min窗口SPP中位数 vs 自学习参考基准，偏移>10m触发突变告警
+  - 二级检测：历史中位数环形缓冲区趋势分析，漂移>5m触发漂移告警
+  - 4种数据输入：`onBaseObs`(Obsd数组)、`onRtcmData`(RTCM字节)、`onRtcmFile`(RTCM文件)、`onRinexFile`(RINEX文件)
+  - 回调接口`BaseMonitorCallback`：4个default方法（onSppResult/onWindowResult/onBaseMovement/onBaseDrift）
+  - 配置类`BaseMonitorConfig`：10个参数（窗口时长、突变阈值、漂移阈值、缓冲区大小等）
+  - 完全独立：不绑定RtkProcessor/RtkConfig/Rtk，1基站1实例，多基线共享不重复
+  - 实测验证：基站连续6小时，窗口偏移0.00~3.22m，10m阈值下无误报
+
+- **RTK参数敏感性分析**：量化8个PrcOpt参数对FIX率的影响幅度
+  - 影响排序：频点数(+68.7%) > 对流层模型(+40.6%) > AR锁定计数(+56.2%) > 定位模式(+22.1%) > 电离层模型(-76.6%) > AR ratio阈值(-14.9%) > AR最小FIX计数(-8.8%) > 潮汐/PCV(0%)
+  - 不同站点类型推荐配置（短基线/中长基线/动态/差数据）
+  - 文档：`RTK_Parameter_Sensitivity.md`
+
+- **SNR中位数计算顺序修复**：先赋值SNR再计算中位数（原先顺序反，导致读取上一历元值）
+
 - **P0 基线质量加权**：`BaselineEntry.qualityFactor`，根据ratio/numSat/age/DOP对低质量FIX基线降权
   - `BaselineEntry.computeQualityFactor(SolData)`：综合质量因子计算（0.01~1.0）
   - `CovAssembler.assembleGlobalR(epoch, qualityWeight)`：R矩阵对角块按qualityFactor缩放

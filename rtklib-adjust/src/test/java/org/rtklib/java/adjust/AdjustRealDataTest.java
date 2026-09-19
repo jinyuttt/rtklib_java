@@ -4,9 +4,19 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.rtklib.java.adjust.covariance.CovAssembler;
+import org.rtklib.java.adjust.datasource.RtcmFileDataSource;
+import org.rtklib.java.adjust.engine.BaseStationDiagnoser;
+import org.rtklib.java.adjust.engine.BatchAccumulator;
 import org.rtklib.java.adjust.engine.GnssBaselineAdjust;
+import org.rtklib.java.adjust.engine.MultiBaselineAdjust;
+import org.rtklib.java.adjust.model.AdjustDiagnosisConfig;
 import org.rtklib.java.adjust.model.AdjustResult;
+import org.rtklib.java.adjust.model.BaseStationDiagnosis;
 import org.rtklib.java.adjust.model.BaselineEpoch;
+import org.rtklib.java.adjust.model.BatchCoordinate;
+import org.rtklib.java.adjust.model.MultiBaselineConfig;
+import org.rtklib.java.adjust.model.ReliabilityGrade;
+import org.rtklib.java.adjust.model.ReliableCoordinate;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
@@ -78,6 +88,12 @@ public class AdjustRealDataTest {
         final List<double[]> adjustedPositions = new ArrayList<>();
         final List<double[]> singleABaselinePositions = new ArrayList<>();
         final List<double[]> singleBBaselinePositions = new ArrayList<>();
+        final Map<ReliabilityGrade, Integer> gradeCount = new EnumMap<>(ReliabilityGrade.class);
+        double crossValSum = 0;
+        double crossValMax = 0;
+        double plSum = 0;
+        double plMax = 0;
+        int suspectCount = 0;
     }
 
     @BeforeAll
@@ -746,6 +762,184 @@ public class AdjustRealDataTest {
     }
 
     @Test
+    @DisplayName("闭环修正：诊断异常基站 → 用建议坐标修正 → 重新平差验证σ₀收敛")
+    void testAutoCorrectAndReAdjust() throws IOException {
+        if (!DATA_AVAILABLE) {
+            System.out.println("跳过：数据目录不存在");
+            return;
+        }
+
+        System.out.println("\n========================================");
+        System.out.println("  闭环修正测试");
+        System.out.println("  Step1: 原始RTCM1005坐标平差 → σ₀超限");
+        System.out.println("  Step2: BaseStationDiagnoser诊断 → 识别异常基站+建议坐标");
+        System.out.println("  Step3: 用建议坐标修正 → 重新平差 → σ₀收敛");
+        System.out.println("========================================");
+
+        int startHour = 0;
+        int endHour = 8;
+
+        List<String> baseAFiles = new ArrayList<>();
+        List<String> baseBFiles = new ArrayList<>();
+        List<String> roverFiles = new ArrayList<>();
+        for (int h = startHour; h <= endHour; h++) {
+            baseAFiles.add(buildFilePath(BASE_A, DATE, h));
+            baseBFiles.add(buildFilePath(BASE_B, DATE, h));
+            roverFiles.add(buildFilePath(ROVER, DATE, h));
+        }
+
+        RtcmFileDataSource baseA = new RtcmFileDataSource("A", baseAFiles);
+        RtcmFileDataSource baseB = new RtcmFileDataSource("B", baseBFiles);
+        RtcmFileDataSource rover = new RtcmFileDataSource("R1", roverFiles);
+
+        PrcOpt rtkOpt = createRtkOpt();
+
+        System.out.println("\n--- Step 1: 原始坐标平差 ---");
+        RtkProcessor rtkA1 = new RtkProcessor(rtkOpt);
+        RtkProcessor rtkB1 = new RtkProcessor(rtkOpt);
+        List<SolData> solA1 = new ArrayList<>();
+        List<SolData> solB1 = new ArrayList<>();
+        for (int h = startHour; h <= endHour; h++) {
+            String baseAFile = buildFilePath(BASE_A, DATE, h);
+            String baseBFile = buildFilePath(BASE_B, DATE, h);
+            String roverFile = buildFilePath(ROVER, DATE, h);
+            if (!Files.exists(Paths.get(baseAFile)) || !Files.exists(Paths.get(baseBFile))
+                    || !Files.exists(Paths.get(roverFile))) continue;
+            RtkProcessor.RtkResult resA = rtkA1.process(roverFile, baseAFile);
+            rtkA1.resetForNextBatch();
+            solA1.addAll(resA.solutions);
+            RtkProcessor.RtkResult resB = rtkB1.process(roverFile, baseBFile);
+            rtkB1.resetForNextBatch();
+            solB1.addAll(resB.solutions);
+        }
+        List<EpochPair> aligned1 = alignByEpoch(solA1, solB1);
+        AdjustStats stats1 = runAdjust(aligned1);
+        double sigma0Before = stats1.adjustSuccess > 0 ? stats1.sigma0Sum / stats1.adjustSuccess : 0;
+        System.out.printf("  原始σ₀平均: %.2f (预期>>3)%n", sigma0Before);
+
+        System.out.println("\n--- Step 2: 诊断异常基站 ---");
+        AdjustDiagnosisConfig diagConfig = AdjustDiagnosisConfig.builder()
+                .enable(true)
+                .sigma0Threshold(3.0)
+                .diagnoseWindow(100)
+                .diagnoseRatio(0.8)
+                .useSppForDirection(true)
+                .useStaticForCorrection(true)
+                .minStaticDataHours(2.0)
+                .cacheDiagnosis(true)
+                .build();
+
+        BaseStationDiagnoser diagnoser = new BaseStationDiagnoser(diagConfig);
+        diagnoser.addBaseStation(baseA);
+        diagnoser.addBaseStation(baseB);
+        diagnoser.setRover(rover);
+
+        List<BaseStationDiagnosis> diagnoses = diagnoser.diagnose(rtkOpt);
+        System.out.printf("  诊断出 %d 个异常基站%n", diagnoses.size());
+
+        String anomalousId = null;
+        double[] suggestedXyz = null;
+        for (BaseStationDiagnosis d : diagnoses) {
+            System.out.println(d);
+            if (d.anomalyLevel != BaseStationDiagnosis.AnomalyLevel.NORMAL
+                    && d.anomalyLevel != BaseStationDiagnosis.AnomalyLevel.UNKNOWN
+                    && d.suggestedXyz != null) {
+                anomalousId = d.baseId;
+                suggestedXyz = d.suggestedXyz;
+            }
+        }
+
+        assertNotNull(anomalousId, "应诊断出异常基站");
+        assertNotNull(suggestedXyz, "应提供建议坐标");
+        System.out.printf("%n  异常基站: %s%n", anomalousId);
+        System.out.printf("  建议坐标: X=%.4f Y=%.4f Z=%.4f%n", suggestedXyz[0], suggestedXyz[1], suggestedXyz[2]);
+
+        System.out.println("\n--- Step 3: 用建议坐标修正后重新平差 ---");
+        PrcOpt optA2 = createRtkOpt();
+        PrcOpt optB2 = createRtkOpt();
+        if ("A".equals(anomalousId)) {
+            optA2.rb[0] = suggestedXyz[0];
+            optA2.rb[1] = suggestedXyz[1];
+            optA2.rb[2] = suggestedXyz[2];
+            optA2.refpos = Constants.POSOPT_POS_XYZ;
+            optA2.intpref = 1;
+        } else {
+            optB2.rb[0] = suggestedXyz[0];
+            optB2.rb[1] = suggestedXyz[1];
+            optB2.rb[2] = suggestedXyz[2];
+            optB2.refpos = Constants.POSOPT_POS_XYZ;
+            optB2.intpref = 1;
+        }
+
+        RtkProcessor rtkA2 = new RtkProcessor(optA2);
+        RtkProcessor rtkB2 = new RtkProcessor(optB2);
+        List<SolData> solA2 = new ArrayList<>();
+        List<SolData> solB2 = new ArrayList<>();
+        for (int h = startHour; h <= endHour; h++) {
+            String baseAFile = buildFilePath(BASE_A, DATE, h);
+            String baseBFile = buildFilePath(BASE_B, DATE, h);
+            String roverFile = buildFilePath(ROVER, DATE, h);
+            if (!Files.exists(Paths.get(baseAFile)) || !Files.exists(Paths.get(baseBFile))
+                    || !Files.exists(Paths.get(roverFile))) continue;
+            RtkProcessor.RtkResult resA = rtkA2.process(roverFile, baseAFile);
+            rtkA2.resetForNextBatch();
+            solA2.addAll(resA.solutions);
+            RtkProcessor.RtkResult resB = rtkB2.process(roverFile, baseBFile);
+            rtkB2.resetForNextBatch();
+            solB2.addAll(resB.solutions);
+        }
+
+        List<EpochPair> aligned2 = alignByEpoch(solA2, solB2);
+        AdjustStats stats2 = runAdjust(aligned2);
+        double sigma0After = stats2.adjustSuccess > 0 ? stats2.sigma0Sum / stats2.adjustSuccess : 0;
+        printStats(stats2);
+
+        System.out.println("\n--- 闭环验证 ---");
+
+        double heightSpreadBefore = stats1.adjustedPositions.isEmpty() ? 0 : computeHeightSpread(stats1.adjustedPositions);
+        double heightSpreadAfter = stats2.adjustedPositions.isEmpty() ? 0 : computeHeightSpread(stats2.adjustedPositions);
+        double plBefore = stats1.adjustSuccess > 0 ? stats1.plSum / stats1.adjustSuccess : 0;
+        double plAfter = stats2.adjustSuccess > 0 ? stats2.plSum / stats2.adjustSuccess : 0;
+        int verifiedAfter = stats2.gradeCount.getOrDefault(ReliabilityGrade.VERIFIED, 0);
+        int crossCheckedAfter = stats2.gradeCount.getOrDefault(ReliabilityGrade.CROSS_CHECKED, 0);
+        double reliableRatioAfter = stats2.adjustSuccess > 0
+                ? 100.0 * (verifiedAfter + crossCheckedAfter) / stats2.adjustSuccess : 0;
+
+        System.out.printf("  修正前 σ₀平均: %.2f%n", sigma0Before);
+        System.out.printf("  修正后 σ₀平均: %.2f%n", sigma0After);
+        System.out.printf("  修正前 PL平均: %.4f m%n", plBefore);
+        System.out.printf("  修正后 PL平均: %.4f m%n", plAfter);
+        System.out.printf("  修正前高程散布: %.4f m%n", heightSpreadBefore);
+        System.out.printf("  修正后高程散布: %.4f m%n", heightSpreadAfter);
+        System.out.printf("  修正后可靠比例: %.1f%% (VERIFIED+CROSS_CHECKED)%n", reliableRatioAfter);
+
+        if (sigma0Before > 0 && sigma0After > 0) {
+            double improvement = sigma0Before / sigma0After;
+            System.out.printf("  σ₀改善倍数: %.1fx%n", improvement);
+            assertTrue(sigma0After < 5.0, "修正后σ₀应<5 (实际=" + sigma0After + ")");
+            assertTrue(improvement > 10, "σ₀改善应>10倍 (实际=" + improvement + "倍)");
+        } else {
+            System.out.println("  (σ₀不可比：SUSPECT路径下σ₀=NaN，改用PL验证)");
+            assertTrue(plAfter < 1.0, "修正后PL应<1m (实际=" + plAfter + ")");
+            assertTrue(reliableRatioAfter > 50.0, "修正后可靠比例应>50% (实际=" + reliableRatioAfter + "%)");
+        }
+
+        assertTrue(heightSpreadAfter < 1.0, "修正后高程散布应<1m (实际=" + heightSpreadAfter + ")");
+    }
+
+    private double computeHeightSpread(List<double[]> xyzPositions) {
+        if (xyzPositions.isEmpty()) return 0;
+        double minH = Double.MAX_VALUE, maxH = -Double.MAX_VALUE;
+        for (double[] xyz : xyzPositions) {
+            double[] llh = new double[3];
+            CoordTransform.ecef2pos(xyz, llh);
+            minH = Math.min(minH, llh[2]);
+            maxH = Math.max(maxH, llh[2]);
+        }
+        return (maxH - minH) / 2;
+    }
+
+    @Test
     @DisplayName("修正基站0020坐标后的平差验证")
     void testAdjustWithCorrectedBaseB() throws IOException {
         if (!DATA_AVAILABLE) {
@@ -1069,6 +1263,21 @@ public class AdjustRealDataTest {
                 if (result.success) {
                     stats.adjustSuccess++;
 
+                    if (result.reliabilityGrade != null) {
+                        stats.gradeCount.merge(result.reliabilityGrade, 1, Integer::sum);
+                    }
+                    if (!Double.isNaN(result.crossValidationDist)) {
+                        stats.crossValSum += result.crossValidationDist;
+                        stats.crossValMax = Math.max(stats.crossValMax, result.crossValidationDist);
+                    }
+                    if (!Double.isNaN(result.protectionLevel)) {
+                        stats.plSum += result.protectionLevel;
+                        stats.plMax = Math.max(stats.plMax, result.protectionLevel);
+                    }
+                    if (result.suspectBaseId != null) {
+                        stats.suspectCount++;
+                    }
+
                     if (!Double.isNaN(result.sigma0)) {
                         stats.sigma0Sum += result.sigma0;
                         stats.sigma0Max = Math.max(stats.sigma0Max, result.sigma0);
@@ -1144,6 +1353,25 @@ public class AdjustRealDataTest {
             System.out.printf("Baarda T最大: %.4f%n", stats.maxBaardaT);
         }
 
+        if (!stats.gradeCount.isEmpty()) {
+            System.out.println("----------------------------------------");
+            System.out.println("交叉验证可靠性分级:");
+            for (ReliabilityGrade g : ReliabilityGrade.values()) {
+                int cnt = stats.gradeCount.getOrDefault(g, 0);
+                double pct = stats.adjustSuccess == 0 ? 0 : 100.0 * cnt / stats.adjustSuccess;
+                System.out.printf("  %-15s: %5d (%5.1f%%)  %s%n", g, cnt, pct, g.description);
+            }
+            System.out.printf("  Rover差 平均: %.4f m%n",
+                    stats.adjustSuccess == 0 ? 0 : stats.crossValSum / stats.adjustSuccess);
+            System.out.printf("  Rover差 最大: %.4f m%n", stats.crossValMax);
+            System.out.printf("  PL 平均: %.4f m%n",
+                    stats.adjustSuccess == 0 ? 0 : stats.plSum / stats.adjustSuccess);
+            System.out.printf("  PL 最大: %.4f m%n", stats.plMax);
+            if (stats.suspectCount > 0) {
+                System.out.printf("  ⚠ 可疑历元: %d%n", stats.suspectCount);
+            }
+        }
+
         if (!stats.adjustedPositions.isEmpty()) {
             System.out.println("----------------------------------------");
             System.out.println("平差后坐标统计 (LLH):");
@@ -1212,6 +1440,261 @@ public class AdjustRealDataTest {
             System.out.printf("  vs 基线B: 平均=%.2f mm, 最大=%.2f mm%n",
                     sumDiff / cmpCount, maxDiff);
         }
+
+        System.out.println("========================================");
+    }
+
+    @Test
+    @DisplayName("批量累积：每240历元输出1条最优坐标，对比逐历元精度")
+    void testBatchAccumulation() throws IOException {
+        if (!DATA_AVAILABLE) {
+            System.out.println("跳过：数据目录不存在");
+            return;
+        }
+
+        System.out.println("\n========================================");
+        System.out.println("  批量累积测试");
+        System.out.println("  对比: 逐历元输出 vs 每240历元(≈1h)输出");
+        System.out.println("========================================");
+
+        PrcOpt opt = createRtkOpt();
+        RtkProcessor rtkA = new RtkProcessor(opt);
+        RtkProcessor rtkB = new RtkProcessor(opt);
+
+        List<SolData> allSolA = new ArrayList<>();
+        List<SolData> allSolB = new ArrayList<>();
+
+        for (int hour = 0; hour <= 8; hour++) {
+            String baseAFile = buildFilePath(BASE_A, DATE, hour);
+            String baseBFile = buildFilePath(BASE_B, DATE, hour);
+            String roverFile = buildFilePath(ROVER, DATE, hour);
+
+            if (!Files.exists(Paths.get(baseAFile)) || !Files.exists(Paths.get(baseBFile))
+                    || !Files.exists(Paths.get(roverFile))) continue;
+
+            RtkProcessor.RtkResult resA = rtkA.process(roverFile, baseAFile);
+            rtkA.resetForNextBatch();
+            RtkProcessor.RtkResult resB = rtkB.process(roverFile, baseBFile);
+            rtkB.resetForNextBatch();
+
+            allSolA.addAll(resA.solutions);
+            allSolB.addAll(resB.solutions);
+        }
+
+        List<EpochPair> aligned = alignByEpoch(allSolA, allSolB);
+        if (aligned.isEmpty()) {
+            System.out.println("跳过：无对齐数据");
+            return;
+        }
+
+        List<double[]> epochPositions = new ArrayList<>();
+        List<AdjustResult> epochResults = new ArrayList<>();
+
+        for (EpochPair ep : aligned) {
+            if (ep.solA.status != SolutionStatus.FIX || ep.solB.status != SolutionStatus.FIX) continue;
+
+            BaselineEpoch.BaselineEntry entryA = buildBaselineEntry("A", ep.solA);
+            BaselineEpoch.BaselineEntry entryB = buildBaselineEntry("B", ep.solB);
+            if (entryA == null || entryB == null) continue;
+
+            BaselineEpoch epoch = new BaselineEpoch(ep.epochTag,
+                    new BaselineEpoch.BaselineEntry[]{entryA, entryB});
+            AdjustResult result = GnssBaselineAdjust.adjust(epoch, true);
+
+            if (result.success && result.p01Xyz != null) {
+                epochPositions.add(result.p01Xyz.clone());
+                epochResults.add(result);
+            }
+        }
+
+        BatchAccumulator batch1h = new BatchAccumulator(240);
+        List<BatchAccumulator.BatchResult> batchResults = new ArrayList<>();
+
+        for (AdjustResult result : epochResults) {
+            batch1h.feed(result);
+            if (batch1h.isFull()) {
+                BatchAccumulator.BatchResult br = batch1h.flush();
+                if (br != null) batchResults.add(br);
+            }
+        }
+        if (batch1h.getCount() > 0) {
+            BatchAccumulator.BatchResult br = batch1h.flush();
+            if (br != null) batchResults.add(br);
+        }
+
+        System.out.println("\n--- 逐历元输出统计 ---");
+        double[] epochStd = computePositionStd(epochPositions);
+        System.out.printf("  历元数: %d%n", epochPositions.size());
+        System.out.printf("  N方向 STD: %.2f mm%n", epochStd[0] * 1000);
+        System.out.printf("  E方向 STD: %.2f mm%n", epochStd[1] * 1000);
+        System.out.printf("  U方向 STD: %.2f mm%n", epochStd[2] * 1000);
+
+        System.out.println("\n--- 每240历元(≈1h)批量输出 ---");
+        System.out.printf("  批次数: %d%n", batchResults.size());
+        if (!batchResults.isEmpty()) {
+            List<double[]> batchPositions = new ArrayList<>();
+            System.out.println("  ┌──────────────────────┬────────┬────────┬──────────┬──────────┬──────────┐");
+            System.out.println("  │ 时间窗口              │ 历元数 │ V+CC   │ σN(mm)   │ σE(mm)   │ σU(mm)   │");
+            System.out.println("  ├──────────────────────┼────────┼────────┼──────────┼──────────┼──────────┤");
+            for (BatchAccumulator.BatchResult br : batchResults) {
+                batchPositions.add(br.xyz);
+                String start = br.windowStartTag != null && br.windowStartTag.length() > 18
+                        ? br.windowStartTag.substring(11, 19) : "?";
+                String end = br.windowEndTag != null && br.windowEndTag.length() > 18
+                        ? br.windowEndTag.substring(11, 19) : "?";
+                System.out.printf("  │ %s ~ %s │ %4d   │ %3d    │ %8.2f │ %8.2f │ %8.2f │%n",
+                        start, end,
+                        br.epochCount,
+                        br.verifiedCount + br.crossCheckedCount,
+                        br.sigmaN() * 1000,
+                        br.sigmaE() * 1000,
+                        br.sigmaU() * 1000);
+            }
+            System.out.println("  └──────────────────────┴────────┴────────┴──────────┴──────────┴──────────┘");
+
+            double[] batchStd = computePositionStd(batchPositions);
+            System.out.println("\n--- 批量输出坐标时序STD（批间波动） ---");
+            System.out.printf("  N方向 STD: %.2f mm%n", batchStd[0] * 1000);
+            System.out.printf("  E方向 STD: %.2f mm%n", batchStd[1] * 1000);
+            System.out.printf("  U方向 STD: %.2f mm%n", batchStd[2] * 1000);
+
+            System.out.println("\n--- 精度改善对比 ---");
+            double avgSigmaN = batchResults.stream().mapToDouble(BatchAccumulator.BatchResult::sigmaN).average().orElse(0);
+            double avgSigmaE = batchResults.stream().mapToDouble(BatchAccumulator.BatchResult::sigmaE).average().orElse(0);
+            double avgSigmaU = batchResults.stream().mapToDouble(BatchAccumulator.BatchResult::sigmaU).average().orElse(0);
+            System.out.printf("  N方向: 逐历元STD %.2f mm → 批量内部σ %.2f mm (改善 %.1fx)%n",
+                    epochStd[0] * 1000, avgSigmaN * 1000,
+                    avgSigmaN > 0 ? epochStd[0] / avgSigmaN : 0);
+            System.out.printf("  E方向: 逐历元STD %.2f mm → 批量内部σ %.2f mm (改善 %.1fx)%n",
+                    epochStd[1] * 1000, avgSigmaE * 1000,
+                    avgSigmaE > 0 ? epochStd[1] / avgSigmaE : 0);
+            System.out.printf("  U方向: 逐历元STD %.2f mm → 批量内部σ %.2f mm (改善 %.1fx)%n",
+                    epochStd[2] * 1000, avgSigmaU * 1000,
+                    avgSigmaU > 0 ? epochStd[2] / avgSigmaU : 0);
+
+            assertTrue(avgSigmaN * 1000 < 15, "批量σN应<15mm (实际=" + avgSigmaN * 1000 + "mm)");
+        }
+
+        System.out.println("========================================");
+    }
+
+    private double[] computePositionStd(List<double[]> positions) {
+        if (positions.isEmpty()) return new double[]{0, 0, 0};
+
+        double[] mean = new double[3];
+        for (double[] p : positions) {
+            for (int i = 0; i < 3; i++) mean[i] += p[i];
+        }
+        for (int i = 0; i < 3; i++) mean[i] /= positions.size();
+
+        double[] variance = new double[3];
+        for (double[] p : positions) {
+            for (int i = 0; i < 3; i++) {
+                double d = p[i] - mean[i];
+                variance[i] += d * d;
+            }
+        }
+        double[] std = new double[3];
+        for (int i = 0; i < 3; i++) {
+            std[i] = Math.sqrt(variance[i] / positions.size());
+        }
+        return std;
+    }
+
+    @Test
+    @DisplayName("MultiBaselineAdjust集成测试：高级API完整流程")
+    void testMultiBaselineAdjustIntegration() throws IOException {
+        if (!DATA_AVAILABLE) {
+            System.out.println("跳过：数据目录不存在");
+            return;
+        }
+
+        System.out.println("\n========================================");
+        System.out.println("  MultiBaselineAdjust 集成测试");
+        System.out.println("  展示使用方API：创建 → 喂数据 → 回调获取结果");
+        System.out.println("========================================");
+
+        PrcOpt opt = createRtkOpt();
+        RtkProcessor rtkA = new RtkProcessor(opt);
+        RtkProcessor rtkB = new RtkProcessor(opt);
+
+        List<SolData> allSolA = new ArrayList<>();
+        List<SolData> allSolB = new ArrayList<>();
+        for (int hour = 0; hour <= 8; hour++) {
+            String baseAFile = buildFilePath(BASE_A, DATE, hour);
+            String baseBFile = buildFilePath(BASE_B, DATE, hour);
+            String roverFile = buildFilePath(ROVER, DATE, hour);
+            if (!Files.exists(Paths.get(baseAFile)) || !Files.exists(Paths.get(baseBFile))
+                    || !Files.exists(Paths.get(roverFile))) continue;
+            RtkProcessor.RtkResult resA = rtkA.process(roverFile, baseAFile);
+            rtkA.resetForNextBatch();
+            RtkProcessor.RtkResult resB = rtkB.process(roverFile, baseBFile);
+            rtkB.resetForNextBatch();
+            allSolA.addAll(resA.solutions);
+            allSolB.addAll(resB.solutions);
+        }
+
+        List<EpochPair> aligned = alignByEpoch(allSolA, allSolB);
+        if (aligned.isEmpty()) {
+            System.out.println("跳过：无对齐数据");
+            return;
+        }
+
+        MultiBaselineConfig config = MultiBaselineConfig.builder()
+                .baseStationIds("A", "B")
+                .qualityWeight(true)
+                .crossValidation(MultiBaselineConfig.CrossValidationConfig.defaults())
+                .batch(MultiBaselineConfig.BatchConfig.builder().windowSize(240).enabled(true).build())
+                .diagnosis(MultiBaselineConfig.DiagnosisConfig.builder().enable(false).build())
+                .build();
+
+        MultiBaselineAdjust adjust = MultiBaselineAdjust.create(config);
+
+        int[] epochCounts = {0};
+        int[] verifiedCounts = {0};
+        int[] suspectCounts = {0};
+        List<ReliableCoordinate> allCoords = new ArrayList<>();
+
+        adjust.onEpochResult((coord, detail) -> {
+            epochCounts[0]++;
+            if (coord.grade() == ReliabilityGrade.VERIFIED) verifiedCounts[0]++;
+            if (coord.grade() == ReliabilityGrade.SUSPECT) suspectCounts[0]++;
+            allCoords.add(coord);
+        });
+
+        List<BatchCoordinate> batchResults = new ArrayList<>();
+        adjust.onBatchResult(batchResults::add);
+
+        for (EpochPair ep : aligned) {
+            adjust.feedBaseline("A", ep.solA, ep.epochTag);
+            adjust.feedBaseline("B", ep.solB, ep.epochTag);
+        }
+
+        ReliableCoordinate finalCoord = adjust.flush();
+
+        System.out.println("\n--- 逐历元输出统计 ---");
+        System.out.printf("  总历元: %d%n", epochCounts[0]);
+        System.out.printf("  VERIFIED: %d (%.1f%%)%n", verifiedCounts[0], 100.0 * verifiedCounts[0] / epochCounts[0]);
+        System.out.printf("  SUSPECT: %d (%.1f%%)%n", suspectCounts[0], 100.0 * suspectCounts[0] / epochCounts[0]);
+
+        if (finalCoord != null) {
+            System.out.printf("  最终坐标: X=%.4f Y=%.4f Z=%.4f%n",
+                    finalCoord.xyz()[0], finalCoord.xyz()[1], finalCoord.xyz()[2]);
+            System.out.printf("  可靠性: %s, PL=%.3fm%n", finalCoord.grade(), finalCoord.protectionLevel());
+        }
+
+        System.out.println("\n--- 批量输出（每240历元） ---");
+        System.out.printf("  批次数: %d%n", batchResults.size());
+        for (BatchCoordinate b : batchResults) {
+            System.out.printf("  %s~%s: σN=%.2fmm σE=%.2fmm σU=%.2fmm %s%n",
+                    b.firstEpochTag() != null ? b.firstEpochTag().substring(11, 19) : "?",
+                    b.lastEpochTag() != null ? b.lastEpochTag().substring(11, 19) : "?",
+                    b.sigmaN() * 1000, b.sigmaE() * 1000, b.sigmaU() * 1000,
+                    b.grade());
+        }
+
+        assertTrue(epochCounts[0] > 0, "应有历元输出");
+        assertTrue(finalCoord != null, "应有最终坐标");
 
         System.out.println("========================================");
     }
