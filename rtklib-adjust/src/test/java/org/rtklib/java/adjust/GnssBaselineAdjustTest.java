@@ -7,6 +7,7 @@ import org.rtklib.java.adjust.covariance.CovAssembler;
 import org.rtklib.java.adjust.engine.GnssBaselineAdjust;
 import org.rtklib.java.adjust.model.AdjustResult;
 import org.rtklib.java.adjust.model.BaselineEpoch;
+import org.rtklib.java.adjust.model.ReliabilityGrade;
 import org.rtklib.java.data.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -247,6 +248,99 @@ public class GnssBaselineAdjustTest {
 
         int posMask = PrcOpt.POS_ECEF | PrcOpt.POS_LLH;
         return new SolData(sol, posMask);
+    }
+
+    @Test
+    @DisplayName("交叉验证: k=2无噪声→VERIFIED，Rover差<2cm")
+    void testCrossValidationVerified() {
+        BaselineEpoch epoch = buildEpoch(2, 0.0);
+        AdjustResult result = GnssBaselineAdjust.adjust(epoch);
+        assertTrue(result.success);
+        assertNotNull(result.reliabilityGrade);
+        assertEquals(ReliabilityGrade.VERIFIED, result.reliabilityGrade);
+        assertTrue(result.crossValidationDist < 0.02,
+                "无噪声时Rover差应<2cm，实际=" + result.crossValidationDist);
+        assertTrue(result.protectionLevel > 0, "PL应为正");
+        assertNull(result.suspectBaseId, "VERIFIED时无可疑基站");
+    }
+
+    @Test
+    @DisplayName("交叉验证: k=2小噪声→CROSS_CHECKED，Rover差2~5cm")
+    void testCrossValidationCrossChecked() {
+        BaselineEpoch epoch = buildEpochWithBias(2, 0.003, 0.03);
+        AdjustResult result = GnssBaselineAdjust.adjust(epoch);
+        assertTrue(result.success);
+        assertNotNull(result.reliabilityGrade);
+        assertTrue(result.reliabilityGrade == ReliabilityGrade.CROSS_CHECKED
+                        || result.reliabilityGrade == ReliabilityGrade.VERIFIED,
+                "小偏差时应为CROSS_CHECKED或VERIFIED，实际=" + result.reliabilityGrade);
+    }
+
+    @Test
+    @DisplayName("交叉验证: k=2大偏差→SUSPECT，Rover差>5cm，识别可疑基站")
+    void testCrossValidationSuspect() {
+        BaselineEpoch epoch = buildEpochWithBias(2, 0.0, 0.5);
+        AdjustResult result = GnssBaselineAdjust.adjust(epoch);
+        assertTrue(result.success);
+        assertNotNull(result.reliabilityGrade);
+        assertEquals(ReliabilityGrade.SUSPECT, result.reliabilityGrade,
+                "大偏差时应为SUSPECT，Rover差=" + result.crossValidationDist);
+        assertTrue(result.crossValidationDist > 0.05,
+                "SUSPECT时Rover差应>5cm，实际=" + result.crossValidationDist);
+        assertNotNull(result.suspectBaseId, "SUSPECT时应识别可疑基站");
+        assertTrue(result.protectionLevel > 0.05,
+                "SUSPECT时PL应>=Rover差，实际PL=" + result.protectionLevel);
+    }
+
+    @Test
+    @DisplayName("交叉验证: k=1→UNVERIFIED，无交叉验证")
+    void testCrossValidationUnverified() {
+        BaselineEpoch epoch = buildEpoch(1, 0.0);
+        AdjustResult result = GnssBaselineAdjust.adjust(epoch);
+        assertTrue(result.success);
+        assertEquals(ReliabilityGrade.UNVERIFIED, result.reliabilityGrade);
+        assertEquals(0.0, result.crossValidationDist, 1e-10);
+        assertNull(result.suspectBaseId);
+    }
+
+    @Test
+    @DisplayName("Protection Level: VERIFIED时PL小，SUSPECT时PL大")
+    void testProtectionLevelScales() {
+        BaselineEpoch epochGood = buildEpoch(2, 0.0);
+        AdjustResult resultGood = GnssBaselineAdjust.adjust(epochGood);
+
+        BaselineEpoch epochBad = buildEpochWithBias(2, 0.0, 0.5);
+        AdjustResult resultBad = GnssBaselineAdjust.adjust(epochBad);
+
+        assertTrue(resultGood.protectionLevel < resultBad.protectionLevel,
+                "VERIFIED的PL应远小于SUSPECT的PL: "
+                        + resultGood.protectionLevel + " vs " + resultBad.protectionLevel);
+    }
+
+    private BaselineEpoch buildEpochWithBias(int k, double noise, double biasM) {
+        BaselineEpoch.BaselineEntry[] entries = new BaselineEpoch.BaselineEntry[k];
+        for (int i = 0; i < k; i++) {
+            double bias = (i == 0) ? 0.0 : biasM;
+            entries[i] = buildEntryWithBias(i, noise, bias);
+        }
+        return new BaselineEpoch("2026-01-01 00:00:00", entries);
+    }
+
+    private BaselineEpoch.BaselineEntry buildEntryWithBias(int baseIdx, double noise, double biasM) {
+        double[] base = BASE_COORDS[baseIdx];
+        double dX = (P01_X - base[0]) + noise * (baseIdx - 1) + biasM;
+        double dY = (P01_Y - base[1]) + noise * (baseIdx - 1);
+        double dZ = (P01_Z - base[2]) + noise * (baseIdx - 1);
+
+        double roverX = base[0] + dX;
+        double roverY = base[1] + dY;
+        double roverZ = base[2] + dZ;
+
+        SolData solData = buildMockSolData(roverX, roverY, roverZ, SolutionStatus.FIX);
+        double[] dXyz = {dX, dY, dZ};
+        double[][] cov = buildCov3x3(COV_DIAG, COV_OFF);
+
+        return new BaselineEpoch.BaselineEntry(BASE_IDS[baseIdx], solData, dXyz, cov, cov);
     }
 
     private double[][] buildCov3x3(double diag, double off) {

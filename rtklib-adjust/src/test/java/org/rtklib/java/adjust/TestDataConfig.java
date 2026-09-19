@@ -66,11 +66,27 @@ public class TestDataConfig {
         return props.getProperty("rover", "");
     }
 
-    public String getRover2() {
-        return props.getProperty("rover2", "");
+    public String getDate() {
+        return props.getProperty("date", "");
     }
 
-    public String getDate() {
+    public String getBadBase() {
+        return props.getProperty("bad.base", "");
+    }
+
+    public String getBadRover() {
+        return props.getProperty("bad.rover", "");
+    }
+
+    public String getGoodBase() {
+        return props.getProperty("good.base", "");
+    }
+
+    public String getGoodRover() {
+        return props.getProperty("good.rover", "");
+    }
+
+    public String getRover2() {
         return props.getProperty("date", "");
     }
 

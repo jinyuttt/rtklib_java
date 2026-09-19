@@ -37,8 +37,10 @@ public final class RtkOptimizations {
             if (validCount >= cfg.snrMedianMinSatsForFallback) {
                 java.util.Arrays.sort(validSnrs, 0, validCount);
                 rtk.snrMedian[f] = validSnrs[validCount / 2];
+                rtk.diagSnrMedianValidCount++;
             } else {
                 rtk.snrMedian[f] = cfg.snrMedianFallbackPhaseRef;
+                rtk.diagSnrMedianFallbackCount++;
             }
         }
     }
@@ -139,6 +141,13 @@ public final class RtkOptimizations {
         }
 
         rtk.qScale = finalScale;
+
+        if (finalScale != 1.0) {
+            rtk.diagQScaleNotOneCount++;
+        }
+        rtk.diagQScaleSum += finalScale;
+        if (finalScale < rtk.diagQScaleMin) rtk.diagQScaleMin = finalScale;
+        if (finalScale > rtk.diagQScaleMax) rtk.diagQScaleMax = finalScale;
     }
 
     static boolean isZeroVelocity(Rtk rtk) {
@@ -260,6 +269,7 @@ public final class RtkOptimizations {
         for (int i = 0; i < nv; i++) {
             if (w[i] < 1.0) {
                 R[i * nv + i] /= w[i];
+                rtk.diagIggDownWeightCount++;
             }
         }
     }
@@ -369,6 +379,7 @@ public final class RtkOptimizations {
 
         if (anyRefReselect) {
             rtk.parConsecutiveReselectCount++;
+            rtk.diagRefReselectCount++;
             if (rtk.parConsecutiveReselectCount > cfg.parMaxConsecutiveReselect) {
                 rtk.parExcludedSatCount = 0;
                 rtk.parConsecutiveReselectCount = 0;

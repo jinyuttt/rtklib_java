@@ -166,16 +166,16 @@ public final class RtkCore {
         }
         int nx = rtk.nx;
 
-        RtkOptimizations.computeSnrMedian(rtk, obs, nu, nr, sat, ns, nf, nav);
-
-        udstate(rtk, obs, nu, nr, nav, sat, ns, iu, ir);
-
         for (i = 0; i < ns; i++) {
             for (f = 0; f < nf; f++) {
                 rtk.ssat[sat[i] - 1].snrRover[f] = obs[iu[i]].SNR[f];
                 rtk.ssat[sat[i] - 1].snrBase[f] = obs[ir[i]].SNR[f];
             }
         }
+
+        RtkOptimizations.computeSnrMedian(rtk, obs, nu, nr, sat, ns, nf, nav);
+
+        udstate(rtk, obs, nu, nr, nav, sat, ns, iu, ir);
 
         double[] xp = new double[nx];
         double[] Pp = new double[nx * nx];
@@ -1812,6 +1812,7 @@ public final class RtkCore {
                     }
                 }
             }
+            rtk.diagAmbAnchorAttemptCount++;
         }
 
         double[] v = new double[nb];

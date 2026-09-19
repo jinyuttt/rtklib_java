@@ -91,6 +91,17 @@ public class Rtk implements Serializable {
 
     public int[] ambAnchorCount;
 
+    public int diagQScaleNotOneCount;
+    public int diagIggDownWeightCount;
+    public int diagSnrMedianValidCount;
+    public int diagSnrMedianFallbackCount;
+    public int diagRefReselectCount;
+    public int diagAmbAnchorAttemptCount;
+    public int diagIonoGradEnabledCount;
+    public double diagQScaleSum;
+    public double diagQScaleMin = Double.MAX_VALUE;
+    public double diagQScaleMax = Double.MIN_VALUE;
+
     public Rtk() {
         this.sol = new Sol();
         this.rb = new double[6];

@@ -17,10 +17,17 @@
 6. [PAR参考星重选](#6-par参考星重选enableparrefreselect)
 7. [电离层/对流层梯度参数估计](#7-电离层对流层梯度参数估计enableionotropgradient)
 8. [优化项依赖关系与调用顺序](#8-优化项依赖关系与调用顺序)
+9. [基站稳定性监测](#9-基站稳定性监测basestationmonitor)
 
 ---
 
 ## 1. 滑动窗自适应Q矩阵（enableAdaptiveQ）
+
+> **⚠️ 适用场景**: 动态模式（`PMODE_KINEMA` 或 `dynamics=1`）下有效。
+> 静态模式（`PMODE_STATIC`）下 `dynamics=0`，状态向量无速度/加速度分量，
+> Q矩阵仅含位置过程噪声，缩放qScale对已收敛的模糊度无实质影响。
+> 测试数据表明：static模式下开启自适应Q，FIX率无变化（81.0%→81.0%）；
+> kinema模式下效果待验证。
 
 ### 1.1 问题背景
 
@@ -869,3 +876,207 @@ atmFrozenNsThresh → udion() (冻结检查)
 | `parExcludedSats[MAXSAT]` | PAR参考星重选 |
 | `parExcludedSatCount` | PAR参考星重选 |
 | `parPrevRefSat[NFREQ]` | PAR参考星重选 |
+
+---
+
+## 9. 基站稳定性监测（BaseStationMonitor）
+
+> **独立工具类**，不绑定RtkProcessor，由调用方创建和管理生命周期。
+> 1个基站1个实例，多基线共享同一基站时不会重复存储。
+
+### 9.1 问题背景
+
+RTK定位假设基站坐标固定。如果基站天线实际发生了位移（支架倾斜、天线被碰、
+冻融等），所有RTK解会产生系统性偏差，但用户不知道。需要一个独立机制
+检测基站坐标异常变化并提醒用户。
+
+### 9.2 解决方案
+
+对基站观测做SPP定位，按时间窗口聚合中位数，与参考基准对比检测突变和漂移。
+
+```
+基站观测 → [SPP解算] → [观测域+解结果过滤] → [60min窗口聚合]
+                                                    ↓
+                                          窗口中位数 vs 参考基准
+                                                    ↓
+                                          偏移 > 阈值 → 回调提醒用户
+                                                    ↓
+                                          [二级: 历史中位数趋势] → 漂移检测
+```
+
+### 9.3 核心算法
+
+#### 9.3.1 一级检测：窗口SPP中位数 + 突变检测
+
+```
+每历元:
+  1. 提取基站观测, 过滤低SNR卫星
+  2. SPP解算, 过滤: numSat < minSatCount 或 PDOP > maxPdop
+  3. 加入窗口
+
+窗口满 (elapsed ≥ windowMinutes):
+  4. 计算窗口内SPP坐标中位数
+  5. 离群剔除: distance(pos, median) > outlierThresh 的历元剔除
+  6. 重新计算中位数
+  7. 参考基准自学习: 首次窗口的中位数作为参考基准
+  8. 突变检测: distance(median, referencePos) > movementThresh → 告警
+  9. 中位数存入二级环形缓冲区
+  10. 清空窗口
+```
+
+#### 9.3.2 二级检测：历史趋势漂移检测
+
+```
+每次存入二级缓冲区后:
+  if historyCount ≥ 2:
+      drift = distance(oldest_median, newest_median)
+      hours = time_diff / 3600
+      if drift > driftThresh → 漂移告警
+```
+
+#### 9.3.3 SPP窗口差分精度
+
+SPP绝对精度5-10m，但**窗口间差分后有效精度约1m**：
+
+```
+窗口1中位数 = 真实坐标 + SPP系统偏差 + 噪声_1
+窗口2中位数 = 真实坐标 + 位移 + SPP系统偏差 + 噪声_2
+差分 = 位移 + (噪声_2 - 噪声_1)
+```
+
+SPP系统偏差（电离层延迟、卫星钟差等）在相邻60min窗口高度相关，做差后基本消除。
+实测验证：基站连续6小时，窗口间偏移0.00~3.22m，10m阈值下无误报。
+
+### 9.4 检测能力
+
+| 移动幅度 | 可检测性 | 说明 |
+|---------|---------|------|
+| >10m | ✅ 可靠 | SPP窗口差分精度~1m，远低于阈值 |
+| 3~10m | ⚠️ 有风险 | 电离层日变化可能干扰 |
+| <3m | ❌ 不可行 | SPP精度不够 |
+
+### 9.5 数据输入接口
+
+| 接口 | 场景 | 说明 |
+|------|------|------|
+| `onBaseObs(Obsd[], n, Nav, GTime)` | 最底层 | 调用方自行解码，每历元调用 |
+| `onRtcmData(byte[])` | 实时RTCM字节流 | 内部维护Rtcm解码器，自动解码 |
+| `onRtcmData(byte[], offset, length)` | 实时RTCM字节流（指定偏移） | |
+| `onRtcmFile(String)` | RTCM文件离线分析 | 读取文件后解码 |
+| `onRinexFile(String, String)` | RINEX文件离线分析 | 内部用RinexSppProcessor读取 |
+
+### 9.6 回调接口
+
+```java
+public interface BaseMonitorCallback {
+    // 每个SPP结果
+    default void onSppResult(int staid, GTime time, double[] pos, int numSat, double pdop) {}
+
+    // 每个窗口的中位数和偏移
+    default void onWindowResult(int staid, GTime time, double[] medianPos, double offset) {}
+
+    // 突变告警: 窗口中位数偏移超过movementThresh
+    default void onBaseMovement(int staid, GTime time, double[] median, double[] ref,
+                                double offset, String msg) {}
+
+    // 漂移告警: 历史中位数首尾差超过driftThresh
+    default void onBaseDrift(int staid, GTime time, double drift, double hours, String msg) {}
+}
+```
+
+全部default方法，调用方按需实现，不强制。
+
+### 9.7 配置参数（BaseMonitorConfig）
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `windowMinutes` | 60.0 | 一级窗口时长（分钟） |
+| `movementThresh` | 10.0 | 突变检测阈值（米） |
+| `driftThresh` | 5.0 | 二级漂移检测阈值（米） |
+| `historySize` | 24 | 二级环形缓冲区大小（窗口个数） |
+| `minSatCount` | 4 | SPP最少卫星数 |
+| `maxPdop` | 6.0 | SPP最大PDOP |
+| `outlierThresh` | 3.0 | 离群剔除阈值（米） |
+| `minValidInWindow` | 10 | 窗口最少有效历元数 |
+| `minSnrDbHz` | 20.0 | 最低SNR (dB-Hz) |
+| `minElMaskDeg` | 10.0 | 最低高度角（度） |
+
+### 9.8 使用示例
+
+```java
+// 创建监测器: 1基站1实例
+BaseMonitorConfig config = new BaseMonitorConfig();
+config.windowMinutes = 60.0;
+config.movementThresh = 10.0;
+
+BaseMonitorCallback callback = new BaseMonitorCallback() {
+    @Override
+    public void onBaseMovement(int staid, GTime time, double[] median, double[] ref,
+                               double offset, String msg) {
+        // 发送告警到运维系统
+        alertService.send(msg);
+    }
+};
+
+BaseStationMonitor monitor = new BaseStationMonitor(214120, config, callback);
+
+// 方式1: 实时RTCM数据流
+monitor.onRtcmData(rtcmBytes);
+
+// 方式2: RTCM文件
+monitor.onRtcmFile("D:\\data\\BASE_STATION\\2026-07-04\\17.rtcm3");
+
+// 方式3: RINEX文件
+monitor.onRinexFile("base.obs", "base.nav");
+
+// 方式4: 直接传入Obsd观测
+monitor.onBaseObs(obs, n, nav, time);
+
+// 多基线共享同一基站: 同一个monitor实例
+RtkProcessor rtk1 = ...; // rover1 → 基站A
+RtkProcessor rtk2 = ...; // rover2 → 基站A
+// 两个RtkProcessor都把基站观测推给同一个monitor
+
+// 查询状态
+monitor.isReferenceInitialized();
+monitor.getReferencePos();
+monitor.getHistoryCount();
+
+// 重置
+monitor.resetReference(); // 重置参考基准，下次窗口重新自学习
+monitor.reset();          // 重置所有状态
+```
+
+### 9.9 内部存储
+
+| 存储 | 大小 | 生命周期 |
+|------|------|---------|
+| 一级窗口SPP坐标 | ~90KB峰值 | 窗口满计算后清空 |
+| 二级中位数环形缓冲 | ~1KB | 常驻，有上限(historySize) |
+| 参考基准 | 24B | 常驻 |
+| **总计** | **~90KB峰值，1KB常驻** | |
+
+### 9.10 设计原则
+
+1. **完全独立**：不绑定RtkProcessor/RtkConfig/Rtk，纯新增3个类
+2. **1基站1实例**：调用方管理生命周期，多基线共享同一基站不重复存储
+3. **同步调用**：try-catch包裹，异常不影响RTK主流程；1Hz下SPP <1ms
+4. **自学习参考基准**：首次窗口中位数自动初始化，无需外部输入已知坐标
+5. **回调+日志**：检测结果通过回调推送，同时记录WARN日志
+6. **配置灵活**：窗口大小、阈值、缓冲区大小均可配置
+
+### 9.11 实现位置
+
+| 类 | 包 | 说明 |
+|---|---|------|
+| `BaseStationMonitor` | org.rtklib.java.monitor | 核心监测器 |
+| `BaseMonitorConfig` | org.rtklib.java.monitor | 配置类 |
+| `BaseMonitorCallback` | org.rtklib.java.monitor | 回调接口 |
+
+### 9.12 测试验证
+
+| 测试 | 结果 |
+|------|------|
+| RTCM文件输入 (6小时) | SPP成功1429历元, 5个窗口, 偏移0.00~3.22m, 无误报 ✅ |
+| 模拟移动检测 | 正常数据0告警, resetReference正确重置 ✅ |
+| RTCM字节数据输入 | 与文件输入结果一致 ✅ |

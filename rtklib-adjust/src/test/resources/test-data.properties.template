@@ -3,7 +3,7 @@
 # test-data.properties 已加入 .gitignore，不会提交到仓库
 
 # 数据根目录
-data.root=D:\\iot-dm\\jetlinks-data\\device_rtcmbin_storage
+data.root=YOUR_DATA_ROOT
 
 # 基站设备ID
 base.a=YOUR_BASE_A_ID
@@ -12,6 +12,14 @@ base.b=YOUR_BASE_B_ID
 # 测站设备ID
 rover=YOUR_ROVER_ID
 rover2=YOUR_ROVER2_ID
+
+# 差数据组（基站+测站）
+bad.base=YOUR_BAD_BASE_ID
+bad.rover=YOUR_BAD_ROVER_ID
+
+# 好数据组（基站+测站）
+good.base=YOUR_GOOD_BASE_ID
+good.rover=YOUR_GOOD_ROVER_ID
 
 # 数据日期
 date=2026-09-17
