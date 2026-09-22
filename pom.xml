@@ -12,6 +12,7 @@
     <modules>
         <module>rtklib-core</module>
         <module>rtklib-adjust</module>
+        <module>rtklib-product</module>
     </modules>
 
     <properties>
