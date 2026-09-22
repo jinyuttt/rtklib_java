@@ -239,10 +239,8 @@ public final class RtklibCommon {
      * @param sys 卫星系统
      * @return 第二频率索引
      */
-    public static int seliflc(int nf, int sys) {
-        if (nf >= 2) return 1;
-        if (sys == Constants.SYS_IRN) return 0;
-        return 0;
+    public static int seliflc(int optnf, int sys) {
+        return (optnf == 2 || sys != Constants.SYS_GAL) ? 1 : 2;
     }
 
     /**

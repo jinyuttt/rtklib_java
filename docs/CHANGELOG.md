@@ -6,6 +6,23 @@
 
 ---
 
+## [2.2.0] - 2026-09-22
+
+### Added
+
+- **轨道模块（org.rtklib.java.orbit）**：完整的卫星轨道计算功能
+  - SGP4/SDP4轨道传播器：逐行移植自python-sgp4，支持近地/深空/同步轨道
+  - TLE解析器：支持文件读取和两行字符串解析
+  - 轨道六根数转换：rv2coe/coe2rv，移植自Orekit 12的KeplerianParametersConverter
+  - 开普勒方程求解：Halley修正牛顿法，2次迭代达机器精度
+  - 二体轨道传播器：KeplerPropagator，仅推进平近点角
+  - 统一转换入口：TleConverter（TLE↔六根数、TLE↔状态向量）
+  - 数据容器：OrbitalElements、StateVector、Frame（TEME/EME2000/ITRF）
+  - 验证：Vallado标准14用例全通过，86颗真实TLE卫星0失败，rv2coe往返误差<0.001km
+  - 文档：`ORBIT_MODULE_REFERENCE.md`
+
+---
+
 ## [2.1.1] - 2026-09-19
 
 ### Added

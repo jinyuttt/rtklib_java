@@ -57,6 +57,10 @@ test_output*
 # Local test data config (contains device IDs, not for open source)
 **/test-data.properties
 
+# Reference source code (not part of Java project)
+orekit_src/
+python-sgp4/
+
 # rtk_compare intermediate data (keep .md reports)
 rtk_compare/*.nav
 rtk_compare/*.obs
