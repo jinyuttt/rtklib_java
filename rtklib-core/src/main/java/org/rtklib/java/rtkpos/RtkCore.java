@@ -97,7 +97,9 @@ public final class RtkCore {
             }
         }
 
-        return relpos(rtk, obs, nu, nr, nav);
+        int result = relpos(rtk, obs, nu, nr, nav);
+        rtk.epoch++;
+        return result;
     }
 
     private static int relpos(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav) {
@@ -133,6 +135,7 @@ public final class RtkCore {
 
         if (!zdres(1, obs, nu, nr, rs, dts, vare, svh, nav, rtk.rb, opt,
                 y, e, azel, freq, rtk.epoch)) {
+            LOG.info("relpos: zdres(base) failed, epoch={}", rtk.epoch);
             return 0;
         }
 
@@ -147,7 +150,11 @@ public final class RtkCore {
         int[] ir = new int[Constants.MAXSAT];
         ns = selsat(obs, azel, nu, nr, opt, sat, iu, ir);
         if (ns <= 0) {
+            LOG.info("relpos: selsat returned 0, epoch={}", rtk.epoch);
             return 0;
+        }
+        if (rtk.epoch == 0) {
+            LOG.info("relpos: ns={}, nf={}, nu={}, nr={}", ns, nf, nu, nr);
         }
 
         int nx_new = NR(rtk) + NB(rtk);
@@ -198,11 +205,13 @@ public final class RtkCore {
             for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xp[j];
             if (!zdres(0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
                     y, e, azel, freq, rtk.epoch)) {
+                LOG.info("relpos: zdres(rover) failed, epoch={}, iter={}", rtk.epoch, i);
                 stat = Constants.SOLQ_NONE;
                 break;
             }
             if ((nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
                     iu, ir, ns, nf, nav, v, H, R, vflg)) < 4) {
+                LOG.info("relpos: ddres nv={} < 4, epoch={}, iter={}", nv, rtk.epoch, i);
                 stat = Constants.SOLQ_NONE;
                 break;
             }
@@ -225,6 +234,7 @@ public final class RtkCore {
             int info = filter(rtk, xp, Pp, H, v, R, nx, nv);
 
             if (info != 0) {
+                LOG.info("relpos: filter failed info={}, epoch={}, iter={}", info, rtk.epoch, i);
                 stat = Constants.SOLQ_NONE;
                 break;
             }
@@ -286,7 +296,7 @@ public final class RtkCore {
             }
             double[] bias_arr = new double[nx];
             double[] xa_arr = new double[nx];
-            int nb = manage_amb_LAMBDA(rtk, bias_arr, xa_arr, sat, nf, ns);
+            int nb = manage_amb_LAMBDA(rtk, bias_arr, xa_arr, sat, nf, ns, nav);
 
             if (nb > 1) {
                 for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xa_arr[j];
@@ -872,11 +882,9 @@ public final class RtkCore {
                 }
                 int slip = rtk.ssat[s].slip[f];
                 int rejc = (int) rtk.ssat[s].rejc[f];
-                if (opt.ionoopt == Constants.IONOOPT_IFLC && nf > 1) {
+                if (opt.ionoopt == Constants.IONOOPT_IFLC) {
                     int f2 = RtklibCommon.seliflc(opt.nf, rtk.ssat[s].sys);
-                    if (f2 >= 0 && f2 < Constants.NFREQ) {
-                        slip |= rtk.ssat[s].slip[f2];
-                    }
+                    slip |= rtk.ssat[s].slip[f2];
                 }
                 if (opt.modear != Constants.ARMODE_INST &&
                     (slip & Constants.LLI_SLIP) == 0 && rejc < 2) continue;
@@ -906,17 +914,18 @@ public final class RtkCore {
                     double pr = obsR.P[f] - obsB.P[f];
                     bias[i] = cp - pr * freqi / Constants.CLIGHT;
                 } else {
-                    if (obsR.L[0] == 0.0 || obsR.L[1] == 0.0 || obsB.L[0] == 0.0 || obsB.L[1] == 0.0) continue;
-                    if (obsR.P[0] == 0.0 || obsR.P[1] == 0.0 || obsB.P[0] == 0.0 || obsB.P[1] == 0.0) continue;
+                    int f2 = RtklibCommon.seliflc(opt.nf, rtk.ssat[sat[i] - 1].sys);
+                    if (obsR.L[0] == 0.0 || obsR.L[f2] == 0.0 || obsB.L[0] == 0.0 || obsB.L[f2] == 0.0) continue;
+                    if (obsR.P[0] == 0.0 || obsR.P[f2] == 0.0 || obsB.P[0] == 0.0 || obsB.P[f2] == 0.0) continue;
                     double freq1 = SatUtils.sat2freq(sat[i], obsR.code[0], nav);
-                    double freq2 = SatUtils.sat2freq(sat[i], obsR.code[1], nav);
+                    double freq2 = SatUtils.sat2freq(sat[i], obsR.code[f2], nav);
                     if (freq1 <= 0.0 || freq2 <= 0.0) continue;
                     double C1 = SQR(freq1) / (SQR(freq1) - SQR(freq2));
                     double C2 = -SQR(freq2) / (SQR(freq1) - SQR(freq2));
                     double cp1 = (obsR.L[0] - obsB.L[0]) * Constants.CLIGHT / freq1;
-                    double cp2 = (obsR.L[1] - obsB.L[1]) * Constants.CLIGHT / freq2;
+                    double cp2 = (obsR.L[f2] - obsB.L[f2]) * Constants.CLIGHT / freq2;
                     double pr1 = obsR.P[0] - obsB.P[0];
-                    double pr2 = obsR.P[1] - obsB.P[1];
+                    double pr2 = obsR.P[f2] - obsB.P[f2];
                     bias[i] = (C1 * cp1 + C2 * cp2) - (C1 * pr1 + C2 * pr2);
                 }
                 int idx = IB(sat[i], f, opt);
@@ -1122,7 +1131,7 @@ public final class RtkCore {
         }
 
         if (opt.ionoopt == Constants.IONOOPT_IFLC) {
-            var *= SQR(3.0);
+            var *= 3.0;
         }
 
         return var;
@@ -1418,7 +1427,7 @@ public final class RtkCore {
     }
 
     private static int resamb_LAMBDA(Rtk rtk, double[] bias, double[] xa,
-                                     int gps, int glo, int sbs) {
+                                     int gps, int glo, int sbs, Nav nav) {
         PrcOpt opt = rtk.opt;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
         int nx = rtk.nx;
@@ -1576,11 +1585,32 @@ public final class RtkCore {
 
         double[] s = new double[2];
 
+        if (rtk.epoch <= 3 || rtk.epoch % 200 == 0) {
+            StringBuilder ySb = new StringBuilder();
+            StringBuilder qbSb = new StringBuilder();
+            for (int ii = 0; ii < Math.min(nbLambda, 10); ii++) {
+                if (ii > 0) { ySb.append(" "); qbSb.append(" "); }
+                ySb.append(String.format("%.4f", y[ii]));
+                qbSb.append(String.format("%.6f", Qb[ii * nbLambda + ii]));
+            }
+            LOG.info(String.format("LAMBDA input: epoch=%d nb=%d y=[%s] Qb_diag=[%s]",
+                    rtk.epoch, nbLambda, ySb, qbSb));
+        }
+
         int info = Lambda.lambda(nbLambda, 2, y, Qb, b, s);
 
         if (info == 0) {
             rtk.sol.ratio = s[0] > 0 ? (float) (s[1] / s[0]) : 0.0f;
             if (rtk.sol.ratio > 999.9f) rtk.sol.ratio = 999.9f;
+            if (rtk.epoch <= 5 || rtk.epoch % 100 == 0) {
+                StringBuilder bSb = new StringBuilder();
+                for (int ii = 0; ii < Math.min(nbLambda, 10); ii++) {
+                    if (ii > 0) bSb.append(" ");
+                    bSb.append(String.format("%.4f", b[ii]));
+                }
+                LOG.info(String.format("LAMBDA: epoch=%d nb=%d nbLambda=%d ratio=%.3f thres=%.3f s=[%.4f,%.4f] b=[%s]",
+                        rtk.epoch, nb, nbLambda, rtk.sol.ratio, rtk.sol.thres, s[0], s[1], bSb));
+            }
 
             if (opt.thresar[5] != opt.thresar[6]) {
                 rtk.sol.thres = (float) opt.thresar[0];
@@ -1676,7 +1706,7 @@ public final class RtkCore {
     }
 
     private static int manage_amb_LAMBDA(Rtk rtk, double[] bias, double[] xa,
-                                         int[] sat, int nf, int ns) {
+                                         int[] sat, int nf, int ns, Nav nav) {
         PrcOpt opt = rtk.opt;
 
         double posvar = 0.0;
@@ -1732,7 +1762,7 @@ public final class RtkCore {
         int sbas1 = (opt.navsys & Constants.SYS_GLO) != 0 ? glo1 :
                     ((opt.navsys & Constants.SYS_SBS) != 0 ? 1 : 0);
 
-        int nb = resamb_LAMBDA(rtk, bias, xa, gps1, glo1, sbas1);
+        int nb = resamb_LAMBDA(rtk, bias, xa, gps1, glo1, sbas1, nav);
         float ratio1 = rtk.sol.ratio;
 
         if (opt.arfilter != 0) {
@@ -1753,7 +1783,7 @@ public final class RtkCore {
                 }
             }
             if (rerun != 0) {
-                nb = resamb_LAMBDA(rtk, bias, xa, gps1, glo1, sbas1);
+                nb = resamb_LAMBDA(rtk, bias, xa, gps1, glo1, sbas1, nav);
             }
         }
 
@@ -1766,7 +1796,7 @@ public final class RtkCore {
             int sbas2 = 0;
             int gps2 = opt.gpsmodear == 0 && rtk.sol.ratio >= rtk.sol.thres ? 0 : 1;
             if (glo1 != glo2 || gps1 != gps2) {
-                nb = resamb_LAMBDA(rtk, bias, xa, gps2, glo2, sbas2);
+                nb = resamb_LAMBDA(rtk, bias, xa, gps2, glo2, sbas2, nav);
             }
         }
 

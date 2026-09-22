@@ -207,18 +207,13 @@ public final class TimeSystem {
     public static GTime timeadd(GTime t, double sec) {
         GTime result = new GTime(t);
         double tt = t.sec + sec;
-        int loopCount = 0;
-        while (tt < 0.0) {
-            tt += 1.0;
-            result.time -= 1L;
-            if (++loopCount > 10) break;
+        if (tt >= 1.0 || tt < 0.0) {
+            long isec = (long) Math.floor(tt);
+            result.time += isec;
+            result.sec = tt - isec;
+        } else {
+            result.sec = tt;
         }
-        while (tt >= 1.0) {
-            tt -= 1.0;
-            result.time += 1L;
-            if (++loopCount > 10) break;
-        }
-        result.sec = tt;
         return result;
     }
 
