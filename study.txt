@@ -448,15 +448,60 @@ AOD数据下载：
 3. PPP阶段优化方案（RTK交付后启动）
 ================================================================================
 
+【PPP侵入架构说明——与RTK的关键差异】
+─────────────────────────────────────────────────────────────────────
+RTK优化侵入模式：RtkCore + RtkOptimizations，1行委托即可扩展
+PPP优化侵入模式：PppCore是final类，所有方法private static，无RtkOptimizations
+等价扩展点。PPP优化需要更深的侵入，有两种策略：
+
+策略A：仿RTK模式，新增PppOptimizations独立类 + PppCore最小侵入
+  适用：对流层模型替换、潮汐模型升级、周跳检测增强
+  侵入量：与RTK同级别，PppCore中增加if-branch委托
+  示例：
+    PppCore.udtrop_ppp()中：
+      if (opt.tropoopt == TROPOOPT_GPT3VMF3) {
+          // [OPT-GPT3-VMF3] GPT3+VMF3对流层模型
+          return PppOptimizations.tropoDelayGpt3Vmf3(...);
+      }
+
+策略B：继承扩展PppCore，新增PppCoreEx子类
+  适用：ISB/IFCB/IFB偏差估计、PPP-AR模糊度固定
+  原因：这些优化需要扩展PPP状态向量维度、修改观测方程结构，
+        无法通过1行委托实现，必须重写pppos/udstate_ppp/pppRes等核心方法
+  侵入量：较大，需继承PppCore并override多个方法
+  实现方案：
+    public class PppCoreEx extends PppCore {
+        @Override
+        public static void ppos(Rtk rtk, Obsd[] obs, int n, Nav nav) {
+            // 扩展状态向量（新增ISB/IFCB/IFB参数）
+            int nx = pppnx(opt) + PppBiasModel.extraDim(cfg);
+            // 调用super.ppos()或重写核心逻辑
+        }
+    }
+  回退保证：
+    PppProcessor中通过Config开关选择：
+      if (cfg.enableIsbIfcbIfb || cfg.enablePppAR) {
+          PppCoreEx.ppos(rtk, obs, n, nav);  // 扩展版
+      } else {
+          PppCore.ppos(rtk, obs, n, nav);     // 原版
+      }
+    开关全关时走原版PppCore，与原版RTKLIB行为完全一致
+
+  注意：PppCore是final类，需先移除final修饰符（最小改动），
+  或改用组合模式（PppCoreEx内委托PppCore而非继承）。
+  推荐组合模式，避免修改PppCore类声明。
+
 3.1 GPT3+VMF3对流层模型（PPP场景P0）
 ─────────────────────────────────────────────────────────────────────
 见§2.6，PPP场景下为P0最高优先级，精度提升30%~50%
+侵入策略：策略A（PppOptimizations + PppCore if-branch，与RTK同级别）
 
 3.2 IERS2010潮汐模型（P1）
 ─────────────────────────────────────────────────────────────────────
 来源：      PRIDE PPP-AR
 目的：      替换IERS2003，新增多种潮汐改正，满足毫米级精度要求
 改造类型：  模型升级（Tides.java已有IERS2003框架）
+侵入策略：  策略A（Tides.java新增方法 + 调用点if-branch，不涉及PppCore侵入）
 
 现状：
   - 项目实测短基线潮汐改正对FIX率影响0%
@@ -490,6 +535,7 @@ AOD数据下载：
 来源：      PRIDE PPP-AR
 目的：      PPP非差解算中必须估计的偏差，提升多系统、多频高精度PPP精度
 改造类型：  新增偏差参数估计
+侵入策略：  策略B（需扩展PPP状态向量维度，侵入较大）
 
 强约束：双差RTK天然抵消，禁止引入。如果在RTK中估计ISB/IFB，会引入冗余参数
 降低FIX率。严格限定在PPP模块内实现。
@@ -503,20 +549,39 @@ AOD数据下载：
    public boolean estimateIfb = true;             // 估计IFB（频间相位偏差）
 
 2）新增独立类 PppBiasModel.java（org.rtklib.java.ppp包）：
-   - 扩展PPP状态向量：新增ISB/IFCB/IFB参数
-   - 扩展观测方程：H矩阵新增对应列
+   - static int extraDim(PppConfig cfg) → 返回新增状态维度
+   - static void extendStateVector(Rtk rtk, int nx, PppConfig cfg)
+     扩展x/P数组，初始化ISB/IFCB/IFB参数
+   - static void extendObsEquation(...) → H矩阵新增对应列
    - RTK模块完全不调用此类（编译级隔离）
 
-3）PppProcessor最小侵入修改：
-   原代码（状态向量初始化）：
-     int nx = ...;  // 原有状态维数
-   修改为：
-     int nx = ...;
-     // [OPT-ISB-IFCB] 偏差参数扩展
-     if (cfg.enableIsbIfcbIfb) nx += PppBiasModel.extraDim(cfg);
+3）新增PppCoreEx.java（组合模式，不修改PppCore类声明）：
+   public class PppCoreEx {
+       public static void ppos(Rtk rtk, Obsd[] obs, int n, Nav nav, PppConfig cfg) {
+           if (!cfg.enableIsbIfcbIfb) {
+               PppCore.ppos(rtk, obs, n, nav);  // 委托原版
+               return;
+           }
+           // 扩展版：扩展状态向量 + 修改观测方程
+           int nx = PppCore.pppnx(opt) + PppBiasModel.extraDim(cfg);
+           ... // 重写pppos核心逻辑（复用PppCore的辅助方法）
+       }
+   }
 
-4）回退保证：
-   - enableIsbIfcbIfb=false（默认）→ PPP状态向量与原版一致
+4）PppProcessor最小侵入修改：
+   原代码：
+     PppCore.ppos(rtk, obs, n, nav);
+   修改为：
+     // [OPT-ISB-IFCB] ISB/IFCB/IFB偏差模型
+     if (cfg.enableIsbIfcbIfb) {
+         PppCoreEx.ppos(rtk, obs, n, nav, cfg);
+     } else {
+         PppCore.ppos(rtk, obs, n, nav);
+     }
+
+5）回退保证：
+   - enableIsbIfcbIfb=false（默认）→ 走原版PppCore.ppos()，与原版一致
+   - PppCore类声明不修改（组合模式，非继承）
    - RTK模块完全不受影响（代码隔离）
 
 3.4 PPP模糊度固定策略（P1）
@@ -524,6 +589,7 @@ AOD数据下载：
 来源：      PRIDE PPP-AR（整数宽巷+窄巷两步固定）
 目的：      PPP非差模糊度固定，实现PPP-AR
 改造类型：  核心算法新增
+侵入策略：  策略B（需修改PPP解算流程，在pppos()中增加AR步骤，侵入较大）
 
 【实现方法】
 ─────────────────────────────────────────────────────────────────────
@@ -537,7 +603,7 @@ AOD数据下载：
      整数宽巷+窄巷两步固定（与RTK逐级AR类似但非差模式）
    - 需要FCB/OSB相位偏差产品文件（通过ProductDownloader获取）
 
-3）PppProcessor最小侵入修改：
+3）PppCoreEx.ppos()中（与§3.3共用PppCoreEx组合模式）：
    原代码（PPP浮点解输出）：
      sol.stat = SOLQ_FLOAT;
    修改为：
@@ -548,7 +614,9 @@ AOD数据下载：
      }
      if (sol.stat != SOLQ_FIX) sol.stat = SOLQ_FLOAT;
 
-4）回退保证：enablePppAR=false（默认）→ PPP浮点解，与原版一致
+4）回退保证：
+   - enablePppAR=false（默认）→ PPP浮点解，与原版一致
+   - 与enableIsbIfcbIfb可叠加：PPP-AR在ISB/IFCB/IFB估计后执行
 
 3.5 AI辅助AR验证模型（远期储备，不纳入当前迭代）
 ─────────────────────────────────────────────────────────────────────
@@ -892,6 +960,25 @@ PPP阶段总预估：5-9周
   ✅ 新增逻辑全部封装在独立类中（RtkOptimizations*或新包）
   ✅ 每个方法首行检查开关，关闭时return原始行为
   ✅ 侵入点用 // [OPT-XXX] 标注
+
+模式C：组合模式扩展PppCore（PPP策略B专用）
+  适用：ISB/IFCB/IFB偏差估计、PPP-AR模糊度固定
+  原因：需扩展PPP状态向量维度/修改观测方程结构，无法1行委托
+  方案：新增PppCoreEx（组合模式），内委托PppCore
+    public class PppCoreEx {
+        public static void ppos(Rtk rtk, Obsd[] obs, int n, Nav nav, PppConfig cfg) {
+            if (!cfg.enableIsbIfcbIfb && !cfg.enablePppAR) {
+                PppCore.ppos(rtk, obs, n, nav);  // 委托原版
+                return;
+            }
+            // 扩展版逻辑
+        }
+    }
+  PppProcessor中：
+    if (cfg.enableIsbIfcbIfb || cfg.enablePppAR) PppCoreEx.ppos(...)
+    else PppCore.ppos(...)
+  关键：不修改PppCore类声明（保持final），用组合而非继承
+  回退：开关全关→走原版PppCore.ppos()，与原版RTKLIB一致
 
 7.3 RTKLIB版本升级移植维护
 ─────────────────────────────────────────────────────────────────────
