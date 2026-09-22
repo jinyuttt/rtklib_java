@@ -75,14 +75,41 @@ GraphRTK-INS         因子图滑窗优化(FGO)        GNSS/IMU紧耦合、     
 2. RTK阶段优化方案（先行交付）
 ================================================================================
 
+【现有优化实现模式（所有新优化必须遵循）】
+─────────────────────────────────────────────────────────────────────
+项目已建立成熟的"Config开关 + RtkOptimizations独立类 + RtkCore最小侵入"模式：
+
+1）RtkConfig.java：boolean开关默认false + 相关参数默认值
+   例：enableAmbAnchor=false, ambAnchorMinFixCount=100, ambAnchorVar=1e-9
+
+2）RtkOptimizations.java：独立静态类，所有优化逻辑封装于此
+   - 每个方法首行检查开关：if (!cfg.enableXXX) { 原始行为/return; }
+   - 开关关闭时行为与原版RTKLIB完全一致
+   - 例：computeQScale() → if (!cfg.enableAdaptiveQ) { rtk.qScale=1.0; return; }
+
+3）RtkCore.java：仅在关键调用点增加1行委托，不修改原有逻辑
+   例1：RtkOptimizations.computeSnrMedian(rtk,...);  // 替代原snr计算
+   例2：RtkOptimizations.computeQScale(rtk,...);      // udstate()后
+   例3：RtkOptimizations.applyIggiii(rtk,...);        // ddres()后filter()前
+   例4：ddidx() → if (cfg.enableParRefReselect) return RtkOptimizations.buildParIndex(...);
+
+4）resamb_LAMBDA()中的模式：
+   - enableParRefReselect：在ddidx()中切换双差索引构建策略
+   - enableAmbAnchor：在resamb_LAMBDA()内分离锚固/自由模糊度子集，
+     仅对自由子集执行LAMBDA搜索，锚固子集直接代入
+
+所有新优化必须严格遵循此模式，确保：
+  ✅ 开关默认false，关闭时与原版RTKLIB行为完全一致
+  ✅ 新增逻辑封装在RtkOptimizations或新独立类中
+  ✅ RtkCore仅增加if-branch委托，不修改原有代码行
+  ✅ 侵入点用 // [OPT-XXX] 标注，便于RTKLIB版本升级时定位
+
 2.1 逐级模糊度固定 EWL→WL→NL（P0 最高优先级）
 ─────────────────────────────────────────────────────────────────────
 来源：      GREAT-PVT arsig 模块
 目的：      利用多频波长差异逐级约束固定模糊度，提升RTK固定连续性和精度
 现状短板：  仅单步窄巷LAMBDA+Ratio，多频利用率低
-改造类型：  核心算法重构（resamb_LAMBDA()）
-侵入点：    RtkProcessor.resamb_LAMBDA()
-回退方案：  Config开关 enableCascadeAR=false时退回单步LAMBDA
+改造类型：  核心算法新增（逐级LAMBDA搜索）
 依赖：      多频数据（≥3频），项目已支持NFREQ=6
 
 逐级策略：
@@ -97,6 +124,40 @@ GraphRTK-INS         因子图滑窗优化(FGO)        GNSS/IMU紧耦合、     
   - 逐级AR的每一级都应支持锚固分离，但锚固计数仅在NL级管理
   - 注意：EWL/WL级虽然"极易取整"，但不能跳过验证，错误固定会污染NL级
 
+【实现方法】
+─────────────────────────────────────────────────────────────────────
+1）RtkConfig新增开关和参数：
+   public boolean enableCascadeAR = false;      // 总开关，默认关闭
+   public double cascadeArRatioEwl = 1.5;       // EWL级Ratio阈值（放宽）
+   public double cascadeArRatioWl = 2.0;        // WL级Ratio阈值
+   public double cascadeArRatioNl = 3.0;        // NL级Ratio阈值（与thresar一致）
+   public boolean cascadeArBootstrapping = false; // 逐级是否启用Bootstrapping
+
+2）新增独立类 RtkOptimizationsCascadeAR.java（org.rtklib.java.rtkpos包）：
+   - static int cascadeAmbFix(Rtk rtk, double[] bias, double[] xa,
+                              int gps, int glo, int sbs, Nav nav)
+   - 内部实现EWL→WL→NL三级LAMBDA搜索
+   - 每级：构建双差模糊度子矩阵 → LAMBDA搜索 → Ratio/Bootstrapping校验
+   - 上级固定结果作为约束代入下级（缩小搜索空间）
+   - 每级均支持锚固分离（复用现有enableAmbAnchor逻辑）
+
+3）RtkCore.resamb_LAMBDA()最小侵入修改：
+   原代码：
+     int nb = ddidx(rtk, ix, gps, glo, sbs);
+     ... // 单步LAMBDA搜索
+   修改为：
+     if (rtk.rtkConfig.enableCascadeAR) {
+         // [OPT-CASCADE-AR] 逐级模糊度固定
+         return RtkOptimizationsCascadeAR.cascadeAmbFix(rtk, bias, xa, gps, glo, sbs, nav);
+     }
+     int nb = ddidx(rtk, ix, gps, glo, sbs);
+     ... // 原有单步LAMBDA搜索不变
+
+4）回退保证：
+   - enableCascadeAR=false（默认）→ 完全跳过新代码，走原有resamb_LAMBDA逻辑
+   - 与原版RTKLIB行为完全一致
+   - 可随时通过开关A/B对照测试
+
 分阶段落地：
   Phase 1：双频WL→NL（覆盖大多数双频接收机）
   Phase 2：三频EWL→WL→NL（完整三频逐级）
@@ -106,8 +167,6 @@ GraphRTK-INS         因子图滑窗优化(FGO)        GNSS/IMU紧耦合、     
 来源：      PRIDE redig 全套模块
 目的：      通过残差时序迭代跳变检测等手段保障模糊度弧段连续
 改造类型：  新增模块（弧段域质控）
-侵入点：    udbias() 周跳处理 + 新增 ResidualEditor 类
-回退方案：  Config开关 enableResidualEdit=false时使用原生周跳检测
 优先级提升理由：所有高级AR策略的底层基础，周跳检测不可靠则逐级AR和Partial AR失效
 
 现状短板：
@@ -117,20 +176,49 @@ GraphRTK-INS         因子图滑窗优化(FGO)        GNSS/IMU紧耦合、     
   - 缺少弧段完整性筛查
 
 与IGGIII的关系：
-  - enableIggiii：观测域降权抑制粗差（单历元）
-  - PRIDE残差编辑：弧段域检测周跳和异常（多历元时序）
+  - enableIggiii：观测域降权抑制粗差（单历元）→ 已有，RtkCore中ddres后filter前调用
+  - PRIDE残差编辑：弧段域检测周跳和异常（多历元时序）→ 新增
   - 两者作用层面不同，互补
+
+【实现方法】
+─────────────────────────────────────────────────────────────────────
+1）RtkConfig新增开关和参数：
+   public boolean enableResidualEdit = false;    // 总开关，默认关闭
+   public double residEditJumpThresh = 4.0;      // 残差跳变阈值（σ倍数）
+   public int residEditMinArcLen = 10;            // 最小弧段长度（历元数）
+   public double residEditPcConsistThresh = 3.0;  // 伪距-载波一致性阈值
+
+2）新增独立类 RtkOptimizationsResEdit.java（org.rtklib.java.rtkpos包）：
+   - static void checkCycleSlip(Rtk rtk, double[] v, double[] R, int[] vflg, int nv)
+     残差时序迭代跳变检测：对每个卫星-频率的残差序列检测突变
+   - static void checkPcConsistency(Rtk rtk, Obsd[] obs, int[] sat, int ns, int nf)
+     伪距-载波一致性校验：|P - L*λ| 超限则标记周跳
+   - static void screenArcIntegrity(Rtk rtk)
+     弧段完整性筛查：过短弧段或弧段内残差方差过大则重置模糊度
+   - 每个方法首行：if (!cfg.enableResidualEdit) return;
+
+3）RtkCore.udbias()最小侵入修改：
+   原代码（udbias末尾，模糊度初始化/重置逻辑后）：
+     // 原有周跳检测（LLI+几何距离跳变）
+   修改为：
+     // [OPT-RES-EDIT] 精细化残差编辑与周跳检测
+     RtkOptimizationsResEdit.checkCycleSlip(rtk, v, R, vflg, nv);
+     RtkOptimizationsResEdit.checkPcConsistency(rtk, obs, sat, ns, nf);
+     RtkOptimizationsResEdit.screenArcIntegrity(rtk);
+     // 原有周跳检测不变（作为兜底）
+
+4）回退保证：
+   - enableResidualEdit=false（默认）→ 完全跳过，udbias()行为与原版一致
+   - 与现有enableIggiii互不干扰（不同调用点，不同作用域）
 
 2.3 部分模糊度固定 Partial AR（P1）
 ─────────────────────────────────────────────────────────────────────
 来源：      GREAT-PVT arsig 模块
 目的：      全局Ratio失败后，剔除劣质模糊度维度，保留可信子集完成固定
 改造类型：  核心算法新增（LAMBDA子集搜索）
-侵入点：    RtkProcessor.resamb_LAMBDA() Ratio检验失败后
-回退方案：  Config开关 enablePartialAR=false时退回全局Ratio
 
 与现有机制的关系：
-  - enableAmbAnchor：保护"过去已稳定"的模糊度（向后保护）→ 互补
+  - enableAmbAnchor：保护"过去已稳定"的模糊度（向后保护）→ 互补，可叠加
   - enableParRefReselect：仅排除参考星，非真正子集选择 → 弱化版，保留作兜底
   - Partial AR：在当前历元"剔除当前劣质"维度（向前筛选）
 
@@ -139,26 +227,94 @@ GraphRTK-INS         因子图滑窗优化(FGO)        GNSS/IMU紧耦合、     
   - 缺一不可，否则假固定风险不可控
   - 测绘场景宁可失锁不输出错误解
 
+【实现方法】
+─────────────────────────────────────────────────────────────────────
+1）RtkConfig新增开关和参数：
+   public boolean enablePartialAR = false;       // 总开关，默认关闭
+   public double partialArMinRatio = 2.0;        // 子集最小Ratio阈值
+   public int partialArMinSats = 4;              // 子集最少卫星数
+   public double partialArMinBootstrapping = 0.99; // 子集最小Bootstrapping成功率
+   public int partialArMaxSubsetTries = 10;      // 最大子集尝试次数
+
+2）新增独立类 RtkOptimizationsPartialAR.java（org.rtklib.java.rtkpos包）：
+   - static int partialAmbFix(Rtk rtk, double[] bias, double[] xa,
+                              int[] ix, int nb, int gps, int glo, int sbs)
+   - 全局LAMBDA失败后调用
+   - 策略：按模糊度方差排序，逐个剔除最大方差维度，对剩余子集重试LAMBDA
+   - 每次子集固定需通过三判据：Ratio + Bootstrapping + 残差时序
+   - 与enableAmbAnchor叠加：先锚固分离，再对自由子集做Partial AR
+
+3）RtkCore.resamb_LAMBDA()最小侵入修改：
+   原代码（LAMBDA搜索后Ratio检验失败处）：
+     if (rtk.sol.ratio < rtk.sol.thres) {
+         return -1;  // 固定失败
+     }
+   修改为：
+     if (rtk.sol.ratio < rtk.sol.thres) {
+         if (rtk.rtkConfig.enablePartialAR) {
+             // [OPT-PARTIAL-AR] 部分模糊度固定
+             int nbPar = RtkOptimizationsPartialAR.partialAmbFix(
+                             rtk, bias, xa, ix, nb, gps, glo, sbs);
+             if (nbPar > 1) return nbPar;
+         }
+         return -1;  // 固定失败
+     }
+
+4）回退保证：
+   - enablePartialAR=false（默认）→ Ratio失败直接return -1，与原版一致
+   - 与enableAmbAnchor独立：两者可分别开关、叠加使用
+
 2.4 Bootstrapping成功率联合判据（P1，从P2提升）
 ─────────────────────────────────────────────────────────────────────
 来源：      GREAT-PVT arsig 模块
 目的：      作为Ratio的互补判据，与Ratio、残差时序联合判定模糊度固定可靠性
 改造类型：  新增判据模块
-侵入点：    resamb_LAMBDA() 固定判据处
-回退方案：  Config开关 enableBootstrapping=false时仅用Ratio
 优先级提升理由：Partial AR安全落地的必要条件，没有多判据保护就是"裸奔"
 
 现状：
   - 单一Ratio判据，参数敏感性分析显示thresar从2.0→6.0 FIX率下降14.9%
   - Ratio判据对阈值敏感，需要互补判据降低敏感性
 
+【实现方法】
+─────────────────────────────────────────────────────────────────────
+1）RtkConfig新增开关和参数：
+   public boolean enableBootstrapping = false;    // 总开关，默认关闭
+   public double bootstrappingMinSuccess = 0.99;  // 最小Bootstrapping成功率
+   public boolean bootstrappingWithRatio = true;  // 是否与Ratio联合（true=双判据）
+
+2）新增独立类 RtkOptimizationsBootstrap.java（org.rtklib.java.rtkpos包）：
+   - static double computeSuccessRate(double[] a, double[] Q, int n)
+     计算Bootstrapping成功率：对排序后的模糊度逐个取整，
+     累积∏(1-2*Q_erfc(|a_i-round(a_i)|/σ_i))
+   - static boolean validateFix(Rtk rtk, double[] bias, int nb)
+     联合判据：Ratio检验 && Bootstrapping成功率 >= bootstrappingMinSuccess
+   - 每个方法首行：if (!cfg.enableBootstrapping) return true;（默认通过）
+
+3）RtkCore.resamb_LAMBDA()最小侵入修改：
+   原代码（Ratio检验通过后）：
+     if (rtk.sol.ratio >= rtk.sol.thres) {
+         // 固定成功
+     }
+   修改为：
+     if (rtk.sol.ratio >= rtk.sol.thres) {
+         // [OPT-BOOTSTRAP] Bootstrapping联合判据
+         if (!RtkOptimizationsBootstrap.validateFix(rtk, bias, nb)) {
+             rtk.sol.ratio = 0.0f;  // 判据未通过，视为固定失败
+             return -1;
+         }
+         // 固定成功
+     }
+
+4）回退保证：
+   - enableBootstrapping=false（默认）→ validateFix()直接return true，仅用Ratio
+   - 与原版RTKLIB行为完全一致
+   - 可与Partial AR、逐级AR独立开关、叠加使用
+
 2.5 BDS卫星码偏差改正（P2）
 ─────────────────────────────────────────────────────────────────────
 来源：      PRIDE PPP-AR（Wanninger模型，2020 IEEE CBD论文）
 目的：      针对BDS卫星，特别是GEO卫星和低高度角IGSO/MEO卫星的码偏差进行改正
 改造类型：  新增改正模块
-侵入点：    观测值改正阶段
-回退方案：  Config开关 enableBdsCodeBias=false时跳过
 
 智能开关策略：
   - RTK短基线默认关闭（双差可大部分抵消）
@@ -169,13 +325,39 @@ BDS-3新信号注意：
   - B1C/B2a的码偏差特性在RTKLIB 2.5.0中可能未覆盖
   - 需先确认rtkcmn.c中的频率定义和码偏差处理是否完整
 
+【实现方法】
+─────────────────────────────────────────────────────────────────────
+1）RtkConfig新增开关和参数：
+   public boolean enableBdsCodeBias = false;      // 总开关，默认关闭
+   public double bdsCodeBiasElThresh = 30.0;      // 自动开启的高度角阈值(度)
+   public boolean bdsCodeBiasForceOn = false;     // 强制开启（无视基线长度）
+
+2）新增独立类 RtkOptimizationsBdsBias.java（org.rtklib.java.rtkpos包）：
+   - static double[] computeBdsCodeBias(int sat, double el, int freq)
+     Wanninger模型计算BDS码偏差改正值
+     - GEO卫星：使用GEO专用系数
+     - IGSO/MEO卫星：根据高度角插值
+   - static void applyBdsCodeBias(Rtk rtk, double[] obs, int[] sat, int ns)
+     对观测值施加码偏差改正
+   - 每个方法首行：if (!cfg.enableBdsCodeBias) return;
+
+3）RtkCore.udobs()或zdres()最小侵入修改：
+   原代码（零差观测值计算处）：
+     // 计算伪距/载波观测值
+   修改为：
+     // [OPT-BDS-BIAS] BDS码偏差改正
+     RtkOptimizationsBdsBias.applyBdsCodeBias(rtk, obs, sat, ns);
+     // 原有观测值计算不变
+
+4）回退保证：
+   - enableBdsCodeBias=false（默认）→ 完全跳过，观测值与原版一致
+   - 仅影响BDS卫星，GPS/GLO/GAL不受影响
+
 2.6 GPT3+VMF3对流层模型（RTK场景降为P1/P2，PPP场景P0）
 ─────────────────────────────────────────────────────────────────────
 来源：      PRIDE PPP-AR
 目的：      提升中长基线RTK和PPP的对流层改正精度
 改造类型：  新增模型替换
-侵入点：    对流层改正函数
-回退方案：  Config开关 tropoModel=GPT3_VMF3 / SAASTAMOINEN 切换
 
 优先级调整理由：
   - 项目实测短基线（<10km）Saastamoinen FIX率81.0%，EST模式仅40.4%
@@ -190,18 +372,77 @@ AOD数据下载：
   - 可通过ProductDownloader扩展支持AOD自动下载
   - 或使用GPT3纯经验模型（无需AOD，精度略降但仍优于GMF）
 
+【实现方法】
+─────────────────────────────────────────────────────────────────────
+1）RtkConfig/PrcOpt新增开关：
+   PrcOpt.tropoopt新增枚举值 TROPOOPT_GPT3VMF3（与现有SAASTAMOINEN/EST并列）
+   无需额外boolean开关，通过tropoopt枚举切换即可
+
+2）新增独立类 Gpt3Vmf3Model.java（org.rtklib.java.tropo包）：
+   - static double[] gpt3(double[] pos, double mjd, Gpt3Grid grid)
+     GPT3经验模型：计算压力、温度、水汽压、a_h/a_w等VMF3映射系数
+   - static double vmf3(double el, double[] vmf3Coeff)
+     VMF3映射函数：替代GMF/NMF
+   - static double tropoDelayGpt3Vmf3(double[] pos, double el, double mjd, ...)
+     完整对流层天顶延迟计算
+   - Gpt3Grid：1°×1°网格数据加载类（从嵌入资源文件或外部文件读取）
+
+3）RtkCore.tropo()最小侵入修改：
+   原代码：
+     if (opt.tropoopt == TROPOOPT_SAASTAMOINEN) { ... }
+   修改为：
+     if (opt.tropoopt == TROPOOPT_GPT3VMF3) {
+         // [OPT-GPT3-VMF3] GPT3+VMF3对流层模型
+         return Gpt3Vmf3Model.tropoDelayGpt3Vmf3(pos, el, mjd, ...);
+     }
+     if (opt.tropoopt == TROPOOPT_SAASTAMOINEN) { ... }  // 原有逻辑不变
+
+4）回退保证：
+   - tropoopt=SAASTAMOINEN（默认）→ 完全走原有对流层计算，与原版一致
+   - 仅新增一个枚举值分支，不修改任何原有代码
+   - GPT3网格数据按需加载，不使用时不占内存
+
 2.7 自适应随机游走过程噪声（P2）
 ─────────────────────────────────────────────────────────────────────
 来源：      PRIDE PPP-AR
 目的：      按物理参数区分噪声模型，提升解算稳健性
-改造类型：  过程噪声模型重构
-侵入点：    EKF状态转移噪声矩阵构建
-回退方案：  Config开关 enableParamTypeNoise=false时使用统一prn[i]²*|tt|
+改造类型：  过程噪声模型配置化
 
 与现有enableAdaptiveQ的关系：
   - study方案：参数类型级（ZTD用随机游走、钟差用白噪声、位置不使用随机游走）
   - 现有enableAdaptiveQ：运动状态级（位置过程噪声缩放，静态压制/动态放大）
+    → 已有，RtkCore.udstate()中：if (enableAdaptiveQ && qScale!=1.0) { qh*=qScale²; }
   - 两者互补，可叠加
+
+【实现方法】
+─────────────────────────────────────────────────────────────────────
+1）RtkConfig新增开关和参数：
+   public boolean enableParamTypeNoise = false;   // 总开关，默认关闭
+   public double noiseZtdRw = 1e-4;               // ZTD随机游走过程噪声(m/√s)
+   public double noiseClkWhite = 1e2;             // 钟差白噪声(m)
+   public double noiseIonoRw = 1e-3;              // 电离层随机游走(m/√s)
+
+2）新增方法 RtkOptimizations.applyParamTypeNoise()：
+   - static void applyParamTypeNoise(Rtk rtk, double[] P, int nx, double tt)
+   - 按状态索引区分参数类型，施加不同噪声模型：
+     - 位置(0-2)：不使用随机游走（位置本身是状态，非时变参数）
+     - ZTD(5)：随机游走 → P[i*nx+i] += noiseZtdRw² * |tt|
+     - 钟差(6-8)：白噪声 → P[i*nx+i] = noiseClkWhite²（替换，非累加）
+     - 模糊度(na..nx)：无过程噪声（保持不变）
+   - 首行：if (!cfg.enableParamTypeNoise) return;
+
+3）RtkCore.udstate()最小侵入修改：
+   原代码（过程噪声矩阵Q构建后）：
+     // 统一 prn[i]² * |tt| 过程噪声
+   修改为：
+     // [OPT-PARAM-NOISE] 参数类型级自适应过程噪声
+     RtkOptimizations.applyParamTypeNoise(rtk, P, nx, tt);
+     // 原有统一过程噪声逻辑不变（当enableParamTypeNoise=false时走原逻辑）
+
+4）回退保证：
+   - enableParamTypeNoise=false（默认）→ 完全跳过，走原有prn[i]²*|tt|逻辑
+   - 与enableAdaptiveQ独立：两者可分别开关、叠加使用
+   - enableAdaptiveQ管位置噪声缩放，enableParamTypeNoise管ZTD/钟差/电离层噪声类型
 
 ================================================================================
 3. PPP阶段优化方案（RTK交付后启动）
@@ -216,32 +457,98 @@ AOD数据下载：
 来源：      PRIDE PPP-AR
 目的：      替换IERS2003，新增多种潮汐改正，满足毫米级精度要求
 改造类型：  模型升级（Tides.java已有IERS2003框架）
-侵入点：    Tides.java
-回退方案：  Config开关 tidesModel=IERS2010 / IERS2003 切换
 
 现状：
   - 项目实测短基线潮汐改正对FIX率影响0%
   - 对毫米级精度有价值，主要赋能后处理PPP
   - 改造量不大（Tides.java已有框架）
 
+【实现方法】
+─────────────────────────────────────────────────────────────────────
+1）PrcOpt新增枚举值 TIDEOPT_IERS2010（与现有IERS2003并列）
+
+2）Tides.java新增方法：
+   - static double[] tideDisplacementIers2010(...)
+     IERS2010潮汐改正：新增长周期潮汐、频率依赖Love数、
+     大气潮负载改正等（IERS2003不含这些）
+   - 原有tideDisplacementIers2003()不变
+
+3）调用点最小侵入修改：
+   原代码：
+     if (opt.tideopt == TIDEOPT_IERS2003) { ... }
+   修改为：
+     if (opt.tideopt == TIDEOPT_IERS2010) {
+         // [OPT-IERS2010] IERS2010潮汐模型
+         return Tides.tideDisplacementIers2010(...);
+     }
+     if (opt.tideopt == TIDEOPT_IERS2003) { ... }  // 原有不变
+
+4）回退保证：tideopt=IERS2003（默认）→ 与原版一致
+
 3.3 ISB/IFCB/IFB全维度偏差模型（P1）
 ─────────────────────────────────────────────────────────────────────
 来源：      PRIDE PPP-AR
 目的：      PPP非差解算中必须估计的偏差，提升多系统、多频高精度PPP精度
 改造类型：  新增偏差参数估计
-侵入点：    PPP状态扩展 + 观测方程
-回退方案：  Config开关，RTK模块禁止调用
 
 强约束：双差RTK天然抵消，禁止引入。如果在RTK中估计ISB/IFB，会引入冗余参数
 降低FIX率。严格限定在PPP模块内实现。
+
+【实现方法】
+─────────────────────────────────────────────────────────────────────
+1）PppConfig新增开关：
+   public boolean enableIsbIfcbIfb = false;       // 总开关，默认关闭
+   public boolean estimateIsb = true;             // 估计ISB（系统间偏差）
+   public boolean estimateIfcb = true;            // 估计IFCB（频间码偏差）
+   public boolean estimateIfb = true;             // 估计IFB（频间相位偏差）
+
+2）新增独立类 PppBiasModel.java（org.rtklib.java.ppp包）：
+   - 扩展PPP状态向量：新增ISB/IFCB/IFB参数
+   - 扩展观测方程：H矩阵新增对应列
+   - RTK模块完全不调用此类（编译级隔离）
+
+3）PppProcessor最小侵入修改：
+   原代码（状态向量初始化）：
+     int nx = ...;  // 原有状态维数
+   修改为：
+     int nx = ...;
+     // [OPT-ISB-IFCB] 偏差参数扩展
+     if (cfg.enableIsbIfcbIfb) nx += PppBiasModel.extraDim(cfg);
+
+4）回退保证：
+   - enableIsbIfcbIfb=false（默认）→ PPP状态向量与原版一致
+   - RTK模块完全不受影响（代码隔离）
 
 3.4 PPP模糊度固定策略（P1）
 ─────────────────────────────────────────────────────────────────────
 来源：      PRIDE PPP-AR（整数宽巷+窄巷两步固定）
 目的：      PPP非差模糊度固定，实现PPP-AR
 改造类型：  核心算法新增
-侵入点：    PppProcessor
-回退方案：  Config开关 enablePppAR=false时PPP浮点解
+
+【实现方法】
+─────────────────────────────────────────────────────────────────────
+1）PppConfig新增开关：
+   public boolean enablePppAR = false;            // 总开关，默认关闭
+   public double pppArRatioWl = 2.0;              // 宽巷Ratio阈值
+   public double pppArRatioNl = 3.0;              // 窄巷Ratio阈值
+
+2）新增独立类 PppAmbFix.java（org.rtklib.java.ppp包）：
+   - static int pppAmbFixWlNl(Rtk rtk, ...)
+     整数宽巷+窄巷两步固定（与RTK逐级AR类似但非差模式）
+   - 需要FCB/OSB相位偏差产品文件（通过ProductDownloader获取）
+
+3）PppProcessor最小侵入修改：
+   原代码（PPP浮点解输出）：
+     sol.stat = SOLQ_FLOAT;
+   修改为：
+     if (cfg.enablePppAR) {
+         // [OPT-PPP-AR] PPP模糊度固定
+         int nb = PppAmbFix.pppAmbFixWlNl(rtk, ...);
+         if (nb > 1) sol.stat = SOLQ_FIX;
+     }
+     if (sol.stat != SOLQ_FIX) sol.stat = SOLQ_FLOAT;
+
+4）回退保证：enablePppAR=false（默认）→ PPP浮点解，与原版一致
 
 3.5 AI辅助AR验证模型（远期储备，不纳入当前迭代）
 ─────────────────────────────────────────────────────────────────────
@@ -552,22 +859,72 @@ PPP阶段总预估：5-9周
 7.1 回退安全设计原则
 ─────────────────────────────────────────────────────────────────────
 1）所有优化通过独立Config开关控制，默认关闭
-2）开关关闭时与原版RTKLIB行为完全一致
+2）开关关闭时与原版RTKLIB行为完全一致（代码级保证，非配置级）
 3）支持独立回退和A/B对照测试
 4）新旧算法互补叠加，不替换
 
-7.2 侵入点最小化策略
+7.2 侵入点最小化策略（遵循现有模式）
 ─────────────────────────────────────────────────────────────────────
-1）新增算法以独立类/模块实现，通过Config开关调用
-2）核心EKF循环（udstate/udobs/resamb）仅增加if分支，不修改原有逻辑
-3）所有新增参数在Config中有明确默认值和文档说明
+现有项目已建立成熟的侵入模式，所有新优化严格遵循：
+
+模式A：Config开关 + RtkOptimizations独立类 + RtkCore 1行委托
+  适用：逐级AR、周跳检测、Partial AR、Bootstrapping、BDS码偏差、过程噪声
+  示例（现有）：
+    RtkCore.relpos()中：
+      RtkOptimizations.computeSnrMedian(rtk,...);    // 1行委托
+      RtkOptimizations.computeQScale(rtk,...);        // 1行委托
+      RtkOptimizations.applyIggiii(rtk,...);          // 1行委托
+    RtkCore.ddidx()中：
+      if (cfg.enableParRefReselect) return RtkOptimizations.buildParIndex(...);  // if-branch
+  新增优化同模式：
+    if (cfg.enableCascadeAR) return RtkOptimizationsCascadeAR.cascadeAmbFix(...);
+    if (cfg.enablePartialAR) { ... RtkOptimizationsPartialAR.partialAmbFix(...); }
+    if (!RtkOptimizationsBootstrap.validateFix(...)) return -1;
+
+模式B：枚举值扩展 + 新增独立类 + 调用点if-branch
+  适用：GPT3+VMF3（tropoopt枚举）、IERS2010（tideopt枚举）
+  示例：
+    if (opt.tropoopt == TROPOOPT_GPT3VMF3) return Gpt3Vmf3Model.tropoDelay(...);
+    if (opt.tideopt == TIDEOPT_IERS2010) return Tides.tideDisplacementIers2010(...);
+
+关键约束：
+  ✅ RtkCore仅增加if-branch委托，不修改任何原有代码行
+  ✅ 新增逻辑全部封装在独立类中（RtkOptimizations*或新包）
+  ✅ 每个方法首行检查开关，关闭时return原始行为
+  ✅ 侵入点用 // [OPT-XXX] 标注
 
 7.3 RTKLIB版本升级移植维护
 ─────────────────────────────────────────────────────────────────────
-1）标准"化注释标记：每个优化侵入点用 // [OPT-XXX] 标注
-2）代码物理隔离：新增类放在独立包中（如org.rtklib.java.ar、org.rtklib.java.tropo）
-3）Config集中管理：所有优化开关在RtkConfig/PrcOpt中统一声明
-4）升级时只需关注标记点，逐个确认兼容性
+1）标准化注释标记：每个优化侵入点用 // [OPT-XXX] 标注
+   已定义标记：
+   [OPT-CASCADE-AR]  逐级模糊度固定
+   [OPT-RES-EDIT]    精细化残差编辑与周跳检测
+   [OPT-PARTIAL-AR]  部分模糊度固定
+   [OPT-BOOTSTRAP]   Bootstrapping联合判据
+   [OPT-BDS-BIAS]    BDS码偏差改正
+   [OPT-GPT3-VMF3]   GPT3+VMF3对流层模型
+   [OPT-PARAM-NOISE] 参数类型级过程噪声
+   [OPT-IERS2010]    IERS2010潮汐模型
+   [OPT-ISB-IFCB]    ISB/IFCB/IFB偏差模型
+   [OPT-PPP-AR]      PPP模糊度固定
+
+2）代码物理隔离：新增类放在独立包中
+   org.rtklib.java.rtkpos.RtkOptimizationsCascadeAR
+   org.rtklib.java.rtkpos.RtkOptimizationsResEdit
+   org.rtklib.java.rtkpos.RtkOptimizationsPartialAR
+   org.rtklib.java.rtkpos.RtkOptimizationsBootstrap
+   org.rtklib.java.rtkpos.RtkOptimizationsBdsBias
+   org.rtklib.java.tropo.Gpt3Vmf3Model
+   org.rtklib.java.ppp.PppBiasModel
+   org.rtklib.java.ppp.PppAmbFix
+
+3）Config集中管理：所有优化开关在RtkConfig/PrcOpt中统一声明，默认false
+
+4）升级流程：RTKLIB新版本发布时
+   a) diff新版RtkCore.c与旧版，定位udstate/udobs/resamb/ddres/tropo等函数变化
+   b) 搜索 // [OPT-XXX] 标记，逐个确认侵入点是否受影响
+   c) 如侵入点函数签名变化，仅需调整委托调用参数，核心优化逻辑不变
+   d) 运行全量测试验证：所有开关关闭时行为与新版RTKLIB一致
 
 ================================================================================
 8. 现有优化项保留清单
