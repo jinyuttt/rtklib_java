@@ -29,14 +29,11 @@ class ProductDownloaderTest {
     }
 
     @Test
-    @DisplayName("FTP/FTPS to HTTP/HTTPS URL conversion")
-    void testFtpToHttp() {
-        assertEquals("https://igs.ign.fr/pub/igs/products/mgex/2260/test.sp3.gz",
-                ProductDownloader.ftpToHttp("ftp://igs.ign.fr/pub/igs/products/mgex/2260/test.sp3.gz"));
-        assertEquals("https://bdspride.com/wum/2260/test.sp3.gz",
-                ProductDownloader.ftpToHttp("ftps://bdspride.com/wum/2260/test.sp3.gz"));
-        assertEquals("https://example.com/file.gz",
-                ProductDownloader.ftpToHttp("https://example.com/file.gz"));
+    @DisplayName("URL constants are correct")
+    void testUrlConstants() {
+        assertTrue(ProductDownloader.URL_BDSPRIDE.startsWith("ftps://"));
+        assertTrue(ProductDownloader.URL_IGN.startsWith("ftp://"));
+        assertTrue(ProductDownloader.URL_WHU.startsWith("ftp://"));
     }
 
     @Test
@@ -60,8 +57,8 @@ class ProductDownloaderTest {
     @DisplayName("Custom URL configuration")
     void testCustomUrls(@TempDir Path tempDir) {
         ProductDownloader dl = new ProductDownloader(
-                tempDir.toString(), true, true,
-                "ftps://custom1.com", "ftp://custom2.com", "ftp://custom3.com");
+                tempDir.toString(), true, false,
+                true, "ftps://custom1.com", "ftp://custom2.com", "ftp://custom3.com");
         LocalDate date = LocalDate.of(2024, 1, 15);
         List<String> urls = dl.generateUrls(date, ProductType.SP3);
         assertTrue(urls.get(0).contains("custom1.com"));
@@ -108,30 +105,24 @@ class ProductDownloaderTest {
     }
 
     @Test
-    @DisplayName("URL generation for DCB")
-    void testGenerateUrlsDcb() {
+    @DisplayName("URL generation for BIA")
+    void testGenerateUrlsBia() {
         ProductDownloader dl = new ProductDownloader("dummy");
         LocalDate date = LocalDate.of(2024, 3, 1);
-        List<String> urls = dl.generateUrls(date, ProductType.DCB);
+        List<String> urls = dl.generateUrls(date, ProductType.BIA);
 
         assertFalse(urls.isEmpty());
-        assertTrue(urls.get(0).contains("CAS0MGXRAP"));
-        assertTrue(urls.get(0).contains("01D_BIA.BIA.gz"));
+        assertTrue(urls.get(0).contains("WUM0MGXRAP"));
+        assertTrue(urls.get(0).contains("01D_OSB.BIA.gz"));
     }
 
     @Test
-    @DisplayName("Sub directory structure")
-    void testSubDirStructure(@TempDir Path tempDir) {
+    @DisplayName("Cache directory structure")
+    void testCacheDirStructure(@TempDir Path tempDir) {
         ProductDownloader dl = new ProductDownloader(tempDir.toString());
-        assertEquals(tempDir.resolve("orbit"), dl.getSubDir(ProductType.SP3));
-        assertEquals(tempDir.resolve("clock"), dl.getSubDir(ProductType.CLK));
-        assertEquals(tempDir.resolve("erp"), dl.getSubDir(ProductType.ERP));
-        assertEquals(tempDir.resolve("erp"), dl.getSubDir(ProductType.ERP_IGS));
-        assertEquals(tempDir.resolve("dcb"), dl.getSubDir(ProductType.DCB));
-        assertTrue(Files.exists(tempDir.resolve("orbit")));
-        assertTrue(Files.exists(tempDir.resolve("clock")));
-        assertTrue(Files.exists(tempDir.resolve("erp")));
-        assertTrue(Files.exists(tempDir.resolve("dcb")));
+        Path commonDir = dl.getCommonDir();
+        assertTrue(Files.exists(commonDir));
+        assertEquals(tempDir.resolve("common"), commonDir);
     }
 
     @Test
@@ -146,8 +137,10 @@ class ProductDownloaderTest {
                 dl.generateLocalFileName(date, ProductType.CLK));
         assertEquals("WUM0MGXRAP_20240150000_01D_01D_ERP.ERP",
                 dl.generateLocalFileName(date, ProductType.ERP));
-        assertEquals("CAS0MGXRAP_20240150000_01D_01D_BIA.BIA",
-                dl.generateLocalFileName(date, ProductType.DCB));
+        assertEquals("WUM0MGXRAP_20240150000_01D_01D_OSB.BIA",
+                dl.generateLocalFileName(date, ProductType.BIA));
+        assertEquals("WUM0MGXRAP_20240150000_01D_30S_ATT.OBX",
+                dl.generateLocalFileName(date, ProductType.OBX));
     }
 
     @Test
@@ -159,7 +152,7 @@ class ProductDownloaderTest {
     }
 
     @Test
-    @DisplayName("Offline mode returns null")
+    @DisplayName("Offline mode returns empty result")
     void testOfflineMode(@TempDir Path tempDir) {
         ProductDownloader dl = new ProductDownloader(tempDir.toString(), true, true);
         LocalDate date = LocalDate.of(2024, 1, 15);

@@ -302,6 +302,37 @@ public class Rtcm implements Serializable {
                 case 1136: return decodeType1136();
                 case 1137: return decodeType1137();
                 case 1230: return decodeType1230();
+                case 1240: return decodeSsrOrbit(Constants.SYS_GAL);
+                case 1241: return decodeSsrClock(Constants.SYS_GAL);
+                case 1242: return decodeSsrCodeBias(Constants.SYS_GAL);
+                case 1243: return decodeSsrCombOrbClk(Constants.SYS_GAL);
+                case 1244: return decodeSsrUra(Constants.SYS_GAL);
+                case 1245: return decodeSsrHrClock(Constants.SYS_GAL);
+                case 1246: return decodeSsrOrbit(Constants.SYS_QZS);
+                case 1247: return decodeSsrClock(Constants.SYS_QZS);
+                case 1248: return decodeSsrCodeBias(Constants.SYS_QZS);
+                case 1249: return decodeSsrCombOrbClk(Constants.SYS_QZS);
+                case 1250: return decodeSsrUra(Constants.SYS_QZS);
+                case 1251: return decodeSsrHrClock(Constants.SYS_QZS);
+                case 1252: return decodeSsrOrbit(Constants.SYS_SBS);
+                case 1253: return decodeSsrClock(Constants.SYS_SBS);
+                case 1254: return decodeSsrCodeBias(Constants.SYS_SBS);
+                case 1255: return decodeSsrCombOrbClk(Constants.SYS_SBS);
+                case 1256: return decodeSsrUra(Constants.SYS_SBS);
+                case 1257: return decodeSsrHrClock(Constants.SYS_SBS);
+                case 1258: return decodeSsrOrbit(Constants.SYS_CMP);
+                case 1259: return decodeSsrClock(Constants.SYS_CMP);
+                case 1260: return decodeSsrCodeBias(Constants.SYS_CMP);
+                case 1261: return decodeSsrCombOrbClk(Constants.SYS_CMP);
+                case 1262: return decodeSsrUra(Constants.SYS_CMP);
+                case 1263: return decodeSsrHrClock(Constants.SYS_CMP);
+                case 1264: return decodeSsrPhaseBias(Constants.SYS_GPS);
+                case 1265: return decodeSsrPhaseBias(Constants.SYS_GLO);
+                case 1266: return decodeSsrPhaseBias(Constants.SYS_GAL);
+                case 1267: return decodeSsrPhaseBias(Constants.SYS_QZS);
+                case 1268: return decodeSsrPhaseBias(Constants.SYS_SBS);
+                case 1269: return decodeSsrPhaseBias(Constants.SYS_CMP);
+                case 1270: return decodeSsrPhaseBias(Constants.SYS_IRN);
                 default:
                     log.trace("RTCM3 type {} not yet implemented", type);
                     return true;
@@ -1142,38 +1173,276 @@ public class Rtcm implements Serializable {
         return true;
     }
 
-    // ---- SSR messages (1057-1067, 1240-1258) ---------------------------------
-    private boolean decodeType1057() { return decodeSsr(1, 0); }  // GPS orbit
-    private boolean decodeType1058() { return decodeSsr(1, 1); }  // GPS clock
-    private boolean decodeType1059() { return decodeSsr(0, 0); }  // GPS combined
-    private boolean decodeType1060() { return decodeSsr(2, 0); }  // GLO orbit
-    private boolean decodeType1061() { return decodeSsr(2, 1); }  // GLO clock
-    private boolean decodeType1062() { return decodeSsr(2, 2); }  // GLO combined
-    private boolean decodeType1063() { return decodeSsr(4, 0); }  // BDS orbit
-    private boolean decodeType1064() { return decodeSsr(4, 1); }  // BDS clock
-    private boolean decodeType1065() { return decodeSsr(4, 2); }  // BDS combined
-    private boolean decodeType1066() { return decodeSsr(6, 0); }  // QZS orbit
-    private boolean decodeType1067() { return decodeSsr(6, 1); }  // QZS clock
+    // ---- SSR messages (1057-1068, 1240-1270) ---------------------------------
+    private boolean decodeType1057() { return decodeSsrOrbit(Constants.SYS_GPS); }
+    private boolean decodeType1058() { return decodeSsrClock(Constants.SYS_GPS); }
+    private boolean decodeType1059() { return decodeSsrCodeBias(Constants.SYS_GPS); }
+    private boolean decodeType1060() { return decodeSsrCombOrbClk(Constants.SYS_GPS); }
+    private boolean decodeType1061() { return decodeSsrUra(Constants.SYS_GPS); }
+    private boolean decodeType1062() { return decodeSsrHrClock(Constants.SYS_GPS); }
+    private boolean decodeType1063() { return decodeSsrOrbit(Constants.SYS_GLO); }
+    private boolean decodeType1064() { return decodeSsrClock(Constants.SYS_GLO); }
+    private boolean decodeType1065() { return decodeSsrCodeBias(Constants.SYS_GLO); }
+    private boolean decodeType1066() { return decodeSsrCombOrbClk(Constants.SYS_GLO); }
+    private boolean decodeType1067() { return decodeSsrUra(Constants.SYS_GLO); }
+    private boolean decodeType1068() { return decodeSsrHrClock(Constants.SYS_GLO); }
 
-    private boolean decodeSsr(int sysSel, int type) {
+    private int ssrIod = 0;
+    private double ssrUdi = 0.0;
+    private int ssrMi = 0;
+    private int ssrNsat = 0;
+
+    private int decodeSsrHead(int i, int sys) {
+        ssrIod = (int) BitUtils.getbitu(buff, i, 4); i += 4;
+        ssrUdi = BitUtils.getbitu(buff, i, 4); i += 4;
+        ssrMi = (int) BitUtils.getbitu(buff, i, 1); i += 1;
+        int nsat = (int) BitUtils.getbitu(buff, i, 6); i += 6;
+        ssrNsat = nsat;
+        return i;
+    }
+
+    private int decodeSsrSatId(int i, int sys) {
+        int blen;
+        if (sys == Constants.SYS_GLO) blen = 5;
+        else if (sys == Constants.SYS_QZS) blen = 4;
+        else blen = 6;
+        int svid = (int) BitUtils.getbitu(buff, i, blen); i += blen;
+        this.ephsat = SatUtils.satno(sys, svid);
+        return i;
+    }
+
+    private boolean decodeSsrOrbit(int sys) {
         int i = 24 + 12;
-        int sat = (int) BitUtils.getbitu(buff, i, 6); i += 6;
-        int sys;
-        switch (sysSel) {
-            case 0: sys = Constants.SYS_GPS; break;
-            case 1: sys = Constants.SYS_GPS; break;
-            case 2: sys = Constants.SYS_GLO; break;
-            case 4: sys = Constants.SYS_CMP; break;
-            case 6: sys = Constants.SYS_QZS; break;
-            default: return false;
-        }
-        int satNo = SatUtils.satno(sys, sat);
-        if (satNo == 0) return false;
-        Ssr ssr = new Ssr();
-        if (satNo > 0 && satNo <= Constants.MAXSAT) {
-            this.nav.ssr[satNo - 1] = ssr;
+        i = decodeSsrHead(i, sys);
+        GTime time = this.time != null ? this.time : new GTime();
+        for (int k = 0; k < ssrNsat; k++) {
+            i = decodeSsrSatId(i, sys);
+            int sat = this.ephsat;
+            if (sat <= 0 || sat > Constants.MAXSAT) {
+                int iodeBlen = (sys == Constants.SYS_GAL) ? 10 : 8;
+                i += iodeBlen + 121;
+                continue;
+            }
+            int iodeBlen = (sys == Constants.SYS_GAL) ? 10 : (sys == Constants.SYS_SBS) ? 24 : 8;
+            int iode = (int) BitUtils.getbitu(buff, i, iodeBlen); i += iodeBlen;
+            int dx = BitUtils.getbits(buff, i, 22); i += 22;
+            int dy = BitUtils.getbits(buff, i, 20); i += 20;
+            int dz = BitUtils.getbits(buff, i, 20); i += 20;
+            int ddx = BitUtils.getbits(buff, i, 21); i += 21;
+            int ddy = BitUtils.getbits(buff, i, 19); i += 19;
+            int ddz = BitUtils.getbits(buff, i, 19); i += 19;
+            Ssr ssr = getOrCreateSsr(sat);
+            ssr.t0[0] = new GTime(time);
+            ssr.iod[0] = ssrIod;
+            ssr.udi[0] = ssrUdi;
+            ssr.iode = iode;
+            ssr.deph[0] = ssrSigned(dx, 22, 0.1e-3);
+            ssr.deph[1] = ssrSigned(dy, 20, 0.4e-3);
+            ssr.deph[2] = ssrSigned(dz, 20, 0.4e-3);
+            ssr.ddeph[0] = ssrSigned(ddx, 21, 1e-6);
+            ssr.ddeph[1] = ssrSigned(ddy, 19, 4e-6);
+            ssr.ddeph[2] = ssrSigned(ddz, 19, 4e-6);
+            ssr.update = 1;
         }
         return true;
+    }
+
+    private boolean decodeSsrClock(int sys) {
+        int i = 24 + 12;
+        i = decodeSsrHead(i, sys);
+        GTime time = this.time != null ? this.time : new GTime();
+        for (int k = 0; k < ssrNsat; k++) {
+            i = decodeSsrSatId(i, sys);
+            int sat = this.ephsat;
+            if (sat <= 0 || sat > Constants.MAXSAT) { i += 70; continue; }
+            int dclk0 = BitUtils.getbits(buff, i, 22); i += 22;
+            int dclk1 = BitUtils.getbits(buff, i, 21); i += 21;
+            int dclk2 = BitUtils.getbits(buff, i, 27); i += 27;
+            Ssr ssr = getOrCreateSsr(sat);
+            ssr.t0[1] = new GTime(time);
+            ssr.iod[1] = ssrIod;
+            ssr.udi[1] = ssrUdi;
+            ssr.dclk[0] = ssrSigned(dclk0, 22, 0.1e-3);
+            ssr.dclk[1] = ssrSigned(dclk1, 21, 0.4e-3);
+            ssr.dclk[2] = ssrSigned(dclk2, 27, 4e-6);
+            ssr.update = 1;
+        }
+        return true;
+    }
+
+    private boolean decodeSsrHrClock(int sys) {
+        int i = 24 + 12;
+        i = decodeSsrHead(i, sys);
+        GTime time = this.time != null ? this.time : new GTime();
+        for (int k = 0; k < ssrNsat; k++) {
+            i = decodeSsrSatId(i, sys);
+            int sat = this.ephsat;
+            if (sat <= 0 || sat > Constants.MAXSAT) { i += 22; continue; }
+            int hclk = BitUtils.getbits(buff, i, 22); i += 22;
+            Ssr ssr = getOrCreateSsr(sat);
+            ssr.t0[2] = new GTime(time);
+            ssr.iod[2] = ssrIod;
+            ssr.udi[2] = ssrUdi;
+            ssr.hrclk = ssrSigned(hclk, 22, 0.1e-3);
+            ssr.update = 1;
+        }
+        return true;
+    }
+
+    private boolean decodeSsrUra(int sys) {
+        int i = 24 + 12;
+        i = decodeSsrHead(i, sys);
+        GTime time = this.time != null ? this.time : new GTime();
+        for (int k = 0; k < ssrNsat; k++) {
+            i = decodeSsrSatId(i, sys);
+            int sat = this.ephsat;
+            if (sat <= 0 || sat > Constants.MAXSAT) { i += 6; continue; }
+            int cls = (int) BitUtils.getbitu(buff, i, 3); i += 3;
+            int val = (int) BitUtils.getbitu(buff, i, 3); i += 3;
+            Ssr ssr = getOrCreateSsr(sat);
+            ssr.t0[3] = new GTime(time);
+            ssr.iod[3] = ssrIod;
+            ssr.udi[3] = ssrUdi;
+            ssr.ura = ssrQualityIndex(cls, val);
+            ssr.update = 1;
+        }
+        return true;
+    }
+
+    private boolean decodeSsrCodeBias(int sys) {
+        int i = 24 + 12;
+        i = decodeSsrHead(i, sys);
+        GTime time = this.time != null ? this.time : new GTime();
+        for (int k = 0; k < ssrNsat; k++) {
+            i = decodeSsrSatId(i, sys);
+            int sat = this.ephsat;
+            if (sat <= 0 || sat > Constants.MAXSAT) {
+                int nsig = (int) BitUtils.getbitu(buff, i, 5); i += 5;
+                i += nsig * 19;
+                continue;
+            }
+            int nsig = (int) BitUtils.getbitu(buff, i, 5); i += 5;
+            Ssr ssr = getOrCreateSsr(sat);
+            ssr.t0[4] = new GTime(time);
+            ssr.iod[4] = ssrIod;
+            ssr.udi[4] = ssrUdi;
+            for (int j = 0; j < nsig; j++) {
+                int sig = (int) BitUtils.getbitu(buff, i, 5); i += 5;
+                int cb = BitUtils.getbits(buff, i, 14); i += 14;
+                if (sig > 0 && sig <= Constants.MAXCODE) {
+                    ssr.cbias[sig - 1] = (float) ssrSigned(cb, 14, 0.02e-3);
+                }
+            }
+            ssr.update = 1;
+        }
+        return true;
+    }
+
+    private boolean decodeSsrPhaseBias(int sys) {
+        int i = 24 + 12;
+        i = decodeSsrHead(i, sys);
+        GTime time = this.time != null ? this.time : new GTime();
+        for (int k = 0; k < ssrNsat; k++) {
+            i = decodeSsrSatId(i, sys);
+            int sat = this.ephsat;
+            if (sat <= 0 || sat > Constants.MAXSAT) {
+                int nsig = (int) BitUtils.getbitu(buff, i, 5); i += 5;
+                i += 17 + nsig * 30;
+                continue;
+            }
+            int nsig = (int) BitUtils.getbitu(buff, i, 5); i += 5;
+            Ssr ssr = getOrCreateSsr(sat);
+            ssr.t0[5] = new GTime(time);
+            ssr.iod[5] = ssrIod;
+            ssr.udi[5] = ssrUdi;
+            int yaw = (int) BitUtils.getbitu(buff, i, 9); i += 9;
+            int dyaw = BitUtils.getbits(buff, i, 8); i += 8;
+            ssr.yaw_ang = yaw / 256.0;
+            ssr.yaw_rate = ssrSigned(dyaw, 8, 1.0 / 8192.0);
+            for (int j = 0; j < nsig; j++) {
+                int sig = (int) BitUtils.getbitu(buff, i, 5); i += 5;
+                int wl = (int) BitUtils.getbitu(buff, i, 2); i += 2;
+                int di = (int) BitUtils.getbitu(buff, i, 4); i += 4;
+                int pb = BitUtils.getbits(buff, i, 20); i += 20;
+                if (sig > 0 && sig <= Constants.MAXCODE) {
+                    ssr.pbias[sig - 1] = ssrSigned(pb, 20, 0.1e-3);
+                    ssr.dispInd[sig - 1] = di;
+                }
+            }
+            ssr.update = 1;
+        }
+        return true;
+    }
+
+    private boolean decodeSsrCombOrbClk(int sys) {
+        int i = 24 + 12;
+        i = decodeSsrHead(i, sys);
+        GTime time = this.time != null ? this.time : new GTime();
+        for (int k = 0; k < ssrNsat; k++) {
+            i = decodeSsrSatId(i, sys);
+            int sat = this.ephsat;
+            if (sat <= 0 || sat > Constants.MAXSAT) {
+                int iodeBlen = (sys == Constants.SYS_GAL) ? 10 : 8;
+                i += iodeBlen + 121 + 70;
+                continue;
+            }
+            int iodeBlen = (sys == Constants.SYS_GAL) ? 10 : 8;
+            int iode = (int) BitUtils.getbitu(buff, i, iodeBlen); i += iodeBlen;
+            int dx = BitUtils.getbits(buff, i, 22); i += 22;
+            int dy = BitUtils.getbits(buff, i, 20); i += 20;
+            int dz = BitUtils.getbits(buff, i, 20); i += 20;
+            int ddx = BitUtils.getbits(buff, i, 21); i += 21;
+            int ddy = BitUtils.getbits(buff, i, 19); i += 19;
+            int ddz = BitUtils.getbits(buff, i, 19); i += 19;
+            int dclk0 = BitUtils.getbits(buff, i, 22); i += 22;
+            int dclk1 = BitUtils.getbits(buff, i, 21); i += 21;
+            int dclk2 = BitUtils.getbits(buff, i, 27); i += 27;
+            Ssr ssr = getOrCreateSsr(sat);
+            ssr.t0[0] = new GTime(time);
+            ssr.t0[1] = new GTime(time);
+            ssr.iod[0] = ssrIod;
+            ssr.iod[1] = ssrIod;
+            ssr.udi[0] = ssrUdi;
+            ssr.udi[1] = ssrUdi;
+            ssr.iode = iode;
+            ssr.deph[0] = ssrSigned(dx, 22, 0.1e-3);
+            ssr.deph[1] = ssrSigned(dy, 20, 0.4e-3);
+            ssr.deph[2] = ssrSigned(dz, 20, 0.4e-3);
+            ssr.ddeph[0] = ssrSigned(ddx, 21, 1e-6);
+            ssr.ddeph[1] = ssrSigned(ddy, 19, 4e-6);
+            ssr.ddeph[2] = ssrSigned(ddz, 19, 4e-6);
+            ssr.dclk[0] = ssrSigned(dclk0, 22, 0.1e-3);
+            ssr.dclk[1] = ssrSigned(dclk1, 21, 0.4e-3);
+            ssr.dclk[2] = ssrSigned(dclk2, 27, 4e-6);
+            ssr.update = 1;
+        }
+        return true;
+    }
+
+    private Ssr getOrCreateSsr(int sat) {
+        if (this.nav.ssr[sat - 1] == null) {
+            this.nav.ssr[sat - 1] = new Ssr();
+        }
+        return this.nav.ssr[sat - 1];
+    }
+
+    private static double ssrSigned(int raw, int nbits, double scale) {
+        int sign = 1 << (nbits - 1);
+        if (raw < 0) raw += (1 << nbits);
+        if (raw >= sign) raw -= (1 << nbits);
+        return raw * scale;
+    }
+
+    private static int ssrQualityIndex(int cls, int val) {
+        if (cls == 0) return (val + 1);
+        if (cls == 1) return (1 << (val + 2));
+        if (cls == 2) return (1 << (val + 4));
+        if (cls == 3) return (1 << (val + 6));
+        if (cls == 4) return (1 << (val + 8));
+        if (cls == 5) return (1 << (val + 10));
+        if (cls == 6) return (1 << (val + 12));
+        if (cls == 7) return -1;
+        return 0;
     }
 
     // ---- MSM messages (1071-1137) --------------------------------------------

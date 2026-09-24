@@ -18,6 +18,12 @@
 7. [电离层/对流层梯度参数估计](#7-电离层对流层梯度参数估计enableionotropgradient)
 8. [优化项依赖关系与调用顺序](#8-优化项依赖关系与调用顺序)
 9. [基站稳定性监测](#9-基站稳定性监测basestationmonitor)
+10. [逐级模糊度固定](#10-逐级模糊度固定enablecascadear)
+11. [精细化残差编辑与周跳检测](#11-精细化残差编辑与周跳检测enableresidualedit)
+12. [部分模糊度固定](#12-部分模糊度固定enablepartialar)
+13. [Bootstrapping成功率联合判据](#13-bootstrapping成功率联合判据enablebootstrapping)
+14. [BDS卫星码偏差改正](#14-bds卫星码偏差改正enablebdscodebias)
+15. [参数类型级自适应过程噪声](#15-参数类型级自适应过程噪声enableparamtypenoise)
 
 ---
 
@@ -1080,3 +1086,369 @@ monitor.reset();          // 重置所有状态
 | RTCM文件输入 (6小时) | SPP成功1429历元, 5个窗口, 偏移0.00~3.22m, 无误报 ✅ |
 | 模拟移动检测 | 正常数据0告警, resetReference正确重置 ✅ |
 | RTCM字节数据输入 | 与文件输入结果一致 ✅ |
+
+---
+
+## 10. 逐级模糊度固定（enableCascadeAR）
+
+> **来源**: GREAT-PVT
+> **适用场景**: 多频（≥2频）RTK，提升模糊度固定连续性和精度
+> **优先级**: P0
+
+### 10.1 问题背景
+
+经典LAMBDA搜索直接在窄巷(NL)模糊度空间搜索，当模糊度方差较大时Ratio值低，
+导致固定失败。逐级AR利用多频波长差异，先在超宽巷(EWL)和宽巷(WL)空间固定，
+由于EWL/WL波长长、取整容差大，固定成功率远高于NL，逐级约束后NL搜索空间大幅缩小。
+
+### 10.2 核心算法
+
+```
+1. EWL级固定（λ_ewl ≈ 0.86m GPS, Ratio阈值默认1.5）
+   → EWL模糊度取整极易，成功率>99%
+   → 固定后作为WL级约束
+
+2. WL级固定（λ_wl ≈ 0.48m GPS, Ratio阈值默认2.0）
+   → 在EWL约束下搜索，成功率>95%
+   → 固定后作为NL级约束
+
+3. NL级固定（λ_nl ≈ 0.11m GPS, Ratio阈值默认3.0）
+   → 在EWL+WL约束下搜索，搜索空间大幅缩小
+   → Ratio检验通过则固定成功
+```
+
+### 10.3 配置参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `enableCascadeAR` | false | 总开关 |
+| `cascadeArRatioEwl` | 1.5 | EWL级Ratio阈值 |
+| `cascadeArRatioWl` | 2.0 | WL级Ratio阈值 |
+| `cascadeArRatioNl` | 3.0 | NL级Ratio阈值（与原版thres一致） |
+| `cascadeArBootstrapping` | false | 级联AR中启用Bootstrapping校验 |
+
+### 10.4 侵入方式
+
+`RtkCore.resamb_LAMBDA()` 开头1行if分支：
+
+```java
+if (rtk.rtkConfig.enableCascadeAR) {
+    return RtkOptimizationsCascadeAR.cascadeAmbFix(rtk, bias, xa, gps, glo, sbs, nav);
+}
+```
+
+### 10.5 回退保证
+
+`enableCascadeAR=false`（默认）→ 完全跳过，走原版LAMBDA逻辑。
+
+### 10.6 实现位置
+
+- 算法：`org.rtklib.java.rtkpos.RtkOptimizationsCascadeAR`
+- 测试：`org.rtklib.java.rtkpos.RtkOptimizationsCascadeARTest`（6个测试）
+
+---
+
+## 11. 精细化残差编辑与周跳检测（enableResidualEdit）
+
+> **来源**: PRIDE PPP-AR
+> **适用场景**: 所有RTK模式，是高级AR策略生效的底层基础
+> **优先级**: P0
+
+### 11.1 问题背景
+
+原版RTKLIB的周跳检测仅依赖LLI标志和MW/GF组合，对缓变周跳、接收机钟跳、
+多路径引起的伪距-载波不一致检测能力不足。错误模糊度弧段会污染EKF状态，
+导致后续AR失败或假固定。
+
+### 11.2 三重检测机制
+
+```
+1. 残差时序跳变检测（checkCycleSlip）
+   - 对EKF后验残差v归一化: normRes = |v[i]| / sqrt(R[i*nv+i])
+   - normRes > residEditJumpThresh(4.0σ) → 标记周跳
+   - 在ddres()后调用，利用最新残差信息
+
+2. 伪距-载波一致性校验（checkPcConsistency）
+   - P-C差分 = 2*I + b（电离层+偏差）
+   - 历元间差分消除偏差，仅含电离层变化+噪声
+   - |Δ(P-C)| > residEditPcConsistThresh(3.0σ) → 标记周跳
+
+3. 弧段完整性筛查（screenArcIntegrity）
+   - lock < residEditMinArcLen(10) 且 outc > 0.5*lock → 弧段过短且频繁中断
+   → 重置模糊度状态（lock=-minlock, outc=0）
+   - 在udbias()末尾调用，确保下一历元重新初始化
+```
+
+### 11.3 配置参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `enableResidualEdit` | false | 总开关 |
+| `residEditJumpThresh` | 4.0 | 残差跳变阈值（σ倍数） |
+| `residEditMinArcLen` | 10 | 最小弧段长度（历元数） |
+| `residEditPcConsistThresh` | 3.0 | 伪距-载波一致性阈值（σ倍数） |
+
+### 11.4 侵入方式
+
+3个侵入点，均为if分支：
+
+```java
+// ddres()后
+RtkOptimizationsResEdit.checkCycleSlip(rtk, v, R, vflg, nv);
+RtkOptimizationsResEdit.checkPcConsistency(rtk, obs, sat, ns, nf, nav);
+
+// udbias()末尾
+RtkOptimizationsResEdit.screenArcIntegrity(rtk);
+```
+
+### 11.5 回退保证
+
+`enableResidualEdit=false`（默认）→ 三个方法首行return，完全跳过。
+
+### 11.6 实现位置
+
+- 算法：`org.rtklib.java.rtkpos.RtkOptimizationsResEdit`
+- 测试：`org.rtklib.java.rtkpos.RtkOptimizationsResEditTest`（5个测试）
+
+---
+
+## 12. 部分模糊度固定（enablePartialAR）
+
+> **来源**: GREAT-PVT
+> **适用场景**: 全局Ratio检验失败后，尝试保留可信子集完成固定
+> **优先级**: P1
+
+### 12.1 问题背景
+
+全局Ratio检验要求所有模糊度联合通过，但实际中常有个别卫星模糊度质量差
+（低高度角、多路径、频繁周跳），导致整体Ratio低而无法固定。部分AR剔除
+劣质维度，保留可信子集完成固定，平衡固定率与可靠性。
+
+### 12.2 核心算法
+
+```
+1. 全局Ratio失败后触发
+2. 按模糊度方差排序（方差大→质量差）
+3. 逐步剔除方差最大的模糊度：
+   for drop = 1 to maxSubsetTries:
+     subNb = nb - drop
+     if subNb < minSats → 停止
+     构建子集 → LAMBDA搜索 → Ratio检验
+     if Ratio >= partialArMinRatio:
+       Bootstrapping校验（如启用）
+       通过 → 返回固定结果
+4. 所有子集尝试失败 → 返回-1（浮点解）
+```
+
+### 12.3 配置参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `enablePartialAR` | false | 总开关 |
+| `partialArMinRatio` | 2.0 | 部分AR最小Ratio阈值 |
+| `partialArMinSats` | 4 | 部分AR最小保留卫星数 |
+| `partialArMinBootstrapping` | 0.99 | 部分AR最小Bootstrapping成功率 |
+| `partialArMaxSubsetTries` | 10 | 最大子集尝试次数 |
+
+### 12.4 侵入方式
+
+`RtkCore.resamb_LAMBDA()` Ratio失败后1行if分支：
+
+```java
+if (nb <= 0 && rtk.rtkConfig.enablePartialAR) {
+    int nbPar = RtkOptimizationsPartialAR.partialAmbFix(rtk, bias, xa, ix, rtk.nb_ar, gps, glo, sbs);
+    if (nbPar > 1) return nbPar;
+}
+```
+
+### 12.5 回退保证
+
+`enablePartialAR=false`（默认）→ 完全跳过，走原版逻辑（全局Ratio失败即浮点解）。
+
+### 12.6 实现位置
+
+- 算法：`org.rtklib.java.rtkpos.RtkOptimizationsPartialAR`
+- 测试：`org.rtklib.java.rtkpos.RtkOptimizationsPartialARTest`（3个测试）
+
+---
+
+## 13. Bootstrapping成功率联合判据（enableBootstrapping）
+
+> **来源**: GREAT-PVT
+> **适用场景**: 作为Ratio的互补判据，防止Ratio偶然通过但模糊度不可靠的情况
+> **优先级**: P1
+
+### 13.1 问题背景
+
+Ratio检验仅比较LAMBDA搜索前两个候选解的二次型比值，无法保证固定结果的
+统计可靠性。Bootstrapping成功率基于模糊度浮点值与方差的概率分布，计算
+所有模糊度同时取整成功的概率，是Ratio的必要补充。
+
+### 13.2 核心算法
+
+```
+对每个模糊度i:
+  halfNorm = 0.5 / σ_i    （σ_i为模糊度标准差）
+  prob_i = erf(halfNorm / √2)  （单个模糊度取整成功概率）
+
+联合成功率 = Π prob_i  （独立假设下的联合概率）
+
+判定：
+  联合成功率 >= bootstrappingMinSuccess(0.99) → 通过
+  否则 → 拒绝固定
+```
+
+erf(x)通过erfc(x) = 1 - erf(x)计算，erfc使用Horner有理逼近。
+
+### 13.3 配置参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `enableBootstrapping` | false | 总开关 |
+| `bootstrappingMinSuccess` | 0.99 | 最小成功率阈值 |
+| `bootstrappingWithRatio` | true | 与Ratio联合使用（Ratio通过后再校验） |
+
+### 13.4 侵入方式
+
+`RtkCore.resamb_LAMBDA()` Ratio通过后1行if分支：
+
+```java
+if (rtk.rtkConfig.enableBootstrapping) {
+    if (!RtkOptimizationsBootstrap.validateFix(rtk, b, nbLambda)) {
+        rtk.sol.ratio = 0.0f;
+        nb = 0;
+        return nb;
+    }
+}
+```
+
+### 13.5 回退保证
+
+`enableBootstrapping=false`（默认）→ 完全跳过，仅靠Ratio判据。
+
+### 13.6 实现位置
+
+- 算法：`org.rtklib.java.rtkpos.RtkOptimizationsBootstrap`
+- 测试：`org.rtklib.java.rtkpos.RtkOptimizationsBootstrapTest`（7个测试）
+
+---
+
+## 14. BDS卫星码偏差改正（enableBdsCodeBias）
+
+> **来源**: PRIDE PPP-AR（Wanninger模型）
+> **适用场景**: 包含BDS卫星的RTK解算，特别是GEO和低高度角IGSO/MEO卫星
+> **优先级**: P2
+
+### 14.1 问题背景
+
+BDS卫星存在显著的码偏差（Code Bias），特别是GEO卫星（PRN 1-5）偏差可达-0.58m，
+IGSO卫星（PRN 6-10）在低高度角时偏差也较大。这些偏差如果不改正，会导致
+伪距观测值系统性偏差，降低模糊度固定成功率。
+
+### 14.2 Wanninger模型
+
+```
+GEO卫星（PRN 1-5）：
+  bias[0] = -0.58m（B1I固定值）
+  bias[1] = -0.50m（B2I固定值）
+  bias[2] = -0.40m（B3I固定值）
+
+IGSO卫星（PRN 6-10）：
+  基于高度角线性插值：
+  el=10°: bias ≈ -0.45m
+  el=30°: bias ≈ -0.20m
+  el=60°: bias ≈ -0.05m
+
+MEO卫星（PRN 11-46）：
+  基于高度角线性插值：
+  el=10°: bias ≈ -0.25m
+  el=30°: bias ≈ -0.10m
+  el=60°: bias ≈ -0.02m
+```
+
+### 14.3 配置参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `enableBdsCodeBias` | false | 总开关 |
+| `bdsCodeBiasElThresh` | 30.0 | 高度角阈值（度），高于此值不改正 |
+| `bdsCodeBiasForceOn` | false | 强制对所有BDS卫星启用（忽略高度角阈值） |
+
+### 14.4 侵入方式
+
+`RtkCore.relpos()` udstate()后1行if分支：
+
+```java
+RtkOptimizationsBdsBias.applyBdsCodeBias(rtk, obs, iu, ir, ns, nf, nav);
+```
+
+内部修改伪距观测值 `obs[iu[i]].P[f] -= bias[f]`，对BDS卫星施加码偏差改正。
+
+### 14.5 回退保证
+
+`enableBdsCodeBias=false`（默认）→ 方法首行return，伪距观测值不修改。
+
+### 14.6 实现位置
+
+- 算法：`org.rtklib.java.rtkpos.RtkOptimizationsBdsBias`
+- 测试：`org.rtklib.java.rtkpos.RtkOptimizationsBdsBiasTest`（6个测试）
+
+---
+
+## 15. 参数类型级自适应过程噪声（enableParamTypeNoise）
+
+> **来源**: PRIDE PPP-AR
+> **适用场景**: 中长基线RTK，ZTD/电离层等时变参数过程噪声需精细建模
+> **优先级**: P2
+
+### 15.1 问题背景
+
+原版RTKLIB对所有时变参数使用统一的 `prn[i]² * |tt|` 过程噪声模型，
+不区分参数物理特性。ZTD适合随机游走模型（方差随时间增长），钟差适合
+白噪声模型（方差恒定），电离层适合随机游走但速率与ZTD不同。
+
+### 15.2 核心算法
+
+```
+按状态索引区分参数类型，施加不同噪声模型：
+
+位置(0..np-1)：不使用随机游走（位置本身是状态，非时变参数）
+ZTD(np+ni..np+ni+nt-1)：随机游走 → P[i*nx+i] += noiseZtdRw² * |tt|
+电离层(np..np+ni-1)：随机游走 → P[i*nx+i] += noiseIonoRw² * |tt|
+钟差/模糊度：保持原逻辑不变
+```
+
+### 15.3 与enableAdaptiveQ的关系
+
+| 优化项 | 控制对象 | 机制 |
+|--------|---------|------|
+| `enableAdaptiveQ` | 位置过程噪声 | 运动状态级缩放（静态压制/动态放大） |
+| `enableParamTypeNoise` | ZTD/电离层过程噪声 | 参数类型级区分（随机游走/白噪声） |
+
+两者互补，可叠加使用。
+
+### 15.4 配置参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `enableParamTypeNoise` | false | 总开关 |
+| `noiseZtdRw` | 1e-4 | ZTD随机游走过程噪声（m/√s） |
+| `noiseClkWhite` | 1e2 | 钟差白噪声（m） |
+| `noiseIonoRw` | 1e-3 | 电离层随机游走过程噪声（m/√s） |
+
+### 15.5 侵入方式
+
+`RtkCore.relpos()` udstate()后1行if分支：
+
+```java
+RtkOptimizations.applyParamTypeNoise(rtk, rtk.P, rtk.nx, rtk.tt);
+```
+
+### 15.6 回退保证
+
+`enableParamTypeNoise=false`（默认）→ 方法首行return，走原有 `prn[i]²*|tt|` 逻辑。
+
+### 15.7 实现位置
+
+- 算法：`org.rtklib.java.rtkpos.RtkOptimizations.applyParamTypeNoise()`
+- 已有测试覆盖

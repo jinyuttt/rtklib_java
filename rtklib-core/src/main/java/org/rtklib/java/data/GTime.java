@@ -87,4 +87,32 @@ public class GTime implements Serializable {
     public static GTime zero() {
         return new GTime(0, 0.0);
     }
+
+    @Override
+    public String toString() {
+        long epochSec = this.time;
+        int day = (int) (epochSec / 86400);
+        int sod = (int) (epochSec % 86400);
+        int hh = sod / 3600;
+        int mm = (sod % 3600) / 60;
+        double ss = (sod % 60) + this.sec;
+        int year = 1970;
+        int[] daysInMonth = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        long totalDays = day;
+        while (true) {
+            int diy = 365 + ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0 ? 1 : 0);
+            if (totalDays < diy) break;
+            totalDays -= diy;
+            year++;
+        }
+        int month = 0;
+        for (int m = 0; m < 12; m++) {
+            int dim = daysInMonth[m];
+            if (m == 1 && ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0)) dim++;
+            if (totalDays < dim) { month = m + 1; break; }
+            totalDays -= dim;
+        }
+        int mday = (int) totalDays + 1;
+        return String.format("%04d/%02d/%02d %02d:%02d:%06.3f", year, month, mday, hh, mm, ss);
+    }
 }

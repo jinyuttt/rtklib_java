@@ -56,8 +56,12 @@ public final class DcbReader {
     }
 
     private static void initCbias(Nav nav) {
-        nav.cbias = new double[Constants.MAXSAT][MAX_CODE_BIAS_FREQS][MAX_CODE_BIASES];
-        nav.rbias = new double[1][2][MAX_CODE_BIASES];
+        if (nav.cbias == null) {
+            nav.cbias = new double[Constants.MAXSAT][MAX_CODE_BIAS_FREQS][MAX_CODE_BIASES];
+        }
+        if (nav.rbias == null) {
+            nav.rbias = new double[1][2][MAX_CODE_BIASES];
+        }
     }
 
     static boolean readdcbf(String file, Nav nav, Sta[] stas) {

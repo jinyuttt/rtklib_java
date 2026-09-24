@@ -99,6 +99,19 @@ public class Nav implements Serializable {
     public double[][][] cbias;
     public double[][][] rbias;
 
+    public double[][] fcbWl;
+    public double[][] fcbNl;
+    public boolean fcbFromOsb;
+    public double[][] updWl;
+    public double[][] updNl;
+    public double[][] osb;
+
+    public double[][] gpt3Grid;
+    public boolean gpt3GridLoaded;
+
+    public double[][] vmf3Coeff;
+    public boolean vmf3OpLoaded;
+
     public PepH[] peph;
     public Pclk[] pclk;
     public Pcv[] pcvs;

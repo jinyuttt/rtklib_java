@@ -115,6 +115,9 @@ public class RinexParser {
             this.obs.n = obsList.size();
             log.info("RINEX observation parsed: {} epochs, {} observations", 
                     this.obs.n, obsList.size());
+            if (this.obs.n > 0) {
+                log.info("RINEX obs time range: {} to {}", this.obs.data[0].time, this.obs.data[this.obs.n - 1].time);
+            }
             return true;
         } catch (IOException e) {
             log.error("Error reading RINEX observation file: {}", file, e);

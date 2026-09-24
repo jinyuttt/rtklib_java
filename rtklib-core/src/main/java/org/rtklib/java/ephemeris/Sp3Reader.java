@@ -5,6 +5,9 @@ import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
 import org.rtklib.java.time.TimeSystem;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
@@ -14,6 +17,7 @@ import java.util.Comparator;
 import java.util.List;
 
 public final class Sp3Reader {
+    private static final Logger LOG = LoggerFactory.getLogger(Sp3Reader.class);
     private Sp3Reader() {
     }
 
@@ -246,9 +250,18 @@ public final class Sp3Reader {
         if (vare != null) vare[0] = 0.0;
         if (varc != null) varc[0] = 0.0;
 
-        if (nav.ne < NMAX + 1) return 0;
-        if (TimeSystem.timediff(time, nav.peph[0].time) < -MAXDTE) return 0;
-        if (TimeSystem.timediff(time, nav.peph[nav.ne - 1].time) > MAXDTE) return 0;
+        if (nav.ne < NMAX + 1) {
+            LOG.warn("pephpos FAIL: sat={} ne={} < NMAX+1={}", sat, nav.ne, NMAX + 1);
+            return 0;
+        }
+        if (TimeSystem.timediff(time, nav.peph[0].time) < -MAXDTE) {
+            LOG.warn(String.format("pephpos FAIL: sat=%d time before SP3 range by %.0fs", sat, -TimeSystem.timediff(time, nav.peph[0].time)));
+            return 0;
+        }
+        if (TimeSystem.timediff(time, nav.peph[nav.ne - 1].time) > MAXDTE) {
+            LOG.warn(String.format("pephpos FAIL: sat=%d time after SP3 range by %.0fs", sat, TimeSystem.timediff(time, nav.peph[nav.ne - 1].time)));
+            return 0;
+        }
 
         int i = 0, j = nav.ne - 1;
         while (i < j) {
@@ -270,7 +283,10 @@ public final class Sp3Reader {
             for (int jj = 0; jj < 3; jj++) {
                 norm += nav.peph[start + ii].pos[sat - 1][jj] * nav.peph[start + ii].pos[sat - 1][jj];
             }
-            if (Math.sqrt(norm) <= 0.0) return 0;
+            if (Math.sqrt(norm) <= 0.0) {
+                LOG.warn(String.format("pephpos FAIL: sat=%d pos=0 at peph[%d] (start=%d ii=%d)", sat, start + ii, start, ii));
+                return 0;
+            }
         }
 
         for (int ii = 0; ii <= NMAX; ii++) {
@@ -317,9 +333,18 @@ public final class Sp3Reader {
         dts[0] = 0.0;
         if (varc != null) varc[0] = 0.0;
 
-        if (nav.nc < 2) return 0;
-        if (TimeSystem.timediff(time, nav.pclk[0].time) < -MAXDTE) return 0;
-        if (TimeSystem.timediff(time, nav.pclk[nav.nc - 1].time) > MAXDTE) return 0;
+        if (nav.nc < 2) {
+            LOG.warn("pephclk FAIL: sat={} nc={} < 2", sat, nav.nc);
+            return 0;
+        }
+        if (TimeSystem.timediff(time, nav.pclk[0].time) < -MAXDTE) {
+            LOG.warn(String.format("pephclk FAIL: sat=%d time before CLK range by %.0fs", sat, -TimeSystem.timediff(time, nav.pclk[0].time)));
+            return 0;
+        }
+        if (TimeSystem.timediff(time, nav.pclk[nav.nc - 1].time) > MAXDTE) {
+            LOG.warn(String.format("pephclk FAIL: sat=%d time after CLK range by %.0fs", sat, TimeSystem.timediff(time, nav.pclk[nav.nc - 1].time)));
+            return 0;
+        }
 
         int i = 0, j = nav.nc - 1;
         while (i < j) {
@@ -337,11 +362,17 @@ public final class Sp3Reader {
 
         double std;
         if (t0 <= 0.0) {
-            if (c0 == 0.0) return 0;
+            if (c0 == 0.0) {
+                LOG.debug(String.format("pephclk: sat=%d c0=0 at index=%d t0=%.1f (no CLK data)", sat, index, t0));
+                return 0;
+            }
             dts[0] = c0;
             std = nav.pclk[index].std[sat - 1][0] * Constants.CLIGHT - 1E-3 * t0;
         } else if (t1 >= 0.0) {
-            if (c1 == 0.0) return 0;
+            if (c1 == 0.0) {
+                LOG.debug(String.format("pephclk: sat=%d c1=0 at idx1=%d t1=%.1f (no CLK data)", sat, idx1, t1));
+                return 0;
+            }
             dts[0] = c1;
             std = nav.pclk[idx1].std[sat - 1][0] * Constants.CLIGHT + 1E-3 * t1;
         } else if (c0 != 0.0 && c1 != 0.0) {
@@ -350,6 +381,7 @@ public final class Sp3Reader {
             int idx = ii == 0 ? index : idx1;
             std = nav.pclk[idx].std[sat - 1][0] * Constants.CLIGHT + 1E-3 * Math.abs(t0 < -t1 ? t0 : t1);
         } else {
+            LOG.debug(String.format("pephclk: sat=%d c0=%.12f c1=%.12f (no CLK data) index=%d idx1=%d", sat, c0, c1, index, idx1));
             return 0;
         }
         if (varc != null) varc[0] = std * std;

@@ -34,17 +34,40 @@ org.rtklib.java
 ├── ppp/           精密单点定位（PPP动态、静态、固定坐标）
 ├── rinex/         RINEX 文件读写与处理
 ├── rtcm/          RTCM 数据解码
-├── rtkpos/        RTK 相对定位核心（含周跳检测、潮汐改正）
+├── rtkpos/        RTK 相对定位核心（含周跳检测、潮汐改正、高级模糊度固定优化）
 ├── time/          时间系统（GPS时、UTC转换）
 ├── trace/         追踪日志系统（RtkTrace/PppTrace）
 └── troposphere/   对流层延迟模型
 ```
 
+RTK高级模糊度固定优化（v2.2.1新增，默认关闭，通过`RtkConfig`开关控制）：
+
+| 优化项 | 开关 | 来源 | 说明 |
+|--------|------|------|------|
+| 逐级模糊度固定(EWL→WL→NL) | `enableCascadeAR` | GREAT-PVT | 多频逐级约束，提升固定连续性 |
+| 精细化残差编辑与周跳检测 | `enableResidualEdit` | PRIDE | 残差跳变+P-C一致性+弧段筛查 |
+| 部分模糊度固定(Partial AR) | `enablePartialAR` | GREAT-PVT | 剔除劣质维度，保留可信子集 |
+| Bootstrapping成功率联合判据 | `enableBootstrapping` | GREAT-PVT | Ratio的互补判据 |
+| BDS码偏差改正(Wanninger) | `enableBdsCodeBias` | PRIDE | GEO/IGSO/MEO码偏差改正 |
+| 参数类型级自适应过程噪声 | `enableParamTypeNoise` | PRIDE | ZTD/电离层随机游走建模 |
+
+轨道模块（v2.2.0新增）：TLE解析、SGP4/SDP4轨道传播、轨道六根数转换、二体传播。验证：Vallado标准14用例全通过，86颗真实TLE卫星0失败。详见 [轨道模块技术参考](docs/ORBIT_MODULE_REFERENCE.md)。
+
+### rtklib-product — 精密产品下载
+
+IGS/MGEX精密产品自动下载器，下载规则对齐PRIDE-PPPAR v3.2 `pdp3.sh`。支持SP3/CLK/ERP/BIA/OBX/FCB/UPD/OSB/DCB/VMF3/GPT3共11类产品，FTPS/FTP/HTTPS多协议多镜像源自动回退、本地缓存和GZ解压。
+
+- **多镜像源回退**：bdspride.com → igs.ign.fr → igs.gnsswhu.cn，自动切换
+- **PPP-AR专用**：FCB宽窄巷偏差、UPD非校准相位延迟
+- **对流层产品**：VMF3映射函数网格、GPT3 5°网格
+- **偏差产品**：OSB观测特定偏差、DCB差分码偏差
+- **离线模式**：仅使用本地缓存，不发起网络请求
+
+详见 [精密产品下载技术参考](docs/PRODUCT_MODULE_REFERENCE.md)。
+
 ### rtklib-adjust — 多基线间接平差
 
 单历元GNSS多基线间接平差模块。基于高斯-马尔可夫最小二乘模型，对同一历元多条独立RTK基线进行融合平差，输出流动站最优坐标及精度评定（σ₀检验 + Baarda数据探测）。
-将多基站定位数据合并为单条基线，进行联合解算。
-例如：基站A-测站M，基站B-测站M，结果融合测站M的坐标。
 
 支持基站异常诊断：当σ₀持续超限时，自动定位异常基站并通过静态解算给出建议坐标。
 
@@ -55,12 +78,36 @@ org.rtklib.java
 - 通过 `PrcOpt.diagMask` 位掩码控制输出，默认关闭，零开销向后兼容
 
 已通过2基站1测站连续9小时RTCM实测数据验证，详见 [技术参考第10~11章](docs/ADJUST_TECHNICAL_REFERENCE.md#10-实测数据验证)。
+
 ```
 org.rtklib.java.adjust
 ├── model/          BaselineEpoch（历元容器）、AdjustResult（平差结果）、BaseStationDiagnosis（诊断结果）
 ├── covariance/     CovAssembler（协方差拼接核心）
 ├── engine/         GnssBaselineAdjust（平差引擎）、BaseStationDiagnoser（基站诊断器）
 └── datasource/     GnssDataSource（数据源接口）、RtcmFileDataSource、RinexFileDataSource、RtcmMemoryDataSource
+```
+
+### rtklib-otl — 海潮负荷BLQ系数生成
+
+从FES2004全球海潮模型直接提取BLQ海潮负荷系数，或计算任意时刻的OTL位移时间序列。独立模块，与rtklib-core无代码级耦合。
+
+- **BLQ系数提取**：`BlqExtractor.extract(lat, lon)` → 3分量 × 11分潮的振幅/相位
+- **位移时间序列**：`BlqExtractor.extractDisplacement(lat, lon, startMjd, endMjd, interval)` → ENU位移(mm)
+- **标准BLQ输出**：`BlqWriter.write()` 生成兼容GOTIC2/RTKLIB格式的BLQ文件
+- **球谐综合**：最大100阶，FES2004球谐系数 + Farrell Love数
+- **命令行工具**：`java -jar rtklib-otl.jar -lat 29.65 -lon 91.13 -sta LHASA -o lhasa.blq`
+
+验证：4站Java vs Fortran振幅/相位差异均为0.0000；25站边界测试（极区89°、赤道、海岸线、极端经度）100%通过。详见 [海潮负荷模块技术参考](docs/OTL_MODULE_REFERENCE.md)。
+
+```
+org.rtklib.java.otl
+├── BlqExtractor      BLQ系数提取 + 位移时间序列计算
+├── BlqWriter         标准BLQ格式文件输出
+├── BlqConsts         物理常数、分潮名称与Doodson数
+├── Fes2004Loader     FES2004球谐系数加载
+├── SphericalHarmonic 归一化Legendre函数及导数（Belikov递推）
+├── AstroArg          天文参数(ASTRO5)、节点改正、Doodson解码
+└── LoveNumberLoader  Farrell Love数加载
 ```
 
 ## 文档
@@ -74,6 +121,19 @@ org.rtklib.java.adjust
 | [实现差异](docs/RTKLIB_Differences.md) | Java 版与 C 版的有意差异说明 |
 | [矩阵存储参考](docs/MATRIX_DIMENSION_REFERENCE.md) | Kalman 滤波矩阵维度、存储约定及运算差异 |
 | [优化介绍](docs/RTK_Extra_Optimizations.md) | Java 版额外优化项（C 版没有的），独立开关控制 |
+| [轨道模块技术参考](docs/ORBIT_MODULE_REFERENCE.md) | TLE解析、SGP4/SDP4传播、六根数转换、二体传播 |
+
+### rtklib-product
+
+| 文档 | 说明 |
+|------|------|
+| [精密产品下载技术参考](docs/PRODUCT_MODULE_REFERENCE.md) | IGS精密产品自动下载、URL优先级、缓存策略、API示例 |
+
+### rtklib-otl
+
+| 文档 | 说明 |
+|------|------|
+| [海潮负荷模块技术参考](docs/OTL_MODULE_REFERENCE.md) | BLQ系数提取、位移时间序列、命令行用法、API示例、验证结果 |
 
 ### rtklib-adjust
 

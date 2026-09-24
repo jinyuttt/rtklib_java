@@ -81,6 +81,21 @@ public final class Constants {
     
     /** E5a+b frequency (Hz) */
     public static final double FREQE5ab = 1.191795E9;
+
+    /** Galileo E1 frequency (Hz) - same as L1 */
+    public static final double FREQE1 = 1.57542E9;
+
+    /** Galileo E5a frequency (Hz) - same as L5 */
+    public static final double FREQE5a = 1.17645E9;
+
+    /** BDS B1I frequency (Hz) */
+    public static final double FREQB1I = 1.561098E9;
+
+    /** BDS B2I frequency (Hz) */
+    public static final double FREQB2I = 1.20714E9;
+
+    /** BDS B3I frequency (Hz) */
+    public static final double FREQB3I = 1.26852E9;
     
     /** S frequency (Hz) */
     public static final double FREQs = 2.492028E9;
@@ -408,6 +423,8 @@ public final class Constants {
     public static final int PMODE_PPP_KINEMA = 7;
     public static final int PMODE_PPP_STATIC = 8;
     public static final int PMODE_PPP_FIXED = 9;
+    public static final int PMODE_PPPRTK_KINEMA = 10;
+    public static final int PMODE_PPPRTK_STATIC = 11;
 
     // Solution formats
     public static final int SOLF_LLH = 0;
@@ -449,6 +466,7 @@ public final class Constants {
     public static final int IONOOPT_EST = 4;
     public static final int IONOOPT_TEC = 5;
     public static final int IONOOPT_QZS = 6;
+    public static final int IONOOPT_SSR = 7;
 
     // Troposphere options
     public static final int TROPOPT_OFF = 0;
@@ -456,6 +474,7 @@ public final class Constants {
     public static final int TROPOPT_SBAS = 2;
     public static final int TROPOPT_EST = 3;
     public static final int TROPOPT_ESTG = 4;
+    public static final int TROPOPT_SSR = 5;
 
     // Ephemeris options
     public static final int EPHOPT_BRDC = 0;

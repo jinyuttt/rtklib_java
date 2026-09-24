@@ -13,6 +13,8 @@
         <module>rtklib-core</module>
         <module>rtklib-adjust</module>
         <module>rtklib-product</module>
+        <module>rtklib-test</module>
+        <module>rtklib-otl</module>
     </modules>
 
     <properties>

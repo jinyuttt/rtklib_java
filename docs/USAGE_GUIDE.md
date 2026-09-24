@@ -17,6 +17,7 @@
 9. [多基站多测站连续处理](#9-多基站多测站连续处理)
 10. [实时流双向缓存](#10-实时流双向缓存)
 11. [模糊度状态缓存](#11-模糊度状态缓存)
+12. [RTK高级模糊度固定优化](#12-rtk高级模糊度固定优化)
 
 ---
 
@@ -1197,3 +1198,98 @@ newProcessor.applyRtkState(saved);  // 将缓存的状态应用到新处理器
 | `TROPOPT_OFF` | 0 | 不修正 |
 | `TROPOPT_SAAS` | 1 | Saastamoinen 模型 |
 | `TROPOPT_EST` | 2 | 估计 |
+
+---
+
+## 12. RTK高级模糊度固定优化
+
+v2.2.1新增6项RTK高级模糊度固定优化，借鉴GREAT-PVT/PRIDE PPP-AR，通过`RtkConfig`独立开关控制，默认全部关闭。详细算法说明见 [RTK_Extra_Optimizations.md](RTK_Extra_Optimizations.md) 第10~15节。
+
+### 12.1 启用方式
+
+```java
+RtkConfig cfg = new RtkConfig();
+
+// 逐级模糊度固定（多频RTK推荐开启）
+cfg.enableCascadeAR = true;
+cfg.cascadeArRatioEwl = 1.5;   // EWL级Ratio阈值
+cfg.cascadeArRatioWl = 2.0;    // WL级Ratio阈值
+cfg.cascadeArRatioNl = 3.0;    // NL级Ratio阈值
+
+// 精细化残差编辑与周跳检测
+cfg.enableResidualEdit = true;
+cfg.residEditJumpThresh = 4.0;       // 残差跳变阈值(σ)
+cfg.residEditMinArcLen = 10;          // 最小弧段长度(epoch)
+cfg.residEditPcConsistThresh = 3.0;   // P-C一致性阈值(σ)
+
+// 部分模糊度固定
+cfg.enablePartialAR = true;
+cfg.partialArMinRatio = 2.0;         // 部分AR最小Ratio
+cfg.partialArMinSats = 4;            // 最小保留卫星数
+
+// Bootstrapping成功率联合判据
+cfg.enableBootstrapping = true;
+cfg.bootstrappingMinSuccess = 0.99;  // 最小成功率阈值
+
+// BDS码偏差改正
+cfg.enableBdsCodeBias = true;
+cfg.bdsCodeBiasElThresh = 30.0;      // 高度角阈值(度)
+
+// 参数类型级自适应过程噪声
+cfg.enableParamTypeNoise = true;
+cfg.noiseZtdRw = 1e-4;               // ZTD随机游走(m/√s)
+cfg.noiseIonoRw = 1e-3;              // 电离层随机游走(m/√s)
+
+// 传入RtkProcessor
+RtkProcessor processor = new RtkProcessor(opt, cfg);
+```
+
+### 12.2 优化项一览
+
+| 优化项 | 开关 | 来源 | 适用场景 | 优先级 |
+|--------|------|------|----------|--------|
+| 逐级模糊度固定(EWL→WL→NL) | `enableCascadeAR` | GREAT-PVT | 多频(≥2)RTK | P0 |
+| 精细化残差编辑与周跳检测 | `enableResidualEdit` | PRIDE | 所有RTK | P0 |
+| 部分模糊度固定(Partial AR) | `enablePartialAR` | GREAT-PVT | Ratio经常失败 | P1 |
+| Bootstrapping成功率联合判据 | `enableBootstrapping` | GREAT-PVT | 防止假固定 | P1 |
+| BDS码偏差改正(Wanninger) | `enableBdsCodeBias` | PRIDE | 含BDS卫星 | P2 |
+| 参数类型级自适应过程噪声 | `enableParamTypeNoise` | PRIDE | 中长基线 | P2 |
+
+### 12.3 推荐组合
+
+| 场景 | 推荐开启 | 说明 |
+|------|---------|------|
+| 短基线双频RTK | CascadeAR + ResEdit + Bootstrapping | 基础保障+逐级固定+可靠性校验 |
+| 短基线单频RTK | ResEdit + PartialAR + Bootstrapping | 单频无级联，用部分AR补固定率 |
+| 中长基线多频RTK | 全部开启 | 中长基线需要所有优化协同 |
+| 含BDS卫星 | +BdsCodeBias | BDS GEO/IGSO码偏差改正 |
+
+### 12.4 诊断变量
+
+优化启用后，可通过Rtk对象访问诊断变量：
+
+```java
+Rtk rtk = processor.getRtk();
+
+// 级联AR诊断
+int fixLevel = rtk.cascadeArFixLevel[sat * nf + freq];  // 0=none,1=EWL,2=WL,3=NL
+double ewlRatio = rtk.cascadeArLastRatio[0];              // EWL级Ratio
+double wlRatio  = rtk.cascadeArLastRatio[1];              // WL级Ratio
+double nlRatio  = rtk.cascadeArLastRatio[2];              // NL级Ratio
+
+// 累计统计
+rtk.diagCascadeArEwlFixCount;    // EWL固定成功次数
+rtk.diagCascadeArWlFixCount;     // WL固定成功次数
+rtk.diagCascadeArNlFixCount;     // NL固定成功次数
+rtk.diagPartialArAttemptCount;   // 部分AR尝试次数
+rtk.diagPartialArFixCount;       // 部分AR固定成功次数
+rtk.diagBootstrapRejectCount;    // Bootstrapping拒绝次数
+rtk.diagResEditSlipCount;        // 残差编辑检测周跳次数
+rtk.diagResEditPcRejectCount;    // P-C一致性拒绝次数
+rtk.diagResEditArcResetCount;    // 弧段重置次数
+rtk.diagBdsBiasApplyCount;       // BDS码偏差应用次数
+```
+
+### 12.5 回退保证
+
+所有优化默认关闭（`false`），关闭时与原版RTKLIB行为完全一致。可独立开关、独立回退，支持A/B对照测试。
