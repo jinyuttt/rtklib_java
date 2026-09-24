@@ -1,5 +1,6 @@
 package org.rtklib.java.ppp;
 
+import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
@@ -7,7 +8,9 @@ import org.rtklib.java.ephemeris.ClkReader;
 import org.rtklib.java.ephemeris.Sp3Reader;
 import org.rtklib.java.pntpos.PntPos;
 import org.rtklib.java.pntpos.PosHandler;
+import org.rtklib.java.ppprtk.PppRtkCore;
 import org.rtklib.java.rtkpos.CombinedFilter;
+import org.rtklib.java.rtkpos.Tides;
 import org.rtklib.java.rtcm.Rtcm;
 import org.rtklib.java.time.TimeSystem;
 import org.slf4j.Logger;
@@ -158,6 +161,10 @@ public class PppProcessor {
         this(createDefaultOpt(), null, null, null);
     }
 
+    public void setRtkConfig(RtkConfig cfg) {
+        this.rtk.rtkConfig = cfg;
+    }
+
     public static PrcOpt createDefaultOpt() {
         PrcOpt opt = new PrcOpt();
         opt.mode = Constants.PMODE_PPP_KINEMA;
@@ -249,11 +256,57 @@ public class PppProcessor {
     public void loadSp3(String sp3FilePath) {
         Sp3Reader.readsp3(sp3FilePath, rtcm.nav, 0);
         log.info("Loaded SP3: {} ephemerides", rtcm.nav.ne);
+        if (rtcm.nav.ne > 0) {
+            log.info("SP3 time range: {} to {}", rtcm.nav.peph[0].time, rtcm.nav.peph[rtcm.nav.ne - 1].time);
+        }
     }
 
     public void loadClk(String clkFilePath) {
         ClkReader.readclk(clkFilePath, rtcm.nav);
         log.info("Loaded CLK: {} records", rtcm.nav.nc);
+    }
+
+    public void loadErp(String erpFilePath) {
+        int n = org.rtklib.java.ephemeris.ErpReader.readErp(erpFilePath, rtcm.nav);
+        log.info("Loaded ERP: {} records from {}", n, erpFilePath);
+    }
+
+    public void loadBlq(String blqFilePath, String staName) {
+        org.rtklib.java.ephemeris.OtlReader.readotl(opt, blqFilePath, null);
+        if (staName != null && !staName.isEmpty()) {
+            org.rtklib.java.ephemeris.OtlReader.readblq(blqFilePath, staName, opt.odisp[0]);
+        }
+        log.info("Loaded BLQ (ocean tide loading): {}", blqFilePath);
+    }
+
+    public void loadDcb(String dcbFilePath) {
+        org.rtklib.java.ephemeris.DcbReader.readdcb(dcbFilePath, rtcm.nav, null);
+        log.info("Loaded DCB: {}", dcbFilePath);
+    }
+
+    public void loadFcb(String fcbFilePath) {
+        org.rtklib.java.ephemeris.FcbReader.readFcb(fcbFilePath, rtcm.nav);
+        log.info("Loaded FCB: {}", fcbFilePath);
+    }
+
+    public void loadUpd(String updFilePath) {
+        org.rtklib.java.ephemeris.UpdReader.readUpd(updFilePath, rtcm.nav);
+        log.info("Loaded UPD: {}", updFilePath);
+    }
+
+    public void loadOsb(String osbFilePath) {
+        org.rtklib.java.ephemeris.OsbReader.readOsb(osbFilePath, rtcm.nav);
+        log.info("Loaded OSB: {}", osbFilePath);
+    }
+
+    public void loadGpt3Grid(String gpt3FilePath) {
+        org.rtklib.java.ephemeris.Gpt3GridReader.readGpt3Grid(gpt3FilePath, rtcm.nav);
+        log.info("Loaded GPT3 grid: {}", gpt3FilePath);
+    }
+
+    public void loadVmf3Op(String vmf3FilePath) {
+        org.rtklib.java.ephemeris.Vmf3OpReader.readVmf3Op(vmf3FilePath, rtcm.nav);
+        log.info("Loaded VMF3 OP: {}", vmf3FilePath);
     }
 
     public void loadSbs(String sbsFilePath) {
@@ -338,6 +391,25 @@ public class PppProcessor {
         finished = false;
     }
 
+    public void resetForNextBatch() {
+        finished = false;
+        totalEpochs = 0;
+        successCount = 0;
+        failCount = 0;
+        solutions.clear();
+        solutionSsatList.clear();
+        bestSol = null;
+        bestTime = null;
+        windowCount = 0;
+        solStaticOutputs.clear();
+        pendingObsList.clear();
+        pendingObsCountList.clear();
+        pendingObsTimeList.clear();
+        pendingLen = 0;
+        ephReady = false;
+        ephTypeCount.clear();
+    }
+
     public PppResult finish() {
         if (finished) {
             throw new IllegalStateException("Processor already finished");
@@ -409,6 +481,7 @@ public class PppProcessor {
             batchRtcm.nav.nc = rtcm.nav.nc;
             batchRtcm.nav.ncmax = rtcm.nav.ncmax;
         }
+        mergePreciseProducts(batchRtcm.nav, rtcm.nav);
 
         int ephWeek = findEphWeek(batchRtcm.nav);
         if (ephWeek > 0) {
@@ -471,11 +544,16 @@ public class PppProcessor {
         if (sp3FilePath != null) {
             Sp3Reader.readsp3(sp3FilePath, parser.nav, 0);
             log.info("Loaded SP3: {} ephemerides", parser.nav.ne);
+            if (parser.nav.ne > 0) {
+                log.info("SP3 time range: {} to {}", parser.nav.peph[0].time, parser.nav.peph[parser.nav.ne - 1].time);
+            }
         }
         if (clkFilePath != null) {
             ClkReader.readclk(clkFilePath, parser.nav);
             log.info("Loaded CLK: {} records", parser.nav.nc);
         }
+
+        mergePreciseProducts(parser.nav, rtcm.nav);
 
         if (parser.obs.n == 0) {
             log.warn("No observation data in RINEX file");
@@ -591,9 +669,71 @@ public class PppProcessor {
     private void processEpoch(Obsd[] obsData, int n, GTime time, Nav nav) {
         totalEpochs++;
 
+        if (totalEpochs == 1) {
+            log.info("PPP config dump: tidecorr={}, tropopt={}, ionoopt={}, sateph={}, nf={}, navsys={}",
+                    opt.tidecorr, opt.tropopt, opt.ionoopt, opt.sateph, opt.nf, opt.navsys);
+            int fcbCount = 0;
+            if (nav.fcbWl != null) {
+                for (int i = 0; i < nav.fcbWl.length; i++) {
+                    for (int j = 0; j < nav.fcbWl[i].length; j++) {
+                        if (nav.fcbWl[i][j] != 0.0) fcbCount++;
+                    }
+                }
+            }
+            int cbiasCount = 0;
+            if (nav.cbias != null) {
+                for (int i = 0; i < nav.cbias.length; i++) {
+                    for (int j = 0; j < nav.cbias[i].length; j++) {
+                        for (int k = 0; k < nav.cbias[i][j].length; k++) {
+                            if (nav.cbias[i][j][k] != 0.0) cbiasCount++;
+                        }
+                    }
+                }
+            }
+            log.info("PPP nav dump: ne={}, nc={}, erp.n={}, gpt3Grid={}, vmf3Op={}, fcbWl={}, cbias={}",
+                    nav.ne, nav.nc,
+                    nav.erp != null ? nav.erp.n : 0,
+                    nav.gpt3GridLoaded ? "LOADED" : "N/A",
+                    nav.vmf3OpLoaded ? "LOADED" : "N/A",
+                    fcbCount, cbiasCount);
+            if (rtk.rtkConfig != null) {
+                log.info("PPP rtkConfig: iers2010={}, gpt3Vmf3={}, isbIfcbIfb={}, pppAR={}, arFixHold={}, partialAR={}, bds3AR={}",
+                        rtk.rtkConfig.enableIers2010, rtk.rtkConfig.enableGpt3Vmf3,
+                        rtk.rtkConfig.enableIsbIfcbIfb, rtk.rtkConfig.enablePppAR,
+                        rtk.rtkConfig.enablePppArFixHold, rtk.rtkConfig.enablePppPartialAR,
+                        rtk.rtkConfig.enableBds3PppAR);
+            }
+        }
+
+        if (rtk.rtkConfig != null && rtk.rtkConfig.enableIers2010 && opt.tidecorr == 0) {
+            opt.tidecorr = 1;
+            rtk.opt.tidecorr = 1;
+            log.info("enableIers2010=true but tidecorr=0, auto-set tidecorr=1");
+        }
+
+        if (totalEpochs == 1 && opt.sateph == Constants.EPHOPT_PREC) {
+            if (nav.ne == 0 || nav.nc == 0) {
+                log.warn("Precise eph requested but SP3(ne={})/CLK(nc={}) missing, fallback to broadcast eph",
+                        nav.ne, nav.nc);
+                opt.sateph = Constants.EPHOPT_BRDC;
+                rtk.opt.sateph = Constants.EPHOPT_BRDC;
+            }
+        }
+
         GTime prevTime = new GTime(rtk.sol.time);
         if (rtk.sol.stat == Constants.SOLQ_NONE) {
             PntPos.pntpos(obsData, n, nav, opt, rtk.sol, null, rtk.ssat);
+            if (log.isDebugEnabled() && rtk.sol.stat != Constants.SOLQ_NONE) {
+                double[] llh = new double[3];
+                CoordTransform.ecef2pos(rtk.sol.rr, llh);
+                log.debug("SPP initial pos: lat={} lon={} h={} ns={}",
+                        String.format("%.6f", llh[0] * Constants.R2D),
+                        String.format("%.6f", llh[1] * Constants.R2D),
+                        String.format("%.1f", llh[2]), rtk.sol.ns);
+            }
+            if (log.isDebugEnabled() && rtk.sol.stat == Constants.SOLQ_NONE) {
+                log.debug("SPP failed - no initial position for PPP");
+            }
         } else {
             rtk.sol.time = obsData[0].time;
         }
@@ -606,7 +746,38 @@ public class PppProcessor {
 
         RtklibCommon.corrPhaseBiasSsr(obsData, n, nav, opt.pppopt);
 
-        PppCore.pppos(rtk, obsData, n, nav);
+        if (totalEpochs <= 3) {
+            log.info("processEpoch[{}]: rtkConfig={}, pppRtk={}, pppAR={}", totalEpochs,
+                    rtk.rtkConfig != null,
+                    rtk.rtkConfig != null && rtk.rtkConfig.enablePppRtk,
+                    rtk.rtkConfig != null && rtk.rtkConfig.enablePppAR);
+        }
+
+        if (rtk.rtkConfig != null && rtk.rtkConfig.enablePppRtk) {
+            PppRtkCore.ppprtkos(rtk, obsData, n, nav);
+        } else if (rtk.rtkConfig != null && (rtk.rtkConfig.enableIsbIfcbIfb || rtk.rtkConfig.enablePppAR
+                || rtk.rtkConfig.enablePppArFixHold || rtk.rtkConfig.enablePppPartialAR
+                || rtk.rtkConfig.enableBds3PppAR || rtk.rtkConfig.enableOsb
+                || rtk.rtkConfig.enableAt1S2 || rtk.rtkConfig.useGpt3Grid)) {
+            PppCoreEx.ppos(rtk, obsData, n, nav, rtk.rtkConfig);
+        } else {
+            PppCore.pppos(rtk, obsData, n, nav);
+        }
+
+        if (false && rtk.sol.stat != Constants.SOLQ_NONE && opt.tidecorr != 0) {
+            double[] dispOut = new double[3];
+            double[] rrOut = new double[]{rtk.sol.rr[0], rtk.sol.rr[1], rtk.sol.rr[2]};
+            if (rtk.rtkConfig != null && rtk.rtkConfig.enableIers2010) {
+                double[] disp2010 = PppOptimizations.tideDisplacementIers2010(
+                        TimeSystem.gpst2utc(obsData[0].time), rrOut, opt.tidecorr, nav.erp, opt.odisp[0], rtk.rtkConfig);
+                if (disp2010 != null) {
+                    for (int i = 0; i < 3; i++) dispOut[i] = disp2010[i];
+                }
+            } else {
+                Tides.tidedisp(TimeSystem.gpst2utc(obsData[0].time), rrOut, opt.tidecorr, nav.erp, opt.odisp[0], dispOut);
+            }
+            for (int i = 0; i < 3; i++) rtk.sol.rr[i] += dispOut[i];
+        }
 
         if (rtk.sol.stat != Constants.SOLQ_NONE) {
             successCount++;
@@ -644,6 +815,63 @@ public class PppProcessor {
             if (handler != null) {
                 handler.onPosFail(time, "PPP positioning failed");
             }
+        }
+    }
+
+    private void mergePreciseProducts(Nav dst, Nav src) {
+        if (src.erp != null && src.erp.n > 0 && (dst.erp == null || dst.erp.n == 0)) {
+            dst.erp = src.erp;
+            log.info("Merged ERP: {} records", src.erp.n);
+        }
+        if (src.gpt3Grid != null && dst.gpt3Grid == null) {
+            dst.gpt3Grid = src.gpt3Grid;
+            dst.gpt3GridLoaded = src.gpt3GridLoaded;
+            log.info("Merged GPT3 grid: {} points", src.gpt3Grid.length);
+        }
+        if (src.vmf3Coeff != null && src.vmf3Coeff.length > 0 && (dst.vmf3Coeff == null || dst.vmf3Coeff.length == 0)) {
+            dst.vmf3Coeff = src.vmf3Coeff;
+            dst.vmf3OpLoaded = src.vmf3OpLoaded;
+            log.info("Merged VMF3 coeff: {} epochs", src.vmf3Coeff.length);
+        }
+        if (src.fcbWl != null && src.fcbWl.length > 0 && (dst.fcbWl == null || dst.fcbWl.length == 0)) {
+            int srcFcbNz = 0;
+            for (int i = 0; i < src.fcbWl.length; i++)
+                for (int j = 0; j < src.fcbWl[i].length; j++)
+                    if (src.fcbWl[i][j] != 0.0) srcFcbNz++;
+            dst.fcbWl = src.fcbWl;
+            dst.fcbNl = src.fcbNl;
+            log.info("Merged FCB: WL={}, NL={}, nonZero={}", src.fcbWl.length, src.fcbNl != null ? src.fcbNl.length : 0, srcFcbNz);
+        }
+        if (src.updWl != null && src.updWl.length > 0 && (dst.updWl == null || dst.updWl.length == 0)) {
+            dst.updWl = src.updWl;
+            dst.updNl = src.updNl;
+            log.info("Merged UPD: WL={}, NL={}", src.updWl.length, src.updNl != null ? src.updNl.length : 0);
+        }
+        if (src.osb != null && src.osb.length > 0 && (dst.osb == null || dst.osb.length == 0)) {
+            dst.osb = src.osb;
+            log.info("Merged OSB: {} records", src.osb.length);
+        }
+        if (src.cbias != null && src.cbias.length > 0 && (dst.cbias == null || dst.cbias.length == 0)) {
+            int srcCbiasNz = 0;
+            for (int i = 0; i < src.cbias.length; i++)
+                for (int j = 0; j < src.cbias[i].length; j++)
+                    for (int k = 0; k < src.cbias[i][j].length; k++)
+                        if (src.cbias[i][j][k] != 0.0) srcCbiasNz++;
+            dst.cbias = src.cbias;
+            dst.rbias = src.rbias;
+            log.info("Merged DCB: {} sats, nonZero={}", src.cbias.length, srcCbiasNz);
+        }
+        if (src.ne > 0 && dst.ne == 0) {
+            dst.peph = src.peph;
+            dst.ne = src.ne;
+            dst.nemax = src.nemax;
+            log.info("Merged SP3: {} ephemerides", src.ne);
+        }
+        if (src.nc > 0 && dst.nc == 0) {
+            dst.pclk = src.pclk;
+            dst.nc = src.nc;
+            dst.ncmax = src.ncmax;
+            log.info("Merged CLK: {} records", src.nc);
         }
     }
 
@@ -839,7 +1067,14 @@ public class PppProcessor {
                 rtkB.tt = 0.0;
             }
 
-            PppCore.pppos(rtkB, obsData, n, nav);
+            if (rtkB.rtkConfig != null && (rtkB.rtkConfig.enableIsbIfcbIfb || rtkB.rtkConfig.enablePppAR
+                    || rtkB.rtkConfig.enablePppArFixHold || rtkB.rtkConfig.enablePppPartialAR
+                    || rtkB.rtkConfig.enableBds3PppAR || rtkB.rtkConfig.enableOsb
+                    || rtkB.rtkConfig.enableAt1S2 || rtkB.rtkConfig.useGpt3Grid)) {
+                PppCoreEx.ppos(rtkB, obsData, n, nav, rtkB.rtkConfig);
+            } else {
+                PppCore.pppos(rtkB, obsData, n, nav);
+            }
             if (rtkB.sol.stat != Constants.SOLQ_NONE) {
                 solbList.add(new Sol(rtkB.sol));
                 rbbList.add(new double[3]);

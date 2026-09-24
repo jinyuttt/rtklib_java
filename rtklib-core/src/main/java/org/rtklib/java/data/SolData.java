@@ -253,9 +253,15 @@ public class SolData implements Serializable {
 
     private static LocalDateTime toLocalDateTime(GTime time) {
         double[] ymdhms = TimeSystem.time2ymdhms(time);
+        int sec = (int) ymdhms[5];
+        int nano = (int) ((ymdhms[5] - sec) * 1e9);
+        if (sec >= 60) {
+            sec = 59;
+            nano = 999_999_999;
+        }
         return LocalDateTime.of(
                 (int) ymdhms[0], (int) ymdhms[1], (int) ymdhms[2],
-                (int) ymdhms[3], (int) ymdhms[4], (int) ymdhms[5]);
+                (int) ymdhms[3], (int) ymdhms[4], sec, nano);
     }
 
     private static String formatTime(GTime time) {

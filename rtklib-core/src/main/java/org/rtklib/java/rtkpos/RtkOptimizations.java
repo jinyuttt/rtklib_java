@@ -477,4 +477,40 @@ public final class RtkOptimizations {
     private static double clamp(double val, double min, double max) {
         return Math.max(min, Math.min(max, val));
     }
+
+    public static void applyParamTypeNoise(Rtk rtk, double[] P, int nx, double tt) {
+        RtkConfig cfg = rtk.rtkConfig;
+        if (!cfg.enableParamTypeNoise) return;
+        if (tt == 0.0) return;
+
+        PrcOpt opt = rtk.opt;
+        int np = (opt.dynamics == 0) ? 3 : 9;
+        int ni = (opt.ionoopt == Constants.IONOOPT_EST) ?
+                 (opt.ionoGradient ? Constants.MAXSAT * 3 : Constants.MAXSAT) : 0;
+        int nt = (opt.tropopt < Constants.TROPOPT_EST) ? 0 :
+                 (opt.tropopt < Constants.TROPOPT_ESTG) ? 2 : 6;
+        int nl = (opt.glomodear != Constants.GLO_ARMODE_AUTOCAL) ? 0 : Constants.NFREQGLO;
+        int nr = np + ni + nt + nl;
+        int na = nr + Constants.MAXSAT * opt.nf;
+
+        int ztdStart = np + ni;
+        int ztdCount = nt;
+        for (int i = ztdStart; i < ztdStart + ztdCount && i < na; i++) {
+            P[i * nx + i] += cfg.noiseZtdRw * cfg.noiseZtdRw * Math.abs(tt);
+        }
+
+        int clkStart = np;
+        int clkCount = ni > 0 ? 0 : 0;
+        if (opt.dynamics == 0) {
+            clkCount = 0;
+        }
+
+        int ionoStart = np;
+        if (opt.ionoopt == Constants.IONOOPT_EST) {
+            int ionoCount = opt.ionoGradient ? Constants.MAXSAT * 3 : Constants.MAXSAT;
+            for (int i = ionoStart; i < ionoStart + ionoCount && i < na; i++) {
+                P[i * nx + i] += cfg.noiseIonoRw * cfg.noiseIonoRw * Math.abs(tt);
+            }
+        }
+    }
 }

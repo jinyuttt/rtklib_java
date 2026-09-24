@@ -184,6 +184,12 @@ public final class RtkCore {
 
         udstate(rtk, obs, nu, nr, nav, sat, ns, iu, ir);
 
+        // [OPT-BDS-BIAS] BDS码偏差改正
+        RtkOptimizationsBdsBias.applyBdsCodeBias(rtk, obs, iu, ir, ns, nf, nav);
+
+        // [OPT-PARAM-NOISE] 参数类型级自适应过程噪声
+        RtkOptimizations.applyParamTypeNoise(rtk, rtk.P, rtk.nx, rtk.tt);
+
         double[] xp = new double[nx];
         double[] Pp = new double[nx * nx];
         System.arraycopy(rtk.x, 0, xp, 0, nx);
@@ -247,6 +253,10 @@ public final class RtkCore {
                     y, e, azel, freq, rtk.epoch)) {
                 nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
                         iu, ir, ns, nf, nav, v, null, R, vflg);
+
+                // [OPT-RES-EDIT] 残差时序周跳检测与伪距-载波一致性校验
+                RtkOptimizationsResEdit.checkCycleSlip(rtk, v, R, vflg, nv);
+                RtkOptimizationsResEdit.checkPcConsistency(rtk, obs, sat, ns, nf, nav);
 
                 if (valpos(rtk, v, R, vflg, nv, 4.0)) {
                     System.arraycopy(xp, 0, rtk.x, 0, nx);
@@ -960,6 +970,9 @@ public final class RtkCore {
                 int firstIdx = IB(sat[0], f, opt);
             }
         }
+
+        // [OPT-RES-EDIT] 精细化残差编辑与周跳检测
+        RtkOptimizationsResEdit.screenArcIntegrity(rtk);
     }
 
     private static boolean zdres(int base, Obsd[] obs, int nu, int nr,
@@ -1428,6 +1441,11 @@ public final class RtkCore {
 
     private static int resamb_LAMBDA(Rtk rtk, double[] bias, double[] xa,
                                      int gps, int glo, int sbs, Nav nav) {
+        // [OPT-CASCADE-AR] 逐级模糊度固定
+        if (rtk.rtkConfig.enableCascadeAR) {
+            return RtkOptimizationsCascadeAR.cascadeAmbFix(rtk, bias, xa, gps, glo, sbs, nav);
+        }
+
         PrcOpt opt = rtk.opt;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
         int nx = rtk.nx;
@@ -1619,6 +1637,16 @@ public final class RtkCore {
             }
 
             if (s[0] <= 0.0 || s[1] / s[0] >= rtk.sol.thres) {
+                // [OPT-BOOTSTRAP] Bootstrapping联合判据
+                if (rtk.rtkConfig.enableBootstrapping) {
+                    if (!RtkOptimizationsBootstrap.validateFix(rtk, b, nbLambda)) {
+                        rtk.sol.ratio = 0.0f;
+                        rtk.diagBootstrapRejectCount++;
+                        nb = 0;
+                        return nb;
+                    }
+                }
+
                 for (int i = 0; i < na; i++) {
                     rtk.xa[i] = rtk.x[i];
                     for (int j = 0; j < na; j++) {
@@ -1672,6 +1700,13 @@ public final class RtkCore {
             }
         } else {
             nb = 0;
+        }
+
+        // [OPT-PARTIAL-AR] 部分模糊度固定
+        if (nb <= 0 && rtk.rtkConfig.enablePartialAR) {
+            int nbPar = RtkOptimizationsPartialAR.partialAmbFix(
+                            rtk, bias, xa, ix, rtk.nb_ar, gps, glo, sbs);
+            if (nbPar > 1) return nbPar;
         }
 
         return nb;

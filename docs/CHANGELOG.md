@@ -6,6 +6,29 @@
 
 ---
 
+## [2.2.1] - 2026-09-22
+
+### Added
+
+- **RTK阶段高级模糊度固定优化（6项）**：借鉴GREAT-PVT/PRIDE PPP-AR，通过RtkConfig独立开关控制，默认全部关闭
+  - **逐级模糊度固定（Cascade AR, EWL→WL→NL）**：`enableCascadeAR`，利用多频波长差异逐级约束固定模糊度，提升RTK固定连续性和精度
+  - **精细化残差编辑与周跳检测**：`enableResidualEdit`，残差时序迭代跳变检测、伪距-载波一致性校验、弧段完整性筛查
+  - **部分模糊度固定（Partial AR）**：`enablePartialAR`，全局Ratio检验失败后剔除劣质模糊度维度，保留可信子集完成固定
+  - **Bootstrapping成功率联合判据**：`enableBootstrapping`，作为Ratio的互补判据，与Ratio联合判定模糊度固定可靠性
+  - **BDS卫星码偏差改正（Wanninger模型）**：`enableBdsCodeBias`，针对BDS GEO/IGSO/MEO卫星码偏差改正，提升BDS固定成功率
+  - **参数类型级自适应过程噪声**：`enableParamTypeNoise`，按物理参数区分噪声模型（ZTD随机游走/钟差白噪声/电离层随机游走）
+  - 实现类：`RtkOptimizationsCascadeAR`/`RtkOptimizationsResEdit`/`RtkOptimizationsPartialAR`/`RtkOptimizationsBootstrap`/`RtkOptimizationsBdsBias`
+  - 侵入方式：RtkCore中8个`if(cfg.enableXxx)`分支，默认关闭时与原版RTKLIB行为完全一致
+  - 27个新增单元测试全部通过
+
+- **BDS/Galileo频率常量**：`Constants.FREQB1I`/`FREQB2I`/`FREQB3I`/`FREQE1`/`FREQE5a`，供级联AR和BDS码偏差使用
+
+- **RtkConfig新增20+个开关和参数**：级联AR各级Ratio阈值、残差编辑阈值、部分AR参数、Bootstrapping成功率阈值、BDS码偏差高度角阈值、过程噪声参数等
+
+- **Rtk新增诊断变量**：`cascadeArFixLevel`/`cascadeArLastRatio`/`diagCascadeArEwlFixCount`等，用于优化效果评估
+
+---
+
 ## [2.2.0] - 2026-09-22
 
 ### Added

@@ -409,12 +409,7 @@ public final class EphModel {
             GTime time = TimeSystem.timeadd(obs[i].time, -pr / Constants.CLIGHT);
 
             double[] dtOut = new double[1];
-            if (ephopt == Constants.EPHOPT_PREC) {
-                double[] varc = new double[1];
-                if (Sp3Reader.pephclk(time, obs[i].sat, nav, dtOut, varc) == 0) continue;
-            } else {
-                if (!ephclk(time, teph, obs[i].sat, nav, dtOut)) continue;
-            }
+            if (!ephclk(time, teph, obs[i].sat, nav, dtOut)) continue;
 
             time = TimeSystem.timeadd(time, -dtOut[0]);
 
@@ -424,7 +419,10 @@ public final class EphModel {
             int[] svhi = new int[1];
 
             if (ephopt == Constants.EPHOPT_PREC) {
-                if (!satposPrec(time, obs[i].sat, nav, rsi, dtsi, varei)) continue;
+                if (!satposPrec(time, obs[i].sat, nav, rsi, dtsi, varei)) {
+                    svh[i] = -1;
+                    continue;
+                }
                 svhi[0] = 0;
             } else {
                 if (!satposBrdc(time, teph, obs[i].sat, nav, rsi, dtsi, varei, svhi)) continue;
@@ -435,7 +433,7 @@ public final class EphModel {
             vare[i] = varei[0];
             svh[i] = svhi[0];
 
-            if (dts[i * 2] == 0.0 && ephopt != Constants.EPHOPT_PREC) {
+            if (dts[i * 2] == 0.0) {
                 if (!ephclk(time, teph, obs[i].sat, nav, dtOut)) continue;
                 dts[i * 2] = dtOut[0];
                 dts[i * 2 + 1] = 0.0;

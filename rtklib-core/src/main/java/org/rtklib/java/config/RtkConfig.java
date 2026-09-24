@@ -60,6 +60,78 @@ public class RtkConfig implements Serializable {
 
     public int atmFrozenNsThresh = 7;
 
+    public boolean enableCascadeAR = false;
+    public double cascadeArRatioEwl = 1.5;
+    public double cascadeArRatioWl = 2.0;
+    public double cascadeArRatioNl = 3.0;
+    public boolean cascadeArBootstrapping = false;
+
+    public boolean enableResidualEdit = false;
+    public double residEditJumpThresh = 4.0;
+    public int residEditMinArcLen = 10;
+    public double residEditPcConsistThresh = 3.0;
+
+    public boolean enablePartialAR = false;
+    public double partialArMinRatio = 2.0;
+    public int partialArMinSats = 4;
+    public double partialArMinBootstrapping = 0.99;
+    public int partialArMaxSubsetTries = 10;
+
+    public boolean enableBootstrapping = false;
+    public double bootstrappingMinSuccess = 0.99;
+    public boolean bootstrappingWithRatio = true;
+
+    public boolean enableBdsCodeBias = false;
+    public double bdsCodeBiasElThresh = 30.0;
+    public boolean bdsCodeBiasForceOn = false;
+
+    public boolean enableParamTypeNoise = false;
+    public double noiseZtdRw = 1e-4;
+    public double noiseClkWhite = 1e2;
+    public double noiseIonoRw = 1e-3;
+
+    public boolean enableGpt3Vmf3 = false;
+    public String gpt3GridFile = "";
+    public String vmf3OpFile = "";
+    public boolean useGpt3Grid = false;
+
+    public boolean enableIers2010 = false;
+    public boolean enableAt1S2 = false;
+
+    public boolean enableIsbIfcbIfb = false;
+    public boolean estimateIsb = true;
+    public boolean estimateIfcb = true;
+    public boolean estimateIfb = true;
+    public double isbPrn = 0.01;
+    public double ifcbPrn = 0.01;
+    public double ifbPrn = 0.001;
+
+    public boolean enablePppAR = false;
+    public double pppArRatioWl = 2.0;
+    public double pppArRatioNl = 3.0;
+    public String fcbFile = "";
+    public String updFile = "";
+    public boolean enablePppArFixHold = false;
+    public double pppArFixHoldVar = 1e-6;
+    public int pppArFixHoldMinEp = 50;
+    public boolean enablePppPartialAR = false;
+    public double pppPartialArMinRatio = 2.0;
+    public int pppPartialArMinSats = 4;
+    public int pppPartialArMaxTries = 10;
+    public boolean enableBds3PppAR = false;
+    public boolean enableOsb = false;
+    public String osbFile = "";
+    public String dcbFile = "";
+
+    public boolean enablePppRtk = false;
+    public boolean enablePppRtkAR = false;
+    public double pppRtkArRatio = 3.0;
+    public boolean enablePppRtkFixHold = false;
+    public int pppRtkFixHoldMinEpoch = 10;
+    public double pppRtkFixHoldVar = 1e-4;
+    public double ssrMaxAge = 60.0;
+    public int ssrIonoMode = 1;
+
     public RtkConfig() {
     }
 
@@ -111,5 +183,77 @@ public class RtkConfig implements Serializable {
         this.ambAnchorMinFixCount = other.ambAnchorMinFixCount;
         this.ambAnchorVar = other.ambAnchorVar;
         this.atmFrozenNsThresh = other.atmFrozenNsThresh;
+
+        this.enableCascadeAR = other.enableCascadeAR;
+        this.cascadeArRatioEwl = other.cascadeArRatioEwl;
+        this.cascadeArRatioWl = other.cascadeArRatioWl;
+        this.cascadeArRatioNl = other.cascadeArRatioNl;
+        this.cascadeArBootstrapping = other.cascadeArBootstrapping;
+
+        this.enableResidualEdit = other.enableResidualEdit;
+        this.residEditJumpThresh = other.residEditJumpThresh;
+        this.residEditMinArcLen = other.residEditMinArcLen;
+        this.residEditPcConsistThresh = other.residEditPcConsistThresh;
+
+        this.enablePartialAR = other.enablePartialAR;
+        this.partialArMinRatio = other.partialArMinRatio;
+        this.partialArMinSats = other.partialArMinSats;
+        this.partialArMinBootstrapping = other.partialArMinBootstrapping;
+        this.partialArMaxSubsetTries = other.partialArMaxSubsetTries;
+
+        this.enableBootstrapping = other.enableBootstrapping;
+        this.bootstrappingMinSuccess = other.bootstrappingMinSuccess;
+        this.bootstrappingWithRatio = other.bootstrappingWithRatio;
+
+        this.enableBdsCodeBias = other.enableBdsCodeBias;
+        this.bdsCodeBiasElThresh = other.bdsCodeBiasElThresh;
+        this.bdsCodeBiasForceOn = other.bdsCodeBiasForceOn;
+
+        this.enableParamTypeNoise = other.enableParamTypeNoise;
+        this.noiseZtdRw = other.noiseZtdRw;
+        this.noiseClkWhite = other.noiseClkWhite;
+        this.noiseIonoRw = other.noiseIonoRw;
+
+        this.enableGpt3Vmf3 = other.enableGpt3Vmf3;
+        this.gpt3GridFile = other.gpt3GridFile;
+        this.vmf3OpFile = other.vmf3OpFile;
+        this.useGpt3Grid = other.useGpt3Grid;
+
+        this.enableIers2010 = other.enableIers2010;
+        this.enableAt1S2 = other.enableAt1S2;
+
+        this.enableIsbIfcbIfb = other.enableIsbIfcbIfb;
+        this.estimateIsb = other.estimateIsb;
+        this.estimateIfcb = other.estimateIfcb;
+        this.estimateIfb = other.estimateIfb;
+        this.isbPrn = other.isbPrn;
+        this.ifcbPrn = other.ifcbPrn;
+        this.ifbPrn = other.ifbPrn;
+
+        this.enablePppAR = other.enablePppAR;
+        this.pppArRatioWl = other.pppArRatioWl;
+        this.pppArRatioNl = other.pppArRatioNl;
+        this.fcbFile = other.fcbFile;
+        this.updFile = other.updFile;
+        this.enablePppArFixHold = other.enablePppArFixHold;
+        this.pppArFixHoldVar = other.pppArFixHoldVar;
+        this.pppArFixHoldMinEp = other.pppArFixHoldMinEp;
+        this.enablePppPartialAR = other.enablePppPartialAR;
+        this.pppPartialArMinRatio = other.pppPartialArMinRatio;
+        this.pppPartialArMinSats = other.pppPartialArMinSats;
+        this.pppPartialArMaxTries = other.pppPartialArMaxTries;
+        this.enableBds3PppAR = other.enableBds3PppAR;
+        this.enableOsb = other.enableOsb;
+        this.osbFile = other.osbFile;
+        this.dcbFile = other.dcbFile;
+
+        this.enablePppRtk = other.enablePppRtk;
+        this.enablePppRtkAR = other.enablePppRtkAR;
+        this.pppRtkArRatio = other.pppRtkArRatio;
+        this.enablePppRtkFixHold = other.enablePppRtkFixHold;
+        this.pppRtkFixHoldMinEpoch = other.pppRtkFixHoldMinEpoch;
+        this.pppRtkFixHoldVar = other.pppRtkFixHoldVar;
+        this.ssrMaxAge = other.ssrMaxAge;
+        this.ssrIonoMode = other.ssrIonoMode;
     }
 }

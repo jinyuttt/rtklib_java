@@ -53,7 +53,13 @@ public class Ssr implements Serializable {
     
     /** Yaw angle and yaw rate (deg, deg/s) */
     public double yaw_ang, yaw_rate;
-    
+
+    /** Dispersive bias indicator (0:non-dispersive, 1:dispersive) per signal */
+    public int[] dispInd;
+
+    /** Dispersive bias correction (m) per signal, for ionosphere-constrained SSR */
+    public double[] dispBias;
+
     /** Update flag (0:no update, 1:update) */
     public int update;
 
@@ -80,6 +86,8 @@ public class Ssr implements Serializable {
         this.stdpb = new float[Constants.MAXCODE];
         this.yaw_ang = 0.0;
         this.yaw_rate = 0.0;
+        this.dispInd = new int[Constants.MAXCODE];
+        this.dispBias = new double[Constants.MAXCODE];
         this.update = 0;
     }
 
@@ -107,6 +115,8 @@ public class Ssr implements Serializable {
         this.stdpb = other.stdpb.clone();
         this.yaw_ang = other.yaw_ang;
         this.yaw_rate = other.yaw_rate;
+        this.dispInd = other.dispInd.clone();
+        this.dispBias = other.dispBias.clone();
         this.update = other.update;
     }
 }

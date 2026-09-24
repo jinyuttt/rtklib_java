@@ -102,6 +102,19 @@ public class Rtk implements Serializable {
     public double diagQScaleMin = Double.MAX_VALUE;
     public double diagQScaleMax = Double.MIN_VALUE;
 
+    public int[] cascadeArFixLevel;
+    public double[] cascadeArLastRatio;
+    public int diagCascadeArEwlFixCount;
+    public int diagCascadeArWlFixCount;
+    public int diagCascadeArNlFixCount;
+    public int diagPartialArAttemptCount;
+    public int diagPartialArFixCount;
+    public int diagBootstrapRejectCount;
+    public int diagResEditSlipCount;
+    public int diagResEditPcRejectCount;
+    public int diagResEditArcResetCount;
+    public int diagBdsBiasApplyCount;
+
     public Rtk() {
         this.sol = new Sol();
         this.rb = new double[6];
@@ -151,5 +164,7 @@ public class Rtk implements Serializable {
         this.winCnt = 0;
         this.ambAnchored = new boolean[Constants.MAXSAT * Constants.NFREQ];
         this.ambAnchorCount = new int[Constants.MAXSAT * Constants.NFREQ];
+        this.cascadeArFixLevel = new int[Constants.MAXSAT * Constants.NFREQ];
+        this.cascadeArLastRatio = new double[3];
     }
 }
