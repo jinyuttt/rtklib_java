@@ -66,3 +66,6 @@ rtk_compare/*.nav
 rtk_compare/*.obs
 rtk_compare/*.conf
 rtk_compare/*.pos
+
+# Downloaded precise products (SP3/CLK/ERP/DCB/GPT3/VMF3/FCB/BLQ etc.)
+rtklib-product/product/
