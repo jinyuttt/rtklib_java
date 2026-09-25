@@ -5,7 +5,9 @@ import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
 import org.rtklib.java.ephemeris.Gpt3GridReader;
+import org.rtklib.java.ephemeris.Vmf3OpReader;
 import org.rtklib.java.rtkpos.Tides;
+import org.rtklib.java.tide.AtmosphericTideS1S2;
 import org.rtklib.java.time.TimeSystem;
 import org.rtklib.java.troposphere.TroposphereModel;
 import org.slf4j.Logger;
@@ -65,7 +67,24 @@ public class PppOptimizations {
 
         double el = azel[1];
 
-        double[] vmf3 = vmf3(el, lat, hell, doy, ah, aw);
+        double bH = 0.0029052;
+        double bW = vmf3Bw(lat, doy);
+
+        if (nav != null && nav.vmf3OpLoaded && nav.vmf3Coeff != null) {
+            double mjd = Vmf3OpReader.mjdFromGTime(time);
+            double[] vmf3Op = Vmf3OpReader.interpolateVmf3(nav.vmf3Coeff, mjd);
+            if (vmf3Op != null) {
+                ah = vmf3Op[0];
+                aw = vmf3Op[1];
+                if (vmf3Op[2] > 0) bH = vmf3Op[2];
+                if (vmf3Op[3] > 0) bW = vmf3Op[3];
+                LOG.debug("VMF3 OP interpolated: ah={} aw={} bH={} bW={}",
+                        String.format("%.6e", ah), String.format("%.6e", aw),
+                        String.format("%.6e", bH), String.format("%.6e", bW));
+            }
+        }
+
+        double[] vmf3 = vmf3(el, lat, hell, doy, ah, aw, bH, bW);
         double mfh = vmf3[0];
         double mfw = vmf3[1];
 
@@ -190,25 +209,17 @@ public class PppOptimizations {
     }
 
     private static double[] vmf3(double el, double lat, double hell, double doy,
-                                 double ah, double aw) {
+                                 double ah, double aw, double bH, double bW) {
         double[] result = new double[2];
 
         double sinel = Math.sin(el);
         if (sinel < 0.01) sinel = 0.01;
 
-        double[] bhC = {0.0012769934, 0.0, 0.0, 0.0, 0.0};
-        double[] chC = {0.0, 0.0, 0.0, 0.0, 0.0};
-        double[] bwC = {0.00057318, 0.00162083, 0.00374833, 0.00189883, 0.00046875};
-        double[] cwC = {0.0, 0.0, 0.0, 0.0, 0.0};
-
-        double bh = 0.0029052;
         double ch = 0.0;
-
-        double bw = vmf3Bw(lat, doy);
         double cw = 0.0;
 
-        double mfh = 1.0 + ah / (1.0 + bh / (1.0 + ch / sinel));
-        double mfw = 1.0 + aw / (1.0 + bw / (1.0 + cw / sinel));
+        double mfh = 1.0 + ah / (1.0 + bH / (1.0 + ch / sinel));
+        double mfw = 1.0 + aw / (1.0 + bW / (1.0 + cw / sinel));
 
         double htCorr = vmf3HtCorr(el, hell);
         mfh *= htCorr;
@@ -274,20 +285,11 @@ public class PppOptimizations {
             return null;
         }
 
-        double[] dr = new double[3];
-        Tides.tidedisp(tutc, rr, opt, erp, odisp, dr);
-
         double[] dr2010 = new double[3];
-        System.arraycopy(dr, 0, dr2010, 0, 3);
-
-        double[] drLtid = longPeriodTide(tutc, rr);
-        for (int i = 0; i < 3; i++) dr2010[i] += drLtid[i];
+        Tides.tidedisp(tutc, rr, opt, erp, odisp, dr2010);
 
         double[] drAtal = atmosphericTide(tutc, rr);
         for (int i = 0; i < 3; i++) dr2010[i] += drAtal[i];
-
-        double[] drPolt = poleTide(tutc, rr, erp);
-        for (int i = 0; i < 3; i++) dr2010[i] += drPolt[i];
 
         LOG.debug("IERS2010 tide: dr=[{},{},{}]m",
                 String.format("%.5f", dr2010[0]), String.format("%.5f", dr2010[1]), String.format("%.5f", dr2010[2]));
@@ -295,82 +297,22 @@ public class PppOptimizations {
         return dr2010;
     }
 
-    private static double[] longPeriodTide(GTime time, double[] rr) {
-        double[] dr = new double[3];
-
-        double[] pos = new double[3];
-        CoordTransform.ecef2pos(rr, pos);
-        double lat = pos[0];
-        double r = CoordTransform.norm3(rr);
-
-        double h2 = 0.6090;
-        double l2 = 0.0840;
-
-        double[] rsun = new double[3], rmoon = new double[3];
-        Tides.sunmoonpos(time, new double[5], rsun, rmoon, null);
-
-        double rSun = CoordTransform.norm3(rsun);
-        double rMoon = CoordTransform.norm3(rmoon);
-
-        if (rSun > 0 && rMoon > 0) {
-            double cosZSun = (rr[0] * rsun[0] + rr[1] * rsun[1] + rr[2] * rsun[2]) / (r * rSun);
-            double cosZMoon = (rr[0] * rmoon[0] + rr[1] * rmoon[1] + rr[2] * rmoon[2]) / (r * rMoon);
-
-            double p2Sun = 0.5 * (3.0 * cosZSun * cosZSun - 1.0);
-            double p2Moon = 0.5 * (3.0 * cosZMoon * cosZMoon - 1.0);
-
-            double GM_Sun = 1.32712440018e20;
-            double GM_Moon = 4.902800055e12;
-            double GM_Earth = 3.986004418e14;
-            double a_Earth = 6378136.6;
-
-            double dispSun = h2 * GM_Sun / GM_Earth * Math.pow(a_Earth / rSun, 3) * p2Sun * a_Earth;
-            double dispMoon = h2 * GM_Moon / GM_Earth * Math.pow(a_Earth / rMoon, 3) * p2Moon * a_Earth;
-
-            double radial = dispSun + dispMoon;
-
-            for (int i = 0; i < 3; i++) {
-                dr[i] = radial * rr[i] / r;
-            }
-        }
-
-        return dr;
-    }
-
     private static double[] atmosphericTide(GTime time, double[] rr) {
         double[] dr = new double[3];
-        return dr;
-    }
-
-    private static double[] poleTide(GTime time, double[] rr, Erp erp) {
-        double[] dr = new double[3];
-
-        if (erp == null || erp.n <= 0) return dr;
-
-        double xp = erp.data[0].xp;
-        double yp = erp.data[0].yp;
 
         double[] pos = new double[3];
         CoordTransform.ecef2pos(rr, pos);
-        double sinLat = Math.sin(pos[0]);
-        double cosLat = Math.cos(pos[0]);
-        double sin2Lat = 2.0 * sinLat * cosLat;
-        double cos2Lat = cosLat * cosLat - sinLat * sinLat;
-        double lon = pos[1];
+        double latDeg = pos[0] * Constants.R2D;
+        double lonDeg = pos[1] * Constants.R2D;
+        double height = pos[2];
 
-        double h2 = 0.6090;
-        double l2 = 0.0840;
+        double mjd = 40587.0 + (time.time + time.sec) / 86400.0;
 
-        double m1 = -xp * sin2Lat * Math.cos(lon) - yp * sin2Lat * Math.sin(lon);
-        double m2 = -xp * cos2Lat * Math.cos(lon) - yp * cos2Lat * Math.sin(lon);
+        double[] enu = AtmosphericTideS1S2.displacementS1S2(latDeg, lonDeg, height, mjd, null);
 
-        double scale = 1e-3 * 0.001;
-
-        double rNorm = CoordTransform.norm3(rr);
-        dr[0] = scale * m1 * rr[0] / rNorm;
-        dr[1] = scale * m1 * rr[1] / rNorm;
-        dr[2] = scale * m2 * rr[2] / rNorm;
+        CoordTransform.enu2ecef(pos, enu, dr);
 
         return dr;
     }
+
 }

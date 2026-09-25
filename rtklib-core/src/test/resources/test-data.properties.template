@@ -1,0 +1,33 @@
+# Test Data Configuration (LOCAL - not committed to git)
+# Copy this file to test-data.properties and fill in your paths.
+# The file test-data.properties is in .gitignore and will NOT be committed.
+
+# --- RTCM data directory ---
+# Base directory containing device RTCM3 data organized as: <dir>/<device_id>/<date>/<hour>.rtcm3
+rtcm.base.dir=D:\\rtcm3\\rtcm
+
+# --- Product directory ---
+# Contains SP3, CLK, ERP, DCB, GPT3, VMF3, FCB/OSB, BLQ files
+product.dir=D:\\rtcm3\\product
+
+# --- Result output directory ---
+result.dir=C:\\Users\\jinyu\\rtklib_java_results
+
+# --- Station / Device IDs ---
+station.id=DEVICE_ID_REDACTED
+station.date=2026-06-29
+
+# --- Base-Rover pairs ---
+# Group 1
+baserover.group1=DEVICE_ID_REDACTED
+baserover.rover1=DEVICE_ID_REDACTED,DEVICE_ID_REDACTED,DEVICE_ID_REDACTED,DEVICE_ID_REDACTED,DEVICE_ID_REDACTED,DEVICE_ID_REDACTED,DEVICE_ID_REDACTED,DEVICE_ID_REDACTED
+# Group 2
+baserover.group2=DEVICE_ID_REDACTED
+baserover.rover2=DEVICE_ID_REDACTED,DEVICE_ID_REDACTED,DEVICE_ID_REDACTED,DEVICE_ID_REDACTED,DEVICE_ID_REDACTED,DEVICE_ID_REDACTED
+
+# --- Custom base-rover pairs (optional, semicolon separated, format: baseId=rover1,rover2,...) ---
+# custom.bases=DEVICE_ID_REDACTED=DEVICE_ID_REDACTED,DEVICE_ID_REDACTED;DEVICE_ID_REDACTED=DEVICE_ID_REDACTED
+
+# --- Direct file paths (optional, override directory-based discovery) ---
+# rover.file=D:\\rtcm3\\rtcm\\DEVICE_ID_REDACTED\\2026-06-29\\12.rtcm3
+# base.file=D:\\rtcm3\\rtcm\\DEVICE_ID_REDACTED\\2026-06-29\\12.rtcm3

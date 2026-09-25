@@ -1,8 +1,0 @@
-<configuration>
-  <root level="WARN">
-    <appender-ref ref="STDOUT"/>
-  </root>
-  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
-    <encoder><pattern>%msg%n</pattern></encoder>
-  </appender>
-</configuration>

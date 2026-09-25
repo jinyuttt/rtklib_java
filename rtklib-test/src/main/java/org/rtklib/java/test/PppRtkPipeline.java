@@ -19,8 +19,8 @@ public class PppRtkPipeline {
 
     private static final Logger log = LoggerFactory.getLogger(PppRtkPipeline.class);
 
-    private static final String YAXIA_DIR = "D:\\yaxia\\rtcm";
-    private static final String PRODUCT_DIR = "D:\\yaxia\\product";
+    private static final String YAXIA_DIR = "D:\\rtcm3";
+    private static final String PRODUCT_DIR = "D:\\rtcm3\\product";
 
     private static String sp3File;
     private static String clkFile;
@@ -91,7 +91,10 @@ public class PppRtkPipeline {
             System.exit(1);
         }
 
-        LocalDate obsDateUtc = LocalDate.parse(dateStr).minusDays(1);
+        // 文件夹日期是北京时间，RTCM内时间戳是UTC
+        // 北京2026-06-29 = UTC 2026-06-28T16:00 ~ 2026-06-29T15:59
+        // 用UTC日期（与文件夹同日）下载产品，覆盖大部分观测数据
+        LocalDate obsDateUtc = LocalDate.parse(dateStr);
         log.info("Folder date (Beijing): {} => UTC obs date: {}", dateStr, obsDateUtc);
         downloader = new ProductDownloader(PRODUCT_DIR);
 
@@ -110,8 +113,24 @@ public class PppRtkPipeline {
         printSummary();
     }
 
+    private static String sp3FilePrev, clkFilePrev, erpFilePrev;
+
     private static void ensureProducts(LocalDate obsDate) {
-        log.info("--- Ensuring precise products ---");
+        log.info("--- Ensuring precise products for UTC {} and {} ---", obsDate, obsDate.minusDays(1));
+        // 前一天产品（覆盖北京日期前8小时UTC数据）
+        ProductDownloader.DownloadResult rSp3p = downloader.download(obsDate.minusDays(1), ProductDownloader.ProductType.SP3);
+        for (ProductDownloader.ProductFile f : rSp3p.files) {
+            if (f.type == ProductDownloader.ProductType.SP3) { sp3FilePrev = f.localPath; break; }
+        }
+        ProductDownloader.DownloadResult rClkp = downloader.download(obsDate.minusDays(1), ProductDownloader.ProductType.CLK);
+        for (ProductDownloader.ProductFile f : rClkp.files) {
+            if (f.type == ProductDownloader.ProductType.CLK) { clkFilePrev = f.localPath; break; }
+        }
+        ProductDownloader.DownloadResult rErpp = downloader.download(obsDate.minusDays(1), ProductDownloader.ProductType.ERP);
+        for (ProductDownloader.ProductFile f : rErpp.files) {
+            if (f.type == ProductDownloader.ProductType.ERP) { erpFilePrev = f.localPath; break; }
+        }
+        // 当天产品
         ProductDownloader.DownloadResult rSp3 = downloader.download(obsDate, ProductDownloader.ProductType.SP3);
         for (ProductDownloader.ProductFile f : rSp3.files) {
             if (f.type == ProductDownloader.ProductType.SP3) { sp3File = f.localPath; break; }
@@ -125,9 +144,10 @@ public class PppRtkPipeline {
             if (f.type == ProductDownloader.ProductType.ERP) { erpFile = f.localPath; break; }
         }
         dcbFile = downloader.downloadDcb(obsDate);
-        gpt3File = downloader.downloadGpt3Grid();
-        vmf3File = downloader.downloadVmf3Grid(obsDate);
-        fcbFile = downloader.downloadFcb(obsDate);
+        // Skip downloads that hang - use only cached products
+        // gpt3File = downloader.downloadGpt3Grid();
+        // vmf3File = downloader.downloadVmf3Grid(obsDate);
+        // fcbFile = downloader.downloadFcb(obsDate);
 
         log.info("SP3={} CLK={} ERP={} DCB={} GPT3={} VMF3={} FCB={}",
                 sp3File != null, clkFile != null, erpFile != null,
@@ -145,6 +165,11 @@ public class PppRtkPipeline {
 
         PppProcessor p = new PppProcessor(opt);
 
+        // 加载前一天产品（覆盖北京日期前8小时UTC数据）
+        if (sp3FilePrev != null) p.loadSp3(sp3FilePrev);
+        if (clkFilePrev != null) p.loadClk(clkFilePrev);
+        if (erpFilePrev != null) p.loadErp(erpFilePrev);
+        // 加载当天产品
         if (sp3File != null) p.loadSp3(sp3File);
         if (clkFile != null) p.loadClk(clkFile);
         if (erpFile != null) p.loadErp(erpFile);

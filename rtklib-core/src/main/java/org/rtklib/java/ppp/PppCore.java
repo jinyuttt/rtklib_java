@@ -1,6 +1,8 @@
 package org.rtklib.java.ppp;
 
 import org.rtklib.java.common.RtklibCommon;
+import java.util.Locale;
+import org.rtklib.java.common.ObsCode;
 import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
@@ -13,12 +15,15 @@ import org.rtklib.java.pntpos.SppCore;
 import org.rtklib.java.rtkpos.Tides;
 import org.rtklib.java.time.TimeSystem;
 import org.rtklib.java.trace.PppTrace;
+import org.rtklib.java.trace.Trace;
+import org.rtklib.java.trace.TraceConfig;
 import org.rtklib.java.trace.TraceCallback;
 import org.rtklib.java.trace.TraceControl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.rtklib.java.troposphere.TroposphereModel;
 import org.rtklib.java.ppprtk.SsrCorrector;
+import org.rtklib.java.ppp.PppOsbModel;
 
 public class PppCore {
     private PppCore() {
@@ -126,6 +131,8 @@ public class PppCore {
         int nx = pppnx(opt);
         TraceControl ctrl = rtk.traceControl;
         TraceCallback cb = rtk.traceCallback;
+        TraceConfig v2cfg = rtk.traceConfig;
+        TraceCallback v2cb = rtk.traceCallback;
         rtk.epoch++;
 
         {
@@ -169,6 +176,7 @@ public class PppCore {
         udstate_ppp(rtk, obs, n, nav, nx);
 
         PppTrace.tracePppInput(ctrl, cb, rtk.epoch, obs[0].time, obs, n, nav);
+        Trace.emit("SATELLITE", "START", v2cfg, v2cb, rtk.epoch, obs[0].time, "n_obs", n);
 
         EphModel.satposs(obs[0].time, obs, n, nav, rs, dts, var, svh, opt.sateph);
 
@@ -209,6 +217,8 @@ public class PppCore {
         }
 
         PppTrace.tracePppUdstate(ctrl, cb, rtk.epoch, obs[0].time, rtk, nx);
+        Trace.emit("AMBIGUITY", "UPDATE", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                "x", rtk.x[0], "y", rtk.x[1], "z", rtk.x[2], "nx", nx);
 
         int maxnv = n * NF(opt) * 2 + Constants.MAXSAT + 3;
         double[] xp = new double[nx];
@@ -235,6 +245,7 @@ public class PppCore {
             }
 
             PppTrace.tracePppRes(ctrl, cb, rtk.epoch, obs[0].time, nv, v, R, nx, H, opt);
+            Trace.emit("FILTER", "RESIDUAL", v2cfg, v2cb, rtk.epoch, obs[0].time, "nv", nv);
 
             if (nv == 0) {
                 LOG.debug("pppos epoch={} iter={} nv=0 no valid observations", rtk.epoch, iter);
@@ -247,15 +258,19 @@ public class PppCore {
             int info = KalmanFilter.update(xp, Pp, H, v, R, nx, nv);
 
             PppTrace.tracePppFilter(ctrl, cb, rtk.epoch, obs[0].time, info, xp, xpPrev, Pp, nx);
+            Trace.emit("FILTER", "UPDATE", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                    "info", info, "nv", nv, "nx", nx);
 
             if (info != 0) {
                 LOG.debug("pppos epoch={} iter={} KF update failed info={}", rtk.epoch, iter, info);
                 break;
             }
 
+            // Always save the latest state
+            System.arraycopy(xp, 0, rtk.x, 0, nx);
+            System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
+
             if (pppRes(iter + 1, obs, n, rs, dts, var, svh, exc, nav, xp, rtk, null, null, null, azel, nx) != 0) {
-                System.arraycopy(xp, 0, rtk.x, 0, nx);
-                System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
                 stat = Constants.SOLQ_PPP;
                 if (LOG.isDebugEnabled() && rtk.epoch <= 5) {
                     double[] posNew = new double[3];
@@ -271,13 +286,34 @@ public class PppCore {
         if (stat == Constants.SOLQ_PPP) {
             updateStat(rtk, obs, n, stat, nx);
         } else {
+            if (rtk.epoch <= 10) {
+                LOG.info("pppos epoch={} did not converge after {} iterations, stat={}", rtk.epoch, MAX_ITER, stat);
+            }
             LOG.debug("pppos epoch={} did not converge, stat={}", rtk.epoch, stat);
         }
 
         PppTrace.tracePppResult(ctrl, cb, rtk.epoch, obs[0].time, rtk.sol, MAX_ITER);
+        Trace.emit("POSITION", "UPDATE", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                "x", rtk.sol.rr[0], "y", rtk.sol.rr[1], "z", rtk.sol.rr[2],
+                "Q", (int) rtk.sol.stat, "ns", (int) rtk.sol.ns);
+        if (rtk.sol.stat == Constants.SOLQ_FIX || rtk.sol.stat == Constants.SOLQ_FLOAT) {
+            Trace.emit("RESULT", "UPDATE", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                    "Q", (int) rtk.sol.stat, "ns", (int) rtk.sol.ns);
+        } else {
+            Trace.emit("RESULT", "FAIL", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                    "Q", (int) rtk.sol.stat, "reason", "no_convergence");
+        }
     }
 
     public static void udstate_ppp(Rtk rtk, Obsd[] obs, int n, Nav nav, int nx) {
+        for (int i = 0; i < Constants.MAXSAT; i++) rtk.ssat[i].vs = 0;
+        for (int i = 0; i < n; i++) {
+            int sat = obs[i].sat;
+            if (sat >= 1 && sat <= Constants.MAXSAT) {
+                int sys = SatUtils.satsys(sat, null);
+                if ((sys & rtk.opt.navsys) != 0) rtk.ssat[sat - 1].vs = 1;
+            }
+        }
         udpos_ppp(rtk, nx);
         udclk_ppp(rtk, nx);
         if (rtk.opt.tropopt == Constants.TROPOPT_EST || rtk.opt.tropopt == Constants.TROPOPT_ESTG
@@ -321,8 +357,14 @@ public class PppCore {
         }
 
         if (opt.dynamics == 0) {
-            for (int i = 0; i < 3; i++) {
-                initx(x, P, nx, rtk.sol.rr[i], VAR_POS, i);
+            if (P[0] <= 0.0) {
+                for (int i = 0; i < 3; i++) {
+                    initx(x, P, nx, rtk.sol.rr[i], VAR_POS, i);
+                }
+            } else {
+                for (int i = 0; i < 3; i++) {
+                    P[i * (nx + 1)] += opt.prn[5] * opt.prn[5] * Math.abs(rtk.tt);
+                }
             }
             return;
         }
@@ -339,7 +381,12 @@ public class PppCore {
         }
 
         if (rtk.tt != 0.0) {
-            for (int i = 0; i < 6; i++) x[i] += rtk.tt * x[i + 3];
+            for (int i = 0; i < 3; i++) {
+                x[i] += rtk.tt * x[i + 3] + 0.5 * rtk.tt * rtk.tt * x[i + 6];
+            }
+            for (int i = 3; i < 6; i++) {
+                x[i] += rtk.tt * x[i + 3];
+            }
             for (int i = 0; i < 3; i++) {
                 P[i * nx + i] += VAR_POS * rtk.tt * rtk.tt;
             }
@@ -397,15 +444,27 @@ public class PppCore {
         }
     }
 
+    private static final double VAR_IONO_INIT = 10.0 * 10.0;
+
     public static void udiono_ppp(Rtk rtk, Obsd[] obs, int n, Nav nav, int nx) {
         double[] x = rtk.x;
         double[] P = rtk.P;
         PrcOpt opt = rtk.opt;
 
-        for (int i = 0; i < Constants.MAXSAT; i++) {
-            int idx = II(i + 1, opt);
-            if (rtk.sol.stat == Constants.SOLQ_NONE) {
-                initx(x, P, nx, 0.0, VAR_IONO, idx);
+        if (rtk.epoch <= 1) {
+            double[] pos = new double[3];
+            CoordTransform.ecef2pos(rtk.sol.rr, pos);
+            double[] azelZenith = {0.0, Constants.PI / 2.0};
+            double[] ionOut = new double[2];
+            IonosphereModel.ionocorr(rtk.sol.time, nav, 1, pos, azelZenith,
+                    Constants.IONOOPT_BRDC, ionOut);
+            double zenithDelay = ionOut[0];
+            if (zenithDelay < 1.0) {
+                zenithDelay = 10.0;
+            }
+            for (int i = 0; i < Constants.MAXSAT; i++) {
+                int idx = II(i + 1, opt);
+                initx(x, P, nx, zenithDelay, VAR_IONO_INIT, idx);
             }
         }
 
@@ -439,10 +498,43 @@ public class PppCore {
         detslpGf(rtk, obs, n, nav);
         detslpMw(rtk, obs, n, nav);
 
+        int nSlip = 0;
+        for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
+            int sat = obs[i].sat;
+            for (int j = 0; j < opt.nf; j++) {
+                if (rtk.ssat[sat - 1].slip[j] != 0) nSlip++;
+            }
+        }
+        if (nSlip > 0 || rtk.epoch <= 5) {
+            LOG.info(String.format(Locale.US, "SLIP-DIAG epoch=%d nSlip=%d", rtk.epoch, nSlip));
+            for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
+                int sat = obs[i].sat;
+                for (int j = 0; j < opt.nf; j++) {
+                    if (rtk.ssat[sat - 1].slip[j] != 0) {
+                        LOG.info(String.format(Locale.US, "SLIP-DIAG epoch=%d sat=%d f=%d slip=1", rtk.epoch, sat, j));
+                    }
+                }
+            }
+        }
+
         for (int f = 0; f < NF(opt); f++) {
             for (int i = 0; i < Constants.MAXSAT; i++) {
-                if (++rtk.ssat[i].outc[f] > opt.maxout) {
-                    initx(x, P, nx, 0.0, 0.0, IB(i + 1, f, opt));
+                if (++rtk.ssat[i].outc[f] > opt.maxout && rtk.ssat[i].vsat[f] != 0) {
+                    int idx = IB(i + 1, f, opt);
+                    if (idx < nx && x[idx] != 0.0) {
+                        double pBefore = P[idx * nx + idx];
+                        initx(x, P, nx, 0.0, VAR_BIAS, idx);
+                        rtk.ssat[i].mw[0] = 0.0;
+                        rtk.ssat[i].gf[0] = 0.0;
+                        rtk.ssat[i].xrwl = 0.0;
+                        rtk.ssat[i].rw = 0.0;
+                        rtk.ssat[i].xswl = 0.0;
+                        rtk.ssat[i].niwl = 0;
+                        LOG.info(String.format(Locale.US, "AMB-RESET epoch=%d sat=%d f=%d reason=maxout outc=%d maxout=%d P_before=%.4e P_after=%.4e",
+                                rtk.epoch, i + 1, f, rtk.ssat[i].outc[f], opt.maxout, pBefore, VAR_BIAS));
+                    }
+                    rtk.ssat[i].outc[f] = 0;
+                    rtk.ssat[i].vsat[f] = 0;
                 }
             }
 
@@ -468,7 +560,10 @@ public class PppCore {
 
                 if (opt.ionoopt == Constants.IONOOPT_IFLC) {
                     bias[i] = Lc[0] - Pc[0];
-                    slip[i] = (rtk.ssat[sat - 1].slip[0] != 0 || rtk.ssat[sat - 1].slip[1] != 0) ? 1 : 0;
+                    slip[i] = 0;
+                    for (int fi = 0; fi < Constants.NFREQ; fi++) {
+                        if (rtk.ssat[sat - 1].slip[fi] != 0) { slip[i] = 1; break; }
+                    }
                 } else {
                     if (L[f] != 0.0 && P_arr[f] != 0.0) {
                         double freq1 = SatUtils.sat2freq(sat, obs[i].code[0], nav);
@@ -505,7 +600,17 @@ public class PppCore {
 
                 if (bias[i] == 0.0 || (x[j] != 0.0 && slip[i] == 0)) continue;
 
+                double pBefore = P[j * nx + j];
+                String reason = (x[j] == 0.0) ? "new" : "slip";
                 initx(x, P, nx, bias[i], VAR_BIAS, IB(sat, f, opt));
+                rtk.ssat[sat - 1].mw[0] = 0.0;
+                rtk.ssat[sat - 1].gf[0] = 0.0;
+                rtk.ssat[sat - 1].xrwl = 0.0;
+                rtk.ssat[sat - 1].rw = 0.0;
+                rtk.ssat[sat - 1].xswl = 0.0;
+                rtk.ssat[sat - 1].niwl = 0;
+                LOG.info(String.format(Locale.US, "AMB-RESET epoch=%d sat=%d f=%d reason=%s bias=%.4f P_before=%.4e P_after=%.4e",
+                        rtk.epoch, sat, f, reason, bias[i], pBefore, VAR_BIAS));
             }
         }
     }
@@ -515,6 +620,8 @@ public class PppCore {
             for (int j = 0; j < rtk.opt.nf; j++) {
                 if (obs[i].L[j] == 0.0) continue;
                 if ((obs[i].LLI[j] & 1) != 0 || (obs[i].LLI[j] & 2) != 0) {
+                    LOG.info(String.format(Locale.US, "SLIP-LLI epoch=%d sat=%d f=%d LLI=%d triggered=true",
+                            rtk.epoch, obs[i].sat, j, obs[i].LLI[j]));
                     rtk.ssat[obs[i].sat - 1].slip[j] = 1;
                 }
             }
@@ -530,6 +637,8 @@ public class PppCore {
             rtk.ssat[obs[i].sat - 1].gf[0] = g1;
 
             if (g0 != 0.0 && Math.abs(g1 - g0) > rtk.opt.thresslip) {
+                LOG.info(String.format(Locale.US, "SLIP-GF epoch=%d sat=%d gf_diff=%.6f thres=%.6f triggered=true",
+                        rtk.epoch, obs[i].sat, g1 - g0, rtk.opt.thresslip));
                 for (int j = 0; j < rtk.opt.nf; j++) {
                     rtk.ssat[obs[i].sat - 1].slip[j] |= 1;
                 }
@@ -609,6 +718,14 @@ public class PppCore {
         double[] dion_vari = new double[2];
         double[] varr = new double[n * 2 * NF(opt)];
         int nv = 0;
+        int stat = 0;
+
+        // For post-fit residual check
+        int[] obsi = new int[n * 2];
+        int[] frqi = new int[n * 2];
+        double[] ve = new double[n * 2];
+        int ne = 0;
+        final double THRES_REJECT = 4.0;
 
         for (int i = 0; i < Constants.MAXSAT; i++) {
             for (int j = 0; j < opt.nf; j++) rtk.ssat[i].vsat[j] = 0;
@@ -717,6 +834,20 @@ public class PppCore {
             double phw = rtk.ssat[sat - 1].phw;
             corrMeas(obs[i], nav, azelI, opt, dantr, dants, phw, L, P_arr, Lc, Pc);
 
+            for (int fc = 0; fc < Constants.NFREQ; fc++) {
+                if (obs[i].code[fc] != 0) {
+                    rtk.ssat[sat - 1].code[fc][0] = obs[i].code[fc];
+                }
+            }
+
+            double osbCorr = 0.0;
+            if (rtk.rtkConfig != null && rtk.rtkConfig.enableOsb) {
+                if (opt.ionoopt == Constants.IONOOPT_IFLC) {
+                    osbCorr = PppOsbModel.osbCorrectionIfComb(sat, obs[i].code[0], obs[i].code[1],
+                            nav, rtk.sol.time.time, rtk.rtkConfig);
+                }
+            }
+
             for (int j = 0; j < 2 * NF(opt); j++) {
                 int code = j % 2;
                 int frq = j / 2;
@@ -734,6 +865,10 @@ public class PppCore {
                     double freq = SatUtils.sat2freq(sat, obs[i].code[frq], nav);
                     if (freq == 0.0) continue;
                     C = SQR(Constants.FREQL1 / freq) * (code == 0 ? -1.0 : 1.0);
+                    if (rtk.rtkConfig != null && rtk.rtkConfig.enableOsb) {
+                        osbCorr = PppOsbModel.osbCorrection(sat, frq, obs[i].code[frq],
+                                nav, rtk.sol.time.time, rtk.rtkConfig);
+                    }
                 }
 
                 if (H != null) {
@@ -753,7 +888,8 @@ public class PppCore {
 
                 if (H != null) {
                     H[nv * nx + IC(k, opt)] = 1.0;
-                    if (opt.tropopt == Constants.TROPOPT_EST || opt.tropopt == Constants.TROPOPT_ESTG) {
+                    if (opt.tropopt == Constants.TROPOPT_EST || opt.tropopt == Constants.TROPOPT_ESTG
+                        || opt.tropopt == Constants.TROPOPT_SSR) {
                         int nt = opt.tropopt >= Constants.TROPOPT_ESTG ? 3 : 1;
                         for (int kk = 0; kk < nt; kk++) {
                             H[nv * nx + IT(opt) + kk] = dtdx[kk];
@@ -782,7 +918,7 @@ public class PppCore {
                     ssrCb = SsrCorrector.getCodeBias(nav.ssr, sat, obs[i].code[frq]);
                 }
 
-                double res = y - (r + cdtr - Constants.CLIGHT * dts[i * 2] + dtrp + C * dion + dcb + bias + ssrCb);
+                double res = y - (r + cdtr - Constants.CLIGHT * dts[i * 2] + dtrp + C * dion + dcb + bias + ssrCb + osbCorr);
                 if (v != null) v[nv] = res;
 
                 if (code == 0) rtk.ssat[sat - 1].resc[frq] = res;
@@ -798,9 +934,41 @@ public class PppCore {
                     continue;
                 }
 
-                if (code == 0) rtk.ssat[sat - 1].vsat[frq] = 1;
+                // Record large post-fit residuals
+                if (post != 0 && Math.abs(res) > Math.sqrt(varr[nv]) * THRES_REJECT) {
+                    obsi[ne] = i;
+                    frqi[ne] = frq;
+                    ve[ne] = res;
+                    ne++;
+                }
+
+                if (code == 0) {
+                    rtk.ssat[sat - 1].vsat[frq] = 1;
+                    rtk.ssat[sat - 1].code[frq][0] = obs[i].code[frq];
+                    stat++;
+                }
                 nv++;
             }
+        }
+
+        // Reject satellite with large and max post-fit residual
+        if (post != 0 && ne > 0) {
+            double vmax = ve[0];
+            int maxobs = obsi[0];
+            int maxfrq = frqi[0];
+            int rej = 0;
+            for (int j = 1; j < ne; j++) {
+                if (Math.abs(vmax) >= Math.abs(ve[j])) continue;
+                vmax = ve[j];
+                maxobs = obsi[j];
+                maxfrq = frqi[j];
+                rej = j;
+            }
+            int sat = obs[maxobs].sat;
+            exc[maxobs] = 1;
+            rtk.ssat[sat - 1].rejc[maxfrq]++;
+            stat = 0;
+            ve[rej] = 0;
         }
 
         if (R != null) {
@@ -824,7 +992,7 @@ public class PppCore {
                 n, nv, geodistFail, elFail, sysFail, tropFail, ionoFail, measFail);
         }
 
-        return post != 0 ? 1 : nv;
+        return post != 0 ? stat : nv;
     }
 
     public static boolean modelTrop(GTime time, double[] pos, double[] azel,
@@ -922,6 +1090,51 @@ public class PppCore {
             }
             return true;
         }
+        if (opt.ionoopt == Constants.IONOOPT_TEC) {
+            if (nav.ionexGrid != null && nav.ionexGrid.maps != null && nav.ionexGrid.maps.length > 0) {
+                double el = azel[1];
+                double az = azel[0];
+                if (el <= 0.0) {
+                    out[1] = VAR_IONO_OFF;
+                    return true;
+                }
+
+                double RE = 6371.0e3;
+                double HION = 450.0e3;
+                double phiR = pos[0];
+                double lamR = pos[1];
+
+                double cosEl = Math.cos(el);
+                double sinEl = Math.sin(el);
+                double cosAz = Math.cos(az);
+                double psi = Math.asin(RE / (RE + HION) * cosEl);
+                double phiIpp = Math.asin(Math.sin(phiR) * Math.cos(psi)
+                        + Math.cos(phiR) * Math.sin(psi) * cosAz);
+                double dLam = Math.asin(Math.sin(psi) * Math.sin(az) / Math.cos(phiIpp));
+                double lamIpp = lamR + dLam;
+
+                double latDeg = phiIpp * Constants.R2D;
+                double lonDeg = lamIpp * Constants.R2D;
+
+                double vtec = nav.ionexGrid.interpolate(time, latDeg, lonDeg);
+
+                double cosZIpp = Math.cos(Math.acos(RE / (RE + HION) * cosEl));
+                double mapFunc = 1.0 / Math.max(cosZIpp, 0.01);
+                double stec = vtec * mapFunc;
+
+                double freq = Constants.FREQL1;
+                double delay = 40.3e16 / (freq * freq) * stec;
+
+                out[0] = delay;
+                out[1] = SQR(0.5);
+                return true;
+            }
+            double[] ionOut = new double[2];
+            IonosphereModel.ionocorr(time, nav, sat, pos, azel, Constants.IONOOPT_BRDC, ionOut);
+            out[0] = ionOut[0];
+            out[1] = ionOut[1];
+            return true;
+        }
         if (opt.ionoopt == Constants.IONOOPT_IFLC) {
             return true;
         }
@@ -985,6 +1198,10 @@ public class PppCore {
         }
 
         rtk.sol.stat = (byte)(rtk.sol.ns < MIN_NSAT_SOL ? Constants.SOLQ_NONE : stat);
+        
+        if (rtk.sol.ns < MIN_NSAT_SOL && rtk.epoch <= 5) {
+            LOG.info("updateStat: epoch={} ns={} < MIN_NSAT_SOL={}, stat set to NONE", rtk.epoch, rtk.sol.ns, MIN_NSAT_SOL);
+        }
 
         for (int i = 0; i < 3; i++) {
             rtk.sol.rr[i] = rtk.x[i];
@@ -1119,22 +1336,133 @@ public class PppCore {
     }
 
     public static void detslpMw(Rtk rtk, Obsd[] obs, int n, Nav nav) {
+        double mwThres = Math.max(rtk.opt.thresslip, 10.0);
         for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
-            double mw = mwmeas(obs[i], nav);
+            double mw = mwmeas(obs[i], nav, rtk.epoch);
             if (mw == 0.0) continue;
 
-            double mw0 = rtk.ssat[obs[i].sat - 1].mw[0];
-            rtk.ssat[obs[i].sat - 1].mw[0] = mw;
+            int sat = obs[i].sat;
+            double mw0 = rtk.ssat[sat - 1].mw[0];
+            rtk.ssat[sat - 1].mw[0] = mw;
 
-            if (mw0 != 0.0 && Math.abs(mw - mw0) > rtk.opt.thresslip) {
+            boolean slip = false;
+            if (mw0 != 0.0 && Math.abs(mw - mw0) > mwThres) {
+                slip = true;
+                if (rtk.epoch <= 5) {
+                    double freq1 = SatUtils.sat2freq(sat, obs[i].code[0], nav);
+                    double freq2 = SatUtils.sat2freq(sat, obs[i].code[1], nav);
+                    LOG.info(String.format(Locale.US,
+                        "SLIP-MW epoch=%d sat=%d mw=%.4f mw0=%.4f diff=%.4f thres=%.4f f1=%.4e f2=%.4e L1=%.4f L2=%.4f P1=%.4f P2=%.4f",
+                        rtk.epoch, sat, mw, mw0, mw - mw0, mwThres,
+                        freq1, freq2, obs[i].L[0], obs[i].L[1], obs[i].P[0], obs[i].P[1]));
+                } else {
+                    LOG.info(String.format(Locale.US, "SLIP-MW epoch=%d sat=%d mw_diff=%.6f thres=%.6f triggered=true",
+                            rtk.epoch, sat, mw - mw0, mwThres));
+                }
                 for (int j = 0; j < rtk.opt.nf; j++) {
-                    rtk.ssat[obs[i].sat - 1].slip[j] |= 1;
+                    rtk.ssat[sat - 1].slip[j] |= 1;
+                }
+            }
+
+            double freq1 = SatUtils.sat2freq(sat, obs[i].code[0], nav);
+            double freq2 = SatUtils.sat2freq(sat, obs[i].code[1], nav);
+            if (freq1 > 0 && freq2 > 0) {
+                double lamWl = Constants.CLIGHT / (freq1 - freq2);
+                double mwCycles = mw / lamWl;
+                double el = rtk.ssat[sat - 1].azel[1];
+                double wele = 1.0;
+                if (el > 0 && el < 30.0 * Constants.D2R) {
+                    wele = 2.0 * Math.sin(el);
+                } else if (el <= 0) {
+                    wele = 0.0;
+                }
+
+                if (slip || rtk.ssat[sat - 1].lock[0] <= 1) {
+                    rtk.ssat[sat - 1].xrwl = 0.0;
+                    rtk.ssat[sat - 1].rw = 0.0;
+                    rtk.ssat[sat - 1].xswl = 0.0;
+                    rtk.ssat[sat - 1].niwl = 0;
+                }
+
+                if (wele > 0) {
+                    rtk.ssat[sat - 1].xrwl += mwCycles * wele;
+                    rtk.ssat[sat - 1].rw += wele;
+                    rtk.ssat[sat - 1].xswl += wele * mwCycles * mwCycles;
+                    rtk.ssat[sat - 1].niwl++;
+                }
+            }
+
+            double ewl = ewlmeas(obs[i], nav);
+            if (ewl != 0.0) {
+                rtk.ssat[sat - 1].mw[1] = ewl;
+
+                double freqE2 = SatUtils.sat2freq(sat, obs[i].code[1], nav);
+                double freqE3 = SatUtils.sat2freq(sat, obs[i].code[2], nav);
+                if (freqE2 > 0 && freqE3 > 0) {
+                    double lamEwl = Constants.CLIGHT / (freqE2 - freqE3);
+                    double ewlCycles = ewl / lamEwl;
+                    double el = rtk.ssat[sat - 1].azel[1];
+                    double wele = 1.0;
+                    if (el > 0 && el < 30.0 * Constants.D2R) {
+                        wele = 2.0 * Math.sin(el);
+                    } else if (el <= 0) {
+                        wele = 0.0;
+                    }
+
+                    if (slip || rtk.ssat[sat - 1].lock[2] <= 1) {
+                        rtk.ssat[sat - 1].xrewl = 0.0;
+                        rtk.ssat[sat - 1].rew = 0.0;
+                        rtk.ssat[sat - 1].xsewl = 0.0;
+                        rtk.ssat[sat - 1].niewl = 0;
+                    }
+
+                    if (wele > 0) {
+                        rtk.ssat[sat - 1].xrewl += ewlCycles * wele;
+                        rtk.ssat[sat - 1].rew += wele;
+                        rtk.ssat[sat - 1].xsewl += wele * ewlCycles * ewlCycles;
+                        rtk.ssat[sat - 1].niewl++;
+                    }
                 }
             }
         }
     }
 
     public static double mwmeas(Obsd obs, Nav nav) {
+        return mwmeas(obs, nav, -1);
+    }
+
+    public static double ewlmeas(Obsd obs, Nav nav) {
+        double freq2 = SatUtils.sat2freq(obs.sat, obs.code[1], nav);
+        double freq3 = SatUtils.sat2freq(obs.sat, obs.code[2], nav);
+        if (freq2 == 0.0 || freq3 == 0.0 || obs.L[1] == 0.0 || obs.L[2] == 0.0 ||
+            obs.P[1] == 0.0 || obs.P[2] == 0.0) return 0.0;
+
+        double f2mf3 = freq2 - freq3;
+        double f2pf3 = freq2 + freq3;
+        if (Math.abs(f2mf3) < 1.0) return 0.0;
+
+        double P2 = obs.P[1];
+        double P3 = obs.P[2];
+        int sys = SatUtils.satsys(obs.sat, null);
+
+        int biasIx2 = SppCore.code2biasIx(sys, obs.code[1]);
+        if (biasIx2 > 0 && nav.cbias != null && obs.sat - 1 < nav.cbias.length &&
+                nav.cbias[obs.sat - 1] != null && nav.cbias[obs.sat - 1][1] != null &&
+                biasIx2 - 1 < nav.cbias[obs.sat - 1][1].length) {
+            P2 += nav.cbias[obs.sat - 1][1][biasIx2 - 1];
+        }
+        int biasIx3 = SppCore.code2biasIx(sys, obs.code[2]);
+        if (biasIx3 > 0 && nav.cbias != null && obs.sat - 1 < nav.cbias.length &&
+                nav.cbias[obs.sat - 1] != null && nav.cbias[obs.sat - 1][2] != null &&
+                biasIx3 - 1 < nav.cbias[obs.sat - 1][2].length) {
+            P3 += nav.cbias[obs.sat - 1][2][biasIx3 - 1];
+        }
+
+        return (obs.L[1] - obs.L[2]) * Constants.CLIGHT / f2mf3 -
+               (freq2 * P2 + freq3 * P3) / f2pf3;
+    }
+
+    public static double mwmeas(Obsd obs, Nav nav, int epoch) {
         double freq1 = SatUtils.sat2freq(obs.sat, obs.code[0], nav);
         double freq2 = SatUtils.sat2freq(obs.sat, obs.code[1], nav);
         if (freq1 == 0.0 || freq2 == 0.0 || obs.L[0] == 0.0 || obs.L[1] == 0.0 ||
@@ -1142,11 +1470,38 @@ public class PppCore {
 
         double lam1 = Constants.CLIGHT / freq1;
         double lam2 = Constants.CLIGHT / freq2;
-        double f1f2 = freq1 - freq2;
+        double f1mf2 = freq1 - freq2;
         double f1pf2 = freq1 + freq2;
 
-        return (obs.L[0] * lam1 - obs.L[1] * lam2) -
-               (freq1 * obs.P[0] + freq2 * obs.P[1]) / f1pf2;
+        double P1 = obs.P[0];
+        double P2 = obs.P[1];
+        int sys = SatUtils.satsys(obs.sat, null);
+        int biasIx1 = SppCore.code2biasIx(sys, obs.code[0]);
+        if (biasIx1 > 0 && nav.cbias != null && obs.sat - 1 < nav.cbias.length &&
+                nav.cbias[obs.sat - 1] != null && nav.cbias[obs.sat - 1][0] != null &&
+                biasIx1 - 1 < nav.cbias[obs.sat - 1][0].length) {
+            P1 += nav.cbias[obs.sat - 1][0][biasIx1 - 1];
+        }
+        int biasIx2 = SppCore.code2biasIx(sys, obs.code[1]);
+        if (biasIx2 > 0 && nav.cbias != null && obs.sat - 1 < nav.cbias.length &&
+                nav.cbias[obs.sat - 1] != null && nav.cbias[obs.sat - 1][1] != null &&
+                biasIx2 - 1 < nav.cbias[obs.sat - 1][1].length) {
+            P2 += nav.cbias[obs.sat - 1][1][biasIx2 - 1];
+        }
+
+        double mw = (obs.L[0] - obs.L[1]) * Constants.CLIGHT / f1mf2 -
+               (freq1 * P1 + freq2 * P2) / f1pf2;
+
+        if (epoch >= 1 && epoch <= 3) {
+            String c0 = ObsCode.code2obs(obs.code[0]);
+            String c1 = ObsCode.code2obs(obs.code[1]);
+            double lamWl = Constants.CLIGHT / f1mf2;
+            LOG.info(String.format(Locale.US,
+                "MW-DIAG ep=%d sat=%d code0=%s code1=%s f1=%.6e f2=%.6e lam1=%.4f lam2=%.4f lamWl=%.4f MW=%.4f MW_wl=%.2f",
+                epoch, obs.sat, c0, c1, freq1, freq2, lam1, lam2, lamWl, mw, mw / lamWl));
+        }
+
+        return mw;
     }
 
     public static void testeclipse(Obsd[] obs, int n, Nav nav, double[] rs) {

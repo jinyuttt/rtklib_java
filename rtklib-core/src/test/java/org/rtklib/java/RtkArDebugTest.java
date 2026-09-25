@@ -20,9 +20,9 @@ public class RtkArDebugTest {
     private static final Logger log = LoggerFactory.getLogger(RtkArDebugTest.class);
 
     private static final String BASE_PATH =
-            "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage\\<BASE_DEVICE_ID>\\2026-07-20\\12.rtcm3";
+            TestDataConfig.getBaseFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<BASE_DEVICE_ID>\\2026-07-20\\12.rtcm3" : TestDataConfig.getBaseFile();
     private static final String ROVER_PATH =
-            "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage\\<ROVER_DEVICE_ID>\\2026-07-20\\12.rtcm3";
+            TestDataConfig.getRoverFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<ROVER_DEVICE_ID>\\2026-07-20\\12.rtcm3" : TestDataConfig.getRoverFile();
 
     @Test
     @DisplayName("调试 AR 为什么没有 Fix 解")

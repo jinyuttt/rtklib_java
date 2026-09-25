@@ -68,6 +68,7 @@ public final class SsrCorrector {
             if (sat <= 0 || sat > Constants.MAXSAT) continue;
             Ssr s = ssr[sat - 1];
             if (s == null || s.update == 0) continue;
+            if (s.hrclk == 0.0) continue;
             dts[i * 2] += s.hrclk / Constants.CLIGHT;
         }
     }

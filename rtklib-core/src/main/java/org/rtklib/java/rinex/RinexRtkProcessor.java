@@ -5,6 +5,7 @@ import org.rtklib.java.data.*;
 import org.rtklib.java.pntpos.PosHandler;
 import org.rtklib.java.rtkpos.RtkProcessor;
 import org.rtklib.java.trace.TraceCallback;
+import org.rtklib.java.trace.TraceConfig;
 import org.rtklib.java.trace.TraceControl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,6 +102,10 @@ public class RinexRtkProcessor {
 
     public void setTraceControl(TraceControl traceControl) {
         rtk.traceControl = traceControl;
+    }
+
+    public void setTraceConfig(TraceConfig traceConfig) {
+        rtk.traceConfig = traceConfig;
     }
 
     public void setTraceCallback(TraceCallback traceCallback) {

@@ -50,7 +50,7 @@ public final class PntPos {
         double[] vare = new double[n];
         int[] svh = new int[n];
 
-        EphModel.satposs(sol.time, obs, n, nav, rs, dts, vare, svh);
+        EphModel.satposs(sol.time, obs, n, nav, rs, dts, vare, svh, opt_.sateph);
 
         int[] vsat = new int[n];
         double[] resp = new double[n];

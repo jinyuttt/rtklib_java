@@ -1,9 +1,10 @@
-package org.rtklib.java;
+package org.rtklib.java.test;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.condition.EnabledIf;
+import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
@@ -32,13 +33,15 @@ public class PppTest {
 
     private static final Logger log = LoggerFactory.getLogger(PppTest.class);
 
-    private static final String BASE_DIR = System.getProperty("user.dir");
+    private static final String PRODUCT_DIR = TestDataConfig.getProductDir();
+    private static final String STATION = TestDataConfig.getStation();
+    private static final String DATE = TestDataConfig.getStationDate();
+    private static final String RTCM_BASE_DIR = TestDataConfig.getRtcmBaseDir();
 
-    private static final String RTCM_ROVER = BASE_DIR + "\\testdat\\rover.rtcm";
-    private static final String RTCM_BASE = BASE_DIR + "\\testdat\\base.rtcm";
+    private static final String RTCM_ROVER = RTCM_BASE_DIR + "\\" + STATION + "\\" + DATE + "\\0.rtcm3";
 
-    private static final String SP3_FILE = BASE_DIR + "\\WUM0MGXNRT_20261581500_02D_05M_ORB.SP3\\WUM0MGXNRT_20261581500_02D_05M_ORB.SP3";
-    private static final String CLK_FILE = BASE_DIR + "\\WUM0MGXNRT_20261581500_02D_05M_CLK.CLK\\WUM0MGXNRT_20261581500_02D_05M_CLK.CLK";
+    private static final String SP3_FILE = PRODUCT_DIR + "\\sp3\\WUM0MGXRAP_20261790000_01D_05M_ORB.SP3";
+    private static final String CLK_FILE = PRODUCT_DIR + "\\clk\\WUM0MGXRAP_20261790000_01D_30S_CLK.CLK";
 
     private static String roverObsFile;
     private static String roverNavFile;

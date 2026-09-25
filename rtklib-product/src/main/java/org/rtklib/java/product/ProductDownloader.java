@@ -18,7 +18,6 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.zip.GZIPInputStream;
-
 /**
  * IGS精密产品自动下载器，下载规则完全对齐PRIDE-PPPAR v3.2 pdp3.sh。
  *
@@ -87,6 +86,7 @@ public class ProductDownloader {
     public static final String URL_IGN = "ftp://igs.ign.fr";
     public static final String URL_WHU = "ftp://igs.gnsswhu.cn";
     public static final String URL_VMF = "http://vmf.geo.tuwien.ac.at";
+    public static final String URL_CDDIS = "https://cddis.nasa.gov";
 
     public enum ProductType {
         SP3, CLK, ERP, BIA, OBX, FCB, UPD, OSB, DCB, VMF3, GPT3
@@ -133,6 +133,7 @@ public class ProductDownloader {
     private final String urlBdspride;
     private final String urlIgn;
     private final String urlWhu;
+    private final String urlCddis;
 
     public ProductDownloader() {
         this(DEFAULT_CACHE_DIR);
@@ -143,11 +144,17 @@ public class ProductDownloader {
     }
 
     public ProductDownloader(String cacheDir, boolean useCache, boolean offline) {
-        this(cacheDir, useCache, offline, true, URL_BDSPRIDE, URL_IGN, URL_WHU);
+        this(cacheDir, useCache, offline, true, URL_BDSPRIDE, URL_IGN, URL_WHU, URL_CDDIS);
     }
 
     public ProductDownloader(String cacheDir, boolean useCache, boolean offline,
                              boolean useRts, String urlBdspride, String urlIgn, String urlWhu) {
+        this(cacheDir, useCache, offline, useRts, urlBdspride, urlIgn, urlWhu, URL_CDDIS);
+    }
+
+    public ProductDownloader(String cacheDir, boolean useCache, boolean offline,
+                             boolean useRts, String urlBdspride, String urlIgn, String urlWhu,
+                             String urlCddis) {
         this.cacheDir = Paths.get(cacheDir).toAbsolutePath();
         this.useCache = useCache;
         this.offline = offline;
@@ -155,13 +162,14 @@ public class ProductDownloader {
         this.urlBdspride = urlBdspride != null ? urlBdspride : URL_BDSPRIDE;
         this.urlIgn = urlIgn != null ? urlIgn : URL_IGN;
         this.urlWhu = urlWhu != null ? urlWhu : URL_WHU;
+        this.urlCddis = urlCddis != null ? urlCddis : URL_CDDIS;
         try {
             Files.createDirectories(this.cacheDir);
         } catch (IOException e) {
             log.warn("Cannot create cache directory: {}", this.cacheDir);
         }
-        log.info("ProductDownloader cacheDir={} bdspride={} ign={} whu={} useRts={}",
-                this.cacheDir, this.urlBdspride, this.urlIgn, this.urlWhu, this.useRts);
+        log.info("ProductDownloader cacheDir={} bdspride={} ign={} whu={} cddis={} useRts={}",
+                this.cacheDir, this.urlBdspride, this.urlIgn, this.urlWhu, this.urlCddis, this.useRts);
     }
 
     public Path getCacheDir() {
@@ -541,6 +549,14 @@ public class ProductDownloader {
             }
         }
 
+        boolean isCddis = urlStr.contains("cddis.nasa.gov");
+        String basicAuth = null;
+        if (isCddis && CredentialManager.hasCddisCredentials()) {
+            String user = CredentialManager.getCddisUsername();
+            String pass = CredentialManager.getCddisPassword();
+            basicAuth = Base64.getEncoder().encodeToString((user + ":" + pass).getBytes());
+        }
+
         for (int retry = 0; retry < MAX_RETRIES; retry++) {
             HttpURLConnection conn = null;
             try {
@@ -549,6 +565,9 @@ public class ProductDownloader {
                 conn.setConnectTimeout(CONNECT_TIMEOUT);
                 conn.setReadTimeout(READ_TIMEOUT);
                 conn.setRequestProperty("User-Agent", "rtklib-java/2.1");
+                if (basicAuth != null) {
+                    conn.setRequestProperty("Authorization", "Basic " + basicAuth);
+                }
                 conn.setInstanceFollowRedirects(true);
 
                 int responseCode = conn.getResponseCode();
@@ -565,6 +584,9 @@ public class ProductDownloader {
 
                 if (responseCode != HttpURLConnection.HTTP_OK) {
                     conn.disconnect();
+                    if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED && isCddis) {
+                        throw new IOException("CDDIS authentication failed. Check credentials.properties");
+                    }
                     if (retry < MAX_RETRIES - 1) {
                         Thread.sleep(1000L * (retry + 1));
                         continue;
@@ -884,7 +906,7 @@ public class ProductDownloader {
     /**
      * 下载OSB（Observable-Specific Bias）产品，用于v2.3.0 OSB偏差模型。
      * 存储目录：product/osb/
-     * 来源：IGS-MGEX(CAS) / WHU
+     * 来源：IGS-MGEX(CAS) / WHU / CDDIS
      */
     public String downloadOsb(LocalDate date) {
         Path osbDir = cacheDir.resolve("osb");
@@ -901,6 +923,8 @@ public class ProductDownloader {
             String.format("%d%03d0.BIA", y, doy)
         };
 
+        boolean hasCddis = CredentialManager.hasCddisCredentials();
+
         for (String name : osbNames) {
             Path localFile = osbDir.resolve(name);
             if (useCache && Files.exists(localFile)) {
@@ -908,13 +932,15 @@ public class ProductDownloader {
             }
             if (offline) continue;
 
-            // OSB候选URL：IGS-MGEX / WHU
-            String[] urls = {
-                urlIgn + "/pub/igs/products/mgex/" + wwww + "/" + name,
-                urlWhu + "/pub/whu/phasebias/" + y + "/"+ (doy / 50 + 16) + "/" + name
-            };
+            // OSB候选URL：IGS-MGEX / WHU / CDDIS
+            List<String> urlList = new ArrayList<>();
+            urlList.add(urlIgn + "/pub/igs/products/mgex/" + wwww + "/" + name);
+            urlList.add(urlWhu + "/pub/whu/phasebias/" + y + "/"+ (doy / 50 + 16) + "/" + name);
+            if (hasCddis) {
+                urlList.add(urlCddis + "/archive/gnss/products/mgex/" + wwww + "/" + name);
+            }
 
-            for (String url : urls) {
+            for (String url : urlList) {
                 log.info("Trying OSB {} from {}", name, url);
                 try {
                     String downloaded = downloadFromUrl(url, osbDir);
@@ -935,7 +961,7 @@ public class ProductDownloader {
     /**
      * 下载DCB（Differential Code Bias）产品，用于伪距偏差改正。
      * 存储目录：product/dcb/
-     * 来源：CODE(AIUB) / IGS-MGEX(CAS)
+     * 来源：CODE(AIUB) / IGS-MGEX(CAS) / CDDIS
      * 格式：.BSX(BIAS-SINEX) / .DCB(传统格式)
      */
     public String downloadDcb(LocalDate date) {
@@ -953,6 +979,10 @@ public class ProductDownloader {
 
         if (offline) return null;
 
+        boolean hasCddis = CredentialManager.hasCddisCredentials();
+        int gpsw = dateToGpsWeek(date);
+        String wwww = String.format("%04d", gpsw);
+
         String[] remoteNames = {
             String.format("CAS0MGXRAP_%04d%03d0000_01D_01D_DCB.BSX", y, doy),
             String.format("GFZ0OPSRAP_%04d%03d0000_01D_01D_DCB.BIA", y, doy),
@@ -962,16 +992,19 @@ public class ProductDownloader {
         };
 
         for (String remoteName : remoteNames) {
-            String[] urls = {
-                urlIgn + "/pub/igs/products/bias/" + y + "/" + remoteName + ".gz",
-                urlIgn + "/pub/igs/products/mgex/" + dateToGpsWeek(date) + "/" + remoteName + ".gz",
-                urlWhu + "/pub/whu/phasebias/" + y + "/bias/" + remoteName + ".gz",
-                "ftp://ftp.aiub.unibe.ch/CODE/" + y + "/" + remoteName + ".gz",
-                urlIgn + "/pub/igs/products/bias/" + y + "/" + remoteName,
-                urlIgn + "/pub/igs/products/mgex/" + dateToGpsWeek(date) + "/" + remoteName,
-                urlWhu + "/pub/whu/phasebias/" + y + "/bias/" + remoteName
-            };
-            for (String url : urls) {
+            List<String> urlList = new ArrayList<>();
+            urlList.add(urlIgn + "/pub/igs/products/bias/" + y + "/" + remoteName + ".gz");
+            urlList.add(urlIgn + "/pub/igs/products/mgex/" + wwww + "/" + remoteName + ".gz");
+            urlList.add(urlWhu + "/pub/whu/phasebias/" + y + "/bias/" + remoteName + ".gz");
+            urlList.add("ftp://ftp.aiub.unibe.ch/CODE/" + y + "/" + remoteName + ".gz");
+            urlList.add(urlIgn + "/pub/igs/products/bias/" + y + "/" + remoteName);
+            urlList.add(urlIgn + "/pub/igs/products/mgex/" + wwww + "/" + remoteName);
+            urlList.add(urlWhu + "/pub/whu/phasebias/" + y + "/bias/" + remoteName);
+            if (hasCddis) {
+                urlList.add(urlCddis + "/archive/gnss/products/bias/" + y + "/" + remoteName);
+                urlList.add(urlCddis + "/archive/gnss/products/mgex/" + wwww + "/" + remoteName);
+            }
+            for (String url : urlList) {
                 log.info("Trying DCB {} from {}", remoteName, url);
                 try {
                     String downloaded = downloadFromUrl(url, dcbDir);
@@ -1008,8 +1041,9 @@ public class ProductDownloader {
         if (offline) return null;
 
         // GPT3候选URL：TU Wien(HTTPS) / PRIDE(FTP) / WHU(FTP)
+        // TU Wien远端文件名为gpt3_5.grd，下载后重命名为gpt3_5deg.dat
         String[] urls = {
-            "https://vmf.geo.tuwien.ac.at/trop_products/GPT3/gpt3_5deg.dat",
+            "https://vmf.geo.tuwien.ac.at/codes/gpt3_5.grd",
             urlBdspride + "/table/" + gpt3Name,
             urlWhu + "/pub/whu/phasebias/table/" + gpt3Name
         };
@@ -1025,6 +1059,11 @@ public class ProductDownloader {
                 }
                 if (downloaded != null) {
                     Path downloadedPath = gpt3Dir.resolve(downloaded);
+                    if (!downloaded.equals(gpt3Name)) {
+                        Path renamedPath = gpt3Dir.resolve(gpt3Name);
+                        Files.move(downloadedPath, renamedPath, StandardCopyOption.REPLACE_EXISTING);
+                        downloadedPath = renamedPath;
+                    }
                     log.info("Downloaded GPT3 grid -> {}", downloadedPath);
                     return downloadedPath.toString();
                 }

@@ -19,7 +19,7 @@ import java.io.IOException;
  * 每个网格点11列：p_mean, p_cos, p_sin, T_mean, T_cos, T_sin, Qs_mean, Qs_cos, Qs_sin, ah, aw
  * 其中p=气压(mbar), T=温度(K), Qs=比湿, ah/aw=VMF3干/湿映射函数系数
  *
- * <p>文件来源：TU Wien (https://vmf.geo.tuwien.ac.at/trop_products/GPT3/gpt3_5deg.dat)
+ * <p>文件来源：TU Wien (https://vmf.geo.tuwien.ac.at/codes/gpt3_5.grd)
  * 文件大小：~5MB，静态表，只需下载一次
  *
  * <p>对应C版：RTKLIB未内置GPT3，本模块为v2.2.2新增优化

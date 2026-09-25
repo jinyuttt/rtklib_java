@@ -11,6 +11,8 @@ import org.rtklib.java.kalman.KalmanFilter;
 import org.rtklib.java.ppprtk.SsrCorrector;
 import org.rtklib.java.tide.AtmosphericTideS1S2;
 import org.rtklib.java.trace.PppTrace;
+import org.rtklib.java.trace.Trace;
+import org.rtklib.java.trace.TraceConfig;
 import org.rtklib.java.trace.TraceCallback;
 import org.rtklib.java.trace.TraceControl;
 import org.slf4j.Logger;
@@ -26,7 +28,7 @@ public class PppCoreEx {
         LOG.info("PppCoreEx.ppos called: pppAR={}, bds3AR={}", cfg.enablePppAR, cfg.enableBds3PppAR);
         if (!cfg.enableIsbIfcbIfb && !cfg.enablePppAR && !cfg.enablePppArFixHold
             && !cfg.enablePppPartialAR && !cfg.enableBds3PppAR && !cfg.enableOsb
-            && !cfg.enableAt1S2 && !cfg.useGpt3Grid) {
+            && !cfg.enableAt1S2 && !cfg.useGpt3Grid && !cfg.enableMultiFreqAR) {
             PppCore.pppos(rtk, obs, n, nav);
             return;
         }
@@ -74,7 +76,10 @@ public class PppCoreEx {
 
         TraceControl ctrl = rtk.traceControl;
         TraceCallback cb = rtk.traceCallback;
+        TraceConfig v2cfg = rtk.traceConfig;
+        TraceCallback v2cb = rtk.traceCallback;
         PppTrace.tracePppInput(ctrl, cb, rtk.epoch, obs[0].time, obs, n, nav);
+        Trace.emit("SATELLITE", "START", v2cfg, v2cb, rtk.epoch, obs[0].time, "n_obs", n);
 
         EphModel.satposs(obs[0].time, obs, n, nav, rs, dts, var, svh, opt.sateph);
 
@@ -104,6 +109,8 @@ public class PppCoreEx {
         }
 
         PppTrace.tracePppUdstate(ctrl, cb, rtk.epoch, obs[0].time, rtk, nx);
+        Trace.emit("AMBIGUITY", "UPDATE", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                "x", rtk.x[0], "y", rtk.x[1], "z", rtk.x[2], "nx", nx);
 
         int maxnv = n * PppCore.NF(opt) * 2 + Constants.MAXSAT + 3;
         double[] xp = new double[nx];
@@ -129,6 +136,7 @@ public class PppCoreEx {
             }
 
             PppTrace.tracePppRes(ctrl, cb, rtk.epoch, obs[0].time, nv, v, R, nx, H, opt);
+            Trace.emit("FILTER", "RESIDUAL", v2cfg, v2cb, rtk.epoch, obs[0].time, "nv", nv);
 
             if (nv == 0) {
                 LOG.debug("PppCoreEx epoch={} iter={} nv=0", rtk.epoch, iter);
@@ -141,19 +149,23 @@ public class PppCoreEx {
             int info = KalmanFilter.update(xp, Pp, H, v, R, nx, nv);
 
             PppTrace.tracePppFilter(ctrl, cb, rtk.epoch, obs[0].time, info, xp, xpPrev, Pp, nx);
+            Trace.emit("FILTER", "UPDATE", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                    "info", info, "nv", nv, "nx", nx);
 
             if (info != 0) {
                 LOG.info("PppCoreEx epoch={} iter={} KF failed info={}", rtk.epoch, iter, info);
                 break;
             }
 
+            // Always save the latest state
+            System.arraycopy(xp, 0, rtk.x, 0, nx);
+            System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
+
             int resCheck = pppResEx(iter + 1, obs, n, rs, dts, var, svh, exc, nav, xp, rtk, null, null, null, azel, nx, cfg);
             if (rtk.epoch <= 2) {
                 LOG.info("PppCoreEx epoch={} iter={} resCheck={}", rtk.epoch, iter, resCheck);
             }
             if (resCheck != 0) {
-                System.arraycopy(xp, 0, rtk.x, 0, nx);
-                System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
                 stat = Constants.SOLQ_PPP;
                 break;
             }
@@ -162,7 +174,16 @@ public class PppCoreEx {
         if (stat == Constants.SOLQ_PPP) {
             PppCore.updateStat(rtk, obs, n, stat, nx);
 
-            if (cfg.enablePppAR) {
+            if (cfg.enableMultiFreqAR) {
+                LOG.info("PppCoreEx: calling pppAmbFixEwlWlNl, epoch={}", rtk.epoch);
+                int nb = PppAmbFix.pppAmbFixEwlWlNl(rtk, null, rtk.xa, 1, 0, 0, nav);
+                if (nb > 1) {
+                    rtk.sol.stat = Constants.SOLQ_FIX;
+                    LOG.debug("PppCoreEx: PPP-AR 3F fixed {} ambiguities", nb);
+                }
+            }
+
+            if (cfg.enablePppAR && rtk.sol.stat != Constants.SOLQ_FIX) {
                 LOG.info("PppCoreEx: calling pppAmbFixWlNl, epoch={}", rtk.epoch);
                 int nb = PppAmbFix.pppAmbFixWlNl(rtk, null, rtk.xa, 1, 0, 0, nav);
                 if (nb > 1) {
@@ -182,18 +203,36 @@ public class PppCoreEx {
             if (cfg.enableBds3PppAR) {
                 int nb = PppAmbFixBds3.pppAmbFixBds3(rtk, null, rtk.xa, nav);
                 if (nb > 1) {
+                    rtk.sol.stat = Constants.SOLQ_FIX;
                     LOG.debug("PppCoreEx: BDS-3 PPP-AR fixed {} ambiguities", nb);
                 }
+            }
+
+            if (rtk.sol.stat == Constants.SOLQ_FIX) {
+                rtk.nfix++;
+            } else {
+                rtk.nfix = 0;
             }
 
             if (cfg.enablePppArFixHold && rtk.sol.stat == Constants.SOLQ_FIX) {
                 PppAmbFix.pppArFixHold(rtk, nav);
             }
         } else {
+            rtk.nfix = 0;
             LOG.info("PppCoreEx epoch={} did not converge, stat={}", rtk.epoch, stat);
         }
 
         PppTrace.tracePppResult(ctrl, cb, rtk.epoch, obs[0].time, rtk.sol, PppCore.MAX_ITER);
+        Trace.emit("POSITION", "UPDATE", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                "x", rtk.sol.rr[0], "y", rtk.sol.rr[1], "z", rtk.sol.rr[2],
+                "Q", (int) rtk.sol.stat, "ns", (int) rtk.sol.ns);
+        if (rtk.sol.stat == Constants.SOLQ_FIX || rtk.sol.stat == Constants.SOLQ_FLOAT) {
+            Trace.emit("RESULT", "UPDATE", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                    "Q", (int) rtk.sol.stat, "ns", (int) rtk.sol.ns);
+        } else {
+            Trace.emit("RESULT", "FAIL", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                    "Q", (int) rtk.sol.stat, "reason", "no_convergence");
+        }
     }
 
     private static void udstateEx(Rtk rtk, Obsd[] obs, int n, Nav nav, int nx, RtkConfig cfg) {

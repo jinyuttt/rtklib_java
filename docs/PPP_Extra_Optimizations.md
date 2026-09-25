@@ -1,7 +1,7 @@
 # PPP 扩展优化技术文档
 
-> 版本：v2.0  
-> 日期：2026-09-24  
+> 版本：v3.0  
+> 日期：2026-09-25  
 > 基于：rtklib-java v2.3.0  
 > 对标：PRIDE-PPPAR / GAMP / RTKLIB-demo5  
 
@@ -18,6 +18,8 @@
 - **偏差模型扩展**：ISB/IFCB/IFB 多系统偏差参数估计，改善多系统融合PPP精度
 - **模糊度固定**：PPP-AR（WL+NL LAMBDA），从浮点解提升至固定解
 - **增强固定策略**：Fix-and-Hold、Partial AR、BDS-3 PPP-AR
+- **PPP-RTK**：SSR改正（轨道/钟差/高频钟差/码偏差/相位偏差）+ LAMBDA AR，cm级快速收敛
+- **非组合PPP**：IONOOPT_EST/SSR模式，估计斜路径电离层延迟，支持电离层建模
 
 ### 1.2 设计原则
 
@@ -34,12 +36,18 @@
 |------|------|--------|----------|----------|
 | GPT3+VMF3 对流层 | `enableGpt3Vmf3` | `PppOptimizations` | 毫米~厘米级（先验ZTD） | 间接（更准的先验加速收敛） |
 | GPT3 网格插值 | `useGpt3Grid` | `Gpt3GridReader` + `PppOptimizations` | 毫米级（5°×5°网格） | 间接 |
+| VMF3 OP 集成 | （自动） | `Vmf3OpReader` + `PppOptimizations` | 毫米级（站特异性映射函数系数） | 间接 |
 | IERS2010 潮汐 | `enableIers2010` | `PppOptimizations` | 毫米级（长周期潮+极潮） | 无 |
 | ISB/IFCB/IFB 偏差 | `enableIsbIfcbIfb` | `PppBiasModel` + `PppCoreEx` | 厘米~分米级（多系统偏差） | 显著（消除系统间偏差） |
+| OSB 偏差改正 | `enableOsb` | `PppOsbModel` + `PppCore` | 毫米~厘米级（观测值特异性偏差） | 间接（改善残差一致性） |
 | PPP-AR 模糊度固定 | `enablePppAR` | `PppAmbFix` + `PppCoreEx` | 厘米级（固定→浮点） | 显著（10~20min→固定） |
 | PPP-AR Fix-and-Hold | `enablePppArFixHold` | `PppAmbFix.pppArFixHold()` | 提升固定连续性 | 减少fix→float跳变 |
 | Partial AR | `enablePppPartialAR` | `PppAmbFix.pppPartialAR()` | 提升弱条件下固定率 | 子集固定加速收敛 |
 | BDS-3 PPP-AR | `enableBds3PppAR` | `PppAmbFixBds3` | BDS-3 B1C/B2a固定解 | BDS-3收敛加速 |
+| MW组合DCB校正 | （自动） | `PppCore.mwmeas()` | 提升WL浮点值整数性 | 间接（提升WL固定可靠性） |
+| PPP-RTK | `enablePppRtk` | `PppRtkCore` + `SsrCorrector` | cm级（SSR改正） | 显著（SSR快速收敛） |
+| PPP-RTK AR | `enablePppRtkAR` | `PppRtkAmbFix` | mm~cm级（固定解） | 显著（LAMBDA+Fix-and-Hold） |
+| 非组合PPP | `ionoopt=EST/SSR` | `PppCore.pppRes()` + `PppRtkCore` | 电离层建模精度 | 区域电离层增强 |
 
 ---
 
@@ -117,9 +125,8 @@ cfg.gpt3GridFile = "";        // GPT3网格文件路径
 
 ### 2.6 限制
 
-- VMF3的c系数使用简化模型（cw=0），未读取VMF3网格（OP文件）
 - 简化经验系数（fallback）的精度低于网格插值，建议配合 `useGpt3Grid=true` 使用
-- **改进方向**：加载VMF3 OP文件，实现完整VMF3（含a_h/a_w网格和b_h/b_h/c_h/c_w系数）
+- VMF3 OP文件已集成（`Vmf3OpReader`），当`nav.vmf3OpLoaded=true`时自动覆盖GPT3网格的ah/aw并提供bH/bW
 
 ---
 
@@ -137,10 +144,10 @@ IERS2010潮汐模型在IERS1996（RTKLIB标准）基础上增加三项改正：
 
 | 项目 | IERS1996（标准） | IERS2010（优化） |
 |------|-----------------|-----------------|
-| 固体潮 | 11阶潮汐展开 | 同 + 长周期潮改正 |
+| 固体潮 | 11阶潮汐展开 | dehanttideinel (P2+P3, 频率依赖Love数) |
 | 海潮 | 通过otdisp | 同 |
-| 极潮 | 无或简化 | 简化IERS2010极潮公式 |
-| 大气潮 | 无 | S1/S2大气潮（开关`enableAt1S2`，当前桩） |
+| 极潮 | 无或简化 | IERS标准公式(9mm/9mm/-33mm系数, 含平均极模型) |
+| 大气潮 | 无 | S1/S2大气潮(AtmosphericTideS1S2, Legendre展开) |
 | 量级 | ~分米级改正 | 额外~毫米~厘米级改正 |
 
 ### 3.3 实现细节
@@ -160,23 +167,24 @@ if (rtk.rtkConfig != null && rtk.rtkConfig.enableIers2010) {
 **IERS2010总位移**：
 
 ```
-dr_total = dr_tide(IERS1996) + dr_long_period + dr_atmospheric + dr_pole
+dr_total = dr_tidedisp(IERS1996基础) + dr_atmospheric(S1/S2)
 ```
 
-**长周期潮计算**：
+其中 `dr_tidedisp` 由 `Tides.tidedisp()` 统一计算，包含：
+- 固体潮（dehanttideinel，含P2+P3项，频率依赖Love数）
+- 海潮负荷（ocean tide loading）
+- 极潮（IERS标准公式，9mm/9mm/-33mm系数，含均值极偏移）
+
+`dr_atmospheric` 由 `AtmosphericTideS1S2.displacementS1S2()` 计算S1/S2大气潮改正。
+
+**极潮计算**（由 `Tides.tidePole()` 实现）：
 
 ```
-P2(cosZ) = 0.5 * (3*cos²Z - 1)    // 二阶Legendre多项式
-disp = h2 * (GM_body/GM_earth) * (a_earth/r_body)³ * P2 * a_earth
-dr = disp * rr / |rr|              // 径向方向
-```
-
-**极潮计算**：
-
-```
-m1 = -xp*sin2φ*cosλ - yp*sin2φ*sinλ
-m2 = -xp*cos2φ*cosλ - yp*cos2φ*sinλ
-dr = scale * m * rr / |rr|
+xpBar = 55.0 + 1.677 * (year - 2000)    // 均值极纬度（mas）
+ypBar = 320.5 + 3.460 * (year - 2000)    // 均值极经度（mas）
+m1 = (xp - xpBar) / 1000 * ...           // 极偏移分量
+m2 = (yp - ypBar) / 1000 * ...
+dr_E = -9mm * m1,  dr_N = -9mm * m2,  dr_U = +33mm * m1
 ```
 
 ### 3.4 配置
@@ -184,16 +192,16 @@ dr = scale * m * rr / |rr|
 ```java
 RtkConfig cfg = new RtkConfig();
 cfg.enableIers2010 = true;   // 启用IERS2010潮汐模型
-cfg.enableAt1S2 = false;     // S1/S2大气潮开关（预留，当前未实现）
+cfg.enableAt1S2 = true;      // S1/S2大气潮开关（已实现，由AtmosphericTideS1S2计算）
 // 同时需要 opt.tidecorr = 1 或 7 以启用潮汐改正
 ```
 
 ### 3.5 限制
 
-- 大气潮（`atmosphericTide`）当前返回零向量（未实现S1/S2大气潮展开），`enableAt1S2`开关已预留
-- 极潮使用简化公式（固定Love数h2=0.6090, l2=0.0840），未实现IERS2010完整极潮（含频率依赖的Love数和虚部改正）
-- 长周期潮仅考虑太阳和月亮的二阶项，未考虑三阶项
-- **改进方向**：实现S1/S2大气潮（需Herring公式或Ray-Ponte模型），实现完整极潮
+- 固体潮使用dehanttideinel（含P2+P3项，频率依赖Love数），精度满足mm级PPP需求
+- 极潮使用IERS标准公式（9mm/9mm/-33mm系数），未含频率依赖的Love数虚部改正（亚mm级影响）
+- 海潮负荷依赖外部OTL模型（FES2004/ESCAT等），精度取决于OTL网格分辨率
+- **改进方向**：极潮频率依赖虚部改正（亚mm级，当前影响可忽略）
 
 ---
 
@@ -311,8 +319,8 @@ cfg.ifbPrn = 0.001;            // IFB过程噪声（m/√s）
 ### 4.6 限制
 
 - IFCB参数数量为MAXSAT（85），可能导致状态向量过大、滤波效率降低
-- 未实现OSB（Observable-Specific Bias）模型的完整观测方程集成（`enableOsb`开关已预留）
-- **改进方向**：实现OSB模型完整集成、DCB产品读取
+- OSB模型已集成到观测方程（`PppOsbModel`，`enableOsb`开关），支持IF组合和单频改正
+- **改进方向**：DCB产品独立读取（CODE/IGS格式）
 
 ---
 
@@ -397,6 +405,8 @@ rtk.ssat[sat - 1].fix[f] = 1;
 
 模糊度固定后，将其协方差从浮点值(~1.0)收紧到`pppArFixHoldVar`(默认1e-6)，使后续历元中该模糊度不会被重新浮点化，从而"锁定"固定解。
 
+**安全守卫**：需连续FIX历元数 ≥ `pppArFixHoldMinEp`（默认50）才触发收紧，避免首次固定即锁定导致发散。`PppCoreEx`在每历元结束时管理`rtk.nfix`计数器（FIX递增，非FIX归零）。
+
 ```java
 if (cfg.enablePppArFixHold && rtk.sol.stat == Constants.SOLQ_FIX) {
     PppAmbFix.pppArFixHold(rtk, nav);
@@ -415,6 +425,8 @@ if (cfg.enablePppArFixHold && rtk.sol.stat == Constants.SOLQ_FIX) {
 2. 从全部卫星开始，逐步剔除方差最大的模糊度
 3. 对每个子集运行LAMBDA搜索+比率检验
 4. 选择通过比率检验且固定数最多的子集
+
+**单位空间**：LAMBDA搜索在 **L1循环（cycle）空间** 执行。浮点模糊度和协方差从米空间转换到L1循环空间（`y[i] /= λ₁`, `Q[i][j] /= (λ₁_i × λ₁_j)`），固定后转回米空间（`Math.round(b[i]) × λ₁`）。这确保不同波长卫星的整数约束正确。
 
 约束：子集大小 >= `pppPartialArMinSats`（默认4），搜索次数 <= `pppPartialArMaxTries`（默认10），比率 >= `pppPartialArMinRatio`（默认2.0）。
 
@@ -469,9 +481,9 @@ cfg.enableBds3PppAR = false;       // 启用BDS-3 PPP-AR
 
 ### 5.8 限制
 
-- WL组合计算简化：未使用精确的MW组合（需DCB校正），WL固定可靠性受限
-- 未实现DCB产品独立读取（当前FCB/OSB产品通过`Nav.fcbWl`传入）
-- **改进方向**：实现DCB产品读取（CODE/IGS），完善MW组合计算
+- MW组合已集成DCB校正（`mwmeas()`中从`nav.cbias`读取码偏差，改正P1/P2后再计算MW组合），WL浮点值更接近整数
+- FCB/OSB产品通过`Nav.fcbWl`传入
+- **改进方向**：DCB产品独立读取（CODE/IGS格式），进一步提升MW组合精度
 
 ---
 
@@ -484,9 +496,14 @@ PppProcessor.process()
   └─ 每历元:
        ├─ [enableGpt3Vmf3] PppOptimizations.tropoDelayGpt3Vmf3()  ← 在PppCore.tropoDelayPrec()中
        ├─ [enableIers2010] PppOptimizations.tideDisplacementIers2010()  ← 在PppCore.pppos()中
+       ├─ [enablePppRtk] PppRtkCore.ppprtk()  ← PPP-RTK处理器
+       │     ├─ SsrCorrector.applyXxxCorr()  ← SSR轨道/钟差/高频钟差/码偏差/相位偏差
+       │     ├─ ppprtkRes() × MAX_ITER  ← 迭代滤波（支持非组合模式）
+       │     ├─ [enablePppRtkAR] PppRtkAmbFix.pppRtkAmbFix()  ← LAMBDA AR
+       │     └─ [enablePppRtkFixHold] PppRtkAmbFix.pppRtkFixHold()
        ├─ [任意扩展开关] PppCoreEx.ppos()
        │     ├─ udstateEx()  ← 状态时间更新 + ISB/IFCB/IFB过程噪声
-       │     ├─ pppResEx() × MAX_ITER  ← 迭代滤波
+       │     ├─ pppResEx() × MAX_ITER  ← 迭代滤波（支持非组合模式）
        │     │     ├─ PppCore.pppRes()  ← 标准PPP残差
        │     │     └─ ISB/IFCB/IFB H矩阵扩展
        │     ├─ [enablePppAR] PppAmbFix.pppAmbFixWlNl()
@@ -509,10 +526,13 @@ PppCore中通过 `if(rtk.rtkConfig != null && rtk.rtkConfig.enableXxx)` 分支�
 
 | 侵入点 | 行号 | 条件 | 替代逻辑 |
 |--------|------|------|----------|
-| 历元处理（Rover） | L756 | 任意扩展开关 | `PppCore.pppos()` → `PppCoreEx.ppos()` |
+| 历元处理（Rover） | L756 | `enablePppRtk` | `PppCore.pppos()` → `PppRtkCore.ppprtk()` |
+| 历元处理（Rover） | L756 | 其他扩展开关 | `PppCore.pppos()` → `PppCoreEx.ppos()` |
 | 历元处理（Base） | L1068 | 任意扩展开关 | `PppCore.pppos()` → `PppCoreEx.ppos()` |
 
-扩展开关条件：`enableIsbIfcbIfb || enablePppAR || enablePppArFixHold || enablePppPartialAR || enableBds3PppAR || enableOsb || enableAt1S2 || useGpt3Grid`
+PPP-RTK扩展开关：`enablePppRtk`
+
+其他扩展开关条件：`enableIsbIfcbIfb || enablePppAR || enablePppArFixHold || enablePppPartialAR || enableBds3PppAR || enableOsb || enableAt1S2 || useGpt3Grid`
 
 ---
 
@@ -608,7 +628,7 @@ PppCore中通过 `if(rtk.rtkConfig != null && rtk.rtkConfig.enableXxx)` 分支�
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `enableIers2010` | boolean | false | IERS2010潮汐模型 |
-| `enableAt1S2` | boolean | false | S1/S2大气潮（预留，当前未实现） |
+| `enableAt1S2` | boolean | false | S1/S2大气潮（已实现，由AtmosphericTideS1S2计算） |
 
 ### 8.3 偏差模型相关
 
@@ -621,7 +641,7 @@ PppCore中通过 `if(rtk.rtkConfig != null && rtk.rtkConfig.enableXxx)` 分支�
 | `isbPrn` | double | 0.01 | ISB过程噪声（m/√s） |
 | `ifcbPrn` | double | 0.01 | IFCB过程噪声（m/√s） |
 | `ifbPrn` | double | 0.001 | IFB过程噪声（m/√s） |
-| `enableOsb` | boolean | false | OSB偏差模型（预留） |
+| `enableOsb` | boolean | false | OSB偏差模型（已实现，IF组合+单频改正） |
 
 ### 8.4 PPP-AR相关
 
@@ -638,6 +658,23 @@ PppCore中通过 `if(rtk.rtkConfig != null && rtk.rtkConfig.enableXxx)` 分支�
 | `pppPartialArMaxTries` | int | 10 | Partial AR最大搜索次数 |
 | `enableBds3PppAR` | boolean | false | BDS-3 PPP-AR（B1C/B2a） |
 
+### 8.5 PPP-RTK相关
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `enablePppRtk` | boolean | false | PPP-RTK处理器（SSR改正） |
+| `enablePppRtkAR` | boolean | false | PPP-RTK模糊度固定（LAMBDA） |
+| `pppRtkArRatio` | double | 3.0 | PPP-RTK AR ratio阈值 |
+| `enablePppRtkFixHold` | boolean | false | PPP-RTK Fix-and-Hold |
+
+### 8.6 非组合PPP相关
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `opt.ionoopt` | int | IONOOPT_IFLC | 电离层选项：`IONOOPT_EST`=估计电离层，`IONOOPT_SSR`=SSR电离层，`IONOOPT_IFLC`=IF组合（默认） |
+| `opt.ionoopt` | int | - | `IONOOPT_EST`：每颗卫星估计斜路径电离层延迟（状态向量扩展） |
+| `opt.ionoopt` | int | - | `IONOOPT_SSR`：使用SSR/IONEX等外部电离层产品 |
+
 ---
 
 ## 9. 改进路线图
@@ -651,25 +688,190 @@ PppCore中通过 `if(rtk.rtkConfig != null && rtk.rtkConfig.enableXxx)` 分支�
 - [x] PPP-AR 部分模糊度固定（`pppPartialAR`）
 - [x] BDS-3 PPP-AR（B1C/B2a频率，`PppAmbFixBds3`）
 
-### 9.2 待完成
+### 9.2 已完成（v3.0.0新增）
 
-- [ ] VMF3网格（OP文件）读取，实现完整VMF3（含a_h/a_w网格和b/c系数）
-- [ ] IERS2010 S1/S2大气潮实现（`enableAt1S2`开关已预留）
-- [ ] IERS2010完整极潮（含频率依赖Love数和虚部改正）
-- [ ] OSB模型完整观测方程集成（`enableOsb`开关已预留）
-- [ ] DCB产品独立读取（CODE/IGS格式）
-- [ ] PPP-AR WL组合完善（精确MW组合+DCB校正）
+- [x] VMF3 OP文件读取与集成（`Vmf3OpReader`，按MJD线性插值ah/aw/bH/bW）
+- [x] IERS2010 S1/S2大气潮实现（`AtmosphericTideS1S2`，`enableAt1S2`开关）
+- [x] IERS2010完整极潮（`Tides.tidePole()`，IERS标准9mm/9mm/-33mm公式）
+- [x] IONEX电离层网格读取与STEC内插（`IonexReader`，`IONOOPT_TEC`）
+- [x] OSB模型观测方程集成（`PppOsbModel`，IF组合+单频改正，注入`pppRes()`）
+- [x] MW组合DCB校正（`mwmeas()`中从`nav.cbias`读取码偏差改正P1/P2）
+- [x] PPP-RTK处理器（`PppRtkCore` + `SsrCorrector`：SSR轨道/钟差/高频钟差/码偏差/相位偏差改正）
+- [x] PPP-RTK AR（`PppRtkAmbFix`：LAMBDA + ratio test + Fix-and-Hold）
+- [x] RTCM SSR解码（MT1057-1068 + MT1240-1270紧凑SSR/CLAS）
+- [x] 非组合PPP（`IONOOPT_EST`/`IONOOPT_SSR`模式，`PppCore.pppRes()` + `PppRtkCore.ppprtkRes()`，每频率独立观测方程+逐卫星电离层估计）
+- [x] DCB产品独立读取（`DcbReader`，支持CODE `.DCB`格式 + IGS `.BIA`/`.BSX` Bias-SINEX格式，`PppProcessor.loadDcb()`集成）
 
-### 9.3 长期（v3.0.0）
+### 9.3 待完成
 
-- [ ] PPP-RTK（SSR+区域电离层改正，cm级快速收敛）
-- [ ] 逐历元PPP-AR（无需UPD产品，利用历元间约束）
-- [ ] 非组合PPP（Uncombined PPP，估计电离层延迟）
-- [ ] 多频PPP-AR（L1+L2+L5三频固定）
+- [ ] 多频PPP-AR（L1+L2+L5三频级联EWL→WL→NL固定）
+- [ ] SSR电离层（`SsrIono.extractSsrStec()`当前为stub）
+- [ ] Galileo HAS解码器
+
+> **注**：原"逐历元PPP-AR"已重新评估——当前FCB/OSB框架已支持逐历元固定策略（每历元独立尝试WL+NL固定），无需额外产品依赖。动态场景下可通过调整锁定阈值和重置策略实现类似效果。
 
 ---
 
-## 10. 参考文献
+## 10. PPP-RTK
+
+### 10.1 原理
+
+PPP-RTK（Precise Point Positioning - Real Time Kinematic）通过接收SSR（State Space Representation）改正数，实现cm级快速收敛定位。SSR改正包括：
+
+- **轨道改正**（`deph`）：卫星轨道误差改正
+- **钟差改正**（`dclk`）：卫星钟差改正
+- **高频钟差**（`hrclk`）：高频钟差改正（可选）
+- **码偏差**（`cbias`）：码观测值偏差改正
+- **相位偏差**（`pbias`）：载波相位偏差改正（用于AR）
+
+### 10.2 实现细节
+
+**核心处理器**：[PppRtkCore.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppRtkCore.java)
+
+**SSR改正应用**：[SsrCorrector.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/SsrCorrector.java)
+
+```java
+// 在PppRtkCore.ppprtkRes()中应用SSR改正
+double ssrOrbitCorr = SsrCorrector.applyOrbitCorr(ssr, sat, time);
+double ssrClockCorr = SsrCorrector.applyClockCorr(ssr, sat, time);
+double ssrHrclkCorr = SsrCorrector.applyHrclkCorr(ssr, sat, time);
+double ssrCodeBiasCorr = SsrCorrector.applyCodeBiasCorr(ssr, sat, code, time);
+double ssrPhaseBiasCorr = SsrCorrector.applyPhaseBiasCorr(ssr, sat, freq, time);
+```
+
+**RTCM SSR解码**：[Rtcm.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java)
+
+支持消息类型：
+- MT1057-1068：SSR轨道/钟差/码偏差/相位偏差
+- MT1240-1270：紧凑SSR（CLAS）
+
+**SSR数据结构**：[Ssr.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/Ssr.java)
+
+```java
+public class Ssr {
+    public double[] deph;      // 轨道改正 [3] (radial/along-track/cross-track)
+    public double dclk;        // 钟差改正 (m)
+    public double hrclk;       // 高频钟差 (m)
+    public double[] cbias;     // 码偏差 [MAXCODE]
+    public double[] pbias;     // 相位偏差 [MAXFREQ]
+}
+```
+
+**PPP-RTK AR**：[PppRtkAmbFix.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppRtkAmbFix.java)
+
+LAMBDA搜索 + ratio test + Fix-and-Hold，与标准PPP-AR类似但使用SSR相位偏差改正。
+
+### 10.3 配置
+
+```java
+RtkConfig cfg = new RtkConfig();
+cfg.enablePppRtk = true;         // 启用PPP-RTK处理器
+cfg.enablePppRtkAR = true;       // 启用PPP-RTK AR
+cfg.pppRtkArRatio = 3.0;         // AR ratio阈值
+cfg.enablePppRtkFixHold = true;  // 启用Fix-and-Hold
+```
+
+### 10.4 限制
+
+- `SsrIono.extractSsrStec()` 是stub（返回0.0），SSR电离层未接入
+- 紧凑SSR（CLAS）解码器已实现但未完整测试
+- Galileo HAS解码器未实现
+- **改进方向**：完成SSR电离层接口，实现Galileo HAS解码
+
+---
+
+## 11. 非组合PPP（Uncombined PPP）
+
+### 11.1 原理
+
+非组合PPP（Uncombined PPP）不使用IF组合消除电离层，而是将电离层延迟作为状态向量参数估计。相比IF组合：
+
+- **优点**：保留频率信息，支持电离层建模和多频AR
+- **缺点**：状态向量维度增加（每颗卫星一个电离层参数），收敛速度依赖电离层约束
+
+### 11.2 实现细节
+
+**观测方程分支**：[PppCore.pppRes()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L792)
+
+```java
+if (opt.ionoopt == Constants.IONOOPT_IFLC) {
+    // IF组合模式：消除电离层
+    y = ...;  // IF组合观测值
+    C = ...;  // IF组合系数
+} else {
+    // 非组合模式：每个频率独立观测方程
+    for (int frq = 0; frq < opt.nf; frq++) {
+        y = code == 0 ? L[frq] : P_arr[frq];
+        double freq = SatUtils.sat2freq(sat, obs[i].code[frq], nav);
+        C = SQR(Constants.FREQL1 / freq) * (code == 0 ? -1.0 : 1.0);
+        double dion = C * x[II(sat, opt)];  // 电离层延迟
+        // 残差方程包含电离层项
+    }
+}
+```
+
+**状态向量扩展**：
+
+```java
+// NI(opt)：电离层参数数量
+public static int NI(PrcOpt opt) {
+    if (opt.ionoopt == Constants.IONOOPT_EST || opt.ionoopt == Constants.IONOOPT_SSR) {
+        return Constants.MAXSAT;  // 每颗卫星一个电离层参数
+    }
+    return 0;
+}
+
+// II(sat, opt)：卫星sat的电离层参数在状态向量中的索引
+public static int II(int sat, PrcOpt opt) {
+    return pppBaseDim(opt) + (sat - 1);
+}
+```
+
+**电离层初始化与传播**：[PppCore.udiono_ppp()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java)
+
+```java
+// 初始化电离层状态
+public static void udiono_ppp(Rtk rtk, PrcOpt opt, Nav nav) {
+    for (int sat = 1; sat <= Constants.MAXSAT; sat++) {
+        int idx = II(sat, opt);
+        if (rtk.x[idx] == 0.0) {
+            initx(rtk, opt.iono[0], SQR(opt.iono[0]), idx);  // 先验值+方差
+        }
+    }
+}
+```
+
+**电离层模式**：
+
+| 模式 | 说明 | 状态向量 |
+|------|------|----------|
+| `IONOOPT_IFLC` | IF组合（默认） | 无电离层参数 |
+| `IONOOPT_EST` | 估计电离层 | 每颗卫星一个斜路径电离层 |
+| `IONOOPT_SSR` | 使用SSR/IONEX产品 | 每颗卫星一个电离层残差 |
+| `IONOOPT_TEC` | 使用IONEX网格 | 无（直接读取外部产品） |
+
+### 11.3 配置
+
+```java
+PrcOpt opt = new PrcOpt();
+opt.ionoopt = Constants.IONOOPT_EST;  // 估计电离层
+opt.iono[0] = 0.1;                     // 电离层先验值 (m)
+opt.iono[1] = 0.001;                   // 电离层过程噪声 (m/√s)
+```
+
+### 11.4 PPP-RTK中的非组合
+
+`PppRtkCore.ppprtkRes()` 同样支持非组合模式，结构与 `PppCore.pppRes()` 一致。
+
+### 11.5 限制
+
+- 非组合PPP需要更多历元收敛（电离层参数估计增加不确定性）
+- 区域电离层增强（SSR/IONEX）可显著改善收敛速度
+- **改进方向**：多频非组合PPP（3频以上），电离层约束模型
+
+---
+
+## 12. 参考文献
 
 1. Boehm J, et al. (2015). "GPT2: Global Pressure and Temperature model". Geophysical Research Letters.
 2. Landskron D, Boehm J (2018). "VMF3 for GNSS". Journal of Geodesy.

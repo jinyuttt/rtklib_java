@@ -1367,6 +1367,11 @@ public class Rtcm implements Serializable {
                 if (sig > 0 && sig <= Constants.MAXCODE) {
                     ssr.pbias[sig - 1] = ssrSigned(pb, 20, 0.1e-3);
                     ssr.dispInd[sig - 1] = di;
+                    if (di != 0) {
+                        ssr.dispBias[sig - 1] = ssr.pbias[sig - 1];
+                    } else {
+                        ssr.dispBias[sig - 1] = 0.0;
+                    }
                 }
             }
             ssr.update = 1;

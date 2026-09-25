@@ -3,6 +3,7 @@ package org.rtklib.java.data;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.trace.TraceControl;
+import org.rtklib.java.trace.TraceConfig;
 import org.rtklib.java.trace.TraceCallback;
 import java.io.Serializable;
 import java.util.Arrays;
@@ -44,6 +45,8 @@ public class Rtk implements Serializable {
     public PrcOpt opt;
 
     public TraceControl traceControl;
+
+    public TraceConfig traceConfig;
 
     public transient TraceCallback traceCallback;
 
@@ -145,6 +148,7 @@ public class Rtk implements Serializable {
         this.excsat = 0;
         this.holdambFlag = 0;
         this.traceControl = null;
+        this.traceConfig = null;
         this.traceCallback = null;
         this.rtkConfig = new RtkConfig();
         this.qScale = 1.0;

@@ -92,6 +92,30 @@ public class Ssat implements Serializable {
     /** 模糊度标准差 [NFREQ] */
     public float[] stdA;
 
+    /** WL累积：加权sum of MW/cycles (PRIDE-PPPAR style) */
+    public double xrwl;
+
+    /** WL累积：权重和 */
+    public double rw;
+
+    /** WL累积：加权sum of squares (cycles²) */
+    public double xswl;
+
+    /** WL累积：累积历元数 */
+    public int niwl;
+
+    /** EWL累积：加权sum of EWL/cycles */
+    public double xrewl;
+
+    /** EWL累积：权重和 */
+    public double rew;
+
+    /** EWL累积：加权sum of squares (cycles²) */
+    public double xsewl;
+
+    /** EWL累积：累积历元数 */
+    public int niewl;
+
     /**
      * 默认构造函数，初始化所有数组。
      */

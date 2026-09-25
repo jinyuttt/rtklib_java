@@ -449,7 +449,13 @@ public final class EphModel {
         double[] vareTmp = new double[1];
         double[] varcTmp = new double[1];
 
-        if (Sp3Reader.pephpos(time, sat, nav, rsTmp, dtsTmp, vareTmp, varcTmp) == 0) return false;
+        // Try precise ephemeris first
+        boolean precOk = Sp3Reader.pephpos(time, sat, nav, rsTmp, dtsTmp, vareTmp, varcTmp) != 0;
+        
+        if (!precOk) {
+            // Fallback to broadcast ephemeris for satellites missing from SP3/CLK
+            return satposBrdcFallback(time, sat, nav, rs, dts, vare);
+        }
 
         rs[0] = rsTmp[0];
         rs[1] = rsTmp[1];
@@ -472,10 +478,38 @@ public final class EphModel {
                 dts[1] = (dts2c[0] - dts[0]) / tt;
             }
         } else {
-            dts[0] = 0.0;
+            // Fallback to broadcast clock if precise clock unavailable
+            double[] dtOut = new double[1];
+            if (!ephclk(time, time, sat, nav, dtOut)) return false;
+            dts[0] = dtOut[0];
+            dts[1] = 0.0;
+            vare[0] = Constants.SQR_STD_BRDCCLK;
+            return true;
         }
 
         vare[0] = vareTmp[0];
+        return true;
+    }
+
+    /**
+     * Fallback to broadcast ephemeris when precise ephemeris is unavailable.
+     * @param time Computation time
+     * @param sat Satellite number
+     * @param nav Navigation data
+     * @param rs Output satellite position/velocity (6 elements)
+     * @param dts Output satellite clock bias/drift (2 elements)
+     * @param vare Output variance
+     * @return true if successful, false otherwise
+     */
+    private static boolean satposBrdcFallback(GTime time, int sat, Nav nav,
+                                              double[] rs, double[] dts, double[] vare) {
+        int[] svh = new int[1];
+        double[] varei = new double[1];
+        if (!satposBrdc(time, time, sat, nav, rs, dts, varei, svh)) {
+            // Broadcast ephemeris also failed for this satellite
+            return false;
+        }
+        vare[0] = varei[0];
         return true;
     }
 

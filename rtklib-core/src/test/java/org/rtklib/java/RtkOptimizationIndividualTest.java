@@ -24,9 +24,11 @@ public class RtkOptimizationIndividualTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtkOptimizationIndividualTest.class);
 
-    private static final String ROVER_PATH = "C:\\Users\\Admin\\Desktop\\over.rtcm3";
-    private static final String BASE_PATH = "C:\\Users\\Admin\\Desktop\\base.rtcm3";
-    private static final String RESULT_DIR = "D:\\code\\rtklib_java\\rtk_compare\\optimization_tests";
+    private static final String ROVER_PATH =
+            TestDataConfig.getRoverFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\over.rtcm3" : TestDataConfig.getRoverFile();
+    private static final String BASE_PATH =
+            TestDataConfig.getBaseFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\base.rtcm3" : TestDataConfig.getBaseFile();
+    private static final String RESULT_DIR = TestDataConfig.getResultDir() + "\\optimization_tests";
 
     private static byte[] roverData;
     private static byte[] baseData;

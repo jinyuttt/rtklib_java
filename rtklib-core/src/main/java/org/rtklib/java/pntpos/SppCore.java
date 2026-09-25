@@ -87,13 +87,14 @@ public final class SppCore {
             }
             return 0.0;
         } else {
-            int idx = sat - 1;
-            if (idx >= 0 && idx < nav.eph.length && nav.eph[idx] != null && nav.eph[idx].A > 0) {
-                return nav.eph[idx].tgd[type] * Constants.CLIGHT;
-            }
-            idx = sat - 1 + Constants.MAXSAT;
-            if (idx < nav.eph.length && nav.eph[idx] != null && nav.eph[idx].A > 0) {
-                return nav.eph[idx].tgd[type] * Constants.CLIGHT;
+            // Linear search through nav.eph[] matching by .sat field
+            // Direct indexing (nav.eph[sat-1]) fails for BDS satellites (sat=106-114)
+            if (nav.eph != null) {
+                for (Eph eph : nav.eph) {
+                    if (eph != null && eph.sat == sat && eph.A > 0) {
+                        return eph.tgd[type] * Constants.CLIGHT;
+                    }
+                }
             }
             return 0.0;
         }

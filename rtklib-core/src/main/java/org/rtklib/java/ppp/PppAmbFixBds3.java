@@ -34,7 +34,8 @@ public final class PppAmbFixBds3 {
     private static final double LAM_B1C = Constants.CLIGHT / FREQ_B1C;
     private static final double LAM_B2A = Constants.CLIGHT / FREQ_B2A;
     // 宽巷波长：λ_WL = c / (f_B2a - f_B1C)
-    private static final double LAM_WL_BDS3 = Constants.CLIGHT / (FREQ_B2A - FREQ_B1C);
+    private static final double LAM_WL_BDS3 = Constants.CLIGHT / (FREQ_B1C - FREQ_B2A);
+    private static final double LAM_NL_BDS3 = Constants.CLIGHT / (FREQ_B1C + FREQ_B2A);
 
     public static int pppAmbFixBds3(Rtk rtk, double[] bias, double[] xa, Nav nav) {
         RtkConfig cfg = rtk.rtkConfig;
@@ -60,7 +61,21 @@ public final class PppAmbFixBds3 {
             if (idx >= nx) continue;
 
             double ambVar = rtk.P[idx * nx + idx];
-            if (ambVar <= 0 || ambVar > 1.0) continue;
+            double ambVarCyc = LAM_B1C > 0 ? ambVar / (LAM_B1C * LAM_B1C) : ambVar;
+            if (ambVar <= 0 || ambVarCyc > 16.0) continue;
+
+            // Skip satellites without OSB data when using OSB mode
+            if (nav.fcbFromOsb && nav.fcbWlByCode != null) {
+                int code0 = rtk.ssat[sat - 1].code[0][0];
+                int code1 = rtk.ssat[sat - 1].code[1][0];
+                double osb0 = getOsb(nav, sat, code0);
+                double osb1 = getOsb(nav, sat, code1);
+                if (osb0 == 0.0 || osb1 == 0.0) {
+                    LOG.debug("BDS-3 WL skip sat={} no OSB: code0={} osb0={} code1={} osb1={}",
+                        sat, code0, osb0, code1, osb1);
+                    continue;
+                }
+            }
 
             satList[nb] = sat;
             nb++;
@@ -78,15 +93,17 @@ public final class PppAmbFixBds3 {
             int sat = satList[i];
             int idx = PppCore.IB(sat, 0, opt);
 
-            double nlFloat = rtk.x[idx] / LAM_B1C;
-            double fcbWl = getWlFcb(nav, sat, rtk.sol.time.time);
+            int code0 = rtk.ssat[sat - 1].code[0][0];
+            int code1 = rtk.ssat[sat - 1].code[1][0];
+            double mw = rtk.ssat[sat - 1].mw[0];
+            double fcbWl = getWlFcb(nav, sat, code0, code1, rtk.sol.time.time);
 
-            yWl[i] = nlFloat * LAM_B1C / LAM_WL_BDS3 + fcbWl;
+            yWl[i] = mw / LAM_WL_BDS3 + (nav.fcbFromOsb ? -fcbWl : fcbWl);
 
             for (int j = 0; j < nb; j++) {
                 int satJ = satList[j];
                 int idxJ = PppCore.IB(satJ, 0, opt);
-                QbWl[i * nb + j] = rtk.P[idx * nx + idxJ] * (LAM_B1C / LAM_WL_BDS3) * (LAM_B1C / LAM_WL_BDS3);
+                QbWl[i * nb + j] = rtk.P[idx * nx + idxJ] / (LAM_WL_BDS3 * LAM_WL_BDS3);
             }
         }
 
@@ -103,7 +120,7 @@ public final class PppAmbFixBds3 {
 
         int[] wlFixed = new int[nb];
         for (int i = 0; i < nb; i++) {
-            wlFixed[i] = (int) Math.round(bWl[i]);
+            wlFixed[i] = (int) Math.round(bWl[i * 2]);
         }
 
         double[] yNl = new double[nb];
@@ -113,15 +130,16 @@ public final class PppAmbFixBds3 {
             int sat = satList[i];
             int idx = PppCore.IB(sat, 0, opt);
 
-            double nlFloat = (rtk.x[idx] / LAM_B1C - wlFixed[i] * LAM_WL_BDS3 / LAM_B1C);
-            double fcbNl = getNlFcb(nav, sat, rtk.sol.time.time);
+            int code0 = rtk.ssat[sat - 1].code[0][0];
+            double nlFloat = rtk.x[idx] / LAM_NL_BDS3 - wlFixed[i] * FREQ_B2A / (FREQ_B1C - FREQ_B2A);
+            double fcbNl = getNlFcb(nav, sat, code0, rtk.sol.time.time);
 
-            yNl[i] = nlFloat + fcbNl;
+            yNl[i] = nlFloat + (nav.fcbFromOsb ? -fcbNl : fcbNl);
 
             for (int j = 0; j < nb; j++) {
                 int satJ = satList[j];
                 int idxJ = PppCore.IB(satJ, 0, opt);
-                QbNl[i * nb + j] = rtk.P[idx * nx + idxJ] / (LAM_B1C * LAM_B1C);
+                QbNl[i * nb + j] = rtk.P[idx * nx + idxJ] / (LAM_NL_BDS3 * LAM_NL_BDS3);
             }
         }
 
@@ -140,8 +158,8 @@ public final class PppAmbFixBds3 {
             int sat = satList[i];
             int idx = PppCore.IB(sat, 0, opt);
 
-            double fixedNl = Math.round(bNl[i]);
-            double fixedAmb = wlFixed[i] * LAM_B1C + fixedNl * LAM_B1C;
+            double fixedNl = Math.round(bNl[i * 2]);
+            double fixedAmb = fixedNl * LAM_NL_BDS3 + wlFixed[i] * FREQ_B2A * LAM_WL_BDS3 / (FREQ_B1C + FREQ_B2A);
 
             rtk.x[idx] = fixedAmb;
             PppCore.initx(rtk.x, rtk.P, nx, fixedAmb, 0.0, idx);
@@ -155,23 +173,46 @@ public final class PppAmbFixBds3 {
         return nb;
     }
 
-    private static double getWlFcb(Nav nav, int sat, double time) {
-        if (nav.fcbWl == null) return 0.0;
+    // B2b/B2I fallback: same as PppAmbFix.BDS_B2B_EQUIV, see comments there.
+    private static final int[] BDS_B2B_EQUIV = {Constants.CODE_L7I, Constants.CODE_L7D};
+
+    private static double getOsb(Nav nav, int sat, int code) {
+        if (code < 0 || code > Constants.MAXCODE) return 0.0;
+        double osb = nav.fcbWlByCode[sat - 1][code];
+        if (osb != 0.0) return osb;
+        if (code == Constants.CODE_L7I || code == Constants.CODE_L7D) {
+            for (int ec : BDS_B2B_EQUIV) {
+                if (ec != code && ec >= 0 && ec <= Constants.MAXCODE) {
+                    double v = nav.fcbWlByCode[sat - 1][ec];
+                    if (v != 0.0) return v;
+                }
+            }
+        }
+        return 0.0;
+    }
+
+    private static double getWlFcb(Nav nav, int sat, int code0, int code1, double time) {
         if (nav.fcbFromOsb) {
-            if (sat < 1 || sat > nav.fcbWl.length) return 0.0;
-            double osbL1 = nav.fcbWl[sat - 1][0];
-            double osbL2 = (nav.fcbWl[sat - 1].length > 1) ? nav.fcbWl[sat - 1][1] : 0.0;
-            return osbL1 / LAM_B1C - osbL2 / LAM_B2A;
+            if (nav.fcbWlByCode == null) return 0.0;
+            if (sat < 1 || sat > Constants.MAXSAT) return 0.0;
+            double osbL1 = getOsb(nav, sat, code0);
+            double osbL2 = getOsb(nav, sat, code1);
+            double wlFcb = osbL1 / LAM_B1C - osbL2 / LAM_B2A;
+            String prn = org.rtklib.java.common.SatUtils.satno2id(sat);
+            System.out.printf(java.util.Locale.US,
+                "FCB-DIAG-BDS3 prn=%s sat=%d code0=%d code1=%d osbL1=%.6f osbL2=%.6f wlFcb=%.6f%n",
+                prn, sat, code0, code1, osbL1, osbL2, wlFcb);
+            return wlFcb;
         }
         return org.rtklib.java.ephemeris.FcbReader.getFcbWl(nav, sat, time);
     }
 
-    private static double getNlFcb(Nav nav, int sat, double time) {
-        if (nav.fcbWl == null) return 0.0;
+    private static double getNlFcb(Nav nav, int sat, int code0, double time) {
         if (nav.fcbFromOsb) {
-            if (sat < 1 || sat > nav.fcbWl.length) return 0.0;
-            double osbL1 = nav.fcbWl[sat - 1][0];
-            return osbL1 / LAM_B1C;
+            if (nav.fcbWlByCode == null) return 0.0;
+            if (sat < 1 || sat > Constants.MAXSAT) return 0.0;
+            double osbL1 = getOsb(nav, sat, code0);
+            return osbL1 / LAM_NL_BDS3;
         }
         return org.rtklib.java.ephemeris.FcbReader.getFcbNl(nav, sat, time);
     }
