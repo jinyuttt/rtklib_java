@@ -15,6 +15,9 @@ import org.rtklib.java.ionosphere.SbasCorrection;
 import org.rtklib.java.ionosphere.SbsMsgReader;
 import org.rtklib.java.rtkpos.EpochCache;
 import org.rtklib.java.rtkpos.InMemoryEpochCache;
+import org.rtklib.java.trace.Trace;
+import org.rtklib.java.trace.TraceConfig;
+import org.rtklib.java.trace.TraceCallback;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -94,6 +97,10 @@ public class SppProcessor {
     private int sleepInterval = 100;
     private int sleepMs = 10;
     private final List<Sol> solutions = new ArrayList<>();
+
+    private TraceConfig traceConfig;
+    private TraceCallback traceCallback;
+    private int sppEpoch = 0;
 
     private final int sppSmoothWindow;
     private final List<double[]> sppSmoothBuf = new ArrayList<>();
@@ -184,6 +191,14 @@ public class SppProcessor {
 
     public void setEpochCache(EpochCache cache) {
         this.epochCache = cache;
+    }
+
+    public void setTraceConfig(TraceConfig traceConfig) {
+        this.traceConfig = traceConfig;
+    }
+
+    public void setTraceCallback(TraceCallback traceCallback) {
+        this.traceCallback = traceCallback;
     }
 
     public EpochCache getEpochCache() {
@@ -589,6 +604,9 @@ public class SppProcessor {
     private void processEpoch(Obsd[] obsData, int n, GTime time, Nav nav) {
         n = RtklibCommon.sortobs(obsData, n);
         totalEpochs++;
+        sppEpoch++;
+
+        Trace.emit("SATELLITE", "START", traceConfig, traceCallback, sppEpoch, time, "n_obs", n);
 
         double[] rs = new double[n * 6];
         double[] dts = new double[n * 2];
@@ -607,6 +625,11 @@ public class SppProcessor {
 
         if (result == 1) {
             successCount++;
+            Trace.emit("POSITION", "UPDATE", traceConfig, traceCallback, sppEpoch, time,
+                    "x", sol.rr[0], "y", sol.rr[1], "z", sol.rr[2],
+                    "Q", (int) sol.stat, "ns", (int) sol.ns);
+            Trace.emit("RESULT", "UPDATE", traceConfig, traceCallback, sppEpoch, time,
+                    "Q", (int) sol.stat, "ns", (int) sol.ns);
             Sol solCopy = new Sol(sol);
             solutions.add(solCopy);
             solutionSsatList.add(copySsatArray(ssat));
@@ -634,6 +657,8 @@ public class SppProcessor {
             }
         } else {
             failCount++;
+            Trace.emit("RESULT", "FAIL", traceConfig, traceCallback, sppEpoch, time,
+                    "reason", "spp_failed");
             if (handler != null) {
                 handler.onPosFail(time, msg[0]);
             }

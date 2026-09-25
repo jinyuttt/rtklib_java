@@ -22,4 +22,38 @@ public class TraceControl implements Serializable {
     public int maxEpochs = 0;
     public int samplerate = 1;
     public int[] targetSats = new int[0];
+
+    private static final String[][] STAGE_TOPIC_MAP = {
+        {"SATELLITE"},       // STAGE_INPUT
+        {"EPHEMERIS"},       // STAGE_SATPOS
+        {"BASELINE", "AMBIGUITY"}, // STAGE_UDSTATE
+        {"FILTER"},          // STAGE_DDRES
+        {"FILTER"},          // STAGE_FILTER
+        {"AR"},              // STAGE_LAMBDA
+        {"POSITION", "RESULT"} // STAGE_RESULT
+    };
+
+    public TraceConfig toTraceConfig() {
+        TraceConfig cfg = new TraceConfig();
+        cfg.enabled = this.enabled;
+        cfg.maxEpoch = this.maxEpochs;
+        cfg.samplerate = this.samplerate;
+        cfg.targetSats = this.targetSats;
+        if ((this.contentFlags & CONTENT_H_MATRIX) != 0) {
+            if (cfg.actions == null) cfg.actions = new java.util.HashSet<>();
+            cfg.actions.add("H_MATRIX");
+        }
+        if ((this.contentFlags & CONTENT_SUMMARY_ONLY) != 0) {
+            if (cfg.actions == null) cfg.actions = new java.util.HashSet<>();
+            cfg.actions.add("SUMMARY_ONLY");
+        }
+        for (int i = 0; i < STAGE_TOPIC_MAP.length; i++) {
+            if ((this.stages & (1 << i)) != 0) {
+                for (String topic : STAGE_TOPIC_MAP[i]) {
+                    cfg.topics.add(topic);
+                }
+            }
+        }
+        return cfg;
+    }
 }

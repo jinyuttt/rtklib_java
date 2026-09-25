@@ -6,6 +6,7 @@ import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
 import org.rtklib.java.kalman.KalmanFilter;
+import org.rtklib.java.ppp.PppAmbFix;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,6 +20,59 @@ public final class PppRtkAmbFix {
         RtkConfig cfg = rtk.rtkConfig;
         if (cfg == null || !cfg.enablePppRtkAR) return;
 
+        PrcOpt opt = rtk.opt;
+
+        if (opt.ionoopt == Constants.IONOOPT_IFLC) {
+            ppprtkAmbFixIf(rtk, nav);
+        } else {
+            ppprtkAmbFixUc(rtk, nav);
+        }
+    }
+
+    /**
+     * IFLC模式AR：x[IB]存储IF组合模糊度（米），不是整数，不能直接LAMBDA。
+     * 必须用WL+NL两步固定（委托给PppAmbFix.pppAmbFixWlNl）。
+     */
+    private static void ppprtkAmbFixIf(Rtk rtk, Nav nav) {
+        RtkConfig cfg = rtk.rtkConfig;
+        int nx = rtk.nx;
+
+        double[] xa = rtk.xa;
+        if (xa == null || xa.length != nx) {
+            xa = new double[nx];
+        }
+        System.arraycopy(rtk.x, 0, xa, 0, nx);
+
+        int nFixed = PppAmbFix.pppAmbFixWlNl(rtk, null, xa, 0, 0, 0, nav);
+        if (nFixed <= 0) {
+            LOG.debug("PPP-RTK AR (IF): WL+NL fix failed");
+            return;
+        }
+
+        rtk.xa = xa;
+        if (rtk.Pa == null || rtk.Pa.length != nx * nx) {
+            rtk.Pa = new double[nx * nx];
+        }
+        System.arraycopy(rtk.P, 0, rtk.Pa, 0, nx * nx);
+
+        rtk.nfix++;
+
+        if (cfg.enablePppRtkFixHold && rtk.nfix >= cfg.pppRtkFixHoldMinEpoch) {
+            PppAmbFix.pppArFixHold(rtk, nav);
+        }
+
+        for (int i = 0; i < 3 && i < nx; i++) {
+            rtk.sol.rr[i] = xa[i];
+        }
+        rtk.sol.stat = Constants.SOLQ_FIX;
+        LOG.debug("PPP-RTK AR (IF): fixed {} ambiguities via WL+NL cascade", nFixed);
+    }
+
+    /**
+     * 非IFLC模式（非组合）AR：x[IB]存储单频模糊度（米），除以λ后是整数周，可直接LAMBDA。
+     */
+    private static void ppprtkAmbFixUc(Rtk rtk, Nav nav) {
+        RtkConfig cfg = rtk.rtkConfig;
         PrcOpt opt = rtk.opt;
         int nf = PppRtkCore.NF(opt);
         int nx = rtk.nx;

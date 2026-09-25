@@ -17,7 +17,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class RinexObsWriterTest {
 
-    private static final String BASE_RTCM = "C:\\Users\\jinyu\\Desktop\\base.rtcm3";
+    private static final String BASE_RTCM =
+            TestDataConfig.getBaseFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\base.rtcm3" : TestDataConfig.getBaseFile();
 
     @Test
     void testObstypeAll() throws Exception {

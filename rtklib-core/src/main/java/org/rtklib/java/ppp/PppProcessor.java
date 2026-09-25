@@ -13,6 +13,9 @@ import org.rtklib.java.rtkpos.CombinedFilter;
 import org.rtklib.java.rtkpos.Tides;
 import org.rtklib.java.rtcm.Rtcm;
 import org.rtklib.java.time.TimeSystem;
+import org.rtklib.java.trace.TraceCallback;
+import org.rtklib.java.trace.TraceConfig;
+import org.rtklib.java.trace.TraceControl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -198,6 +201,10 @@ public class PppProcessor {
 
     public void setDynamics(int dynamics) { opt.dynamics = dynamics; rtk.opt.dynamics = dynamics; }
 
+    public void setTraceControl(TraceControl traceControl) { rtk.traceControl = traceControl; }
+    public void setTraceConfig(TraceConfig traceConfig) { rtk.traceConfig = traceConfig; }
+    public void setTraceCallback(TraceCallback traceCallback) { rtk.traceCallback = traceCallback; }
+
     public PrcOpt getOpt() { return opt; }
 
     public Rtk getRtk() { return rtk; }
@@ -307,6 +314,11 @@ public class PppProcessor {
     public void loadVmf3Op(String vmf3FilePath) {
         org.rtklib.java.ephemeris.Vmf3OpReader.readVmf3Op(vmf3FilePath, rtcm.nav);
         log.info("Loaded VMF3 OP: {}", vmf3FilePath);
+    }
+
+    public void loadIonex(String ionexFilePath) {
+        org.rtklib.java.ephemeris.IonexReader.readIonex(ionexFilePath, rtcm.nav);
+        log.info("Loaded IONEX: {}", ionexFilePath);
     }
 
     public void loadSbs(String sbsFilePath) {
@@ -458,6 +470,15 @@ public class PppProcessor {
             if (isEphemerisType(type) && batchRtcm.ephsat != 0) {
                 batchEphTypeCount.merge(type, 1, Integer::sum);
             }
+            if (isStationType(type)) {
+                if (batchRtcm.sta.pos[0] != 0.0 || batchRtcm.sta.pos[1] != 0.0 || batchRtcm.sta.pos[2] != 0.0) {
+                    System.arraycopy(batchRtcm.sta.pos, 0, rtk.sol.rr, 0, 3);
+                    System.arraycopy(batchRtcm.sta.pos, 0, rtk.rb, 0, 3);
+                    rtk.sol.stat = Constants.SOLQ_SINGLE;
+                    log.info("RTCM {}: captured station position ECEF ({}, {}, {})",
+                        type, batchRtcm.sta.pos[0], batchRtcm.sta.pos[1], batchRtcm.sta.pos[2]);
+                }
+            }
             if (isObsType(type) && batchRtcm.obs.n > 0 && batchRtcm.obsflag == 1) {
                 int n = batchRtcm.obs.n;
                 Obsd[] obsCopy = new Obsd[n];
@@ -566,7 +587,11 @@ public class PppProcessor {
             rtk.sol.rr[0] = parser.sta.pos[0];
             rtk.sol.rr[1] = parser.sta.pos[1];
             rtk.sol.rr[2] = parser.sta.pos[2];
-            log.info("Using approximate position from RINEX header");
+            rtk.sol.stat = Constants.SOLQ_SINGLE;
+            double[] pos = new double[3];
+            org.rtklib.java.coord.CoordTransform.ecef2pos(rtk.sol.rr, pos);
+            log.info(String.format("Using approximate position from RINEX header: ECEF=(%.3f, %.3f, %.3f) LLH=(%.6f, %.6f, %.3f)",
+                    rtk.sol.rr[0], rtk.sol.rr[1], rtk.sol.rr[2], pos[0]*Constants.R2D, pos[1]*Constants.R2D, pos[2]));
         }
 
         List<List<Obsd>> epochGroups = groupObsByEpoch(parser.obs.data, parser.obs.n);
@@ -616,6 +641,16 @@ public class PppProcessor {
             if (!ephReady) {
                 ephReady = true;
                 flushPendingObservations();
+            }
+        }
+
+        if (isStationType(type)) {
+            if (rtcm.sta.pos[0] != 0.0 || rtcm.sta.pos[1] != 0.0 || rtcm.sta.pos[2] != 0.0) {
+                System.arraycopy(rtcm.sta.pos, 0, rtk.sol.rr, 0, 3);
+                System.arraycopy(rtcm.sta.pos, 0, rtk.rb, 0, 3);
+                rtk.sol.stat = Constants.SOLQ_SINGLE;
+                log.info("RTCM {}: captured station position ECEF ({}, {}, {})",
+                    type, rtcm.sta.pos[0], rtcm.sta.pos[1], rtcm.sta.pos[2]);
             }
         }
 
@@ -680,6 +715,14 @@ public class PppProcessor {
                     }
                 }
             }
+            int osbCount = 0;
+            if (nav.fcbWlByCode != null) {
+                for (int i = 0; i < nav.fcbWlByCode.length; i++) {
+                    for (int j = 0; j < nav.fcbWlByCode[i].length; j++) {
+                        if (nav.fcbWlByCode[i][j] != 0.0) osbCount++;
+                    }
+                }
+            }
             int cbiasCount = 0;
             if (nav.cbias != null) {
                 for (int i = 0; i < nav.cbias.length; i++) {
@@ -690,12 +733,13 @@ public class PppProcessor {
                     }
                 }
             }
-            log.info("PPP nav dump: ne={}, nc={}, erp.n={}, gpt3Grid={}, vmf3Op={}, fcbWl={}, cbias={}",
+            log.info("PPP nav dump: ne={}, nc={}, erp.n={}, gpt3Grid={}, vmf3Op={}, ionex={}, fcbWl={}, osbByCode={}, cbias={}, fcbFromOsb={}",
                     nav.ne, nav.nc,
                     nav.erp != null ? nav.erp.n : 0,
                     nav.gpt3GridLoaded ? "LOADED" : "N/A",
                     nav.vmf3OpLoaded ? "LOADED" : "N/A",
-                    fcbCount, cbiasCount);
+                    nav.ionexGrid != null && nav.ionexGrid.maps != null ? nav.ionexGrid.maps.length + "maps" : "N/A",
+                    fcbCount, osbCount, cbiasCount, nav.fcbFromOsb);
             if (rtk.rtkConfig != null) {
                 log.info("PPP rtkConfig: iers2010={}, gpt3Vmf3={}, isbIfcbIfb={}, pppAR={}, arFixHold={}, partialAR={}, bds3AR={}",
                         rtk.rtkConfig.enableIers2010, rtk.rtkConfig.enableGpt3Vmf3,
@@ -828,6 +872,10 @@ public class PppProcessor {
             dst.gpt3GridLoaded = src.gpt3GridLoaded;
             log.info("Merged GPT3 grid: {} points", src.gpt3Grid.length);
         }
+        if (src.ionexGrid != null && dst.ionexGrid == null) {
+            dst.ionexGrid = src.ionexGrid;
+            log.info("Merged IONEX grid: {} maps", src.ionexGrid.maps != null ? src.ionexGrid.maps.length : 0);
+        }
         if (src.vmf3Coeff != null && src.vmf3Coeff.length > 0 && (dst.vmf3Coeff == null || dst.vmf3Coeff.length == 0)) {
             dst.vmf3Coeff = src.vmf3Coeff;
             dst.vmf3OpLoaded = src.vmf3OpLoaded;
@@ -841,6 +889,16 @@ public class PppProcessor {
             dst.fcbWl = src.fcbWl;
             dst.fcbNl = src.fcbNl;
             log.info("Merged FCB: WL={}, NL={}, nonZero={}", src.fcbWl.length, src.fcbNl != null ? src.fcbNl.length : 0, srcFcbNz);
+        }
+        if (src.fcbWlByCode != null && (dst.fcbWlByCode == null)) {
+            int srcOsbNz = 0;
+            for (int i = 0; i < src.fcbWlByCode.length; i++)
+                for (int j = 0; j < src.fcbWlByCode[i].length; j++)
+                    if (src.fcbWlByCode[i][j] != 0.0) srcOsbNz++;
+            dst.fcbWlByCode = src.fcbWlByCode;
+            dst.fcbNlByCode = src.fcbNlByCode;
+            dst.fcbFromOsb = src.fcbFromOsb;
+            log.info("Merged FCB-OSB: nonZero={}", srcOsbNz);
         }
         if (src.updWl != null && src.updWl.length > 0 && (dst.updWl == null || dst.updWl.length == 0)) {
             dst.updWl = src.updWl;
@@ -1199,6 +1257,10 @@ public class PppProcessor {
         return type == 1019 || type == 1020
                 || type == 1041 || type == 1042
                 || type == 1044 || type == 1045 || type == 1046;
+    }
+
+    private static boolean isStationType(int type) {
+        return type >= 1005 && type <= 1006;
     }
 
     public static class PppResult {

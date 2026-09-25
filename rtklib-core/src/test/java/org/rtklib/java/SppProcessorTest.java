@@ -22,8 +22,8 @@ public class SppProcessorTest {
 
     private static final Logger log = LoggerFactory.getLogger(SppProcessorTest.class);
     private static final String ROVER_PATH =
-            "C:\\Users\\admin\\Desktop\\<DEVICE_ID>\\2026-06-08\\1.rtcm3";
-    private static final String RESULT_DIR = "C:\\Users\\admin\\Desktop\\rtklib_java_results";
+            TestDataConfig.get("spp.rover.file", TestDataConfig.getRtcmBaseDir() + "\\<DEVICE_ID>\\2026-06-08\\1.rtcm3");
+    private static final String RESULT_DIR = TestDataConfig.getResultDir();
     private static byte[] roverData;
 
     @BeforeAll

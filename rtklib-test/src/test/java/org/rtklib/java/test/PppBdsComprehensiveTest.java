@@ -1,8 +1,9 @@
-package org.rtklib.java;
+package org.rtklib.java.test;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
@@ -24,19 +25,19 @@ public class PppBdsComprehensiveTest {
 
     private static final Logger log = LoggerFactory.getLogger(PppBdsComprehensiveTest.class);
 
-    private static final String YAXIA_DIR = "D:\\yaxia\\rtcm";
-    private static final String STATION = "540423124124";
-    private static final String DATE = "2026-06-29";
-    private static final String RTCM_FILE = YAXIA_DIR + "\\" + STATION + "\\" + DATE + "\\0.rtcm3";
+    private static final String PRODUCT_DIR = TestDataConfig.getProductDir();
+    private static final String STATION = TestDataConfig.getStation();
+    private static final String DATE = TestDataConfig.getStationDate();
+    private static final String RTCM_FILE = TestDataConfig.getRtcmBaseDir() + "\\" + STATION + "\\" + DATE + "\\0.rtcm3";
 
-    private static final String SP3_FILE = "D:\\yaxia\\product\\sp3\\WUM0MGXNRT_20261801500_02D_05M_ORB.SP3";
-    private static final String CLK_FILE = "D:\\yaxia\\product\\clk\\WUM0MGXNRT_20261801500_02D_05M_CLK.CLK";
-    private static final String ERP_FILE = "D:\\yaxia\\product\\erp\\WUM0MGXNRT_20261801500_02D_05M_ERP.ERP";
-    private static final String DCB_FILE = "D:\\yaxia\\product\\dcb\\CAS0MGXRAP_20261800000_01D_30S_DCB.BIA";
-    private static final String GPT3_FILE = "D:\\yaxia\\product\\gpt3\\gpt3_5deg.txt";
-    private static final String VMF3_FILE = "D:\\yaxia\\product\\vmf3\\VMF3_5x5.GRID";
-    private static final String FCB_FILE = "D:\\yaxia\\product\\fcb\\WHU0MGXFCB_20261800000_01D_05M_FCB.fcb";
-    private static final String BLQ_FILE = "D:\\yaxia\\product\\blq\\540423124124.blq";
+    private static final String SP3_FILE = PRODUCT_DIR + "\\sp3\\WUM0MGXRAP_20261790000_01D_05M_ORB.SP3";
+    private static final String CLK_FILE = PRODUCT_DIR + "\\clk\\WUM0MGXRAP_20261790000_01D_30S_CLK.CLK";
+    private static final String ERP_FILE = PRODUCT_DIR + "\\erp\\WUM0MGXRAP_20261790000_01D_01D_ERP.ERP";
+    private static final String DCB_FILE = PRODUCT_DIR + "\\dcb\\CAS0MGXRTS_20261800_01D_01D_DCB.BSX";
+    private static final String GPT3_FILE = PRODUCT_DIR + "\\gpt3\\gpt3_5deg.dat";
+    private static final String VMF3_FILE = PRODUCT_DIR + "\\vmf\\VMF3_20260629.H00";
+    private static final String FCB_FILE = PRODUCT_DIR + "\\fcb\\WUM0MGXRAP_20261800000_01D_01D_OSB.BIA";
+    private static final String BLQ_FILE = PRODUCT_DIR + "\\blq\\" + STATION + ".blq";
 
     private static String obsFile;
     private static String navFile;
@@ -68,7 +69,13 @@ public class PppBdsComprehensiveTest {
         log.info("FCB:  {} => {}", FCB_FILE, fcbExists);
         log.info("BLQ:  {} => {}", BLQ_FILE, new File(BLQ_FILE).exists());
 
-        if (rtcmExists) {
+        String preRinexObs = PRODUCT_DIR + "\\product\\rinex\\" + STATION + "\\" + DATE + "\\" + STATION + ".obs";
+        String preRinexNav = PRODUCT_DIR + "\\product\\rinex\\" + STATION + "\\" + DATE + "\\" + STATION + ".nav";
+        if (new File(preRinexObs).exists() && new File(preRinexNav).exists()) {
+            obsFile = preRinexObs;
+            navFile = preRinexNav;
+            log.info("Using pre-existing RINEX: obs={}, nav={}", obsFile, navFile);
+        } else if (rtcmExists) {
             try {
                 String tempDir = System.getProperty("java.io.tmpdir") + "\\ppp_bds_test_" + System.currentTimeMillis();
                 new File(tempDir).mkdirs();

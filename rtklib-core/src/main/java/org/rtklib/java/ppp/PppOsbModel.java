@@ -23,7 +23,7 @@ public final class PppOsbModel {
     private PppOsbModel() {}
 
     /**
-     * 单频OSB相位偏差改正（从nav.fcbWl读取）。
+     * 单频OSB相位偏差改正（从nav.fcbWlByCode按信号码读取）。
      *
      * @param sat   卫星编号
      * @param freq  频率索引（0=freq1, 1=freq2）
@@ -35,9 +35,9 @@ public final class PppOsbModel {
      */
     public static double osbCorrection(int sat, int freq, int code, Nav nav, double time, RtkConfig cfg) {
         if (!cfg.enableOsb) return 0.0;
-        if (nav.fcbWl == null || sat <= 0 || sat > Constants.MAXSAT) return 0.0;
-        if (freq < 0 || freq >= nav.fcbWl[sat - 1].length) return 0.0;
-        return nav.fcbWl[sat - 1][freq];
+        if (nav.fcbWlByCode == null || sat <= 0 || sat > Constants.MAXSAT) return 0.0;
+        if (code < 0 || code > Constants.MAXCODE) return 0.0;
+        return nav.fcbWlByCode[sat - 1][code];
     }
 
     /**
@@ -50,15 +50,15 @@ public final class PppOsbModel {
      * @param cfg  配置
      * @return IF组合OSB偏差改正值(米)
      */
-    public static double osbCorrectionIfComb(int sat, Nav nav, double time, RtkConfig cfg) {
+    public static double osbCorrectionIfComb(int sat, int code0, int code1, Nav nav, double time, RtkConfig cfg) {
         if (!cfg.enableOsb) return 0.0;
-        if (nav.fcbWl == null || sat <= 0 || sat > Constants.MAXSAT) return 0.0;
+        if (nav.fcbWlByCode == null || sat <= 0 || sat > Constants.MAXSAT) return 0.0;
 
-        double osb1 = nav.fcbWl[sat - 1][0];
-        double osb2 = nav.fcbWl[sat - 1].length > 1 ? nav.fcbWl[sat - 1][1] : 0.0;
+        double osb1 = (code0 >= 0 && code0 <= Constants.MAXCODE) ? nav.fcbWlByCode[sat - 1][code0] : 0.0;
+        double osb2 = (code1 >= 0 && code1 <= Constants.MAXCODE) ? nav.fcbWlByCode[sat - 1][code1] : 0.0;
 
-        double freq1 = SatUtils.sat2freq(sat, 0, nav);
-        double freq2 = SatUtils.sat2freq(sat, 1, nav);
+        double freq1 = SatUtils.sat2freq(sat, code0, nav);
+        double freq2 = SatUtils.sat2freq(sat, code1, nav);
         if (freq1 == 0.0 || freq2 == 0.0) return 0.0;
 
         double f1sq = freq1 * freq1;

@@ -15,6 +15,7 @@ import org.rtklib.java.ppp.PppCore;
 import org.rtklib.java.rtkpos.Tides;
 import org.rtklib.java.time.TimeSystem;
 import org.rtklib.java.coord.CoordTransform;
+import org.rtklib.java.trace.*;
 import org.rtklib.java.troposphere.TroposphereModel;
 import org.rtklib.java.common.MatrixUtil;
 import org.ejml.simple.SimpleMatrix;
@@ -107,6 +108,10 @@ public final class RtkCore {
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
         int i, j, f, ns, nv = 0;
         int n = nu + nr;
+        TraceControl v1ctrl = rtk.traceControl;
+        TraceCallback v1cb = rtk.traceCallback;
+        TraceConfig v2cfg = rtk.traceConfig;
+        TraceCallback v2cb = rtk.traceCallback;
 
         if (rtk.rtkConfig.enableIonoTropGradient && !opt.ionoGradient) {
             opt.ionoGradient = true;
@@ -128,6 +133,9 @@ public final class RtkCore {
         double[] azel = new double[Constants.MAXSAT * 2];
 
         EphModel.satposs(obs[0].time, obs, n, nav, rs, dts, vare, svh, opt.sateph);
+
+        RtkTrace.traceStage1(v1ctrl, v1cb, rtk.epoch, obs[0].time, null, 0, nf,
+                rs, dts, nav, rtk.rb, null);
 
         double[] y = new double[nf * 2 * n];
         double[] e = new double[3 * n];
@@ -153,6 +161,11 @@ public final class RtkCore {
             LOG.info("relpos: selsat returned 0, epoch={}", rtk.epoch);
             return 0;
         }
+
+        RtkTrace.traceStage0(v1ctrl, v1cb, rtk.epoch, obs, nu, nr, nav, rtk.ssat);
+        Trace.emit("SATELLITE", "START", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                "rover_ns", nu, "base_ns", nr, "common_ns", ns);
+
         if (rtk.epoch == 0) {
             LOG.info("relpos: ns={}, nf={}, nu={}, nr={}", ns, nf, nu, nr);
         }
@@ -183,6 +196,14 @@ public final class RtkCore {
         RtkOptimizations.computeSnrMedian(rtk, obs, nu, nr, sat, ns, nf, nav);
 
         udstate(rtk, obs, nu, nr, nav, sat, ns, iu, ir);
+
+        RtkTrace.traceStage2(v1ctrl, v1cb, rtk.epoch, obs[0].time, rtk, sat, ns, nf);
+        Trace.emit("BASELINE", "UPDATE", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                "x", rtk.x[0] + rtk.rb[0],
+                "y", rtk.x[1] + rtk.rb[1],
+                "z", rtk.x[2] + rtk.rb[2]);
+        Trace.emit("AMBIGUITY", "UPDATE", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                "ns", ns, "nf", nf, "na", rtk.na, "nx", rtk.nx);
 
         // [OPT-BDS-BIAS] BDS码偏差改正
         RtkOptimizationsBdsBias.applyBdsCodeBias(rtk, obs, iu, ir, ns, nf, nav);
@@ -222,6 +243,9 @@ public final class RtkCore {
                 break;
             }
 
+            RtkTrace.traceStage3(v1ctrl, v1cb, rtk.epoch, obs[0].time,
+                    sat[0], sat, ns, nf, v, nv, R, H, nx, opt);
+
             RtkOptimizations.computeQScale(rtk, sat, ns);
 
             RtkOptimizations.applyIggiii(rtk, v, H, R, vflg, nv, nx, sat, ns,
@@ -238,6 +262,11 @@ public final class RtkCore {
             }
 
             int info = filter(rtk, xp, Pp, H, v, R, nx, nv);
+
+            RtkTrace.traceStage4(v1ctrl, v1cb, rtk.epoch, obs[0].time,
+                    info, xp, rtk.x, nx, Pp);
+            Trace.emit("FILTER", "UPDATE", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                    "info", info, "nv", nv, "nx", nx);
 
             if (info != 0) {
                 LOG.info("relpos: filter failed info={}, epoch={}, iter={}", info, rtk.epoch, i);
@@ -308,6 +337,9 @@ public final class RtkCore {
             double[] xa_arr = new double[nx];
             int nb = manage_amb_LAMBDA(rtk, bias_arr, xa_arr, sat, nf, ns, nav);
 
+            RtkTrace.traceStage5(v1ctrl, v1cb, rtk.epoch, obs[0].time,
+                    0, rtk.sol.ratio, sat, ns, nf, rtk, xa_arr, null);
+
             if (nb > 1) {
                 for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xa_arr[j];
                 boolean zdOk = zdres(0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
@@ -329,11 +361,25 @@ public final class RtkCore {
                         }
                         stat = Constants.SOLQ_FIX;
                         System.arraycopy(xa_arr, 0, xa, 0, nx);
+                        Trace.emit("AR", "FIX", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                                "nb", nb, "ratio", (double) rtk.sol.ratio,
+                                "x", xa_arr[0] + rtk.rb[0],
+                                "y", xa_arr[1] + rtk.rb[1],
+                                "z", xa_arr[2] + rtk.rb[2]);
                     } else {
+                        Trace.emit("AR", "FAIL", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                                "nb", nb, "ratio", (double) rtk.sol.ratio,
+                                "reason", "valpos_failed");
                     }
                 } else {
+                    Trace.emit("AR", "FAIL", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                            "nb", nb, "ratio", (double) rtk.sol.ratio,
+                            "reason", "zdres_failed");
                 }
             } else {
+                Trace.emit("AR", "FAIL", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                        "nb", nb, "ratio", (double) rtk.sol.ratio,
+                        "reason", "insufficient_ambiguities");
             }
         }
 
@@ -393,6 +439,19 @@ public final class RtkCore {
         }
 
         rtk.sol.stat = (byte) stat;
+
+        RtkTrace.traceStage6(v1ctrl, v1cb, rtk.epoch, obs[0].time, rtk.sol, opt.niter);
+        Trace.emit("POSITION", "UPDATE", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                "x", rtk.sol.rr[0], "y", rtk.sol.rr[1], "z", rtk.sol.rr[2],
+                "Q", (int) stat, "ns", (int) rtk.sol.ns);
+        if (stat == Constants.SOLQ_FIX || stat == Constants.SOLQ_FLOAT) {
+            Trace.emit("RESULT", "UPDATE", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                    "Q", (int) stat, "ns", (int) rtk.sol.ns,
+                    "ratio", (double) rtk.sol.ratio);
+        } else {
+            Trace.emit("RESULT", "FAIL", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                    "Q", (int) stat, "reason", stat == Constants.SOLQ_NONE ? "no_solution" : "insufficient_sats");
+        }
 
         computeDiagData(rtk, opt, v, H, R, vflg, nv, nx);
 

@@ -70,14 +70,20 @@ public final class OsbReader {
                 if (biasType.equals("OSB")) {
                     boolean isPhase = (obsTypeChar == 'L');
                     if (isPhase) {
-                        int freq = obs2freq(sys, obs1);
-                        if (freq >= 0 && freq < 2) {
-                            if (nav.fcbWl == null) {
-                                nav.fcbWl = new double[Constants.MAXSAT][2];
+                        if (obs1.length() > 1) {
+                            int code = obs2code(obs1.substring(1));
+                            if (code > 0 && code <= Constants.MAXCODE) {
+                                if (nav.fcbWlByCode == null) {
+                                    nav.fcbWlByCode = new double[Constants.MAXSAT][Constants.MAXCODE + 1];
+                                }
+                                nav.fcbWlByCode[sat - 1][code] = value * 1E-9 * Constants.CLIGHT;
+                                nav.fcbFromOsb = true;
+                                nPhaseOsb++;
+                                if (sys == Constants.SYS_CMP) {
+                                    System.out.printf("OSB-DIAG prn=%s obs=%s code=%d value=%.4e%n",
+                                        prn, obs1, code, value * 1E-9 * Constants.CLIGHT);
+                                }
                             }
-                            nav.fcbWl[sat - 1][freq] = value * 1E-9 * Constants.CLIGHT;
-                            nav.fcbFromOsb = true;
-                            nPhaseOsb++;
                         }
                     } else {
                         int freq = obs2freq(sys, obs1);
@@ -119,6 +125,31 @@ public final class OsbReader {
         int total = nPhaseOsb + nCodeOsb + nDsb;
         if (total > 0) {
             LOG.info("OSB/BIA loaded from {}: phaseOSB={}, codeOSB={}, DSB={}", file, nPhaseOsb, nCodeOsb, nDsb);
+            
+            // Diagnostic: show BDS satellite mapping
+            System.err.printf("OSB-MAP-DEBUG fcbWlByCode=%s fcbFromOsb=%s%n",
+                nav.fcbWlByCode != null ? "not-null" : "null", nav.fcbFromOsb);
+            System.err.flush();
+            if (nav.fcbWlByCode != null && nav.fcbFromOsb) {
+                System.err.println("OSB-MAP BDS satellite index mapping:");
+                for (int prn = 1; prn <= 46; prn++) {
+                    int sat = SatUtils.satno(Constants.SYS_CMP, prn);
+                    if (sat > 0 && sat <= Constants.MAXSAT) {
+                        // Check if this satellite has any OSB data
+                        boolean hasOsb = false;
+                        for (int code = 0; code <= Constants.MAXCODE; code++) {
+                            if (nav.fcbWlByCode[sat - 1][code] != 0.0) {
+                                hasOsb = true;
+                                break;
+                            }
+                        }
+                        if (hasOsb) {
+                            System.err.printf("OSB-MAP C%02d -> sat=%d (index=%d)%n", prn, sat, sat - 1);
+                        }
+                    }
+                }
+                System.err.flush();
+            }
         } else {
             LOG.warn("No OSB/BIA data loaded from {}", file);
         }

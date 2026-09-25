@@ -98,6 +98,8 @@ public class RtkConfig implements Serializable {
     public boolean enableIers2010 = false;
     public boolean enableAt1S2 = false;
 
+    public String ionexFile = "";
+
     public boolean enableIsbIfcbIfb = false;
     public boolean estimateIsb = true;
     public boolean estimateIfcb = true;
@@ -119,6 +121,8 @@ public class RtkConfig implements Serializable {
     public int pppPartialArMinSats = 4;
     public int pppPartialArMaxTries = 10;
     public boolean enableBds3PppAR = false;
+    public boolean enableMultiFreqAR = false;
+    public double pppArRatioEwl = 1.5;
     public boolean enableOsb = false;
     public String osbFile = "";
     public String dcbFile = "";
@@ -222,6 +226,8 @@ public class RtkConfig implements Serializable {
         this.enableIers2010 = other.enableIers2010;
         this.enableAt1S2 = other.enableAt1S2;
 
+        this.ionexFile = other.ionexFile;
+
         this.enableIsbIfcbIfb = other.enableIsbIfcbIfb;
         this.estimateIsb = other.estimateIsb;
         this.estimateIfcb = other.estimateIfcb;
@@ -243,6 +249,8 @@ public class RtkConfig implements Serializable {
         this.pppPartialArMinSats = other.pppPartialArMinSats;
         this.pppPartialArMaxTries = other.pppPartialArMaxTries;
         this.enableBds3PppAR = other.enableBds3PppAR;
+        this.enableMultiFreqAR = other.enableMultiFreqAR;
+        this.pppArRatioEwl = other.pppArRatioEwl;
         this.enableOsb = other.enableOsb;
         this.osbFile = other.osbFile;
         this.dcbFile = other.dcbFile;

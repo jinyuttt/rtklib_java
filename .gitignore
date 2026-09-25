@@ -69,3 +69,7 @@ rtk_compare/*.pos
 
 # Downloaded precise products (SP3/CLK/ERP/DCB/GPT3/VMF3/FCB/BLQ etc.)
 rtklib-product/product/
+
+# Local credentials config (contains passwords, NEVER commit)
+**/credentials.properties
+credentials.properties

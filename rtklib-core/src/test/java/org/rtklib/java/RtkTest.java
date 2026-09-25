@@ -28,8 +28,7 @@ public class RtkTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtkTest.class);
 
-    private static final String DATA_BASE =
-            "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage";
+    private static final String DATA_BASE = TestDataConfig.getRtcmBaseDir();
 
     private static final String ROVER_ID = "XXX";
     private static final String BASE_ID = "XXX";

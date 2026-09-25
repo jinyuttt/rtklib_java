@@ -16,7 +16,7 @@ public final class BlqWriter {
             pw.printf("$$ Station: %s  Lat: %.4f  Lon: %.4f%n", stationName, lat, lon);
 
             StringBuilder header = new StringBuilder();
-            header.append(String.format("%-16s", ""));
+            header.append(String.format("  %-14s", stationName));
             for (String name : BlqConsts.CONSTITUENT_NAMES) {
                 header.append(String.format(" %10s", name));
             }

@@ -4,19 +4,20 @@ RTKLIB 的 Java 移植版本，基于 [RTKLIB 2.5.0](https://github.com/tomojita
 
 项目定位为**算法引擎库（Library）**而非独立软件，可嵌入 Java 应用中实现 GNSS 数据处理与定位解算。
 
-> **功能边界**：Java版专注核心定位算法（SPP/RTK/PPP），不包含C版的网络通信（NTRIP/TCP/串口）、接收机原始协议（u-blox/NovAtel等）、NMEA输出等功能。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
+> **功能边界**：Java版专注核心定位算法（SPP/RTK/PPP/PPP-RTK），不包含C版的网络通信（NTRIP/TCP/串口）、接收机原始协议（u-blox/NovAtel等）、NMEA输出等功能。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
 ## 模块
 
 ### rtklib-core — 核心定位算法
 
-支持 SPP（米级）、RTK（厘米~毫米）、PPP（分米~厘米）三种定位模式，数据入口支持 RTCM3 实时流和 RINEX 3.x 事后文件以及RTCM解码。
+支持 SPP（米级）、RTK（厘米~毫米）、PPP（分米~厘米）、PPP-RTK（厘米级快速收敛）四种定位模式，数据入口支持 RTCM3 实时流和 RINEX 3.x 事后文件以及RTCM解码。
 
 | 定位模式 | 常量 | 精度 | 数据入口 |
 |----------|------|------|----------|
 | SPP | `PMODE_SINGLE` | 米级 | RTCM3 / RINEX |
 | RTK | `PMODE_KINEMA` / `PMODE_STATIC` / `PMODE_MOVEB` | 厘米~毫米 | RTCM3 / RINEX |
 | PPP | `PMODE_PPP_KINEMA` / `PMODE_PPP_STATIC` | 分米~厘米 | RTCM3 / RINEX |
+| PPP-RTK | `PMODE_PPP_KINEMA` + SSR | 厘米级（快速收敛） | RTCM3 (SSR) |
 
 核心包结构：
 
@@ -32,6 +33,7 @@ org.rtklib.java
 ├── kalman/        Kalman滤波器
 ├── pntpos/        单点定位（SPP、RAIM FDE、速度估计）
 ├── ppp/           精密单点定位（PPP动态、静态、固定坐标）
+├── ppprtk/        PPP-RTK定位（SSR改正、模糊度固定）
 ├── rinex/         RINEX 文件读写与处理
 ├── rtcm/          RTCM 数据解码
 ├── rtkpos/        RTK 相对定位核心（含周跳检测、潮汐改正、高级模糊度固定优化）
@@ -40,7 +42,9 @@ org.rtklib.java
 └── troposphere/   对流层延迟模型
 ```
 
-RTK高级模糊度固定优化（v2.2.1新增，默认关闭，通过`RtkConfig`开关控制）：
+高级优化（默认关闭，通过`RtkConfig`开关控制）：
+
+**RTK模糊度固定优化**（v2.2.1）：
 
 | 优化项 | 开关 | 来源 | 说明 |
 |--------|------|------|------|
@@ -50,6 +54,19 @@ RTK高级模糊度固定优化（v2.2.1新增，默认关闭，通过`RtkConfig`
 | Bootstrapping成功率联合判据 | `enableBootstrapping` | GREAT-PVT | Ratio的互补判据 |
 | BDS码偏差改正(Wanninger) | `enableBdsCodeBias` | PRIDE | GEO/IGSO/MEO码偏差改正 |
 | 参数类型级自适应过程噪声 | `enableParamTypeNoise` | PRIDE | ZTD/电离层随机游走建模 |
+
+**PPP/PPP-RTK优化**（v2.2.2）：
+
+| 优化项 | 开关 | 说明 |
+|--------|------|------|
+| PPP模糊度固定(PPP-AR) | `enablePppAR` | 整周模糊度固定，提升至厘米级 |
+| PPP Fix-and-Hold | `enablePppArFixHold` | 固定后持续约束，维持固定解 |
+| PPP部分模糊度固定 | `enablePppPartialAR` | 剔除劣质模糊度，保留可信子集 |
+| PPP-RTK | `enablePppRtk` | SSR改正+状态空间表示，快速收敛 |
+| PPP-RTK模糊度固定 | `enablePppRtkAR` | PPP-RTK模式下的模糊度固定 |
+| PPP-RTK Fix-and-Hold | `enablePppRtkFixHold` | PPP-RTK固定后持续约束 |
+| GPT3+VMF3对流层 | `enableGpt3Vmf3` | GPT3先验+VMF3映射函数替代Saastamoinen+GMF |
+| IERS2010潮汐改正 | `enableIers2010` | IERS2010标准潮汐模型（极移、海潮负荷等） |
 
 轨道模块（v2.2.0新增）：TLE解析、SGP4/SDP4轨道传播、轨道六根数转换、二体传播。验证：Vallado标准14用例全通过，86颗真实TLE卫星0失败。详见 [轨道模块技术参考](docs/ORBIT_MODULE_REFERENCE.md)。
 

@@ -155,7 +155,7 @@ public class RinexParser {
                 }
             }
 
-            log.info("RINEX navigation parsed: GPS={}, GLO={}, GAL={}, BDS={}",
+            log.info("RINEX navigation parsed: Total={}, GLO={}, GAL={}, Almanac={}",
                     this.nav.n, this.nav.ng, this.nav.ne, this.nav.na);
             return true;
         } catch (IOException e) {

@@ -3,6 +3,7 @@ package org.rtklib.java.data;
 import java.io.Serializable;
 import java.util.Arrays;
 import org.rtklib.java.constants.Constants;
+import org.rtklib.java.ephemeris.IonexReader;
 
 /**
  * Navigation data container class.
@@ -102,6 +103,8 @@ public class Nav implements Serializable {
     public double[][] fcbWl;
     public double[][] fcbNl;
     public boolean fcbFromOsb;
+    public double[][] fcbWlByCode;
+    public double[][] fcbNlByCode;
     public double[][] updWl;
     public double[][] updNl;
     public double[][] osb;
@@ -111,6 +114,8 @@ public class Nav implements Serializable {
 
     public double[][] vmf3Coeff;
     public boolean vmf3OpLoaded;
+
+    public IonexReader.IonexGrid ionexGrid;
 
     public PepH[] peph;
     public Pclk[] pclk;

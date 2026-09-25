@@ -6,6 +6,81 @@
 
 ---
 
+## [2.2.3] - 2026-09-26
+
+### Added
+
+- **TraceLog V2 全模式日志追踪系统**：基于topic+action字符串的高层事件追踪，覆盖SPP/RTK/PPP/PPP-AR/PPP-RTK/Adjust全模式
+  - `Trace.emit(topic, action, cfg, cb, epoch, time, kv...)`：唯一入口，6层过滤+拼装+诊断+统计
+  - `Trace.summary(cfg, cb)`：汇总输出（total/success/fail/fail_reasons/fix/float/conv_epoch/max_ar_shift）
+  - `TraceConfig`：V2配置（topics白名单/actions/samplerate/maxEpoch/maxOutputLines/targetSats/refEcef/convergenceThresh/arShiftWarnThresh）
+  - `TraceStats`：累积统计（totalEpochs/successEpochs/failEpochs/failReasons/convEpoch/fixCount/floatCount/maxArShift）
+  - 3条内联诊断：①位置偏差d_dN/d_dE/d_dU/d_d3D/d_conv（自动计算，需设refEcef）②AR偏移告警d_WARN=LARGE_SHIFT ③失败原因累积failReasons
+  - 收敛历元检测：连续N个历元d3D<thresh时记录convEpoch
+  - V1/V2共存：V1（RtkTrace/PppTrace+TraceControl）输出详细阶段数据（H矩阵/R对角线/逐卫星bias），V2输出高层事件+诊断，共享TraceCallback
+  - `TraceControl.toTraceConfig()`：V1→V2桥接，一键迁移
+
+- **V2全引擎集成**：29处`Trace.emit()`调用覆盖4个处理引擎
+  - RtkCore：11处（SATELLITE/BASELINE/AMBIGUITY/FILTER/AR/POSITION/RESULT）
+  - PppCore：7处（SATELLITE/AMBIGUITY/FILTER/POSITION/RESULT）
+  - PppCoreEx：7处（同PppCore）
+  - SppProcessor：4处（SATELLITE/POSITION/RESULT）
+
+- **V1 RtkCore完整集成**：7处`RtkTrace.traceStage0~6()`调用补全（此前RtkCore中一处V1调用都没有）
+
+- **V2 setter传播**：RtkProcessor/RinexRtkProcessor/PppProcessor/SppProcessor均新增`setTraceConfig()`+`setTraceCallback()`
+
+- **Rtk新增`traceConfig`字段**：与V1的`traceControl`并列，独立控制V2输出
+
+### Changed
+
+- `TraceCallback`新增`default void onLine(String line)`委托给`onTrace()`，V1完全兼容
+- `TraceControl`新增`toTraceConfig()`桥接方法，V1 stages位掩码→V2 topics集合
+
+### Verified
+
+- 全项目编译通过（core+adjust+product+otl） ✅
+
+### Milestone
+
+**v2.2.3 标志 GNSS 主要算法内容已完善。** SPP/RTK/PPP/PPP-AR/PPP-RTK 五种定位模式、多基线间接平差、轨道计算、精密产品下载、对流层模型（GPT3+VMF3）、海洋潮汐（BLQ/OTL）、日志追踪（V1+V2）等核心功能均已实现并集成。后续版本主要工作转入**测试验证与Bug修复**，重点包括：SP3星历GEO卫星兼容性、PPP-AR固定率提升、V2日志追踪实测验证、测试数据硬编码路径清理等。
+
+---
+
+## [2.2.2] - 2026-09-25
+
+### Fixed
+
+- **PPP精确模式历元失败率过高（P0修复）**：精确星历模式下75%历元失败的根本原因是SP3产品未覆盖部分BDS GEO卫星
+  - **根因**：WUM0MGXRAP SP3产品不含BDS GEO卫星（C01/C02/C03/C07/C09），导致这些卫星位置计算返回(0,0,0)，仰角=-89.8°被剔除，仅剩3颗MEO/IGSO卫星低于MIN_NSAT_SOL(4)要求
+  - **修复**：`EphModel.satposPrec()` 增加广播星历降级策略，当精确星历不可用时自动回退到广播星历
+  - **效果**：历元成功率从25%提升至75.8%（3倍改进），可用卫星数从3颗增至8颗
+  - **实现细节**：新增 `satposBrdcFallback()` 辅助方法，在Sp3Reader.pephpos()或pephclk()失败时调用satposBrdc()获取广播星历位置和钟差
+  - **已知限制**：降级卫星使用广播星历精度较低，影响PPP-AR模糊度收敛速度；当前WL固定率仍<1%，需进一步优化（P1问题）
+  - 修改文件：`EphModel.java:445-517`
+
+- **PPP-AR Fix-and-Hold缺少最小连续固定历元检查（P2修复）**：`pppArFixHoldMinEp=50`参数已定义但从未被检查
+  - **根因**：`PppAmbFix.pppArFixHold()`未检查`rtk.nfix`，导致首次FIX即收紧方差，可能因错误固定导致发散
+  - **修复**：在`pppArFixHold()`入口添加`rtk.nfix < cfg.pppArFixHoldMinEp`守卫条件；在`PppCoreEx`中正确管理`rtk.nfix`计数器（FIX时递增，非FIX时归零）
+  - **效果**：Fix-and-Hold现在需要连续50个FIX历元后才收紧方差，避免过早锁定
+  - 修改文件：`PppAmbFix.java:268`, `PppCoreEx.java:188-197`
+
+- **PPP Partial AR模糊度固定单位错误（P3修复）**：`pppPartialAR()`在米空间直接对浮点值取整，数学上无意义
+  - **根因**：LAMBDA方法要求输入为循环（cycle）空间的模糊度（整数特性），但原代码直接使用米空间的`rtk.x[idx]`并`Math.round()`，对不同波长的卫星产生错误固定值
+  - **修复**：收集阶段存储每颗卫星的λ₁；构建LAMBDA输入时将y[]和Q[][]从米空间转换到L1循环空间（`y[i]/=lam1`, `Q[i][j]/=(lam1_i*lam1_j)`）；固定后将结果转回米空间（`Math.round(b[i])*lam1`）
+  - **效果**：Partial AR现在正确地在L1循环空间执行整数模糊度搜索，固定值物理意义正确
+  - 修改文件：`PppAmbFix.java:321-438`
+
+- **SppCore.gettgd() BDS卫星索引越界**：使用`nav.eph[sat-1]`直接索引对BDS卫星（sat=106-114）失败
+  - **修复**：改为线性搜索匹配`.sat`字段
+  - 修改文件：`SppCore.java:82-100`
+
+- **RinexParser日志误导**：`nav.n`标注为GPS、`nav.na`标注为BDS，实际分别为总星历数和Almanac数
+  - **修复**：更正日志标签为Total和Almanac
+  - 修改文件：`RinexParser.java:158-159`
+
+---
+
 ## [2.2.1] - 2026-09-22
 
 ### Added

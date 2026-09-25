@@ -28,19 +28,19 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("RTK Iono-Free LC 测试 (540423231901-540423187770)")
+@DisplayName("RTK Iono-Free LC Test")
 public class RtkIonoptTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtkIonoptTest.class);
 
-    private static final String DATA_BASE = "D:\\yaxia\\rtcm";
-    private static final String BASE_ID = "540423231901";
-    private static final String ROVER_ID = "540423187770";
-    private static final String DATE = "2026-05-20";
-    private static final int START_HOUR = 8;
-    private static final int END_HOUR = 10;
+    private static final String DATA_BASE = TestDataConfig.getRtcmBaseDir();
+    private static final String BASE_ID = TestDataConfig.getBaseRoverPairs("group1")[0];
+    private static final String ROVER_ID = TestDataConfig.getBaseRoverPairs("rover1")[0];
+    private static final String DATE = TestDataConfig.get("ionopt.date", "2026-05-20");
+    private static final int START_HOUR = Integer.parseInt(TestDataConfig.get("ionopt.start.hour", "8"));
+    private static final int END_HOUR = Integer.parseInt(TestDataConfig.get("ionopt.end.hour", "10"));
 
-    private static final String RESULT_DIR = "D:\\code\\rtklib_java\\rtk_compare\\ionopt_results";
+    private static final String RESULT_DIR = TestDataConfig.getResultDir() + "\\ionopt_results";
 
     private static List<ObsEpoch> roverEpochs;
     private static List<ObsEpoch> baseEpochs;

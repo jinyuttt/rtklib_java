@@ -300,7 +300,7 @@ product/
 
 | 优先级 | URL模式 | 服务器 |
 |--------|---------|--------|
-| 1 | `https://vmf.geo.tuwien.ac.at/trop_products/GPT3/gpt3_5deg.dat` | S5(HTTPS) |
+| 1 | `https://vmf.geo.tuwien.ac.at/codes/gpt3_5.grd` | S5(HTTPS) |
 | 2 | `ftps://bdspride.com/table/gpt3_5deg.dat` | S1 |
 | 3 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/table/gpt3_5deg.dat` | S3 |
 

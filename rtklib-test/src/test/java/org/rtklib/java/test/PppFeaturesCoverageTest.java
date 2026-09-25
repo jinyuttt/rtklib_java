@@ -1,11 +1,13 @@
-package org.rtklib.java.ppp;
+package org.rtklib.java.test;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
+import org.rtklib.java.ppp.PppProcessor;
 import org.rtklib.java.rtkpos.RtkProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,45 +18,14 @@ import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * PPP新增功能覆盖测试（使用D:\yaxia真实RTCM数据）。
- *
- * <p>数据：16个BDS接收器，按日期(2026-05~07)组织，每天24个rtcm3文件(每小时1个)。
- * <p>Base-Rover配对：
- * - Base 540423231901 → Rovers [540423503435, 540423128131, ...]
- * - Base 540423214120 → Rovers [540423860355, 540423268595, ...]
- *
- * <p>覆盖功能：
- * 1. RTK基准解（BDS双频，作为对比基准）
- * 2. PPP广播星历解（BDS-only，验证SPP初始化+PPP滤波）
- * 3. PPP + GPT3/VMF3对流层模型
- * 4. PPP + IERS2010潮汐（固体潮+海潮+极潮）
- * 5. PPP + S1/S2大气潮汐
- * 6. PPP + ISB/IFCB/IFB偏差模型
- * 7. PPP + PPP-AR模糊度固定
- * 8. PPP + Fix-and-Hold策略
- * 9. PPP + Partial AR部分模糊度固定
- * 10. PPP + BDS-3 PPP-AR
- * 11. PPP + OSB偏差改正
- * 12. PPP + 全部优化组合
- */
 @DisplayName("PPP Features Coverage Test with Real RTCM Data")
 public class PppFeaturesCoverageTest {
 
     private static final Logger log = LoggerFactory.getLogger(PppFeaturesCoverageTest.class);
 
-    private static final String RTCM_BASE_DIR = "D:\\yaxia\\rtcm";
+    private static final String RTCM_BASE_DIR = TestDataConfig.getRtcmBaseDir();
 
-    private static final Map<String, String[]> BASE_ROVER_MAP = new LinkedHashMap<>();
-
-    static {
-        BASE_ROVER_MAP.put("540423231901", new String[]{
-                "540423503435", "540423128131", "540423187770", "540423211132"
-        });
-        BASE_ROVER_MAP.put("540423214120", new String[]{
-                "540423860355", "540423268595", "540423156203", "540423128507"
-        });
-    }
+    private static final Map<String, String[]> BASE_ROVER_MAP = TestDataConfig.getBaseRoverMap();
 
     private static boolean dataAvailable = false;
     private static String baseRtcmFile;
@@ -176,7 +147,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("1. RTK基准解 - BDS双频（对比基准）")
+    @DisplayName("1. RTK baseline - BDS dual-freq")
     void test01_RtkBaseline() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 
@@ -190,7 +161,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("2. PPP广播星历解 - BDS-only（验证SPP初始化）")
+    @DisplayName("2. PPP broadcast eph - BDS-only")
     void test02_PppBrdcBaseline() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 
@@ -205,7 +176,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("3. PPP + GPT3/VMF3对流层模型")
+    @DisplayName("3. PPP + GPT3/VMF3 troposphere")
     void test03_PppGpt3Vmf3() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 
@@ -221,7 +192,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("4. PPP + IERS2010潮汐（固体潮+极潮）")
+    @DisplayName("4. PPP + IERS2010 tides")
     void test04_PppIers2010() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 
@@ -237,7 +208,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("5. PPP + S1/S2大气潮汐")
+    @DisplayName("5. PPP + S1/S2 atmospheric tide")
     void test05_PppAtmosphericTideS1S2() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 
@@ -253,7 +224,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("6. PPP + ISB/IFCB/IFB偏差模型")
+    @DisplayName("6. PPP + ISB/IFCB/IFB bias model")
     void test06_PppIsbIfcbIfb() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 
@@ -269,7 +240,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("7. PPP + PPP-AR模糊度固定")
+    @DisplayName("7. PPP + PPP-AR ambiguity resolution")
     void test07_PppAmbFix() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 
@@ -287,7 +258,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("8. PPP + Fix-and-Hold策略")
+    @DisplayName("8. PPP + Fix-and-Hold")
     void test08_PppFixHold() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 
@@ -306,7 +277,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("9. PPP + Partial AR部分模糊度固定")
+    @DisplayName("9. PPP + Partial AR")
     void test09_PppPartialAR() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 
@@ -326,7 +297,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("10. PPP + BDS-3 PPP-AR（B1C/B2a）")
+    @DisplayName("10. PPP + BDS-3 PPP-AR (B1C/B2a)")
     void test10_PppBds3AR() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 
@@ -343,7 +314,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("11. PPP + OSB偏差改正模型")
+    @DisplayName("11. PPP + OSB bias correction")
     void test11_PppOsb() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 
@@ -359,7 +330,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("12. PPP + 全部优化组合")
+    @DisplayName("12. PPP + all optimizations")
     void test12_PppAllOptimizations() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 
@@ -388,7 +359,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("13. RTK多基线对测试 - 验证所有base-rover配对")
+    @DisplayName("13. RTK all base-rover pairs")
     void test13_RtkAllPairs() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 
@@ -432,7 +403,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("14. PPP多小时连续观测 - 验证滤波收敛")
+    @DisplayName("14. PPP multi-hour continuous observation")
     void test14_PppMultiHour() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 
@@ -462,7 +433,7 @@ public class PppFeaturesCoverageTest {
     }
 
     @Test
-    @DisplayName("15. RTK vs PPP精度对比 - 同一rover数据")
+    @DisplayName("15. RTK vs PPP accuracy comparison")
     void test15_RtkVsPppComparison() throws IOException {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM data");
 

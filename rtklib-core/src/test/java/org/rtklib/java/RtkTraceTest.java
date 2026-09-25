@@ -25,10 +25,10 @@ public class RtkTraceTest {
     private static final Logger log = LoggerFactory.getLogger(RtkTraceTest.class);
 
     private static final String ROVER_PATH =
-            "C:\\Users\\admin\\Desktop\\<ROVER_DEVICE_ID>\\2026-06-08\\1.rtcm3";
+            TestDataConfig.getRoverFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<ROVER_DEVICE_ID>\\2026-06-08\\1.rtcm3" : TestDataConfig.getRoverFile();
     private static final String BASE_PATH =
-            "C:\\Users\\admin\\Desktop\\<BASE_DEVICE_ID>\\2026-06-08\\1.rtcm3";
-    private static final String RESULT_DIR = "C:\\Users\\admin\\Desktop\\rtklib_java_results";
+            TestDataConfig.getBaseFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<BASE_DEVICE_ID>\\2026-06-08\\1.rtcm3" : TestDataConfig.getBaseFile();
+    private static final String RESULT_DIR = TestDataConfig.getResultDir();
 
     private static byte[] roverData;
     private static byte[] baseData;

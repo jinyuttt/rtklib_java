@@ -27,10 +27,10 @@ public class RtkProcessorTest {
     private static final Logger log = LoggerFactory.getLogger(RtkProcessorTest.class);
 
     private static final String ROVER_PATH =
-            "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage\\<ROVER_DEVICE_ID>\\2026-06-30\\16.rtcm3";
+            TestDataConfig.getRoverFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<ROVER_DEVICE_ID>\\2026-06-30\\16.rtcm3" : TestDataConfig.getRoverFile();
     private static final String BASE_PATH =
-            "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage\\<BASE_DEVICE_ID>\\2026-06-30\\16.rtcm3";
-    private static final String RESULT_DIR = "D:\\code\\rtklib_java\\rtklib_java_results";
+            TestDataConfig.getBaseFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<BASE_DEVICE_ID>\\2026-06-30\\16.rtcm3" : TestDataConfig.getBaseFile();
+    private static final String RESULT_DIR = TestDataConfig.getResultDir();
 
     private static byte[] roverData;
     private static byte[] baseData;

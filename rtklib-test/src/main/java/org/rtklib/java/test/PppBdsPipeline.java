@@ -19,11 +19,11 @@ public class PppBdsPipeline {
 
     private static final Logger log = LoggerFactory.getLogger(PppBdsPipeline.class);
 
-    private static final String YAXIA_DIR = "D:\\yaxia\\rtcm";
+    private static final String YAXIA_DIR = "D:\\rtcm3";
     private static final String STATION = "540423124124";
     private static final String DATE_STR = "2026-06-29";
     private static final String RTCM_FILE = YAXIA_DIR + "\\" + STATION + "\\" + DATE_STR + "\\0.rtcm3";
-    private static final String PRODUCT_DIR = "D:\\yaxia\\product";
+    private static final String PRODUCT_DIR = "D:\\rtcm3\\product";
 
     private static String obsFile;
     private static String navFile;
@@ -121,40 +121,61 @@ public class PppBdsPipeline {
     private static void step3_downloadProducts() {
         log.info("--- Step 3: Init product downloader (cache-first) ---");
         obsDate = LocalDate.parse(DATE_STR);
-        obsDateUtc = obsDate.minusDays(1);
-        log.info("Beijing date: {}, UTC date for products: {}", obsDate, obsDateUtc);
+        // 文件夹日期是北京时间，RTCM内时间戳是UTC
+        // 北京2026-06-29 = UTC 2026-06-28T16:00 ~ 2026-06-29T15:59
+        // 需要UTC 06-29（主要）和06-28（前8小时）的产品
+        obsDateUtc = obsDate;
+        log.info("Beijing date: {}, UTC date for products: {} (and {})", obsDate, obsDateUtc, obsDateUtc.minusDays(1));
         downloader = new ProductDownloader(PRODUCT_DIR);
         log.info("ProductDownloader ready: cacheDir={}", PRODUCT_DIR);
     }
 
+    // 前一天的SP3/CLK/ERP文件路径（UTC日期-1天，覆盖北京日期前8小时）
+    private static String sp3FilePrev;
+    private static String clkFilePrev;
+    private static String erpFilePrev;
+
     private static String ensureSp3() {
         if (sp3File != null) return sp3File;
-        log.info("  -> downloading SP3...");
+        log.info("  -> downloading SP3 for UTC {} and {}...", obsDateUtc, obsDateUtc.minusDays(1));
+        // 下载前一天（UTC-1）的产品，覆盖北京日期前8小时
+        ProductDownloader.DownloadResult r0 = downloader.download(obsDateUtc.minusDays(1), ProductDownloader.ProductType.SP3);
+        for (ProductDownloader.ProductFile f : r0.files) {
+            if (f.type == ProductDownloader.ProductType.SP3) { sp3FilePrev = f.localPath; break; }
+        }
         ProductDownloader.DownloadResult r = downloader.download(obsDateUtc, ProductDownloader.ProductType.SP3);
         for (ProductDownloader.ProductFile f : r.files) {
             if (f.type == ProductDownloader.ProductType.SP3) { sp3File = f.localPath; break; }
         }
-        return sp3File;
+        return sp3File != null ? sp3File : sp3FilePrev;
     }
 
     private static String ensureClk() {
         if (clkFile != null) return clkFile;
-        log.info("  -> downloading CLK...");
+        log.info("  -> downloading CLK for UTC {} and {}...", obsDateUtc, obsDateUtc.minusDays(1));
+        ProductDownloader.DownloadResult r0 = downloader.download(obsDateUtc.minusDays(1), ProductDownloader.ProductType.CLK);
+        for (ProductDownloader.ProductFile f : r0.files) {
+            if (f.type == ProductDownloader.ProductType.CLK) { clkFilePrev = f.localPath; break; }
+        }
         ProductDownloader.DownloadResult r = downloader.download(obsDateUtc, ProductDownloader.ProductType.CLK);
         for (ProductDownloader.ProductFile f : r.files) {
             if (f.type == ProductDownloader.ProductType.CLK) { clkFile = f.localPath; break; }
         }
-        return clkFile;
+        return clkFile != null ? clkFile : clkFilePrev;
     }
 
     private static String ensureErp() {
         if (erpFile != null) return erpFile;
-        log.info("  -> downloading ERP...");
+        log.info("  -> downloading ERP for UTC {} and {}...", obsDateUtc, obsDateUtc.minusDays(1));
+        ProductDownloader.DownloadResult r0 = downloader.download(obsDateUtc.minusDays(1), ProductDownloader.ProductType.ERP);
+        for (ProductDownloader.ProductFile f : r0.files) {
+            if (f.type == ProductDownloader.ProductType.ERP) { erpFilePrev = f.localPath; break; }
+        }
         ProductDownloader.DownloadResult r = downloader.download(obsDateUtc, ProductDownloader.ProductType.ERP);
         for (ProductDownloader.ProductFile f : r.files) {
             if (f.type == ProductDownloader.ProductType.ERP) { erpFile = f.localPath; break; }
         }
-        return erpFile;
+        return erpFile != null ? erpFile : erpFilePrev;
     }
 
     private static String ensureBia() {
@@ -205,6 +226,11 @@ public class PppBdsPipeline {
         opt.sateph = precise ? Constants.EPHOPT_PREC : Constants.EPHOPT_BRDC;
         PppProcessor p = new PppProcessor(opt);
         if (precise) {
+            // 加载前一天的产品（覆盖北京日期前8小时UTC数据）
+            if (sp3FilePrev != null) p.loadSp3(sp3FilePrev);
+            if (clkFilePrev != null) p.loadClk(clkFilePrev);
+            if (erpFilePrev != null) p.loadErp(erpFilePrev);
+            // 加载当天的产品
             if (ensureSp3() != null) p.loadSp3(sp3File);
             if (ensureClk() != null) p.loadClk(clkFile);
             if (ensureErp() != null) p.loadErp(erpFile);

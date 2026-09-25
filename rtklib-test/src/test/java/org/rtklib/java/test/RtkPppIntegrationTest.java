@@ -1,12 +1,14 @@
-package org.rtklib.java.ppp;
+package org.rtklib.java.test;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
 import org.rtklib.java.pntpos.PosHandler;
+import org.rtklib.java.ppp.PppProcessor;
 import org.rtklib.java.rtkpos.RtkProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,20 +24,9 @@ public class RtkPppIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtkPppIntegrationTest.class);
 
-    private static final String RTCM_BASE_DIR = "D:\\yaxia\\rtcm";
+    private static final String RTCM_BASE_DIR = TestDataConfig.getRtcmBaseDir();
 
-    private static final Map<String, String[]> BASE_ROVER_MAP = new HashMap<>();
-
-    static {
-        BASE_ROVER_MAP.put("540423231901", new String[]{
-                "540423187770", "540423379882", "540423211132", "540423230321",
-                "540423124124", "540423147354", "540423503435", "540423128131"
-        });
-        BASE_ROVER_MAP.put("540423214120", new String[]{
-                "540423156203", "540423128507", "540423276898", "540423355855",
-                "540423860355", "540423268595"
-        });
-    }
+    private static final Map<String, String[]> BASE_ROVER_MAP = TestDataConfig.getBaseRoverMap();
 
     private static boolean dataAvailable = false;
     private static String testBaseDir;
