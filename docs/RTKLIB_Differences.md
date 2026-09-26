@@ -212,9 +212,9 @@ MOVEB 模式下 `RtkCore.rtkpos()` 已实现 SPP 平均获取基准站位置（�
 
 ### 待完善
 
-Java版目前**没有** `antpos()` 的完整等价实现。缺失部分：
-- `POSOPT_SINGLE`：对非MOVEB模式的Static/Kinematic，缺少SPP取平均自动获取基准站位置
-- `POSOPT_FILE`：缺少从位置文件读取基准站位置
+Java版 `antpos()` 的实现状态：
+- `POSOPT_SINGLE`：✅ 已实现（`PostPosProcessor`批处理用`avepos()`，`RtkProcessor`实时流用`averageBasePos()`增量平均，与C版rtksvr逻辑一致，受`maxaveep`/`initrst`控制）
+- `POSOPT_FILE`：Java版不实现，用户自行读取位置文件后通过`opt.rb`赋值即可（C版`getstapos()`读取位置文件的功能在Java版中由用户自行完成）
 
 ---
 
@@ -1065,7 +1065,7 @@ python rtk_compare/compare_results.py \
 
 ---
 
-## 14. 功能边界：Java版未实现功能清单（2026-08-14 梳理）
+## 14. 功能边界：Java版未实现功能清单（2026-09-26 更新）
 
 ### 14.1 数据流与网络协议
 
@@ -1125,10 +1125,10 @@ LLH/XYZ/ENU格式已实现（通过posMask配置）。
 | KML输出 | convkml.c | ❌ 未实现 | Google Earth格式 |
 | 大地水准面模型 | geoid.c | ❌ 未实现 | EGM96等大地水准面改正 |
 | 基准转换 | datum.c | ❌ 未实现 | ITRF间坐标转换 |
-| TLE星历 | tle.c | ❌ 未实现 | 两行根数星历 |
+| TLE星历 | tle.c | ✅ 已实现 | `TleParser`+`Sgp4Propagator`，仅用于可见性预测（TEME坐标系，不实现帧转换） |
 | GIS功能 | gis.c | ❌ 未实现 | Shapefile等 |
-| IONEX电离层 | ionex.c | ❌ 未实现 | IGS IONEX文件读取 |
-| 下载功能 | download.c | ❌ 未实现 | IGS数据自动下载 |
+| IONEX电离层 | ionex.c | ✅ 已实现 | `IonexReader`，IGS IONEX v1.0/v2.0读取+双线性插值 |
+| 下载功能 | download.c | ✅ 已实现 | `ProductDownloader`（rtklib-product模块），FTP/FTPS/HTTPS多协议多镜像 |
 
 ### 14.5 定位模式（未完整对齐项）
 
@@ -1149,8 +1149,8 @@ SBAS改正算法、集成、消息输入均已完整实现，与C版一致。
 
 | C版功能 | C版源码 | Java版状态 | 说明 |
 |---------|---------|------------|------|
-| POSOPT_SINGLE（实时流） | `antpos()` | ⚠️ 空实现 | RtkProcessor中case分支为空，实时流默认用POSOPT_RTCM从RTCM获取；PostPosProcessor批处理已有avepos() |
-| POSOPT_FILE | `antpos()` | ⚠️ fallback | PostPosProcessor中fallback到RINEX header |
+| POSOPT_SINGLE（实时流） | `antpos()` | ✅ 已实现 | `RtkProcessor.averageBasePos()`增量平均，受`maxaveep`/`initrst`控制，与C版rtksvr逻辑一致 |
+| POSOPT_FILE | `antpos()` | — 不实现 | Java版不实现，用户自行读取位置文件后通过`opt.rb`赋值即可 |
 | Static Start长延迟恢复 | `udpos()` 中tt>300重置 | ❌ 未实现 | 边界场景 |
 
 已对齐项（SPP实时均值平滑、SSR相位偏差改正、合并速度smoother、udtrop()冻结）详见 [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第12章。

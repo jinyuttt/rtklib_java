@@ -135,6 +135,8 @@ public class RtkConfig implements Serializable {
     public double pppRtkFixHoldVar = 1e-4;
     public double ssrMaxAge = 60.0;
     public int ssrIonoMode = 1;
+    public boolean enableCompactSsr = false;
+    public String compactSsrGridFile = "";
 
     public RtkConfig() {
     }
@@ -263,5 +265,7 @@ public class RtkConfig implements Serializable {
         this.pppRtkFixHoldVar = other.pppRtkFixHoldVar;
         this.ssrMaxAge = other.ssrMaxAge;
         this.ssrIonoMode = other.ssrIonoMode;
+        this.enableCompactSsr = other.enableCompactSsr;
+        this.compactSsrGridFile = other.compactSsrGridFile;
     }
 }

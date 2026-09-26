@@ -483,7 +483,8 @@ BASE_PATH  = "<base_rtcm3_file_path>";
 ## 9. 待完善项
 
 ### 9.1 中优先级
-- [ ] **基准站位置自动获取**：部分已实现（RINEX头 `APPROX POSITION XYZ` 自动读取、MOVEB模式SPP平均），缺失 `POSOPT_SINGLE`（RtkProcessor实时流中空实现，但实时流默认用POSOPT_RTCM从RTCM获取，C版也无实时流POSOPT_SINGLE；PostPosProcessor批处理已有avepos()）和 `POSOPT_FILE`（位置文件读取，PostPosProcessor中fallback到RINEX header）
+
+（无）
 
 ### 9.2 低优先级
 

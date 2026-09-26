@@ -176,6 +176,33 @@ mvn compile
 mvn test
 ```
 
+## 开发状态
+
+功能开发已完善，覆盖主流GNSS定位算法与工程落地：
+
+**核心算法** — 全部实现并测试通过：
+
+| 模块 | 状态 | 测试方式 |
+|------|------|----------|
+| SPP 单点定位 | ✅ | 真实RINEX数据 vs C版参考结果 |
+| RTK 相对定位 | ✅ | 真实RINEX数据 vs C版参考结果 |
+| PPP 精密单点定位 | ✅ | 真实RINEX+精密星历数据 |
+| PPP-AR 模糊度固定 | ✅ | 真实数据 + 数值验证（PppArFixVerificationTest） |
+| PPP-RTK | ✅ | 真实SSR数据 + 数值验证 |
+| RTK高级优化（CascadeAR/PartialAR/ResEdit/Bootstrap/BdsBias） | ✅ | 真实数据 vs C版参考结果 |
+| PPP高级优化（GPT3+VMF3/IERS2010/PartialAR/Fix-and-Hold） | ✅ | 真实数据 + 数值验证 |
+| RTCM3 SSR解码（MT1057-1068） | ✅ | 真实RTCM流 |
+| Galileo HAS SSR解码 | ✅ | 单元测试 |
+| 紧凑SSR/CLAS解码（MT4073） | ✅ | Python cssrlib交叉验证 |
+| 多基线间接平差 | ✅ | 真实RTCM实测数据 |
+| 精密产品下载 | ✅ | IGS/MGEX多镜像源 |
+| 轨道模块（TLE/SGP4/SDP4） | ✅ | Vallado标准14用例 + 86颗真实TLE（PGS/北斗星历，公共网站下载） |
+| 海潮负荷（OTL） | ✅ | Fortran参考对比验证 |
+
+**当前阶段**：基础功能已通过真实数据测试，主要进入测试修复阶段——用更多场景和边界条件的数据进行验证，发现并修复潜在bug。
+
+**未实现的C版功能**（设计上不实现）：串口/NTRIP通信、接收机原始协议（u-blox/NovAtel等）、NMEA输出、GPX/KML输出、大地水准面/基准转换。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
+
 ## 参考来源
 
 - [RTKLIB 2.5.0](https://github.com/tomojitakasu/RTKLIB) - 原始 C 语言实现
