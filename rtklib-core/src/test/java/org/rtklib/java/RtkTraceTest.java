@@ -8,7 +8,9 @@ import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
 import org.rtklib.java.pntpos.PosHandler;
 import org.rtklib.java.rtkpos.RtkProcessor;
+import org.rtklib.java.trace.Trace;
 import org.rtklib.java.trace.TraceCallback;
+import org.rtklib.java.trace.TraceConfig;
 import org.rtklib.java.trace.TraceControl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,8 +49,10 @@ public class RtkTraceTest {
 
     @Test
     @DisplayName("1. Trace all stages")
-    void testTraceAllStages() {
+    void testTraceAllStages() throws Exception {
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
+        String traceFile = RESULT_DIR + "\\rtk_trace_all_stages.log";
+        PrintWriter fileWriter = new PrintWriter(new BufferedWriter(new FileWriter(traceFile)));
 
         TraceControl ctrl = new TraceControl();
         ctrl.enabled = true;
@@ -57,7 +61,11 @@ public class RtkTraceTest {
                 | TraceControl.STAGE_FILTER | TraceControl.STAGE_LAMBDA
                 | TraceControl.STAGE_RESULT;
 
-        TraceCallback cb = traceLines::add;
+        TraceCallback cb = line -> {
+            traceLines.add(line);
+            System.out.println(line);
+            fileWriter.println(line);
+        };
 
         PrcOpt opt = RtkProcessor.createDefaultOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
@@ -65,9 +73,11 @@ public class RtkTraceTest {
         rtk.setTraceCallback(cb);
 
         RtkProcessor.RtkResult result = rtk.process(roverData, baseData);
+        fileWriter.close();
 
         log.info("Trace lines: {}", traceLines.size());
         log.info("RtkResult: total={}, success={}, fail={}", result.totalEpochs, result.successCount, result.failCount);
+        log.info("Trace file: {}", traceFile);
 
         assertTrue(traceLines.size() > 0, "Should have trace output");
 
@@ -89,10 +99,6 @@ public class RtkTraceTest {
 
         assertTrue(stageCounts.containsKey("STAGE0") || stageCounts.containsKey("STAGE6"),
                 "Should have at least STAGE0 or STAGE6 output");
-
-        for (int i = 0; i < Math.min(10, traceLines.size()); i++) {
-            log.info("  Trace[{}]: {}", i, traceLines.get(i));
-        }
     }
 
     @Test
@@ -550,6 +556,66 @@ public class RtkTraceTest {
 
         File f = new File(posFile);
         assertTrue(f.length() > 0, "Pos file should not be empty");
+    }
+
+    @Test
+    @DisplayName("16. TraceLog V2 output to console and file")
+    void testTraceV2Output() throws Exception {
+        List<String> v2Lines = Collections.synchronizedList(new ArrayList<>());
+        String v2File = RESULT_DIR + "\\rtk_trace_v2.log";
+        PrintWriter v2Writer = new PrintWriter(new BufferedWriter(new FileWriter(v2File)));
+
+        TraceConfig v2cfg = new TraceConfig();
+        v2cfg.enabled = true;
+        v2cfg.topics = java.util.Set.of("SATELLITE", "BASELINE", "AMBIGUITY", "FILTER", "AR", "POSITION", "RESULT");
+        v2cfg.samplerate = 1;
+
+        TraceCallback v2cb = line -> {
+            v2Lines.add(line);
+            System.out.println(line);
+            v2Writer.println(line);
+        };
+
+        TraceControl v1ctrl = new TraceControl();
+        v1ctrl.enabled = false;
+
+        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        RtkProcessor rtk = new RtkProcessor(opt);
+        rtk.setTraceControl(v1ctrl);
+        rtk.setTraceCallback(null);
+        rtk.setTraceConfig(v2cfg);
+        rtk.setTraceCallback2(v2cb);
+
+        RtkProcessor.RtkResult result = rtk.process(roverData, baseData);
+        v2Writer.close();
+
+        log.info("V2 trace lines: {}", v2Lines.size());
+        log.info("V2 trace file: {}", v2File);
+        log.info("RtkResult: total={}, success={}, fail={}", result.totalEpochs, result.successCount, result.failCount);
+
+        assertTrue(v2Lines.size() > 0, "V2 should have trace output");
+
+        Map<String, Map<String, Integer>> topicActionCounts = new LinkedHashMap<>();
+        for (String line : v2Lines) {
+            if (line.startsWith("TRACE|")) {
+                String[] parts = line.split("\\|");
+                if (parts.length >= 4) {
+                    String topic = parts[1].replace("topic=", "");
+                    String action = parts[2].replace("action=", "");
+                    topicActionCounts.computeIfAbsent(topic, k -> new LinkedHashMap<>())
+                            .merge(action, 1, Integer::sum);
+                }
+            }
+        }
+
+        log.info("V2 topic/action distribution:");
+        for (Map.Entry<String, Map<String, Integer>> e : topicActionCounts.entrySet()) {
+            for (Map.Entry<String, Integer> a : e.getValue().entrySet()) {
+                log.info("  {}.{}: {}", e.getKey(), a.getKey(), a.getValue());
+            }
+        }
+
+        Trace.summary(v2cfg);
     }
 
     private static String extractField(String line, String fieldName) {
