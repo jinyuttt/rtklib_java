@@ -6,6 +6,7 @@ import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.GTime;
 import org.rtklib.java.data.Nav;
 import org.rtklib.java.data.Ssr;
+import org.rtklib.java.ephemeris.IonexReader;
 import org.rtklib.java.ionosphere.IonosphereModel;
 import org.rtklib.java.time.TimeSystem;
 import org.slf4j.Logger;
@@ -40,6 +41,11 @@ public final class SsrIono {
                     return stecSsr;
                 }
             }
+        }
+
+        double stecVtec = vtecToStec(time, nav, pos, azel);
+        if (stecVtec != 0.0) {
+            return stecVtec;
         }
 
         double[] ionOut = new double[2];
@@ -196,5 +202,59 @@ public final class SsrIono {
 
     public static double ssrIonoMapFunc(double[] pos, double[] azel) {
         return IonosphereModel.ionmapf(pos, azel);
+    }
+
+    /**
+     * 从IONEX VTEC网格计算STEC（VTEC→STEC映射路径）。
+     *
+     * 原理：
+     * 1. 计算电离层穿刺点(IPP)位置
+     * 2. 从IONEX网格双线性插值获取VTEC
+     * 3. 应用单层映射函数：STEC = VTEC / cos(z_ipp)
+     *    其中 z_ipp 为IPP处天顶距
+     *
+     * @return STEC (TECU)，无IONEX数据时返回0.0
+     */
+    private static double vtecToStec(GTime time, Nav nav, double[] pos, double[] azel) {
+        if (nav.ionexGrid == null || nav.ionexGrid.maps == null || nav.ionexGrid.maps.length == 0) {
+            return 0.0;
+        }
+        if (pos == null || pos.length < 3 || azel == null || azel.length < 2) {
+            return 0.0;
+        }
+        if (azel[1] <= 0.0) {
+            return 0.0;
+        }
+
+        double RE = 6371.0e3;
+        double HION = 450.0e3;
+        double el = azel[1];
+        double az = azel[0];
+        double phiR = pos[0];
+        double lamR = pos[1];
+
+        double cosEl = Math.cos(el);
+        double sinEl = Math.sin(el);
+        double cosAz = Math.cos(az);
+        double psi = Math.asin(RE / (RE + HION) * cosEl);
+        double phiIpp = Math.asin(Math.sin(phiR) * Math.cos(psi)
+                + Math.cos(phiR) * Math.sin(psi) * cosAz);
+        double sinDLam = Math.sin(psi) * Math.sin(az) / Math.cos(phiIpp);
+        double dLam = Math.asin(Math.max(-1.0, Math.min(1.0, sinDLam)));
+        double lamIpp = lamR + dLam;
+
+        double latDeg = phiIpp * Constants.R2D;
+        double lonDeg = lamIpp * Constants.R2D;
+
+        double vtec = nav.ionexGrid.interpolate(time, latDeg, lonDeg);
+        if (vtec <= 0.0) {
+            return 0.0;
+        }
+
+        double cosZIpp = Math.cos(Math.acos(RE / (RE + HION) * cosEl));
+        double mapFunc = 1.0 / Math.max(cosZIpp, 0.01);
+        double stec = vtec * mapFunc;
+
+        return stec;
     }
 }

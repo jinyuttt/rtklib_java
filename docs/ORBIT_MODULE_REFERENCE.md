@@ -25,7 +25,7 @@ TLE ──解析──> TleData ──SGP4──> (r,v)ₜₑₘₑ ──rv2coe
 | `KeplerPropagator` | 二体轨道传播（仅平近点角线性推进） |
 | `TleConverter` | TLE↔六根数 / TLE↔状态向量 转换入口 |
 | `StateVector` | 位置速度不可变容器 (x,y,z,vx,vy,vz) + 坐标系 |
-| `Frame` | 坐标系枚举 (TEME / EME2000 / ITRF) |
+| `Frame` | 坐标系枚举 (TEME) |
 | `OrbitConstants` | 物理常数 (μ, Re, J2, J3, J4) |
 
 ---
@@ -218,12 +218,8 @@ OrbitalElements oe2 = kepler.propagateElements(60.0);
 | 枚举值 | 含义 | 说明 |
 |--------|------|------|
 | `TEME` | True Equator Mean Equinox | SGP4输出坐标系，真赤道平春分点 |
-| `EME2000` | Earth Mean Equator 2000 | J2000平赤道平春分点（常用惯性系） |
-| `ITRF` | International Terrestrial Reference Frame | 国际地球参考框架（地固系） |
 
-**当前状态**：SGP4输出为TEME坐标系。TEME↔EME2000↔ITRF转换尚未实现。
-
-TEME与EME2000的差异约0.5~2.8 km（取决于轨道高度），如需与IGS精密星历或RTKLIB定位结果比对，需实现帧转换。
+**帧转换**：TEME→ITRF不实现。TLE/SGP4仅用于卫星可见性预测，~1km坐标系差异对仰角判断无影响；GNSS定位解算使用广播星历或精密星历（本身为ITRF），不依赖TLE轨道。
 
 ---
 

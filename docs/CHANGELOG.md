@@ -10,6 +10,16 @@
 
 ### Added
 
+- **紧凑SSR/CLAS解码器**（`org.rtklib.java.cssr`包）：QZSS CLAS L6专有格式解码
+  - `CompactSsrDecoder`：L6帧头解析+MT4073子类型1-12全消息解码（Mask/Orbit/Clock/CBias/PBias/Bias/URA/STEC/Grid/Combined/Atmos/HrClock）
+  - `LocalCorr`：本地改正数据结构（STEC多项式系数+Trop函数项+网格残差）
+  - `GridDefinition`：网格坐标读取+最近点查找+双线性插值权重
+  - `CssrMessageType`：消息类型枚举
+  - 全局改正（轨道/钟差/偏差）解码后自动写入`Nav.ssr[]`，复用现有`SsrCorrector`
+  - 本地改正（STEC+Trop）通过`getStec()`/`getTrop()`多项式插值+网格残差获取
+  - `RtkConfig.enableCompactSsr`开关控制，默认关闭
+  - 参考实现：CSSRlib（Rui Hirokawa, Python）
+
 - **TraceLog V2 全模式日志追踪系统**：基于topic+action字符串的高层事件追踪，覆盖SPP/RTK/PPP/PPP-AR/PPP-RTK/Adjust全模式
   - `Trace.emit(topic, action, cfg, cb, epoch, time, kv...)`：唯一入口，6层过滤+拼装+诊断+统计
   - `Trace.summary(cfg, cb)`：汇总输出（total/success/fail/fail_reasons/fix/float/conv_epoch/max_ar_shift）
@@ -115,7 +125,7 @@
   - 开普勒方程求解：Halley修正牛顿法，2次迭代达机器精度
   - 二体轨道传播器：KeplerPropagator，仅推进平近点角
   - 统一转换入口：TleConverter（TLE↔六根数、TLE↔状态向量）
-  - 数据容器：OrbitalElements、StateVector、Frame（TEME/EME2000/ITRF）
+  - 数据容器：OrbitalElements、StateVector、Frame（TEME）
   - 验证：Vallado标准14用例全通过，86颗真实TLE卫星0失败，rv2coe往返误差<0.001km
   - 文档：`ORBIT_MODULE_REFERENCE.md`
 

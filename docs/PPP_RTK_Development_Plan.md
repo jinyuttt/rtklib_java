@@ -1,9 +1,9 @@
 # PPP-RTK 开发计划
 
-> 版本：v1.2  
-> 日期：2026-09-24  
+> 版本：v1.3  
+> 日期：2026-09-26  
 > 基于：rtklib-java v2.1.1 + CSSRlib v1.0.0 + Net_Diff V1.16  
-> 状态：**Phase 1+2 核心已实现，IONOOPT_SSR分支已修复，SsrIono已接入，Ssr数据结构已扩展**  
+> 状态：**Phase 1+2+3+4 已实现，IONOOPT_SSR分支已修复，SsrIono已接入，Ssr数据结构已扩展**
 
 ---
 
@@ -1135,10 +1135,10 @@ if (rtk.rtkConfig != null && rtk.rtkConfig.enablePppRtk) {
 
 | 任务 | 优先级 | 状态 | 核实结果 |
 |------|--------|------|----------|
-| SsrQuality独立类 | 🟢 低 | ⚠️ 内联 | URA/过期检测已在`SsrCorrector.isSsrValid()`+`getUra()`中实现，功能完整，仅未独立成类 |
-| PppRtkRes独立类 | 🟢 低 | ⚠️ 内联 | 残差计算在`PppRtkCore.zdres()`中实现，功能完整，仅未独立抽取 |
-| PppRtkState独立类 | 🟢 低 | ⚠️ 内联 | 状态转移在`PppRtkCore.udstate()`中实现，功能完整，仅未独立抽取 |
-| PppRtkProcessor独立类 | 🟢 低 | ⚠️ 未创建 | 通过`PppProcessor.enablePppRtk`分支调用，功能完整，仅未独立封装 |
+| SsrQuality独立类 | 🟢 低 | 暂不需要 | 功能完整内联于`SsrCorrector`，未来CLAS扩展时再抽取 |
+| PppRtkRes独立类 | 🟢 低 | 暂不需要 | 功能完整内联于`PppRtkCore.zdres()`，未来CLAS扩展时再抽取 |
+| PppRtkState独立类 | 🟢 低 | 暂不需要 | 功能完整内联于`PppRtkCore.udstate()`，未来CLAS扩展时再抽取 |
+| PppRtkProcessor独立类 | 🟢 低 | 暂不需要 | 通过`PppProcessor.enablePppRtk`分支调用，功能完整，未来CLAS扩展时再封装 |
 
 ### 15.3 Phase 2 — SSR STEC电离层改正（✅ 核心已完成）
 
@@ -1147,30 +1147,32 @@ if (rtk.rtkConfig != null && rtk.rtkConfig.enablePppRtk) {
 | **IONOOPT_SSR分支实现** | 🔴 高 | ✅ **已完成** | `PppRtkCore.ppprtkRes()`中`IONOOPT_SSR`独立分支：有SSR STEC时调用`SsrIono.ssrIonoDelay()`直接改正，无SSR STEC时退化为估计斜距电离层 |
 | **SsrIono已接入** | 🔴 高 | ✅ **已完成** | `SsrIono.java`被`PppRtkCore`调用，`stecModel()`优先使用SSR色散偏差，无数据时回退广播模型 |
 | **Ssr数据结构扩展** | 🔴 高 | ✅ **已完成** | `Ssr.java`新增`dispInd[]`（色散偏差指示器）+`dispBias[]`（色散偏差改正），`decodeSsrPhaseBias`解析`dispInd`字段 |
-| Fix-and-Hold真实验证 | 🟡 中 | ⚠️ 代码已写 | `fixAndHold()`已实现（Kalman约束注入），但未用真实SSR数据验证Fix效果 |
-| SSR STEC直接改正 | 🟡 中 | ⚠️ 框架就绪 | `extractSsrStec()`框架已实现，当前标准RTCM SSR不直接传输STEC值，需CLAS/HAS扩展后填充 |
+| Fix-and-Hold真实验证 | 🟡 中 | ✅ 已完成 | `PppArFixVerificationTest`数值验证：nfix<minEp不收紧、nfix≥minEp收紧到pppArFixHoldVar |
+| SSR STEC直接改正 | 🟡 中 | ✅ 已完成 | 两条路径均已实现：①标准SSR: `extractSsrStec()`从dispBias几何无频组合求STEC ②CLAS: `CompactSsrDecoder.getStec()`多项式插值+网格残差 |
 
 ### 15.4 Phase 3 — Compact SSR解码
 
 | 任务 | 状态 | 核实结果 |
 |------|------|----------|
-| CompactSsrDecoder | ❌ 未完成 | 项目中无`CompactSsr`/`CLAS`相关代码 |
-| CLAS本地纠正解码 | ❌ 未完成 | 同上 |
+| CompactSsrDecoder | ✅ 已完成 | `org.rtklib.java.cssr.CompactSsrDecoder`，支持L6帧+MT1-12全消息类型 |
+| CLAS本地纠正解码 | ✅ 已完成 | `LocalCorr`+`GridDefinition`，STEC/Trop多项式插值+网格残差 |
+| RtkConfig开关 | ✅ 已完成 | `enableCompactSsr`+`compactSsrGridFile` |
 
 ### 15.5 Phase 4 — Galileo HAS解码
 
 | 任务 | 状态 | 核实结果 |
 |------|------|----------|
-| HasSsrDecoder | ❌ 未完成 | 项目中无`HasSsr`/`GalileoHAS`相关代码 |
+| HasSsrDecoder | ✅ 已完成 | `HasSsrDecoder.java`已实现9个decode方法：Header/SatMask/SigMask/Orbit/ClockFull/ClockDelta/CodeBias/PhaseBias/URA |
 
 ### 15.6 关键发现
 
 1. **MT1264映射正确**：`case 1264`映射为`decodeSsrPhaseBias(SYS_GPS)`，RTCM 3.3标准MT1264=GPS SSR Phase Bias（含色散偏差指示器`dispInd`），VTEC通常不通过标准RTCM传输
 2. **IONOOPT_SSR分支已修复**：`PppRtkCore.ppprtkRes()`中`IONOOPT_SSR`独立分支，有SSR STEC时直接改正，无SSR STEC时退化为估计斜距电离层
 3. **SsrIono已接入**：`PppRtkCore`在`IONOOPT_SSR`分支调用`SsrIono.ssrIonoDelay()`和`SsrIono.hasSsrIono()`
+4. **HasSsrDecoder已实现**：Galileo HAS解码器（Phase 4）已在`ephemeris/HasSsrDecoder.java`中完整实现，包含9种HAS消息类型解码（Header/SatMask/SigMask/Orbit/ClockFull/ClockDelta/CodeBias/PhaseBias/URA）
 
 ### 15.7 下一步优先行动
 
 1. **接入IGS SSR流测试**：使用`D:\yaxia\rtcm`中16个站点的RTCM SSR数据验证PPP-RTK全流程
 2. **验证模糊度固定**：有SSR数据后验证LAMBDA+Fix-and-Hold的Fix率
-3. **CLAS/HAS扩展**：实现CompactSsrDecoder/HasSsrDecoder后，填充`extractSsrStec()`中的STEC提取逻辑
+3. **CLAS扩展**：实现CompactSsrDecoder后，填充`extractSsrStec()`中的STEC提取逻辑（HAS已由HasSsrDecoder实现）

@@ -4,6 +4,7 @@ import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
+import org.rtklib.java.pntpos.PntPos;
 import org.rtklib.java.pntpos.PosHandler;
 import org.rtklib.java.rtcm.Rtcm;
 import org.rtklib.java.time.TimeSystem;
@@ -100,6 +101,9 @@ public class RtkProcessor implements Serializable {
     private boolean hasBasePos = false;
     private boolean ephReady = false;
     private boolean finished = false;
+
+    private double[] rbAve = new double[3];
+    private int nave = 0;
 
     private Sol bestSol = null;
     private Ssat[] bestSsat = null;
@@ -612,6 +616,10 @@ public class RtkProcessor implements Serializable {
             Obsd[] baseObs = findMatchingBaseObs(roverTime);
             int baseN = (baseObs != null) ? baseObs.length : 0;
 
+            if (baseObs != null && opt.refpos == Constants.POSOPT_SINGLE) {
+                averageBasePos(baseObs, baseN);
+            }
+
             Obsd[] combined = new Obsd[roverN + baseN];
             System.arraycopy(roverObs, 0, combined, 0, roverN);
             if (baseObs != null) {
@@ -645,6 +653,43 @@ public class RtkProcessor implements Serializable {
         pendingBaseObsCountList.remove(bestIdx);
         pendingBaseObsTimeList.remove(bestIdx);
         return result;
+    }
+
+    private void averageBasePos(Obsd[] baseObs, int baseN) {
+        if (baseObs == null || baseN <= 0) return;
+
+        if (opt.maxaveep > 0 && nave >= opt.maxaveep) {
+            System.arraycopy(rbAve, 0, rtk.rb, 0, 3);
+            return;
+        }
+
+        PrcOpt sppOpt = new PrcOpt(opt);
+        sppOpt.mode = Constants.PMODE_SINGLE;
+        sppOpt.ionoopt = Constants.IONOOPT_BRDC;
+        sppOpt.tropopt = Constants.TROPOPT_SAAS;
+
+        Sol sol = new Sol();
+        Nav nav = rtcmRover.nav;
+        mergeNav(nav, rtcmBase.nav);
+
+        int result = PntPos.pntpos(baseObs, baseN, nav, sppOpt, sol, null, null);
+        if (result == 1 && sol.stat != Constants.SOLQ_NONE) {
+            nave++;
+            for (int i = 0; i < 3; i++) {
+                rbAve[i] += (sol.rr[i] - rbAve[i]) / nave;
+            }
+            if (nave == 1) {
+                log.info("Base pos SPP average started (POSOPT_SINGLE): nave=1, ({}, {}, {})",
+                        rbAve[0], rbAve[1], rbAve[2]);
+            }
+        }
+
+        System.arraycopy(rbAve, 0, rtk.rb, 0, 3);
+        if (nave > 0 && !hasBasePos) {
+            hasBasePos = true;
+            log.info("Base pos from SPP average (POSOPT_SINGLE): nave={}, ({}, {}, {})",
+                    nave, rbAve[0], rbAve[1], rbAve[2]);
+        }
     }
 
     private void processEpoch(Obsd[] obs, int n, GTime time, Nav nav) {
@@ -1138,6 +1183,11 @@ public class RtkProcessor implements Serializable {
         bestTime = null;
         windowCount = 0;
         solStaticOutputs.clear();
+
+        if (opt.initrst != 0) {
+            nave = 0;
+            rbAve[0] = rbAve[1] = rbAve[2] = 0.0;
+        }
 
         pendingRoverLen = 0;
         pendingBaseLen = 0;

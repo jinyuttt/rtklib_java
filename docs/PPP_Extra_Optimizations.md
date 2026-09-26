@@ -1,7 +1,7 @@
 # PPP 扩展优化技术文档
 
 > 版本：v3.0  
-> 日期：2026-09-25  
+> 日期：2026-09-26  
 > 基于：rtklib-java v2.3.0  
 > 对标：PRIDE-PPPAR / GAMP / RTKLIB-demo5  
 
@@ -698,15 +698,15 @@ PPP-RTK扩展开关：`enablePppRtk`
 - [x] MW组合DCB校正（`mwmeas()`中从`nav.cbias`读取码偏差改正P1/P2）
 - [x] PPP-RTK处理器（`PppRtkCore` + `SsrCorrector`：SSR轨道/钟差/高频钟差/码偏差/相位偏差改正）
 - [x] PPP-RTK AR（`PppRtkAmbFix`：LAMBDA + ratio test + Fix-and-Hold）
-- [x] RTCM SSR解码（MT1057-1068 + MT1240-1270紧凑SSR/CLAS）
+- [x] RTCM SSR解码（MT1057-1068 GPS/GLO + MT1240-1270 GAL/QZS/SBS/BDS/Phase Bias）
 - [x] 非组合PPP（`IONOOPT_EST`/`IONOOPT_SSR`模式，`PppCore.pppRes()` + `PppRtkCore.ppprtkRes()`，每频率独立观测方程+逐卫星电离层估计）
 - [x] DCB产品独立读取（`DcbReader`，支持CODE `.DCB`格式 + IGS `.BIA`/`.BSX` Bias-SINEX格式，`PppProcessor.loadDcb()`集成）
 
 ### 9.3 待完成
 
-- [ ] 多频PPP-AR（L1+L2+L5三频级联EWL→WL→NL固定）
-- [ ] SSR电离层（`SsrIono.extractSsrStec()`当前为stub）
-- [ ] Galileo HAS解码器
+- [x] 多频PPP-AR（L1+L2+L5三频级联EWL→WL→NL固定）：`PppAmbFix.pppAmbFixEwlWlNl()`，开关`enableMultiFreqAR`
+- [x] SSR电离层VTEC→STEC映射路径：`SsrIono.vtecToStec()`，从IONEX网格双线性插值VTEC→映射函数→STEC，在`stecModel()`中作为SSR dispBias失败后的fallback
+- [x] 紧凑SSR/CLAS解码器（QZSS CLAS L6专有格式MT1-7，非RTCM标准SSR）：`CompactSsrDecoder`（`org.rtklib.java.cssr`包），开关`enableCompactSsr`
 
 > **注**：原"逐历元PPP-AR"已重新评估——当前FCB/OSB框架已支持逐历元固定策略（每历元独立尝试WL+NL固定），无需额外产品依赖。动态场景下可通过调整锁定阈值和重置策略实现类似效果。
 
@@ -743,7 +743,7 @@ double ssrPhaseBiasCorr = SsrCorrector.applyPhaseBiasCorr(ssr, sat, freq, time);
 
 支持消息类型：
 - MT1057-1068：SSR轨道/钟差/码偏差/相位偏差
-- MT1240-1270：紧凑SSR（CLAS）
+- MT1240-1270：GAL/QZS/SBS/BDS/IRN SSR轨道/钟差/码偏差/相位偏差（标准RTCM SSR，非CLAS）
 
 **SSR数据结构**：[Ssr.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/Ssr.java)
 
@@ -773,10 +773,8 @@ cfg.enablePppRtkFixHold = true;  // 启用Fix-and-Hold
 
 ### 10.4 限制
 
-- `SsrIono.extractSsrStec()` 是stub（返回0.0），SSR电离层未接入
-- 紧凑SSR（CLAS）解码器已实现但未完整测试
-- Galileo HAS解码器未实现
-- **改进方向**：完成SSR电离层接口，实现Galileo HAS解码
+- `SsrIono`已实现dispBias→STEC提取路径（`extractSsrStec()`）和VTEC→STEC映射路径（`vtecToStec()`，从IONEX网格双线性插值→映射函数→STEC，作为dispBias失败后的fallback）
+- 紧凑SSR（CLAS）解码器已实现：`CompactSsrDecoder`（`org.rtklib.java.cssr`包），支持L6帧解码+MT1-12全消息类型+STEC/Trop本地改正+网格插值
 
 ---
 

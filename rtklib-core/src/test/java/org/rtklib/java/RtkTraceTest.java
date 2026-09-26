@@ -584,7 +584,7 @@ public class RtkTraceTest {
         rtk.setTraceControl(v1ctrl);
         rtk.setTraceCallback(null);
         rtk.setTraceConfig(v2cfg);
-        rtk.setTraceCallback2(v2cb);
+        rtk.setTraceCallback(v2cb);
 
         RtkProcessor.RtkResult result = rtk.process(roverData, baseData);
         v2Writer.close();
@@ -615,7 +615,7 @@ public class RtkTraceTest {
             }
         }
 
-        Trace.summary(v2cfg);
+        Trace.summary(v2cfg, v2cb);
     }
 
     private static String extractField(String line, String fieldName) {
