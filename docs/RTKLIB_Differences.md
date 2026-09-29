@@ -1065,27 +1065,26 @@ python rtk_compare/compare_results.py \
 
 ---
 
-## 14. 功能边界：Java版未实现功能清单（2026-09-26 更新）
+## 14. 功能边界：Java版未实现功能清单（2026-09-29 更新）
 
 ### 14.1 数据流与网络协议
 
 | C版功能 | C版源码 | Java版状态 | 说明 |
 |---------|---------|------------|------|
-| 串口通信 (STR_SERIAL) | stream.c | ❌ 未实现 | Java可用jSerialComm等库，但未集成 |
+| 串口通信 (STR_SERIAL) | stream.c | ✅ rtklib-stream | `SerialPort`，基于jSerialComm，跨平台（Win/Lin/Mac） |
 | TCP服务端 (STR_TCPSVR) | stream.c | ❌ 未实现 | 需自行用Java ServerSocket实现 |
-| TCP客户端 (STR_TCPCLI) | stream.c | ❌ 未实现 | 需自行用Java Socket实现 |
-| NTRIP客户端 (STR_NTRIPCLI) | stream.c | ❌ 未实现 | NTRIP协议未实现，无法从Caster获取数据 |
+| TCP客户端 (STR_TCPCLI) | stream.c | ❌ 未实现 | NtripClient内部使用Socket，无独立TCP流抽象 |
+| NTRIP客户端 (STR_NTRIPCLI) | stream.c | ✅ rtklib-stream | `NtripClient`，NTRIP v2.0+SSL/TLS+自动重连+Sourcetable查询 |
 | NTRIP服务端 (STR_NTRIPSVR) | stream.c | ❌ 未实现 | 无法向Caster推送数据 |
 | NTRIP Caster (STR_NTRIPCAS) | stream.c | ❌ 未实现 | — |
 | UDP服务端/客户端 | stream.c | ❌ 未实现 | — |
-| FTP下载 (STR_FTP) | stream.c | ❌ 未实现 | — |
-| HTTP下载 (STR_HTTP) | stream.c | ❌ 未实现 | — |
+| FTP下载 (STR_FTP) | stream.c | ❌ 未实现 | rtklib-product模块已实现FTP/FTPS/HTTPS下载 |
+| HTTP下载 (STR_HTTP) | stream.c | ❌ 未实现 | rtklib-product模块已实现 |
 | 内存缓冲区 (STR_MEMBUF) | stream.c | ❌ 未实现 | — |
 | 流服务 (streamsvr.c) | streamsvr.c | ❌ 未实现 | 数据流管理、格式转换服务 |
 | RTK服务 (rtksvr.c) | rtksvr.c | ❌ 未实现 | 多流实时定位服务 |
 
-**Java版数据输入方式**：仅支持本地文件（RTCM/RINEX）和byte[]直接输入（feed方法），
-网络数据获取需应用层自行实现后通过feed()注入。
+**Java版数据输入方式**：rtklib-stream模块提供NTRIP客户端和串口通讯，通过`StreamListener`回调获取数据后调用`feed()`注入核心算法；也支持本地文件（RTCM/RINEX）和byte[]直接输入。
 
 ### 14.2 接收机原始协议
 
@@ -1170,7 +1169,7 @@ SBAS改正算法、集成、消息输入均已完整实现，与C版一致。
 - 多种优化项（自适应Q、IGGIII抗差、SNR质量控制等）
 
 **需要应用层自行实现**：
-- 网络数据获取（NTRIP/TCP/串口）→ 通过feed(sourceId, data)注入
+- TCP/UDP服务端、NTRIP Caster → 不在rtklib-stream范围内
 - NMEA输出 → 通过SolData自行编码
 - 实时流管理 → 自行组合Processor实例
 ### 14.9 实时流双向缓存系统（Java版新增，C版无对应）

@@ -6,6 +6,27 @@
 
 ---
 
+## [2.2.4] - 2026-09-29
+
+### Added
+
+- **rtklib-stream 数据流通讯模块**：与 rtklib-core/product/adjust/otl 平级的新模块，对齐原版RTKLIB `stream.c` 核心功能
+  - `NtripClient`：NTRIP v2.0客户端，支持连接Caster获取实时数据流、Sourcetable查询、HTTP Basic认证、断线自动重连（可配置间隔和最大次数）、NMEA GGA上行
+  - `NtripClientConfig`：连接配置（主机/端口/挂载点/认证/超时/重连策略/SSL）
+  - `SerialPort`：跨平台串口客户端，基于jSerialComm，支持事件驱动异步读取、同步写入、系统串口列举
+  - `SerialPortConfig`：串口配置（端口名/波特率/数据位/停止位/校验位/流控/超时）
+  - `StreamListener`：统一数据流监听器接口（onData/onError/onClosed）
+  - **SSL/TLS支持**：NtripClient支持TLS加密连接，兼容EUREF/IGS等要求HTTPS的Caster；可自定义SSLContext（自签名证书、双向TLS认证）；默认启用TLSv1.2+TLSv1.3
+  - 完整中文Javadoc注释，含类说明、使用流程示例、线程模型说明、参数默认值一览
+
+### Changed
+
+- 根pom.xml新增 `rtklib-stream` 模块
+- README.md更新：新增rtklib-stream模块说明、更新功能边界描述、更新补充说明
+- RTKLIB_Differences.md更新：第14.1节数据流与网络协议表更新NTRIP客户端和串口为已实现
+
+---
+
 ## [2.2.3] - 2026-09-26
 
 ### Added
