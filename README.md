@@ -4,7 +4,7 @@ RTKLIB 的 Java 移植版本，基于 [RTKLIB 2.5.0](https://github.com/tomojita
 
 项目定位为**算法引擎库（Library）**而非独立软件，可嵌入 Java 应用中实现 GNSS 数据处理与定位解算。
 
-> **功能边界**：Java版专注核心定位算法（SPP/RTK/PPP/PPP-RTK），不包含C版的网络通信（NTRIP/TCP/串口）、接收机原始协议（u-blox/NovAtel等）、NMEA输出等功能。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
+> **功能边界**：Java版专注核心定位算法（SPP/RTK/PPP/PPP-RTK），数据流通讯由 `rtklib-stream` 模块提供（NTRIP客户端+串口），不包含C版的TCP/UDP服务端、NTRIP Caster、接收机原始协议（u-blox/NovAtel等）、NMEA输出等功能。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
 ## 模块
 
@@ -82,6 +82,24 @@ IGS/MGEX精密产品自动下载器，下载规则对齐PRIDE-PPPAR v3.2 `pdp3.s
 
 详见 [精密产品下载技术参考](docs/PRODUCT_MODULE_REFERENCE.md)。
 
+### rtklib-stream — 数据流通讯
+
+GNSS数据流通讯模块，对齐原版RTKLIB的 `stream.c` 核心功能，提供NTRIP客户端和串口通讯能力。
+
+- **NTRIP客户端**：连接NTRIP Caster获取差分数据流（RTCM3观测值、SSR改正数等），支持NTRIP v2.0、HTTP Basic认证、Sourcetable查询、断线自动重连、NMEA GGA上行
+- **SSL/TLS**：支持TLS加密连接，兼容EUREF/IGS等要求HTTPS的Caster；可自定义SSLContext（自签名证书、双向TLS认证）
+- **串口通讯**：基于jSerialComm实现跨平台串口读写（Windows COM、Linux /dev/ttyUSB*、macOS /dev/cu.*），支持可配置波特率/数据位/校验位/流控
+- **统一监听器**：`StreamListener` 接口统一数据/错误/关闭事件回调
+
+```
+org.rtklib.java.stream
+├── StreamListener        数据流监听器接口
+├── NtripClient           NTRIP客户端（JDK Socket + SSL/TLS）
+├── NtripClientConfig     NTRIP连接配置（含SSL设置）
+├── SerialPort            串口流客户端（jSerialComm）
+└── SerialPortConfig      串口配置
+```
+
 ### rtklib-adjust — 多基线间接平差
 
 单历元GNSS多基线间接平差模块。基于高斯-马尔可夫最小二乘模型，对同一历元多条独立RTK基线进行融合平差，输出流动站最优坐标及精度评定（σ₀检验 + Baarda数据探测）。
@@ -146,6 +164,12 @@ org.rtklib.java.otl
 |------|------|
 | [精密产品下载技术参考](docs/PRODUCT_MODULE_REFERENCE.md) | IGS精密产品自动下载、URL优先级、缓存策略、API示例 |
 
+### rtklib-stream
+
+| 文档 | 说明 |
+|------|------|
+| — | 模块代码含完整中文Javadoc，暂无独立文档 |
+
 ### rtklib-otl
 
 | 文档 | 说明 |
@@ -201,7 +225,7 @@ mvn test
 
 **当前阶段**：基础功能已通过真实数据测试，主要进入测试修复阶段——用更多场景和边界条件的数据进行验证，发现并修复潜在bug。
 
-**未实现的C版功能**（设计上不实现）：串口/NTRIP通信、接收机原始协议（u-blox/NovAtel等）、NMEA输出、GPX/KML输出、大地水准面/基准转换。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
+**未实现的C版功能**（设计上不实现）：TCP/UDP服务端、NTRIP Caster、接收机原始协议（u-blox/NovAtel等）、NMEA输出、GPX/KML输出、大地水准面/基准转换。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
 ## 参考来源
 
@@ -209,6 +233,12 @@ mvn test
 - [RTKLIB Manual](http://www.rtklib.com/rtklib_document.htm) - 算法原理与使用说明
 
 > C版对齐状态、方法命名规则、测试验证状态详见 [技术文档](docs/RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第16~18章。
+
+## 补充说明
+
+**rtklib-stream 模块**：`rtklib-stream` 提供 NTRIP 客户端和串口通讯能力，是实时数据接入的推荐方式。NTRIP 客户端支持 SSL/TLS、自动重连和 Sourcetable 查询；串口客户端基于 jSerialComm 实现跨平台支持。两者通过统一的 `StreamListener` 接口回调数据，上层应用收到数据后通过 `PppProcessor.feed()` 或 `RtkProcessor.feed()` 将字节流喂入核心算法即可。
+
+**rtklib-test 中的 NtripClient**：`rtklib-test` 中的 `NtripClient` 是早期为方便 PPP-RTK 实时测试而编写的简易版本，功能已被 `rtklib-stream` 模块取代，保留仅为向后兼容。新代码应使用 `org.rtklib.java.stream.NtripClient`。
 
 ## License
 
