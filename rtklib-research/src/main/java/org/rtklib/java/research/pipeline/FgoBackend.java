@@ -30,8 +30,11 @@ import org.rtklib.java.research.factorgraph.PhaseFactor;
 import org.rtklib.java.research.factorgraph.PredictFactor;
 import org.rtklib.java.research.factorgraph.ResidualBlockInfo;
 import org.rtklib.java.research.factorgraph.RobustLoss;
+import org.rtklib.java.research.factorgraph.SwitchPriorFactor;
+import org.rtklib.java.research.factorgraph.SwitchWrapperFactor;
 import org.rtklib.java.research.factorgraph.TcFactor;
 import org.rtklib.java.research.factorgraph.Variable;
+import org.rtklib.java.research.pipeline.SceneEvaluator.Scene;
 
 /**
  * FGO 后端实现（实现 SolverBackend 接口，内部使用 FactorGraph 滑动窗口优化）。
@@ -82,6 +85,9 @@ public class FgoBackend implements SolverBackend {
 
     private IaceEstimator iaceEstimator;
 
+    private final List<Double> lastSwitchValues;
+    private String lastSwitchInfo;
+
     public FgoBackend() {
         this("FGO");
     }
@@ -98,6 +104,8 @@ public class FgoBackend implements SolverBackend {
         this.tdkVars = new ArrayDeque<>();
         this.ambVars = new ArrayDeque<>();
         this.usePhaseFactor = usePhaseFactor;
+        this.lastSwitchValues = new ArrayList<>();
+        this.lastSwitchInfo = "";
     }
 
     @Override
@@ -210,10 +218,34 @@ public class FgoBackend implements SolverBackend {
         double[] uwbRanges = new double[uwbNum];
         double[][] uwbAnchors = new double[uwbNum][3];
 
+        boolean useSwitch = config.useSwitchVariable;
+        if (config.useSceneAdaptive) {
+            Scene scene = SceneEvaluator.classify(validCount);
+            SolverConfig adapted = SceneEvaluator.adaptiveStrategy(config, scene);
+            useSwitch = adapted.useSwitchVariable;
+        }
+
+        lastSwitchValues.clear();
+        lastSwitchInfo = "";
+
         if (validCount > 0) {
             TcFactor tc = new TcFactor(pr, prrate, satPos, uwbRanges, uwbAnchors,
                                         stateVar, tdkVar, 2.0, 0.1, 0.5);
-            graph.addFactor(tc);
+
+            if (useSwitch) {
+                Variable swTc = new Variable("sw_tc_" + epochCount, 1);
+                swTc.value.set(0, 0, 1.0);
+                graph.addVariable(swTc);
+
+                SwitchWrapperFactor swTcFactor = new SwitchWrapperFactor(tc, swTc);
+                graph.addFactor(swTcFactor);
+                graph.addFactor(new SwitchPriorFactor(swTc, config.switchPriorSigma));
+
+                lastSwitchValues.add(0.0);
+                lastSwitchInfo += "TC:sw=1.0 ";
+            } else {
+                graph.addFactor(tc);
+            }
 
             if (usePhaseFactor && phaseCount > 0) {
                 Variable ambVar = new Variable(ambVarName, validCount);
@@ -222,7 +254,21 @@ public class FgoBackend implements SolverBackend {
 
                 PhaseFactor pf = new PhaseFactor(stateVar, ambVar,
                                                   phaseObs, wavelengths, satPos, satClkBias);
-                graph.addFactor(pf);
+
+                if (useSwitch) {
+                    Variable swPh = new Variable("sw_ph_" + epochCount, 1);
+                    swPh.value.set(0, 0, 1.0);
+                    graph.addVariable(swPh);
+
+                    SwitchWrapperFactor swPhFactor = new SwitchWrapperFactor(pf, swPh);
+                    graph.addFactor(swPhFactor);
+                    graph.addFactor(new SwitchPriorFactor(swPh, config.switchPriorSigma));
+
+                    lastSwitchValues.add(0.0);
+                    lastSwitchInfo += "PH:sw=1.0 ";
+                } else {
+                    graph.addFactor(pf);
+                }
 
                 if (prevAmbVar != null) {
                     Variable prevAmb = graph.getVariable(prevAmbVar);
@@ -417,6 +463,9 @@ public class FgoBackend implements SolverBackend {
                     || (oldestAmbName != null && v.name.equals(oldestAmbName))) {
                     margIndices.add(k);
                 }
+                if (config.useSwitchVariable && v.name.startsWith("sw_")) {
+                    margIndices.add(k);
+                }
             }
 
             RobustLoss loss = null;
@@ -446,7 +495,12 @@ public class FgoBackend implements SolverBackend {
                 boolean isOldest = v.name.equals(oldestStateName)
                         || v.name.equals(oldestTdkName)
                         || (oldestAmbName != null && v.name.equals(oldestAmbName));
-                if (!isOldest && !keptVars.contains(v)) {
+                if (isOldest) continue;
+
+                if (v.name.startsWith("sw_") && config.useSwitchVariable) {
+                    continue;
+                }
+                if (!keptVars.contains(v)) {
                     keptVars.add(v);
                 }
             }
@@ -514,5 +568,15 @@ public class FgoBackend implements SolverBackend {
         this.prevAmbVar = null;
         this.priorFactor = null;
         this.epochCount = 0;
+        this.lastSwitchValues.clear();
+        this.lastSwitchInfo = "";
+    }
+
+    public List<Double> lastSwitchValues() {
+        return new ArrayList<>(lastSwitchValues);
+    }
+
+    public String lastSwitchInfo() {
+        return lastSwitchInfo;
     }
 }

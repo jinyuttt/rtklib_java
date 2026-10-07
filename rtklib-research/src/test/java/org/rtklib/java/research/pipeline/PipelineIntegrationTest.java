@@ -137,6 +137,89 @@ public class PipelineIntegrationTest {
         System.out.println(comparator.formatComparisonTable());
     }
 
+    @Test
+    void testFgoSwitchVariable() {
+        if (!dataLoaded) return;
+
+        SolverConfig switchConfig = SolverConfig.forFgoWithSwitch();
+        FgoBackend switchBackend = new FgoBackend("FGO+Switch");
+        switchBackend.initialize(switchConfig);
+
+        System.out.println("\n--- FGO+SwitchVariable Backend ---");
+        List<Solution> solutions = switchBackend.solveBatch(epochs, nav);
+        assertNotNull(solutions, "FGO+Switch solutions should not be null");
+
+        SolverStatistics stats = switchBackend.statistics();
+        System.out.println("  Total epochs: " + stats.totalEpochs);
+        System.out.println("  Avg compute time: " + String.format("%.2f", stats.avgComputeTimeMs) + " ms");
+
+        printPositionSummary("FGO+Switch", solutions);
+
+        String switchInfo = switchBackend.lastSwitchInfo();
+        System.out.println("  Switch info: " + switchInfo);
+        System.out.println("  Switch values tracked: " + switchBackend.lastSwitchValues().size());
+    }
+
+    @Test
+    void testSceneAdaptivePipiline() {
+        if (!dataLoaded) return;
+
+        SolverConfig adaptiveConfig = new SolverConfig();
+        adaptiveConfig.backendName = "FGO+SceneAdaptive";
+        adaptiveConfig.windowSize = 30;
+        adaptiveConfig.maxIterations = 10;
+        adaptiveConfig.convergenceThreshold = 1e-6;
+        adaptiveConfig.useSceneAdaptive = true;
+
+        FgoBackend adaptiveBackend = new FgoBackend("FGO+SceneAdaptive");
+        adaptiveBackend.initialize(adaptiveConfig);
+
+        System.out.println("\n--- FGO+SceneAdaptive Backend ---");
+        List<Solution> solutions = adaptiveBackend.solveBatch(epochs, nav);
+        assertNotNull(solutions, "SceneAdaptive solutions should not be null");
+
+        SolverStatistics stats = adaptiveBackend.statistics();
+        System.out.println("  Total epochs: " + stats.totalEpochs);
+        System.out.println("  Avg compute time: " + String.format("%.2f", stats.avgComputeTimeMs) + " ms");
+
+        printPositionSummary("FGO+SceneAdaptive", solutions);
+
+        System.out.println("  Switch info (last epoch): " + adaptiveBackend.lastSwitchInfo());
+    }
+
+    @Test
+    void testSwitchVariableComparison() {
+        if (!dataLoaded) return;
+
+        FgoBackend fgo = new FgoBackend("FGO");
+        FgoBackend switchFgo = new FgoBackend("FGO+Switch");
+
+        SolverConfig fgoConfig = new SolverConfig();
+        fgoConfig.backendName = "FGO";
+        fgoConfig.windowSize = 30;
+        fgoConfig.maxIterations = 10;
+        fgoConfig.useRobustLoss = true;
+        fgoConfig.robustLossType = "HUBER";
+
+        SolverConfig switchConfig = SolverConfig.forFgoWithSwitch();
+
+        fgo.initialize(fgoConfig);
+        switchFgo.initialize(switchConfig);
+
+        List<Solution> fgoSol = fgo.solveBatch(epochs, nav);
+        List<Solution> switchSol = switchFgo.solveBatch(epochs, nav);
+
+        BackendComparator comparator = new BackendComparator();
+        comparator.addBackend(fgo);
+        comparator.addBackend(switchFgo);
+        comparator.compareAndReport(fgoSol);
+
+        System.out.println("\n--- SwitchVariable vs Huber Comparison ---");
+        System.out.println(comparator.formatComparisonTable());
+        System.out.println("Note: SwitchVariable handles NLOS by turning off bad factors completely.");
+        System.out.println("      Huber loss downweights but never fully removes outliers.");
+    }
+
     private void printPositionSummary(String label, List<Solution> solutions) {
         double avgX = 0, avgY = 0, avgZ = 0;
         int count = 0;

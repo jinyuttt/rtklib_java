@@ -156,6 +156,7 @@ org.rtklib.java.otl
 | [实现差异](docs/RTKLIB_Differences.md) | Java 版与 C 版的有意差异说明 |
 | [矩阵存储参考](docs/MATRIX_DIMENSION_REFERENCE.md) | Kalman 滤波矩阵维度、存储约定及运算差异 |
 | [优化介绍](docs/RTK_Extra_Optimizations.md) | Java 版额外优化项（C 版没有的），独立开关控制 |
+| [优化功能矩阵](docs/CORE_OPTIMIZATION_MATRIX.md) | 按定位模式×场景分类的优化功能矩阵，含静态实测结论、动态适用性、基线类型标记 |
 | [轨道模块技术参考](docs/ORBIT_MODULE_REFERENCE.md) | TLE解析、SGP4/SDP4传播、六根数转换、二体传播 |
 
 ### rtklib-product
@@ -183,22 +184,61 @@ org.rtklib.java.otl
 | [使用说明](docs/ADJUST_USAGE.md) | API 示例、输出字段含义 |
 | [技术参考](docs/ADJUST_TECHNICAL_REFERENCE.md) | 数学模型、协方差构造、理论局限性、联合解算可行性评估 |
 
+## 使用建议
+
+本项目各模块按影响面和风险分为两类，使用者可根据自身需求选择对应的集成策略：
+
+### 第一类：数据解析/辅助型
+
+> 直接使用，不会有实质影响，结论明确。有问题提交 Issue 或自行修改后提交 PR。
+
+不涉及定位解算核心逻辑，侧重点在数据获取、格式解析、辅助改正数计算。集成到业务系统时**无定位精度风险**：
+
+| 模块 | 功能 | 集成风险 |
+|------|------|----------|
+| `rtklib-stream` | NTRIP客户端 + 串口通讯 | 极低 — 纯数据流，输出为RTCM字节流 |
+| `rtklib-product` | IGS精密产品自动下载 | 极低 — 纯文件下载，与定位算法解耦 |
+| `rtklib-otl` | 海潮负荷BLQ系数/位移 | 极低 — mm级改正数，对定位无实质性负面风险 |
+| `rtklib-adjust` | 多基线间接平差 | 低 — 输入为已解算的RTK基线，不修改定位核心 |
+| `rtklib-core`（辅助部分） | 数据解析与模型 | 低 — 不涉及定位解算，子模块可独立使用： |
+
+`rtklib-core` 中大量子模块属于数据解析和模型计算，不包含定位解算逻辑，可直接复用：
+
+| 子模块 | 功能 | 说明 |
+|--------|------|------|
+| `rtcm/` | RTCM 数据解码 | 解析RTCM3各消息类型（观测值、星历、SSR等） |
+| `rinex/` | RINEX 文件读写 | 支持 2.x/3.x 观测文件、导航文件、气象文件 |
+| `ephemeris/` | 星历计算 | 卫星位置/钟差计算、PCV/DCB/OTL读取 |
+| `coord/` | 坐标变换 | ECEF↔LLH变换、ENU变换、大地基准转换 |
+| `time/` | 时间系统 | GPS时/UTC/GLO时/BDS周 等互转 |
+| `ionosphere/` | 电离层模型 | Klobuchar/GIM/IONEX等电离层延迟计算 |
+| `troposphere/` | 对流层模型 | Saastamoinen/GMF/VMF1等延迟计算和映射函数 |
+| `common/` | 通用工具 | 矩阵运算、卫星ID编解码、周跳检测工具函数 |
+
+### 第二类：定位解算/算法型
+
+> 先用自己的测试数据验证有效性，确认通过后再集成使用；不信任时先集成为对比工具，独立运行发现问题再决定是否替换。
+
+涉及状态估计（EKF）、模糊度固定、质量控制等核心算法，直接影响定位结果。建议流程：
+
+| 模块 | 功能 | 集成风险 |
+|------|------|----------|
+| `rtklib-core`（定位部分） | SPP/RTK/PPP/PPP-RTK 全模式定位 | **高** — 定位精度依赖算法实现正确性 |
+
+涉及 `pntpos/`（SPP）、`rtkpos/`（RTK）、`ppp/`（PPP）、`ppprtk/`（PPP-RTK）、`kalman/`（EKF）、`ambiguity/`（LAMBDA）六个子模块。辅助模块（rtcm/rinex/ephemeris/coord/time/ionosphere/troposphere/common）属于第一类，无风险。
+
+1. 确认自己的数据场景与本项目已验证的场景匹配（基线长度、电离层活跃度、遮挡程度等）
+2. 用自己的已知参考数据跑通本项目的完整流程，对比预期结果
+3. 信任且测试通过 → 直接集成使用；同时关注 [优化功能矩阵](docs/CORE_OPTIMIZATION_MATRIX.md) 按场景选择优化开关
+4. 不确定 → 作为对比工具保留，与原系统并行对比，积累足够置信度后再替换
+5. 发现缺陷 → 分析根因后提交 Issue，或修改后提交 PR
+
+> **原则**：本项目定位算法经过真实数据验证（详见开发状态），但所有集成仍建议以自有测试数据验证通过为前提。不盲目信任任何代码的精度声明。
+
 ## 环境要求
 
 - Java 17+
 - Maven 3.6+
-
-## 构建
-
-```
-mvn compile
-```
-
-## 测试
-
-```
-mvn test
-```
 
 ## 开发状态
 

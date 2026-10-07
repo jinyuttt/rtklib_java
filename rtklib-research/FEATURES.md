@@ -40,7 +40,7 @@ IMU 预积分紧耦合等。
 | `Rotation` | 3D 旋转（四元数↔DCM） |
 | `RotationUtils` | SO(3) 李群工具（exp/log 映射、right Jacobian） |
 
-### 2.3 因子图优化（`factorgraph/` 包 · 9 个文件）
+### 2.3 因子图优化（`factorgraph/` 包 · 11 个文件）
 
 #### 核心框架
 
@@ -64,6 +64,8 @@ IMU 预积分紧耦合等。
 | `PhaseFactor` | 载波相位：λ·φ = ρ + c·(tr-ts) + λ·N | nSat | state[11], amb[nSat] |
 | `PredictFactor` | 状态预测/模糊度转移 | dim | state_{t-1}, state_t |
 | `PreintegFactor` | IMU 预积分：ΔR/Δv/Δp | 15 | state_k[21], state_{k+1}[21] |
+| `SwitchWrapperFactor` | 🆕 开关变量包装器：s·residual, s∈[0,1] | dim×1 | base_vars + sw[1] |
+| `SwitchPriorFactor` | 🆕 开关先验约束：使 s→1.0 | 1 | sw[1] |
 
 ### 2.4 模糊度解算（`ambiguity/` 包 · 4 个文件）
 
@@ -91,19 +93,22 @@ score_i = 0.35·norm(elevation_i) + 0.25·norm(snr_i)
 |:---|:---|
 | `SolverBackend` | 统一后端接口（solve/solveBatch/statistics） |
 | `EkfBackend` | EKF 顺序滤波（预测+更新+M测更新） |
-| `FgoBackend` | FGO 批量优化（滑动窗口+边缘化+因子图） |
-| `SolverConfig` | 求解器配置（窗口/鲁棒/模糊度策略） |
+| `FgoBackend` | FGO 批量优化（滑动窗口+边缘化+开关变量+场景自适应） |
+| `SolverConfig` | 求解器配置（窗口/鲁棒/开关/场景自适应策略） |
 | `SolverStatistics` | 运行统计（定位率/固定率/耗时） |
 | `DatasetLoader` | FE-GUT 数据集加载器 |
 | `BackendComparator` | 多后端对比工具（RMS/STD/FixRate 表） |
 | `SceneEvaluator` | 分场景评估（Open Sky / Partial / Urban Canyon） |
 
-**场景分类规则**：
-| 场景 | 高度角 | 卫星数 |
+**场景分类规则**（在线自适应检测）：
+
+| 场景 | 卫星数 | 自适应策略 |
 |:---|:---|:---|
-| OPEN_SKY | ≥30° | ≥8 |
-| PARTIAL_BLOCKED | — | — |
-| URBAN_CANYON | ≤15° | ≤4 |
+| OPEN_SKY | > 8 | 无鲁棒化（观测质量好，不降权） |
+| PARTIAL_BLOCKED | 5~8 | Huber 损失（k=1.345，降权异常值） |
+| URBAN_CANYON | < 5 | SwitchVariable（s∈[0,1]，完全关闭NLOS） |
+
+**精确分类**：可传入平均高度角使用 `SceneEvaluator.classify(avgElDeg, nSat)` 代替纯卫星数分类。
 
 ### 2.6 IMU 预积分（`integration/` 包 · 3 个文件）
 
@@ -174,14 +179,15 @@ score_i = 0.35·norm(elevation_i) + 0.25·norm(snr_i)
 | SO(3) exp/log | 李群李代数 | "A micro Lie theory for state estimation" |
 | DopplerFactor | GNSS 速度约束 | Doppler-based velocity estimation |
 | Huber 鲁棒损失 | M-估计 | Huber (1964) |
-| SceneEvaluator | 场景适应性评估 | Urban GNSS positioning evaluation |
+| SwitchVariable 机制 | 🆕 逐因子自适应降权 | gtsam_gnss, Sünderhauf & Protzel (2012) |
+| 场景自适应 | 🆕 在线环境感知+策略切换 | Urban GNSS positioning evaluation |
 
 ## 5. 编译状态
 
 ```
-  源文件: 50 个 Java (main)
+  源文件: 52 个 Java (main)
   测试文件: 2 个 Java (test)
-  测试通过: 8/8
+  测试通过: 11/11
   JDK: 17
   构建: Maven 3.x + EJML 0.41
 ```
