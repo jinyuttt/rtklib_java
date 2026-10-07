@@ -174,7 +174,6 @@ public class RinexParser {
         boolean endOfHeader = false;
 
         while ((line = reader.readLine()) != null) {
-            if (line.length() < 60) line = String.format("%-80s", line);
             if (line.length() < 80) line = String.format("%-80s", line);
 
             String label = line.substring(60, 80).trim();
@@ -213,7 +212,6 @@ public class RinexParser {
                         if (k > 58) {
                             line = reader.readLine();
                             if (line == null) break;
-                            if (line.length() < 60) line = String.format("%-80s", line);
                             if (line.length() < 80) line = String.format("%-80s", line);
                             k = 7;
                         }
@@ -251,7 +249,7 @@ public class RinexParser {
         boolean endOfHeader = false;
 
         while ((line = reader.readLine()) != null) {
-            if (line.length() < 60) line = String.format("%-80s", line);
+            if (line.length() < 80) line = String.format("%-80s", line);
 
             String label = line.substring(60, 80).trim();
 
@@ -317,13 +315,11 @@ public class RinexParser {
             if (line == null) break;
 
             String satId = line.substring(0, Math.min(3, line.length())).trim();
-            char sysChar = satId.charAt(0);
-            int prn = Integer.parseInt(satId.substring(1));
-            int sys = charToSys(sysChar);
-            obsd.sat = SatUtils.satno(sys, prn);
+            obsd.sat = SatUtils.satid2no(satId);
             if (obsd.sat == 0) continue;
 
-            si = SYSCODES.indexOf(sysChar);
+            int sys = SatUtils.satsys(obsd.sat, null);
+            si = SYSCODES.indexOf(satId.charAt(0));
             nt = (si >= 0) ? nobs[si] : 0;
 
             int pos = 3;
@@ -384,14 +380,12 @@ public class RinexParser {
      */
     private void readNavEphV3(BufferedReader reader, String firstLine) throws IOException {
         String satId = firstLine.substring(0, Math.min(3, firstLine.length())).trim();
-        char sysChar = satId.charAt(0);
-        int prn = Integer.parseInt(satId.substring(1));
-        int sys = charToSys(sysChar);
-        int sat = SatUtils.satno(sys, prn);
+        int sat = SatUtils.satid2no(satId);
         if (sat == 0) {
-            log.warn("readNavEphV3: invalid satellite satId={}, prn={}", satId, prn);
+            log.warn("readNavEphV3: invalid satellite satId={}", satId);
             return;
         }
+        int sys = SatUtils.satsys(sat, null);
 
         if (sys == Constants.SYS_GPS || sys == Constants.SYS_GAL ||
             sys == Constants.SYS_QZS || sys == Constants.SYS_CMP || sys == Constants.SYS_IRN) {

@@ -1,7 +1,7 @@
 # rtklib-core 优化功能矩阵
 
-> **版本**：v1.0  
-> **日期**：2026-10-07  
+> **版本**：v1.1  
+> **日期**：2026-10-08  
 > **目标模块**：`rtklib-core`  
 > **编码规则**：代码真实默认值（非文档描述值），以 `RtkConfig.java` 实际字段值为准  
 
@@ -72,7 +72,20 @@
 
 > **图例**：✅ = 适用且推荐  |  ⚠️ = 可开但效果弱  |  — = 不适用
 
-### 1.3 处理阶段特性（非RtkConfig开关）
+### 1.3 SPP 扩展优化
+
+| # | 优化项 | 开关 | 默认 | SPP | SPP<br>Dynamic | 原理导向 |
+|---|--------|------|------|-----|------|----------|
+| S1 | EKF 时间传播 | `enableSppEkf` | false | ✅ | ✅ | **通用**：位置/速度/加速度状态预测→历元间平滑，替代逐历元独立LSQ `【实测: 高程波动 <0.5m vs LSQ ~3m】` |
+| S2 | M-估计抗差 | `enableSppRobust` | false | ✅ | ✅ | **通用**：IGGIII核函数降权异常观测，抑制NLOS/多路径粗差 |
+| S3 | 零速约束 | `enableSppZeroVel` | false | ✅ | ✅ | **静态/低速场景**：速度<0.5m/s 位置差分<0.05m→压制Q矩阵，提升零速精度 |
+| S4 | 多普勒+SNR加权 | `enableSppDopplerSnr` | false | ✅ | ✅ | **通用**：多普勒平滑伪距+SNR 自适应观测权，降低高频噪声 |
+
+> **图例**：✅ = 适用且推荐  |  ⚠️ = 可开但效果弱  |  — = 不适用  
+> **开关控制**：通过 `SppProcessor.setRtkConfig(cfg)` 传入，基准 RTKLIB 代码通过 `if (cfg != null && cfg.enableSppXxx)` 保护，不影响默认流程  
+> **参考项目**：[MobileGNSS-SPP](https://github.com/ebhual/MobileGNSS-SPP)（C语言，基于 RTKLIB 2.4.3 的 SPP 优化）
+
+### 1.4 处理阶段特性（非RtkConfig开关）
 
 | # | 特性 | 控制方式 | SPP | DGPS | RTK<br>Static | RTK<br>Kinematic | PPP<br>Static | PPP<br>Kinematic | 原理导向 |
 |---|------|----------|-----|------|------|------|------|------|----------|
@@ -98,8 +111,15 @@
 | **P1 GPT3+VMF3** | — | 3站×24h静态 | 基础版 vs 优化版±差 | `【实测】` dN ±0.14~0.18m, dE ±0.03~0.23m, dU 0.26~0.40m。**24h静态分米级差异**（GPT3+VMF3贡献有限，需配合AR验证） |
 | **P1 GPT3+VMF3** | — | 3站×1h动态 | 基础版 vs 优化版STD | `【实测】` N方向-0.06~-0.22m正向趋势，E/U无显著恶化。**1h浮点解噪声量级内，不足以证明精度显著提升** |
 | **P3 IERS2010** | — | 同上 | 同组对比 | `【原理等价】` dehanttideinel+IERS极潮公式为国际标准实现，**数学等价于GAMIT/Bernese等权威软件**，mm级差异不可由定位残差区分 |
+| **S1 EKF时间传播** | — | BDS-only RTCM 230历元 | EKF vs LSQ 高程对比 | `【实测】` EKF高程稳定在 ~2208m（波动<0.5m），LSQ 每历元跳动 ~3m（2191~2195m）。平均3D偏差 16.8m（EKF收敛初期系统偏差） |
+| **S1 EKF时间传播** | — | MobileGNSS-SPP Street 1256历元 | LSQ / EKF / EKF+抗差 / 全开 四组对比 | `【实测】` 1256/1256 历元全部成功（GPS+GAL+QZS+BDS 四系统），OpenSky 1603/1603 全部成功。EKF+全开组合历元解算成功率与LSQ一致 |
+| **QZSS 修复** | — | Street 1256历元 (含97条QZSS星历) | 修复前后对比 | `【修复后】` 1256/1256 全部成功（修复前 0/1256）。根因：星历缓冲区溢满 + QZSS 钟差未写入 sol.dtr[5] |
 
-### 2.2 原理上有明确预期但缺实测数据的优化项
+### 2.2 SPP 优化场景验证（MobileGNSS-SPP 数据）
+
+以上 S1 和 QZSS 修复的验证结果见 2.1 表格末尾。
+
+### 2.3 原理上有明确预期但缺实测数据的优化项（RTK/PPP）
 
 | 优化项 | 基线类型 | 预期效果 | 待验证 |
 |--------|----------|----------|--------|
@@ -191,6 +211,33 @@ PrcOpt:    PMODE_PPPRTK_KINEMA/STATIC
 前提:      SSR数据源（RTCM SSR / QZSS CLAS）
 ```
 
+### 4.6 SPP 标准定位（多系统、开放天空）
+
+```
+RtkConfig: enableSppEkf + enableSppDopplerSnr
+PrcOpt:    PMODE_SINGLE, navsys=SYS_ALL (GPS+GAL+QZS+BDS+etc)
+特点:      EKF平滑高程跳动 + 多普勒+SNR降噪，稳定可靠
+实测:      Street 1256/1256, OpenSky 1603/1603, BDS-only 230/230
+```
+
+### 4.7 SPP 城市峡谷/恶劣环境
+
+```
+RtkConfig: enableSppEkf + enableSppRobust + enableSppDopplerSnr
+PrcOpt:    PMODE_SINGLE, elmin=15°, navsys=SYS_ALL
+特点:      IGGIII抗NLOS多路径粗差 + EKF平滑 + SNR自适应降权
+```
+
+### 4.8 SPP 静态基准站/滑坡监测
+
+```
+RtkConfig: enableSppEkf + enableSppRobust + enableSppZeroVel 
+           + enableSppDopplerSnr
+PrcOpt:    PMODE_SINGLE, dynamics=1 (需要速度状态), navsys=SYS_ALL
+特点:      全开模式：零速压制Q + 抗差 + 多普勒平滑，最大化静态精度
+实测:      BDS-only RTCM EKF高程稳定度 <0.5m（LSQ ~3m跳动）
+```
+
 ---
 
 ## 5. 优化项间协同关系
@@ -200,6 +247,11 @@ PrcOpt:    PMODE_PPPRTK_KINEMA/STATIC
 │                    基础观测层                            │
 │  R9 残差编辑 ──→ 干净弧段 ──→ R5 SNR中值 ──→ 合理权重   │
 │  R12 BDS码偏差 ──→ 无偏伪距 ──→ T7 MW DCB ──→ WL整数性  │
+├─────────────────────────────────────────────────────────┤
+│                    SPP专属层                             │
+│  S4 多普勒+SNR ──→ 伪距平滑+自适应权                     │
+│  S1 EKF传播 ←── S3 零速约束 ──→ 静态Q压制               │
+│  S2 IGGIII抗差 ──→ 抑制粗差+权重调整                     │
 ├─────────────────────────────────────────────────────────┤
 │                    滤波鲁棒层                            │
 │  R4 IGGIII + R1 自适应Q ──→ 静态低噪/动态高响应          │

@@ -126,9 +126,9 @@ public class Nav implements Serializable {
      */
     public Nav() {
         this.n = 0;
-        this.nmax = Constants.MAXSAT * 2;
+        this.nmax = Constants.MAXSAT * 50;
         this.ng = 0;
-        this.ngmax = Constants.MAXSAT;
+        this.ngmax = Constants.MAXSAT * 10;
         this.ns = 0;
         this.nsmax = Constants.MAXSAT;
         this.ne = 0;
@@ -200,6 +200,9 @@ public class Nav implements Serializable {
         for (int i = 0; i < Constants.MAXSAT; i++) {
             this.pcvs[i] = new Pcv();
         }
+
+        this.cbias = new double[Constants.MAXSAT][Constants.NFREQ][Constants.NFREQ];
+        this.rbias = new double[Constants.MAXSAT][Constants.NFREQ][Constants.NFREQ];
     }
 
     /**

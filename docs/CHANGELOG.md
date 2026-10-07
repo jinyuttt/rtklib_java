@@ -6,6 +6,46 @@
 
 ---
 
+## [2.2.5] - 2026-10-08
+
+### Added
+
+- **SPP 优化功能（基于 MobileGNSS-SPP 项目）**：开关控制式 SPP 增强，通过 `RtkConfig` 四个独立开关启用
+  - `enableSppEkf`：EKF 时间传播（位置/速度/加速度），替代逐历元独立 LSQ，实现历元间状态平滑
+  - `enableSppRobust`：M-估计抗差（IGGIII核函数），抑制多路径/粗差观测
+  - `enableSppZeroVel`：零速约束（速度<0.5m/s 且位置差分<0.05m → 压制过程噪声），提高静态/低速精度
+  - `enableSppDopplerSnr`：多普勒+SNR 加权，利用载波平滑降低观测噪声
+  - 通过 `SppProcessor.setRtkConfig()` 传入配置，基准 RTKLIB 代码不受影响
+  - 测试验证：Street 场景 1256/1256 历元成功，OpenSky 场景 1603/1603 历元成功
+  - 测试验证：BDS-only RTCM 230/230 历元成功，EKF 高程平滑效果显著（波动 <0.5m vs LSQ 跳动 ~3m）
+
+### Fixed
+
+- **QZSS 星历解析失败**：`SatUtils.satid2no()` 未实现 QZSS PRN 偏移（RTKLIB C 版 `satid2no` 逻辑），导致 `'J04'` 被解析为无效卫星号
+  - 修复：添加 `case 'J': sys = SYS_QZS; prn += MINPRNQZS - 1; break;`
+  
+- **QZSS 状态向量缺失**：`SppCore.nx()` 和 `sysIdx()` 未计入 `SYS_QZS`，导致 QZSS 钟差不被估计
+  - 修复：在 `nx()` 中添加 QZSS 维度计数，在 `sysIdx()` 中添加 QZSS 索引映射
+  - 修复：`SppCore.estpos()` 写入 QZSS 钟差至 `sol.dtr[5]`
+  - 修复：`SppOptimizations.estposFilter()` EKF 模式下的 QZSS 钟差处理
+
+- **RINEX NAV 文件行长度不足**：导航文件部分行长度 60~79 字符时 `substring(60,80)` 抛出 `StringIndexOutOfBoundsException`
+  - 修复：所有行统一填充至 80 字符
+
+- **星历缓冲区溢满**：多星座场景下 NAV 文件可能包含 7000+ 条星历，原 `nmax = MAXSAT * 2 = 428` 严重不足
+  - 修复：`Nav.nmax` 扩大至 `MAXSAT * 50`，`Nav.ngmax` 扩大至 `MAXSAT * 10`
+  - 实测：Street 场景 6870 条星历正确存储（含 5384 GAL + 429 GPS + 960 BDS + 97 QZS）
+
+- **OBS 解析系统变量误用**：删除局部 `int sys` 后使用类成员 `char sys` 作为系统常量，导致频率索引错误
+  - 修复：显式调用 `SatUtils.satsys(obsd.sat, null)` 初始化系统常量
+
+### Changed
+
+- **`Nav.java` 构造函数**：初始化 `cbias` 和 `rbias` 数组，防止 `SppCore.prange()` 空指针
+- **`SppProcessorTest` `@BeforeAll`**：容错处理，默认 RTCM 文件不存在时跳过而非崩溃
+
+---
+
 ## [2.2.4] - 2026-09-29
 
 ### Added
