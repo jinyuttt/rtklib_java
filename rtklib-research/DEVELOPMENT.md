@@ -1,6 +1,6 @@
 # rtklib-research 模块开发文档
 
-> 最后更新：2026-10-07  
+> 最后更新：2026-10-07（SwitchVariable + 场景自适应）  
 > 参考项目：reference-projects/FE-GUT（因子图+EKF混合，GNSS/UWB紧耦合）
 
 ---
@@ -11,19 +11,19 @@
 
 ## 2. 当前状态
 
-### 2.1 已完成（33 个文件，8 个包）
+### 2.1 已完成（35 个文件，8 个包）
 
 | 包 | 文件 | 用途 | 完成度 |
 |----|------|------|--------|
-| `common/` | GnssConst, GTime, Coordinates, MatrixOps, SatId, EarthModel, Rotation | 常量、时间、坐标、矩阵、旋转 | ✅ |
+| `common/` | GnssConst, GTime, Coordinates, MatrixOps, SatId, EarthModel, Rotation, RotationUtils | 常量、时间、坐标、矩阵、旋转 | ✅ |
 | `data/` | Ephemeris, Navigation, Observation, ObservationEpoch, Solution, SolutionStatus, UwbObservation | 数据模型 | ✅ |
 | `ephemeris/` | SatellitePosition | Kepler轨道+钟差+**卫星速度**+**GLONASS** | ✅ |
 | `atmosphere/` | Ionosphere, Troposphere | Klobuchar/Saastamoinen | ⚠️ 单模型 |
-| `ambiguity/` | LambdaSolver, PartialArSolver | LAMBDA+MLAMBDA+部分AR | ✅ |
-| `factorgraph/` | Variable, Factor, FactorGraph, RobustLoss, Factor(generic), PredictFactor, TcFactor, **PhaseFactor**, MarginalizationInfo, MarginalizationFactor, ResidualBlockInfo | 因子图框架+具体因子+边缘化+载波相位 | ✅ |
-| `pipeline/` | SolverBackend, SolverConfig, SolverStatistics, BackendComparator, EkfBackend, FgoBackend, **DatasetLoader**, **PipelineIntegrationTest** | 管线接口+两种后端+数据加载+端到端测试 | ✅ |
-| `stochastic/` | StochasticModel, ElevationSnrModel | 随机模型（矩阵接口） | ✅ |
-| `integration/` | IntegrationState, StateModel, EkfState | 状态定义+转移模型+EKF后端 | ✅ |
+| `ambiguity/` | LambdaSolver, PartialArSolver, IaceEstimator, IaceResult | LAMBDA+MLAMBDA+部分AR+IACE聚类 | ✅ |
+| `factorgraph/` | Variable, Factor, FactorGraph, RobustLoss, TcFactor, PseudorangeFactor, DopplerFactor, PhaseFactor, PredictFactor, PreintegFactor, **SwitchWrapperFactor**, **SwitchPriorFactor**, MarginalizationInfo, MarginalizationFactor, ResidualBlockInfo | 因子图框架+具体因子+边缘化+开关变量 | ✅ |
+| `pipeline/` | SolverBackend, SolverConfig, SolverStatistics, BackendComparator, EkfBackend, FgoBackend, **SceneEvaluator**, DatasetLoader, PipelineIntegrationTest | 管线接口+两种后端+场景自适应+端到端测试 | ✅ |
+| `stochastic/` | StochasticModel, ElevationSnrModel | 随机模型 | ✅ |
+| `integration/` | IntegrationState, StateModel, EkfState, PreintegrationResult | 状态定义+转移模型+EKF后端+预积分 | ✅ |
 
 ### 2.2 核心缺口
 
@@ -34,6 +34,8 @@
 - ✅ MLAMBDA n>3 树搜索 → 替代 Math.round() 退化逻辑 (2026-10-07)
 - ✅ GLONASS 星历支持 → RK4 数值积分 (2026-10-07)
 - ✅ StochasticModel 接口升级 → double→SimpleMatrix (2026-10-07)
+- ✅ 🆕 SwitchVariable 开关变量机制 → 逐因子自适应降权，N=3 测试通过 (2026-10-07)
+- ✅ 🆕 场景自适应 → 在线分类 + 自动策略切换，N=3 测试通过 (2026-10-07)
 
 ## 3. 参考项目：FE-GUT
 
@@ -130,9 +132,15 @@ research/src/main/java/org/rtklib/java/research/
 │   ├── FactorGraph.java
 │   ├── MarginalizationFactor.java    ✅ Step 8
 │   ├── MarginalizationInfo.java      ✅ Step 7
+│   ├── PhaseFactor.java              ✅ (2026-10-07)
 │   ├── PredictFactor.java            ✅ Step 6
+│   ├── PreintegFactor.java           ✅
+│   ├── PseudorangeFactor.java        ✅
+│   ├── DopplerFactor.java            ✅
 │   ├── ResidualBlockInfo.java        ✅ Step 4
 │   ├── RobustLoss.java
+│   ├── SwitchWrapperFactor.java      🆕 开关变量包装器
+│   ├── SwitchPriorFactor.java        🆕 开关先验约束
 │   ├── TcFactor.java                 ✅ Step 5
 │   └── Variable.java
 ├── integration/
@@ -144,6 +152,7 @@ research/src/main/java/org/rtklib/java/research/
 │   ├── DatasetLoader.java            ✅ Step 11
 │   ├── EkfBackend.java               ✅ Step 9
 │   ├── FgoBackend.java               ✅ Step 10
+│   ├── SceneEvaluator.java           🆕 场景分类+自适应策略
 │   ├── SolverBackend.java
 │   ├── SolverConfig.java
 │   └── SolverStatistics.java

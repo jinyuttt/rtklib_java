@@ -16,6 +16,7 @@
         <module>rtklib-product</module>
         <module>rtklib-test</module>
         <module>rtklib-otl</module>
+        <module>rtklib-research</module>
     </modules>
 
     <properties>

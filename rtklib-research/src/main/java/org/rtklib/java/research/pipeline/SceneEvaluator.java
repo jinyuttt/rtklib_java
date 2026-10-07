@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.rtklib.java.research.data.ObservationEpoch;
 import org.rtklib.java.research.data.Solution;
 import org.rtklib.java.research.data.SolutionStatus;
 
@@ -85,6 +84,64 @@ public class SceneEvaluator {
             return Scene.URBAN_CANYON;
         }
         return Scene.PARTIAL_BLOCKED;
+    }
+
+    /**
+     * 从观测历元实时分类场景（在线自适应检测）。
+     *
+     * <p>仅使用卫星数做粗分类，适合快速在线判断。精确分类应使用
+     * {@link #classify(double, int)} 并传入平均高度角。</p>
+     *
+     * @param nSat 有效卫星数
+     * @return 场景类型
+     */
+    public static Scene classify(int nSat) {
+        if (nSat > OPEN_SKY_NSAT) {
+            return Scene.OPEN_SKY;
+        }
+        if (nSat < CANYON_NSAT) {
+            return Scene.URBAN_CANYON;
+        }
+        return Scene.PARTIAL_BLOCKED;
+    }
+
+    /**
+     * 生成场景自适应求解器配置。
+     *
+     * <p>根据当前场景类型自动选择最优策略：
+     * <ul>
+     *   <li>OPEN_SKY: 不使用鲁棒损失和开关变量（保持最高精度）</li>
+     *   <li>PARTIAL_BLOCKED: 仅使用 Huber 鲁棒损失（标准方案）</li>
+     *   <li>URBAN_CANYON: 使用 SwitchVariable 开关变量（最强方案）</li>
+     * </ul>
+     *
+     * @param baseConfig 基础配置（会被复制，不修改原配置）
+     * @param scene      当前场景
+     * @return 场景自适应的新配置
+     */
+    public static SolverConfig adaptiveStrategy(SolverConfig baseConfig, Scene scene) {
+        SolverConfig cfg = baseConfig.copy();
+
+        switch (scene) {
+            case OPEN_SKY:
+                cfg.useRobustLoss = false;
+                cfg.useSwitchVariable = false;
+                break;
+            case PARTIAL_BLOCKED:
+                cfg.useRobustLoss = true;
+                cfg.robustLossType = "HUBER";
+                cfg.robustLossThreshold = 1.345;
+                cfg.useSwitchVariable = false;
+                break;
+            case URBAN_CANYON:
+                cfg.useRobustLoss = false;
+                cfg.useSwitchVariable = true;
+                cfg.switchPriorSigma = 0.1;
+                break;
+            default:
+                break;
+        }
+        return cfg;
     }
 
     /**

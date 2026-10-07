@@ -24,6 +24,9 @@ public class SolverConfig {
     public int systemMask;
     public int frequencyMask;
     public StochasticModel stochasticModel;
+    public boolean useSwitchVariable;
+    public double switchPriorSigma;
+    public boolean useSceneAdaptive;
 
     public SolverConfig() {
         this.backendName = "unknown";
@@ -43,6 +46,9 @@ public class SolverConfig {
         this.systemMask = 0xFF;
         this.frequencyMask = 0x3F;
         this.stochasticModel = new ElevationSnrModel();
+        this.useSwitchVariable = false;
+        this.switchPriorSigma = 0.1;
+        this.useSceneAdaptive = false;
     }
 
     public static SolverConfig forEkf() {
@@ -65,6 +71,47 @@ public class SolverConfig {
         c.backendName = "FGO+Huber";
         c.useRobustLoss = true;
         c.robustLossType = "huber";
+        return c;
+    }
+
+    public static SolverConfig forFgoWithSwitch() {
+        SolverConfig c = forFgo();
+        c.backendName = "FGO+Switch";
+        c.useSwitchVariable = true;
+        c.switchPriorSigma = 0.1;
+        return c;
+    }
+
+    public static SolverConfig forFgoWithSwitchAndHuber() {
+        SolverConfig c = forFgoWithSwitch();
+        c.backendName = "FGO+Switch+Huber";
+        c.useRobustLoss = true;
+        c.robustLossType = "huber";
+        return c;
+    }
+
+    public SolverConfig copy() {
+        SolverConfig c = new SolverConfig();
+        c.backendName = this.backendName;
+        c.windowSize = this.windowSize;
+        c.useSlidingWindow = this.useSlidingWindow;
+        c.elMaskDeg = this.elMaskDeg;
+        c.snrMaskDbHz = this.snrMaskDbHz;
+        c.maxIterations = this.maxIterations;
+        c.convergenceThreshold = this.convergenceThreshold;
+        c.ratioThreshold = this.ratioThreshold;
+        c.useRobustLoss = this.useRobustLoss;
+        c.robustLossType = this.robustLossType;
+        c.robustLossThreshold = this.robustLossThreshold;
+        c.usePartialAr = this.usePartialAr;
+        c.useCascadeAr = this.useCascadeAr;
+        c.useIace = this.useIace;
+        c.systemMask = this.systemMask;
+        c.frequencyMask = this.frequencyMask;
+        c.stochasticModel = this.stochasticModel;
+        c.useSwitchVariable = this.useSwitchVariable;
+        c.switchPriorSigma = this.switchPriorSigma;
+        c.useSceneAdaptive = this.useSceneAdaptive;
         return c;
     }
 }

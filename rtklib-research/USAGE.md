@@ -91,7 +91,38 @@ backend.initialize(config);
 List<Solution> solutions = backend.solveBatch(epochs, nav);
 ```
 
-### 3.3 EKF vs FGO 对比
+### 3.3 FGO + SwitchVariable（🆕 开关变量机制）
+
+```java
+// 方式1: 快速工厂方法
+SolverConfig switchConfig = SolverConfig.forFgoWithSwitch();
+switchConfig.switchPriorSigma = 0.1;  // 先验标准差（越小越约束 s→1.0）
+
+FgoBackend switchBackend = new FgoBackend("FGO+Switch");
+switchBackend.initialize(switchConfig);
+List<Solution> solutions = switchBackend.solveBatch(epochs, nav);
+
+// 查看开关变量状态
+System.out.println("Switch info: " + switchBackend.lastSwitchInfo());
+// 输出示例: "TC:sw=0.97 PH:sw=1.00"（值<1.0 表示观测被降权）
+```
+
+### 3.4 FGO + 场景自适应（🆕 在线环境感知）
+
+```java
+SolverConfig adaptiveConfig = new SolverConfig();
+adaptiveConfig.backendName = "FGO+Scene";
+adaptiveConfig.windowSize = 30;
+adaptiveConfig.useSceneAdaptive = true;  // 开启自动策略切换
+
+FgoBackend adaptiveBackend = new FgoBackend("FGO+Scene");
+adaptiveBackend.initialize(adaptiveConfig);
+List<Solution> solutions = adaptiveBackend.solveBatch(epochs, nav);
+
+// 输出: OPEN_SKY→无鲁棒, PARTIAL_BLOCKED→Huber, URBAN_CANYON→SwitchVariable
+```
+
+### 3.5 EKF vs FGO 对比
 
 ```java
 BackendComparator comparator = new BackendComparator();
@@ -114,6 +145,9 @@ System.out.println(comparator.formatComparisonTable());
 | `usePhaseFactor` | 启用载波相位 | true |
 | `useIace` | LAMBDA 失败后 IACE 兜底 | false |
 | `usePartialAr` | 部分模糊度固定 | true |
+| `useSwitchVariable` 🆕 | 启用开关变量机制 | false |
+| `switchPriorSigma` 🆕 | 开关先验标准差 | 0.1 |
+| `useSceneAdaptive` 🆕 | 启用场景自适应策略 | false |
 
 ### 全批量模式
 
@@ -132,6 +166,17 @@ SolverConfig config = SolverConfig.forFgoWithHuber();
 config.useRobustLoss = true;
 config.robustLossType = "huber";
 config.robustLossThreshold = 1.345;  // 95% 渐进效率
+```
+
+### SwitchVariable + Huber 双重鲁棒（🆕）
+
+```java
+SolverConfig config = SolverConfig.forFgoWithSwitchAndHuber();
+// 等价于:
+// config.useSwitchVariable = true;
+// config.useRobustLoss = true;
+// config.robustLossType = "HUBER";
+// 效果: 开关变量关闭异常观测 + Huber降权残差噪声
 ```
 
 ## 5. 模糊度解算
@@ -187,6 +232,8 @@ PartialArResult result = solver.solveMultiFactor(
 
 ## 6. 场景评估
 
+### 6.1 离线统计评估
+
 ```java
 SceneEvaluator evaluator = new SceneEvaluator();
 Map<Scene, SceneStats> stats = evaluator.evaluate(solutions, elevations, refPos);
@@ -199,6 +246,25 @@ for (Map.Entry<Scene, SceneStats> e : stats.entrySet()) {
     System.out.printf("%-16s | %4d | %5.1f%% | %8.3f | %8.3f | %8.3f%n",
         label, s.count, s.fixRate * 100, s.rmsE, s.rmsN, s.rmsU);
 }
+```
+
+### 6.2 在线场景分类（🆕）
+
+```java
+// 方法1: 纯卫星数分类
+Scene scene = SceneEvaluator.classify(nSat);
+// nSat > 8  → OPEN_SKY
+// nSat 5-8  → PARTIAL_BLOCKED
+// nSat < 5  → URBAN_CANYON
+
+// 方法2: 高度角+卫星数精确分类
+Scene scene = SceneEvaluator.classify(avgElevationDeg, nSat);
+
+// 方法3: 自动获取自适应策略
+SolverConfig adapted = SceneEvaluator.adaptiveStrategy(baseConfig, scene);
+// OPEN_SKY       → useRobustLoss=false, useSwitchVariable=false
+// PARTIAL_BLOCKED → useRobustLoss=true, Huber k=1.345
+// URBAN_CANYON   → useSwitchVariable=true, sigma=0.1
 ```
 
 ## 7. IMU 预积分（独立使用）
