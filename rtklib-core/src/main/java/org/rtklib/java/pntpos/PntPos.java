@@ -2,6 +2,7 @@ package org.rtklib.java.pntpos;
 
 import org.rtklib.java.common.RtklibCommon;
 import org.rtklib.java.common.SatUtils;
+import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
@@ -17,6 +18,11 @@ public final class PntPos {
     }
 
     public static int pntpos(Obsd[] obs, int n, Nav nav, PrcOpt opt, Sol sol, double[] azel, Ssat[] ssat) {
+        return pntpos(obs, n, nav, opt, sol, azel, ssat, null, null);
+    }
+
+    public static int pntpos(Obsd[] obs, int n, Nav nav, PrcOpt opt, Sol sol,
+                            double[] azel, Ssat[] ssat, RtkConfig cfg, SppEkfState ekfState) {
         PrcOpt opt_ = new PrcOpt(opt);
 
         sol.stat = Constants.SOLQ_NONE;
@@ -57,14 +63,20 @@ public final class PntPos {
         String[] msg = new String[1];
         double[] azel_ = new double[n * 2];
 
-        int stat = SppCore.estpos(obs, n, rs, dts, vare, svh, nav, opt_, ssat, sol, azel_, vsat, resp, msg);
+        int stat;
+        if (cfg != null && cfg.enableSppEkf && ekfState != null) {
+            stat = SppOptimizations.estposFilter(obs, n, rs, dts, vare, svh, nav, opt_, ssat,
+                    sol, azel_, vsat, resp, ekfState, cfg);
+        } else {
+            stat = SppCore.estpos(obs, n, rs, dts, vare, svh, nav, opt_, ssat, sol, azel_, vsat, resp, msg);
 
-        if (stat == 0 && n >= 6 && opt_.posopt[4] != 0) {
-            stat = raimFde(obs, n, rs, dts, vare, svh, nav, opt_, ssat, sol, azel_, vsat, resp, msg);
+            if (stat == 0 && n >= 6 && opt_.posopt[4] != 0) {
+                stat = raimFde(obs, n, rs, dts, vare, svh, nav, opt_, ssat, sol, azel_, vsat, resp, msg);
+            }
         }
 
-        if (stat != 0) {
-            estvel(obs, n, rs, dts, nav, opt_, sol, azel_, vsat);
+        if (stat != 0 && !(cfg != null && cfg.enableSppEkf)) {
+            estvel(obs, n, rs, dts, nav, opt_, sol, azel_, vsat, cfg);
         }
 
         if (azel != null) {
@@ -174,6 +186,12 @@ public final class PntPos {
 
     static void estvel(Obsd[] obs, int n, double[] rs, double[] dts,
                        Nav nav, PrcOpt opt, Sol sol, double[] azel, int[] vsat) {
+        estvel(obs, n, rs, dts, nav, opt, sol, azel, vsat, null);
+    }
+
+    static void estvel(Obsd[] obs, int n, double[] rs, double[] dts,
+                       Nav nav, PrcOpt opt, Sol sol, double[] azel, int[] vsat,
+                       RtkConfig cfg) {
         double[] x = new double[4];
         double[] dx = new double[4];
         double[] Q = new double[16];
@@ -183,7 +201,7 @@ public final class PntPos {
         double[] H = new double[4 * n];
 
         for (int i = 0; i < MAXITR; i++) {
-            nv = resdop(obs, n, rs, dts, nav, sol.rr, x, azel, vsat, err, v, H);
+            nv = resdop(obs, n, rs, dts, nav, sol.rr, x, azel, vsat, err, v, H, opt, cfg);
             if (nv < 4) break;
 
             if (RtklibCommon.lsq(H, v, 4, nv, dx, Q) != 0) break;
@@ -206,6 +224,13 @@ public final class PntPos {
     static int resdop(Obsd[] obs, int n, double[] rs, double[] dts,
                       Nav nav, double[] rr, double[] x, double[] azel,
                       int[] vsat, double err, double[] v, double[] H) {
+        return resdop(obs, n, rs, dts, nav, rr, x, azel, vsat, err, v, H, null, null);
+    }
+
+    static int resdop(Obsd[] obs, int n, double[] rs, double[] dts,
+                      Nav nav, double[] rr, double[] x, double[] azel,
+                      int[] vsat, double err, double[] v, double[] H,
+                      PrcOpt opt, RtkConfig cfg) {
         double[] pos = new double[3];
         double[] E = new double[9];
         double[] a = new double[3];
@@ -218,6 +243,7 @@ public final class PntPos {
 
         for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
             double freq = SatUtils.sat2freq(obs[i].sat, obs[i].code[0], nav);
+            int sys = SatUtils.satsys(obs[i].sat, null);
 
             if (obs[i].D[0] == 0.0 || freq == 0.0 || vsat[i] == 0 ||
                     Math.sqrt(rs[3 + i * 6] * rs[3 + i * 6] + rs[4 + i * 6] * rs[4 + i * 6] + rs[5 + i * 6] * rs[5 + i * 6]) <= 0.0) {
@@ -242,7 +268,15 @@ public final class PntPos {
                     (rs[4 + i * 6] * rr[0] + rs[1 + i * 6] * x[0] -
                      rs[3 + i * 6] * rr[1] - rs[i * 6] * x[1]);
 
-            double sig = (err <= 0.0) ? 1.0 : err * Constants.CLIGHT / freq;
+            double sig;
+            if (cfg != null && cfg.enableSppDopplerSnr && opt != null) {
+                PrcOpt optDop = new PrcOpt(opt);
+                optDop.eratio[0] = 30.0;
+                double varr = SppCore.varerr(optDop, null, obs[i], azel[1 + i * 2], sys);
+                sig = Math.sqrt(varr);
+            } else {
+                sig = (err <= 0.0) ? 1.0 : err * Constants.CLIGHT / freq;
+            }
 
             v[nv] = (-obs[i].D[0] * Constants.CLIGHT / freq - (rate + x[3] - Constants.CLIGHT * dts[1 + i * 2])) / sig;
 

@@ -27,6 +27,7 @@ public final class SppCore {
         int nx = 4;
         if ((opt.navsys & Constants.SYS_GLO) != 0) nx++;
         if ((opt.navsys & Constants.SYS_GAL) != 0) nx++;
+        if ((opt.navsys & Constants.SYS_QZS) != 0) nx++;
         if ((opt.navsys & Constants.SYS_CMP) != 0) nx++;
         if ((opt.navsys & Constants.SYS_IRN) != 0) nx++;
         return nx;
@@ -40,6 +41,10 @@ public final class SppCore {
         }
         if ((opt.navsys & Constants.SYS_GAL) != 0) {
             if (sys == Constants.SYS_GAL) return idx;
+            idx++;
+        }
+        if ((opt.navsys & Constants.SYS_QZS) != 0) {
+            if (sys == Constants.SYS_QZS) return idx;
             idx++;
         }
         if ((opt.navsys & Constants.SYS_CMP) != 0) {
@@ -115,14 +120,14 @@ public final class SppCore {
         if (P1 == 0.0 || (opt.ionoopt == Constants.IONOOPT_IFLC && P2 == 0.0)) return 0.0;
 
         int biasIx = code2biasIx(sys, obs.code[0]);
-        if (biasIx > 0) {
+        if (biasIx > 0 && nav.cbias != null && sat > 0 && sat <= nav.cbias.length) {
             P1 += nav.cbias[sat - 1][0][biasIx - 1];
         }
         if (sys == Constants.SYS_GAL && f2 == 1) {
             // skip code bias for GAL L2, no GAL L2 bias available
         } else {
             biasIx = code2biasIx(sys, obs.code[f2]);
-            if (biasIx > 0) {
+            if (biasIx > 0 && nav.cbias != null && sat > 0 && sat <= nav.cbias.length) {
                 P2 += nav.cbias[sat - 1][1][biasIx - 1];
             }
         }
@@ -374,9 +379,23 @@ public final class SppCore {
             var[nv++] = 0.01;
         }
         if (iter == 0 && nv < NX) {
+            logSkipReasons(skipReason, n);
             return nv;
         }
         return nv;
+    }
+
+    static void logSkipReasons(int[] skipReason, int n) {
+        int[] cnt = new int[11];
+        for (int i = 0; i < n; i++) cnt[skipReason[i]]++;
+        int totalSkip = 0;
+        for (int i = 1; i < cnt.length; i++) totalSkip += cnt[i];
+        if (totalSkip == 0) return;
+        StringBuilder sb = new StringBuilder("rescode skip: total=").append(totalSkip);
+        for (int i = 1; i < cnt.length; i++) {
+            if (cnt[i] > 0) sb.append(" skip").append(i).append("=").append(cnt[i]);
+        }
+        LOG.debug(sb.toString());
     }
 
     public static int estpos(Obsd[] obs, int n, double[] rs, double[] dts,
@@ -398,6 +417,7 @@ public final class SppCore {
                               v, H, var, azel, vsat, resp, ns);
             if (nv < NX) {
                 msg[0] = "lack of valid sats ns=" + ns[0] + " nv=" + nv + " NX=" + NX;
+                LOG.warn("estpos: {}", msg[0]);
                 return 0;
             }
             for (int j = 0; j < nv; j++) {
@@ -407,6 +427,7 @@ public final class SppCore {
             }
             if (RtklibCommon.lsq(H, v, NX, nv, dx, Q) != 0) {
                 msg[0] = "lsq error";
+                LOG.warn("estpos: {}", msg[0]);
                 return 0;
             }
             for (int j = 0; j < NX; j++) x[j] += dx[j];
@@ -419,12 +440,14 @@ public final class SppCore {
                 sol.dtr[0] = x[3] / Constants.CLIGHT;
                 int gloIdx = sysIdx(Constants.SYS_GLO, opt);
                 int galIdx = sysIdx(Constants.SYS_GAL, opt);
+                int qzsIdx = sysIdx(Constants.SYS_QZS, opt);
                 int cmpIdx = sysIdx(Constants.SYS_CMP, opt);
                 int irnIdx = sysIdx(Constants.SYS_IRN, opt);
                 sol.dtr[1] = gloIdx >= 0 ? x[gloIdx] / Constants.CLIGHT : 0.0;
                 sol.dtr[2] = galIdx >= 0 ? x[galIdx] / Constants.CLIGHT : 0.0;
                 sol.dtr[3] = cmpIdx >= 0 ? x[cmpIdx] / Constants.CLIGHT : 0.0;
                 sol.dtr[4] = irnIdx >= 0 ? x[irnIdx] / Constants.CLIGHT : 0.0;
+                sol.dtr[5] = qzsIdx >= 0 ? x[qzsIdx] / Constants.CLIGHT : 0.0;
                 for (int j = 0; j < 6; j++) sol.rr[j] = (j < 3) ? x[j] : 0.0;
                 for (int j = 0; j < 3; j++) sol.qr[j] = (float) Q[j * NX + j];
                 sol.qr[3] = (float) Q[1];
@@ -443,6 +466,7 @@ public final class SppCore {
             }
         }
         msg[0] = "iteration divergent";
+        LOG.warn("estpos: {}", msg[0]);
         return 0;
     }
 }

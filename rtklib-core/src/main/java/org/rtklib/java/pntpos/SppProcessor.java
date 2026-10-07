@@ -1,5 +1,6 @@
 package org.rtklib.java.pntpos;
 
+import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
 import org.rtklib.java.ephemeris.EphModel;
@@ -111,6 +112,9 @@ public class SppProcessor {
     private EpochCache epochCache;
     private String lastSourceId = null;
 
+    private RtkConfig rtkConfig;
+    private SppEkfState ekfState;
+
     /**
      * 构造SPP处理器。
      *
@@ -199,6 +203,24 @@ public class SppProcessor {
 
     public void setTraceCallback(TraceCallback traceCallback) {
         this.traceCallback = traceCallback;
+    }
+
+    public void setRtkConfig(RtkConfig rtkConfig) {
+        this.rtkConfig = rtkConfig;
+        if (rtkConfig != null && rtkConfig.enableSppEkf) {
+            int nxF = SppEkfState.computeNxF(opt);
+            this.ekfState = new SppEkfState(nxF);
+        } else {
+            this.ekfState = null;
+        }
+    }
+
+    public RtkConfig getRtkConfig() {
+        return rtkConfig;
+    }
+
+    public SppEkfState getEkfState() {
+        return ekfState;
     }
 
     public EpochCache getEpochCache() {
@@ -319,6 +341,10 @@ public class SppProcessor {
 
         pendingLen = 0;
         finished = false;
+
+        if (rtkConfig != null && rtkConfig.enableSppEkf && ekfState != null) {
+            ekfState.reset();
+        }
     }
 
     /**
@@ -620,8 +646,7 @@ public class SppProcessor {
         double[] resp = new double[n];
         String[] msg = new String[1];
 
-        int result = SppCore.estpos(obsData, n, rs, dts, vare, svh,
-                nav, opt, ssat, sol, azel, vsat, resp, msg);
+        int result = PntPos.pntpos(obsData, n, nav, opt, sol, azel, ssat, rtkConfig, ekfState);
 
         if (result == 1) {
             successCount++;

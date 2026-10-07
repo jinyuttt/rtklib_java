@@ -98,22 +98,22 @@ public final class SatUtils {
         if (id == null || id.length() < 3) return 0;
         char code = id.charAt(0);
         int sys;
-        switch (code) {
-            case 'G': sys = Constants.SYS_GPS; break;
-            case 'R': sys = Constants.SYS_GLO; break;
-            case 'E': sys = Constants.SYS_GAL; break;
-            case 'J': sys = Constants.SYS_QZS; break;
-            case 'C': sys = Constants.SYS_CMP; break;
-            case 'I': sys = Constants.SYS_IRN; break;
-            case 'L': sys = Constants.SYS_LEO; break;
-            case 'S': sys = Constants.SYS_SBS; break;
-            default: return 0;
-        }
         int prn;
         try {
             prn = Integer.parseInt(id.substring(1));
         } catch (NumberFormatException ex) {
             return 0;
+        }
+        switch (code) {
+            case 'G': sys = Constants.SYS_GPS; prn += Constants.MINPRNGPS - 1; break;
+            case 'R': sys = Constants.SYS_GLO; prn += Constants.MINPRNGLO - 1; break;
+            case 'E': sys = Constants.SYS_GAL; prn += Constants.MINPRNGAL - 1; break;
+            case 'J': sys = Constants.SYS_QZS; prn += Constants.MINPRNQZS - 1; break;
+            case 'C': sys = Constants.SYS_CMP; prn += Constants.MINPRNCMP - 1; break;
+            case 'I': sys = Constants.SYS_IRN; prn += Constants.MINPRNIRN - 1; break;
+            case 'L': sys = Constants.SYS_LEO; prn += Constants.MINPRNLEO - 1; break;
+            case 'S': sys = Constants.SYS_SBS; prn += 100; break;
+            default: return 0;
         }
         return satno(sys, prn);
     }

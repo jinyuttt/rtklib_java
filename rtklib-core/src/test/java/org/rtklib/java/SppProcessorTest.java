@@ -11,6 +11,8 @@ import org.rtklib.java.pntpos.SppProcessor;
 import org.rtklib.java.time.TimeSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.rtklib.java.config.RtkConfig;
+import org.rtklib.java.pntpos.SppEkfState;
 
 import java.io.*;
 import java.util.*;
@@ -28,11 +30,17 @@ public class SppProcessorTest {
 
     @BeforeAll
     static void loadData() throws IOException {
-        try (FileInputStream fis = new FileInputStream(ROVER_PATH)) {
-            roverData = fis.readAllBytes();
+        File roverFile = new File(ROVER_PATH);
+        if (roverFile.exists()) {
+            try (FileInputStream fis = new FileInputStream(roverFile)) {
+                roverData = fis.readAllBytes();
+            }
+            log.info("Loaded RTCM data: {} bytes", roverData.length);
+        } else {
+            log.warn("Default RTCM file not found: {}, tests that need it will skip", ROVER_PATH);
+            roverData = null;
         }
         new File(RESULT_DIR).mkdirs();
-        log.info("Loaded RTCM data: {} bytes", roverData.length);
     }
 
     @Test
@@ -430,5 +438,111 @@ public class SppProcessorTest {
         return String.format("%04d/%02d/%02d %02d:%02d:%s",
                 (int) ymd[0], (int) ymd[1], (int) ymd[2],
                 (int) ymd[3], (int) ymd[4], secStr);
+    }
+
+    @Test
+    @DisplayName("13. BDS-only SPP: optimization vs baseline")
+    void testBdsOnlyOptimizationComparison() throws Exception {
+        String desktopPath = System.getenv("USERPROFILE") + "\\Desktop\\over.rtcm3";
+        File rtcmFile = new File(desktopPath);
+        assertTrue(rtcmFile.exists(), "Desktop RTCM file should exist: " + desktopPath);
+
+        byte[] rtcmData;
+        try (FileInputStream fis = new FileInputStream(rtcmFile)) {
+            rtcmData = fis.readAllBytes();
+        }
+        log.info("BDS-only RTCM data: {} bytes from {}", rtcmData.length, desktopPath);
+
+        PrcOpt opt = new PrcOpt();
+        opt.mode = Constants.PMODE_SINGLE;
+        opt.nf = 3;
+        opt.navsys = Constants.SYS_CMP;
+        opt.elmin = 15.0 * Constants.D2R;
+        opt.ionoopt = Constants.IONOOPT_BRDC;
+        opt.tropopt = Constants.TROPOPT_SAAS;
+        opt.dynamics = 1;
+
+        // ==== baseline: no optimization ====
+        List<Sol> baselineSols = new ArrayList<>();
+        SppProcessor sppBaseline = new SppProcessor(opt, new PosHandler() {
+            @Override public void onSolution(Sol sol, Ssat[] ssat) { baselineSols.add(sol); }
+            @Override public void onPosFail(GTime time, String msg) {}
+            @Override public void onFinish(int total, int success, int fail) {
+                log.info("[baseline] finish: total={}, success={}, fail={}", total, success, fail);
+            }
+        });
+        SppProcessor.SppResult baselineResult = sppBaseline.process(rtcmData);
+        log.info("[baseline] SPP result: total={}, success={}, fail={}",
+                baselineResult.totalEpochs, baselineResult.successCount, baselineResult.failCount);
+
+        // ==== optimized: EKF + robust + zero-vel + Doppler/SNR ====
+        RtkConfig cfg = new RtkConfig();
+        cfg.enableSppEkf = true;
+        cfg.enableSppRobust = true;
+        cfg.enableSppZeroVel = true;
+        cfg.enableSppDopplerSnr = true;
+
+        List<Sol> optSols = new ArrayList<>();
+        SppProcessor sppOpt = new SppProcessor(opt, new PosHandler() {
+            @Override public void onSolution(Sol sol, Ssat[] ssat) { optSols.add(sol); }
+            @Override public void onPosFail(GTime time, String msg) {}
+            @Override public void onFinish(int total, int success, int fail) {
+                log.info("[optimized] finish: total={}, success={}, fail={}", total, success, fail);
+            }
+        });
+        sppOpt.setRtkConfig(cfg);
+        SppProcessor.SppResult optResult = sppOpt.process(rtcmData);
+        log.info("[optimized] SPP result: total={}, success={}, fail={}",
+                optResult.totalEpochs, optResult.successCount, optResult.failCount);
+
+        // ==== compare ====
+        log.info("");
+        log.info("========== BDS-only SPP 优化对比 ==========");
+        log.info("baseline: {} solutions, optimized: {} solutions",
+                baselineSols.size(), optSols.size());
+
+        int compareCount = Math.min(baselineSols.size(), optSols.size());
+        double sumDiff3D = 0, maxDiff3D = 0;
+        double sumDiffH = 0, maxDiffH = 0;
+
+        for (int i = 0; i < compareCount; i++) {
+            Sol bs = baselineSols.get(i);
+            Sol os = optSols.get(i);
+
+            double dx = bs.rr[0] - os.rr[0];
+            double dy = bs.rr[1] - os.rr[1];
+            double dz = bs.rr[2] - os.rr[2];
+            double diff3D = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            double diffH = Math.abs(bs.rr[2] - os.rr[2]);
+
+            sumDiff3D += diff3D;
+            sumDiffH += diffH;
+            if (diff3D > maxDiff3D) maxDiff3D = diff3D;
+            if (diffH > maxDiffH) maxDiffH = diffH;
+        }
+
+        double avgDiff3D = compareCount > 0 ? sumDiff3D / compareCount : 0;
+        double avgDiffH = compareCount > 0 ? sumDiffH / compareCount : 0;
+
+        log.info("平均 3D 偏差: {} m", String.format("%.3f", avgDiff3D));
+        log.info("最大 3D 偏差: {} m", String.format("%.3f", maxDiff3D));
+        log.info("平均 高程偏差: {} m", String.format("%.3f", avgDiffH));
+        log.info("最大 高程偏差: {} m", String.format("%.3f", maxDiffH));
+
+        // print first 5 solutions
+        log.info("");
+        log.info("--- 前5个历元对比 (lat, lon, h, ns) ---");
+        for (int i = 0; i < Math.min(5, compareCount); i++) {
+            double[] bsLlh = new double[3], osLlh = new double[3];
+            CoordTransform.ecef2pos(baselineSols.get(i).rr, bsLlh);
+            CoordTransform.ecef2pos(optSols.get(i).rr, osLlh);
+            log.info("  历元{}: base(lat={} lon={} h={} ns={}) opt(lat={} lon={} h={} ns={})",
+                    i,
+                    String.format("%.6f", Math.toDegrees(bsLlh[0])), String.format("%.6f", Math.toDegrees(bsLlh[1])), String.format("%.2f", bsLlh[2]), baselineSols.get(i).ns,
+                    String.format("%.6f", Math.toDegrees(osLlh[0])), String.format("%.6f", Math.toDegrees(osLlh[1])), String.format("%.2f", osLlh[2]), optSols.get(i).ns);
+        }
+
+        assertTrue(baselineSols.size() > 0, "Baseline should have solutions");
+        assertTrue(optSols.size() > 0, "Optimized should have solutions");
     }
 }

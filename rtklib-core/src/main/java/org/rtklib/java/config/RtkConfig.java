@@ -127,6 +127,31 @@ public class RtkConfig implements Serializable {
     public String osbFile = "";
     public String dcbFile = "";
 
+    public boolean enableSppEkf = false;
+    public boolean enableSppRobust = false;
+    public boolean enableSppZeroVel = false;
+    public boolean enableSppDopplerSnr = false;
+
+    public double sppEkfVarPos = 50.0 * 50.0;
+    public double sppEkfVarVel = 10.0 * 10.0;
+    public double sppEkfVarAcc = 10.0 * 10.0;
+    public double sppEkfClkProcessNoise = 10000.0;
+    public double sppEkfAccPrn1 = 10.0;
+    public double sppEkfAccPrn2 = 10.0;
+    public double sppEkfVelResidScale = 1.0;
+    public double sppEkfVarResetThresh = 50.0 * 50.0;
+    public double sppEkfDtGap = 10.0;
+
+    public double sppRobustKPos = 1.345;
+    public double sppRobustKVel = 5.0;
+    public int sppRobustMaxIter = 15;
+    public double sppRobustPosOutlier = 100.0;
+    public double sppRobustVelOutlier = 20.0;
+    public double sppRobustMinW = 0.0001;
+
+    public double sppZeroVelSpeedThresh = 0.5;
+    public int sppZeroVelMinEpochs = 1;
+
     public boolean enablePppRtk = false;
     public boolean enablePppRtkAR = false;
     public double pppRtkArRatio = 3.0;
@@ -256,6 +281,28 @@ public class RtkConfig implements Serializable {
         this.enableOsb = other.enableOsb;
         this.osbFile = other.osbFile;
         this.dcbFile = other.dcbFile;
+
+        this.enableSppEkf = other.enableSppEkf;
+        this.enableSppRobust = other.enableSppRobust;
+        this.enableSppZeroVel = other.enableSppZeroVel;
+        this.enableSppDopplerSnr = other.enableSppDopplerSnr;
+        this.sppEkfVarPos = other.sppEkfVarPos;
+        this.sppEkfVarVel = other.sppEkfVarVel;
+        this.sppEkfVarAcc = other.sppEkfVarAcc;
+        this.sppEkfClkProcessNoise = other.sppEkfClkProcessNoise;
+        this.sppEkfAccPrn1 = other.sppEkfAccPrn1;
+        this.sppEkfAccPrn2 = other.sppEkfAccPrn2;
+        this.sppEkfVelResidScale = other.sppEkfVelResidScale;
+        this.sppEkfVarResetThresh = other.sppEkfVarResetThresh;
+        this.sppEkfDtGap = other.sppEkfDtGap;
+        this.sppRobustKPos = other.sppRobustKPos;
+        this.sppRobustKVel = other.sppRobustKVel;
+        this.sppRobustMaxIter = other.sppRobustMaxIter;
+        this.sppRobustPosOutlier = other.sppRobustPosOutlier;
+        this.sppRobustVelOutlier = other.sppRobustVelOutlier;
+        this.sppRobustMinW = other.sppRobustMinW;
+        this.sppZeroVelSpeedThresh = other.sppZeroVelSpeedThresh;
+        this.sppZeroVelMinEpochs = other.sppZeroVelMinEpochs;
 
         this.enablePppRtk = other.enablePppRtk;
         this.enablePppRtkAR = other.enablePppRtkAR;

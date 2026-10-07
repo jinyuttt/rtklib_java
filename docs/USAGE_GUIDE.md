@@ -438,6 +438,38 @@ spp.feed(data2);
 SppProcessor.SppResult result2 = spp.finish();
 ```
 
+### 5.4 SPP 优化开关（基于 MobileGNSS-SPP 项目）
+
+通过 `RtkConfig` 开关启用 SPP 优化功能，无需修改基准 RTKLIB 代码：
+
+```java
+PrcOpt opt = SppProcessor.createDefaultOpt();
+opt.mode = Constants.PMODE_SINGLE;
+opt.navsys = Constants.SYS_ALL;
+opt.dynamics = 1;  // EKF 需要速度状态
+
+RtkConfig cfg = new RtkConfig();
+cfg.enableSppEkf = true;           // EKF 时间传播（历元间平滑）
+cfg.enableSppRobust = true;        // IGGIII 抗差估计
+cfg.enableSppZeroVel = true;       // 零速约束（静态/低速场景）
+cfg.enableSppDopplerSnr = true;    // 多普勒+SNR 加权
+
+SppProcessor spp = new SppProcessor(opt, handler);
+spp.setRtkConfig(cfg);             // 注入配置
+SppProcessor.SppResult result = spp.process("data.rtcm3");
+```
+
+**推荐组合：**
+
+| 场景 | 开关配置 |
+|------|----------|
+| 多系统开放天空 | `enableSppEkf` + `enableSppDopplerSnr` |
+| 城市峡谷/恶劣环境 | `enableSppEkf` + `enableSppRobust` + `enableSppDopplerSnr` |
+| 静态基准站/滑坡监测 | 全开 (Ekf + Robust + ZeroVel + DopplerSnr) |
+| 仅北斗 (BDS-only) | 同上述场景，设置 `navsys = SYS_CMP` |
+
+> **注意**：`enableSppZeroVel` 需 `dynamics=1` 使能速度状态。基准 RTKLIB 代码通过 `if (cfg != null && cfg.enableSppXxx)` 保护，不传入 `RtkConfig` 时完全等同于原始行为。
+
 ---
 
 ## 6. PPP 精密单点定位
