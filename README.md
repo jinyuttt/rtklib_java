@@ -158,6 +158,7 @@ org.rtklib.java.otl
 | [优化介绍](docs/RTK_Extra_Optimizations.md) | Java 版额外优化项（C 版没有的），独立开关控制 |
 | [优化功能矩阵](docs/CORE_OPTIMIZATION_MATRIX.md) | 按定位模式×场景分类的优化功能矩阵，含静态实测结论、动态适用性、基线类型标记 |
 | [轨道模块技术参考](docs/ORBIT_MODULE_REFERENCE.md) | TLE解析、SGP4/SDP4传播、六根数转换、二体传播 |
+| [开发路线图](docs/ROADMAP.md) | 各模块完成度、Phase 1~5 规划、完好性监测 / PPP-RTK区域约束 / FGO融合等研究方向、暂缓原则 |
 
 ### rtklib-product
 
@@ -242,28 +243,26 @@ org.rtklib.java.otl
 
 ## 开发状态
 
-功能开发已完善，覆盖主流GNSS定位算法与工程落地：
+基础功能已完善，覆盖主流GNSS定位算法与工程落地。详细规划见 [开发路线图](docs/ROADMAP.md)。
 
-**核心算法** — 全部实现并测试通过：
+**Phase 1 ✅ — 基础能力建设**：RTKLIB C 版核心算法全移植（SPP/RTK/PPP/PPP-RTK）、LAMBDA、RTCM3、RINEX3、Kalman、精密产品、NTRIP、轨道模块、海潮负荷。
+
+**Phase 2 🟡 — 高级优化与独立模块**（基本完成）：
 
 | 模块 | 状态 | 测试方式 |
 |------|------|----------|
-| SPP 单点定位 | ✅ | 真实RINEX数据 vs C版参考结果 |
-| RTK 相对定位 | ✅ | 真实RINEX数据 vs C版参考结果 |
-| PPP 精密单点定位 | ✅ | 真实RINEX+精密星历数据 |
-| PPP-AR 模糊度固定 | ✅ | 真实数据 + 数值验证（PppArFixVerificationTest） |
-| PPP-RTK | ✅ | 真实SSR数据 + 数值验证 |
-| RTK高级优化（CascadeAR/PartialAR/ResEdit/Bootstrap/BdsBias） | ✅ | 真实数据 vs C版参考结果 |
-| PPP高级优化（GPT3+VMF3/IERS2010/PartialAR/Fix-and-Hold） | ✅ | 真实数据 + 数值验证 |
-| RTCM3 SSR解码（MT1057-1068） | ✅ | 真实RTCM流 |
-| Galileo HAS SSR解码 | ✅ | 单元测试 |
-| 紧凑SSR/CLAS解码（MT4073） | ✅ | Python cssrlib交叉验证 |
+| SPP 单点定位 + EKF + 抗差 + 零速约束 | ✅ | 真实RINEX数据 vs C版参考结果 |
+| RTK 相对定位 + 6项高级优化 | ✅ | 真实RINEX数据 vs C版参考结果 |
+| PPP + PPP-AR + 5项高级优化 | ✅ | 真实RINEX+精密星历数据 |
+| PPP-RTK 基础（SSR改正） | ✅ | 真实SSR数据 + 数值验证 |
+| Compact SSR / CLAS / HAS 解码 | ✅ | Python cssrlib交叉验证 / 单元测试 |
 | 多基线间接平差 | ✅ | 真实RTCM实测数据 |
-| 精密产品下载 | ✅ | IGS/MGEX多镜像源 |
-| 轨道模块（TLE/SGP4/SDP4） | ✅ | Vallado标准14用例 + 86颗真实TLE（PGS/北斗星历，公共网站下载） |
-| 海潮负荷（OTL） | ✅ | Fortran参考对比验证 |
+| 因子图优化 FGO + IMU 预积分 | ✅ | FE-GUT 仿真数据集 |
+| 轨道模块 + 海潮负荷 | ✅ | Vallado/Fortran 参考对比 |
 
-**当前阶段**：基础功能已通过真实数据测试，主要进入测试修复阶段——用更多场景和边界条件的数据进行验证，发现并修复潜在bug。
+剩余：RTKLIB C 版 RAIM FDE（`pntpos.c raim_fde()`）未移植、PPP-RTK 区域大气约束未接入。这两项与完好性保护级、ARAIM、固定解完好性同属**Phase 4 研究深化方向，暂缓开发**。
+
+**Phase 3 🟢 — 测试加固与工程质量**（待启动）：多系统多频 PPP 长时段验证、动态车载数据、C 版差异消除、性能基准。
 
 **未实现的C版功能**（设计上不实现）：TCP/UDP服务端、NTRIP Caster、接收机原始协议（u-blox/NovAtel等）、NMEA输出、GPX/KML输出、大地水准面/基准转换。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
