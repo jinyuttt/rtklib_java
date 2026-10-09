@@ -1,0 +1,11 @@
+scenario=open-sky
+role=rover
+systems=C
+date=2026-07-09
+source=self-collected
+duration=1h
+interval=1s
+description=BDS流动站观测数据，RINEX 3.02格式，配合bds_base做RTK
+receiver=u-blox F9P
+base.id=bds_base
+base.distance=0.5

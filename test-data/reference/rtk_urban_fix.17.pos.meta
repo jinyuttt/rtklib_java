@@ -1,0 +1,9 @@
+scenario=urban
+role=reference
+systems=G+R+J+C+E
+date=2017-07-19
+source=Net_Diff
+mode=rtk
+software=RTKLIB
+software.config=Kinematic, IFLC, AR=continuous
+description=城市RTK固定解参考，Trimble基站+u-blox流动站，Q=1固定解，可用于精度验证

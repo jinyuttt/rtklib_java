@@ -1,0 +1,5 @@
+data.repo.url=https://github.com/rtklib-java/rtklib-java-data.git
+data.repo.branch=main
+data.local.dir=test-data
+data.description=GNSS测试数据仓库（大文件>2MB），包含RINEX/RTCM3/SP3/CLK等
+data.note=小文件(<=2MB)已直接提交至test-data/目录，此仓库仅存放大文件

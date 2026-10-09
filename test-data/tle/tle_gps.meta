@@ -1,0 +1,7 @@
+source=Celestrak
+date=2026-09-21
+systems=G
+satellites=GPS全星座运行卫星TLE
+description=GPS卫星两行根数，用于SGP4轨道传播交叉验证
+scenario=orbit-validation
+role=reference

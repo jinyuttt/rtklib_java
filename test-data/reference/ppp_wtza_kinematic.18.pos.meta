@@ -1,0 +1,8 @@
+scenario=open-sky
+role=reference
+systems=G
+date=2018-06-06
+source=Net_Diff
+mode=ppp
+software=RTKLIB
+description=PPP动态解算结果参考，WTZA站(Wettzell,德国)，Q=6动态解

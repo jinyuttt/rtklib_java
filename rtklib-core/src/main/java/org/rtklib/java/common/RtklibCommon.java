@@ -309,6 +309,91 @@ public final class RtklibCommon {
     }
 
     /**
+     * Compact observation frequency arrays so that valid observations
+     * are stored contiguously at positions 0..nf-1, sorted by frequency index.
+     *
+     * <p>RINEX 3.x parsing stores observations at their native frequency index
+     * (e.g., BDS B1I at idx=4, B7I at idx=1). However, zdres() iterates
+     * f=0..nf-1 and accesses obs.code[f], obs.P[f], obs.L[f] sequentially.
+     * If the native indices have gaps (e.g., data at idx=1,3,4 but not 0),
+     * zdres will miss valid observations.</p>
+     *
+     * <p>This method reorders each Obsd's per-frequency arrays so that
+     * the first nf positions contain the valid observations sorted by
+     * their native frequency index (ascending). This aligns with how
+     * RTKLIB C handles multi-frequency observations internally.</p>
+     *
+     * @param obs observation array
+     * @param n   number of observations
+     * @param nf  number of frequencies to use (opt.nf)
+     * @param nav navigation data (for frequency lookup)
+     */
+    public static void compactObsFreq(Obsd[] obs, int n, int nf, Nav nav) {
+        int nfreqNexobs = Constants.NFREQ + Constants.NEXOBS;
+        for (int i = 0; i < n; i++) {
+            Obsd o = obs[i];
+
+            int[] origIdx = new int[nfreqNexobs];
+            int cnt = 0;
+            for (int f = 0; f < nfreqNexobs; f++) {
+                if (o.code[f] != 0 || o.P[f] != 0.0 || o.L[f] != 0.0) {
+                    origIdx[cnt++] = f;
+                }
+            }
+
+            if (cnt == 0) continue;
+
+            boolean needCompact = false;
+            for (int j = 0; j < cnt; j++) {
+                if (origIdx[j] != j) { needCompact = true; break; }
+            }
+            if (!needCompact) continue;
+
+            int[] sortedIdx = new int[cnt];
+            System.arraycopy(origIdx, 0, sortedIdx, 0, cnt);
+            for (int j = 0; j < cnt - 1; j++) {
+                for (int k = j + 1; k < cnt; k++) {
+                    if (sortedIdx[k] < sortedIdx[j]) {
+                        int tmp = sortedIdx[j];
+                        sortedIdx[j] = sortedIdx[k];
+                        sortedIdx[k] = tmp;
+                    }
+                }
+            }
+
+            int[] newCode = new int[nfreqNexobs];
+            double[] newL = new double[nfreqNexobs];
+            double[] newP = new double[nfreqNexobs];
+            float[] newD = new float[nfreqNexobs];
+            float[] newSNR = new float[nfreqNexobs];
+            int[] newLLI = new int[nfreqNexobs];
+            float[] newLstd = new float[nfreqNexobs];
+            float[] newPstd = new float[nfreqNexobs];
+
+            for (int j = 0; j < cnt && j < nfreqNexobs; j++) {
+                int src = sortedIdx[j];
+                newCode[j] = o.code[src];
+                newL[j] = o.L[src];
+                newP[j] = o.P[src];
+                newD[j] = o.D[src];
+                newSNR[j] = o.SNR[src];
+                newLLI[j] = o.LLI[src];
+                newLstd[j] = o.Lstd[src];
+                newPstd[j] = o.Pstd[src];
+            }
+
+            o.code = newCode;
+            o.L = newL;
+            o.P = newP;
+            o.D = newD;
+            o.SNR = newSNR;
+            o.LLI = newLLI;
+            o.Lstd = newLstd;
+            o.Pstd = newPstd;
+        }
+    }
+
+    /**
      * SSR carrier-phase bias correction.
      * Aligned with RTKLIB postpos.c corr_phase_bias_ssr() and rtksvr.c corr_phase_bias().
      *

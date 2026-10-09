@@ -33,7 +33,7 @@ public final class ClkReader {
 
             while ((line = br.readLine()) != null) {
                 if (inHeader) {
-                    if (line.length() >= 20 && line.substring(20).startsWith("RINEX VERSION / TYPE")) {
+                    if (line.contains("RINEX VERSION / TYPE")) {
                         try {
                             ver = Double.parseDouble(line.substring(0, 20).trim());
                         } catch (NumberFormatException ignored) {
@@ -47,13 +47,13 @@ public final class ClkReader {
 
                 if (!line.startsWith("AS")) continue;
 
-                int off = ver >= 3.04 ? 5 : 0;
+                int timeOff = ver >= 3.04 ? 5 : 0;
 
-                String satField = line.substring(3 + off, Math.min(7 + off, line.length())).trim();
+                String satField = line.substring(3, Math.min(7, line.length())).trim();
                 int sat = parseSat(satField);
                 if (sat <= 0 || sat > Constants.MAXSAT) continue;
 
-                GTime time = parseClkTime(line, 8 + off, 26);
+                GTime time = parseClkTime(line, 8 + timeOff, 26);
                 if (time.time == 0 && time.sec == 0.0) continue;
 
                 Pclk last = pclkList.isEmpty() ? null : pclkList.get(pclkList.size() - 1);
@@ -64,8 +64,8 @@ public final class ClkReader {
                     last = pclk;
                 }
 
-                double clkVal = str2num(line, 40 + off, 19);
-                double clkStd = str2num(line, 59 + off, 19);
+                double clkVal = str2num(line, 40 + timeOff, 19);
+                double clkStd = str2num(line, 59 + timeOff, 19);
 
                 last.clk[sat - 1][0] = clkVal;
                 last.std[sat - 1][0] = (float) clkStd;

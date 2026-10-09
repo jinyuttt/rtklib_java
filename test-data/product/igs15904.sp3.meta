@@ -1,0 +1,6 @@
+scenario=open-sky
+role=reference
+systems=G
+date=2005-09-04
+source=IGS
+description=IGS精密轨道，SP3格式，15分钟间隔，配合RTKLIB样例数据
