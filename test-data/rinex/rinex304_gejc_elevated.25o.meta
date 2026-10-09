@@ -1,0 +1,11 @@
+scenario=urban
+role=rover
+systems=G+E+J+C
+date=2025-05-21
+source=MobileGNSS-SPP
+station=uis7865
+duration=21min
+interval=1s
+description=手机GNSS高架桥场景，UNISOC uis7865芯片，G+E+J+C四系统单频，RINEX 3.04格式
+location=Beijing, China
+receiver=UNISOC uis7865

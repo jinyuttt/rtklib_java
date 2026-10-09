@@ -1,0 +1,6 @@
+scenario=open-sky
+role=reference
+systems=G
+date=2005-09-20
+source=RTKLIB-sample
+description=GPS广播星历，RINEX 2.10格式，配合0759观测数据

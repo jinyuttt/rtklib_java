@@ -1,0 +1,12 @@
+scenario=open-sky
+role=reference
+systems=G
+date=2009-05-15
+source=RTKLIB-sample
+mode=rtk
+software=RTKLIB-C 2.4.1
+software.config=kinematic, L1+L2, AR=fix-and-hold, elmask=20, brdc iono, saas trop
+description=RTKLIB自带样例RTK配置，日本新潟县开阔地kinematic定位
+location=Nirasaki, Yamanashi, Japan
+lat=35.715
+lon=138.451

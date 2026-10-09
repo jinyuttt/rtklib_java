@@ -1,0 +1,12 @@
+scenario=open-sky
+role=base
+systems=G
+date=2005-09-20
+source=RTKLIB-sample
+station=3040
+duration=4h
+interval=30s
+description=RTKLIB样例，GPS双频L1/L2，RINEX 2.10格式，短基线RTK基站
+location=Japan
+receiver=NovAtel OEMV
+base.distance=0.015

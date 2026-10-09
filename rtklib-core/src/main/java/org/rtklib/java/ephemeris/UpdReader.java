@@ -17,18 +17,22 @@ import java.util.List;
  * <p>UPD与FCB功能类似，提供宽巷和窄巷的相位偏差改正。
  * UPD是WHU/PRIDE的命名方式，FCB是CNES的命名方式，两者数学上等价。
  *
- * <p>文件格式：
+ * <p>支持两种文件格式：
  * <pre>
- *   WIDELANE 或 WL 标记行（宽巷段开始）
- *   time  sat  upd_wl
- *   NARROWLANE 或 NL 标记行（窄巷段开始）
- *   time  sat  upd_nl
+ *   格式1（WHU/PRIDE标准）：段标记 + time sat upd
+ *     WIDELANE / WL        ← 宽巷段开始
+ *     time  sat  upd_wl
+ *     NARROWLANE / NL      ← 窄巷段开始
+ *     time  sat  upd_nl
+ *
+ *   格式2（GREAT-PVT）：sat在首列，无/有EPOCH-TIME时间行
+ *     % UPD generated using upd_WL
+ *     G02  0.461  0.008  162        ← WL: sat upd sigma nsat
+ *     EPOCH-TIME  60249  0.0       ← NL时间行
+ *     G02  0.532  0.016  31        ← NL: sat upd sigma nsat
  * </pre>
  *
- * <p>文件来源：WHU(WUM) / PRIDE
- * 存储目录：product/upd/（由ProductDownloader.downloadUpd()下载）
- *
- * <p>对应C版：RTKLIB未内置UPD，本模块为v2.2.2新增
+ * <p>文件来源：WHU(WUM) / PRIDE / GREAT-PVT
  */
 public final class UpdReader {
     private UpdReader() {}
@@ -46,32 +50,34 @@ public final class UpdReader {
         if (file == null || file.isEmpty()) return false;
         List<double[]> wlList = new ArrayList<>();
         List<double[]> nlList = new ArrayList<>();
-        int type = 0; // 0=未确定, 1=宽巷(WL), 2=窄巷(NL)
+        int type = inferTypeFromFileName(file);
+        double currentTime = 0.0;
 
         try (BufferedReader br = new BufferedReader(new FileReader(file))) {
             String line;
             while ((line = br.readLine()) != null) {
                 String t = line.trim();
-                // 段标记
                 if (t.startsWith("WIDELANE") || t.startsWith("WL")) { type = 1; continue; }
                 if (t.startsWith("NARROWLANE") || t.startsWith("NL")) { type = 2; continue; }
                 if (t.startsWith("%") || t.startsWith("#") || t.isEmpty()) continue;
 
-                String[] tokens = t.split("\\s+");
-                if (tokens.length < 3) continue;
-
-                try {
-                    double time = Double.parseDouble(tokens[0]);
-                    int sat = parseSat(tokens[1]);
-                    if (sat <= 0) continue;
-                    double upd = Double.parseDouble(tokens[2]);
-                    double[] rec = {time, sat, upd};
-                    if (type == 1) wlList.add(rec);
-                    else if (type == 2) nlList.add(rec);
-                    else wlList.add(rec); // 无段标记时默认为宽巷
-                } catch (NumberFormatException e) {
+                if (t.startsWith("EPOCH-TIME")) {
+                    String[] et = t.split("\\s+");
+                    if (et.length >= 2) {
+                        try { currentTime = Double.parseDouble(et[1]); } catch (NumberFormatException ignored) {}
+                    }
                     continue;
                 }
+
+                String[] tokens = t.split("\\s+");
+                if (tokens.length < 2) continue;
+
+                double[] rec = parseUpdLine(tokens, currentTime);
+                if (rec == null) continue;
+
+                if (type == 1) wlList.add(rec);
+                else if (type == 2) nlList.add(rec);
+                else wlList.add(rec);
             }
         } catch (IOException e) {
             LOG.warn("UPD file open error: {}", file);
@@ -83,19 +89,53 @@ public final class UpdReader {
             return false;
         }
 
-        // 存储到Nav：每行 [time, sat, upd]
-        nav.updWl = new double[wlList.size()][3];
-        for (int i = 0; i < wlList.size(); i++) {
-            System.arraycopy(wlList.get(i), 0, nav.updWl[i], 0, 3);
-        }
-
-        nav.updNl = new double[nlList.size()][3];
-        for (int i = 0; i < nlList.size(); i++) {
-            System.arraycopy(nlList.get(i), 0, nav.updNl[i], 0, 3);
-        }
+        nav.updWl = mergeUpd(nav.updWl, wlList);
+        nav.updNl = mergeUpd(nav.updNl, nlList);
 
         LOG.info("UPD loaded: {} WL, {} NL records from {}", wlList.size(), nlList.size(), file);
         return true;
+    }
+
+    private static double[][] mergeUpd(double[][] existing, List<double[]> newRecords) {
+        if (newRecords.isEmpty()) return existing;
+        int existLen = (existing != null) ? existing.length : 0;
+        double[][] merged = new double[existLen + newRecords.size()][3];
+        if (existLen > 0) {
+            System.arraycopy(existing, 0, merged, 0, existLen);
+        }
+        for (int i = 0; i < newRecords.size(); i++) {
+            System.arraycopy(newRecords.get(i), 0, merged[existLen + i], 0, 3);
+        }
+        return merged;
+    }
+
+    private static double[] parseUpdLine(String[] tokens, double currentTime) {
+        int sat = parseSat(tokens[0].replace("x", ""));
+        if (sat > 0) {
+            try {
+                double upd = Double.parseDouble(tokens[1]);
+                return new double[]{currentTime, sat, upd};
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (tokens.length < 3) return null;
+        try {
+            double time = Double.parseDouble(tokens[0]);
+            sat = parseSat(tokens[1]);
+            if (sat <= 0) return null;
+            double upd = Double.parseDouble(tokens[2]);
+            return new double[]{time, sat, upd};
+        } catch (NumberFormatException ignored) {}
+
+        return null;
+    }
+
+    private static int inferTypeFromFileName(String file) {
+        String name = file.substring(file.lastIndexOf(java.io.File.separatorChar) + 1).toLowerCase();
+        if (name.contains("_nl_") || name.contains("_nl")) return 2;
+        if (name.contains("_wl_") || name.contains("_wl")) return 1;
+        if (name.contains("_ewl_") || name.contains("_ewl")) return 1;
+        return 0;
     }
 
     /** 解析卫星标识：G01→SYS_GPS+1, R01→SYS_GLO+1, E01→SYS_GAL+1, C01→SYS_CMP+1, J01→SYS_QZS+1 */

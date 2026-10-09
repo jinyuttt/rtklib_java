@@ -63,6 +63,14 @@ public final class TestDataConfig {
         return get("product.dir", "D:\\rtcm3\\product");
     }
 
+    public static String getGreatPvtPppDir() {
+        return get("greatpvt.ppp.dir", "D:\\code\\GREAT-PVT\\sample_data\\PPPFLT_2023305\\PPPFLT_2023305");
+    }
+
+    public static String getGreatPvtRtkDir() {
+        return get("greatpvt.rtk.dir", "D:\\code\\GREAT-PVT\\sample_data\\RTKFLT_2020351\\RTKFLT_2020351");
+    }
+
     public static String getResultDir() {
         return get("result.dir", System.getProperty("user.home") + File.separator + "rtklib_java_results");
     }
@@ -86,6 +94,33 @@ public final class TestDataConfig {
 
     public static String getStationDate() {
         return get("station.date", "2026-06-29");
+    }
+
+    public static String getTestDataDir() {
+        return get("test-data.dir", findTestDataDir());
+    }
+
+    private static String findTestDataDir() {
+        String[] candidates = {
+            System.getProperty("user.dir") + File.separator + "test-data",
+            System.getProperty("user.dir") + File.separator + ".." + File.separator + "test-data",
+            System.getProperty("user.dir") + File.separator + "rtklib-core" + File.separator + ".." + File.separator + "test-data",
+        };
+        for (String dir : candidates) {
+            if (Files.isDirectory(Paths.get(dir))) return dir;
+        }
+        return System.getProperty("user.dir") + File.separator + "test-data";
+    }
+
+    public static String getTestDataFile(String relativePath) {
+        String dir = getTestDataDir();
+        Path p = Paths.get(dir, relativePath);
+        if (Files.exists(p)) return p.toString();
+        return relativePath;
+    }
+
+    public static boolean hasTestDataFile(String relativePath) {
+        return Files.exists(Paths.get(getTestDataDir(), relativePath));
     }
 
     public static String getRoverFile() {

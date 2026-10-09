@@ -1,0 +1,6 @@
+scenario=open-sky
+role=reference
+systems=J
+date=2021-03-19
+source=cssrlib
+description=QZSS专用星历，RINEX 3.02格式，含J01/J02/J07等QZSS卫星，独特数据源

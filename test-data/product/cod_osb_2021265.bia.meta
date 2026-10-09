@@ -1,0 +1,6 @@
+scenario=open-sky
+role=reference
+systems=G+R+E+C+J
+date=2021-09-22
+source=CODE-MGEX
+description=CODE MGEX观测信号偏差(OSB)，Bias-SINEX格式，G+R+E+C+J多系统

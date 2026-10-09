@@ -1,0 +1,12 @@
+scenario=open-sky
+role=rover
+systems=G+E+J
+date=2021-03-19
+source=cssrlib
+station=3034
+duration=1min
+interval=30s
+description=cssrlib样例，G+E+J三系统多频，RINEX 3.04格式，仅1分钟数据，适合快速单元测试
+location=Japan
+receiver=Trimble NetR9
+antenna=TRM57971.00

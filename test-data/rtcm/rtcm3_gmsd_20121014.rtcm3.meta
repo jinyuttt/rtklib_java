@@ -1,0 +1,10 @@
+scenario=open-sky
+role=base
+systems=G+R+C
+date=2012-10-14
+source=RTKLIB-sample
+station=GMSD7
+duration=1h
+interval=1s
+description=RTKLIB样例，标准RTCM3消息(1005/1074/1084等)，G+R+C三系统，适合标准消息解码测试
+location=China

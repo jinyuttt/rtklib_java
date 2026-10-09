@@ -574,8 +574,18 @@ public class PostPosProcessor {
                     log.info("Base pos from opt.rb (POSOPT_POS_XYZ/LLH): ({}, {}, {})", optRb[0], optRb[1], optRb[2]);
                     return optRb.clone();
                 }
-                log.warn("opt.rb is zero, fallback to RINEX header");
-                return posFromSta(baseSta);
+                double[] rinexPos = posFromSta(baseSta);
+                if (rinexPos != null) {
+                    log.info("Base pos from RINEX header: ({}, {}, {})", rinexPos[0], rinexPos[1], rinexPos[2]);
+                    return rinexPos;
+                }
+                log.warn("opt.rb and RINEX header pos are both zero, fallback to SPP average");
+                double[] sppPos = avepos(2, baseEpochs, nav);
+                if (sppPos != null) {
+                    log.info("Base pos from SPP average: ({}, {}, {})", sppPos[0], sppPos[1], sppPos[2]);
+                    return sppPos;
+                }
+                return null;
             case Constants.POSOPT_SINGLE:
                 double[] avePos = avepos(2, baseEpochs, nav);
                 if (avePos != null) {
@@ -585,11 +595,11 @@ public class PostPosProcessor {
                 log.warn("SPP average failed, fallback to RINEX header");
                 return posFromSta(baseSta);
             case Constants.POSOPT_RINEX:
-                double[] rinexPos = posFromSta(baseSta);
-                if (rinexPos != null) {
-                    log.info("Base pos from RINEX header (POSOPT_RINEX): ({}, {}, {})", rinexPos[0], rinexPos[1], rinexPos[2]);
+                double[] headerPos = posFromSta(baseSta);
+                if (headerPos != null) {
+                    log.info("Base pos from RINEX header (POSOPT_RINEX): ({}, {}, {})", headerPos[0], headerPos[1], headerPos[2]);
                 }
-                return rinexPos;
+                return headerPos;
             case Constants.POSOPT_FILE:
                 log.warn("POSOPT_FILE not yet supported, fallback to RINEX header");
                 return posFromSta(baseSta);

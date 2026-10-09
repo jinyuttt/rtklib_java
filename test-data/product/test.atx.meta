@@ -1,0 +1,5 @@
+scenario=open-sky
+role=reference
+systems=G+R+E+C+J
+source=cssrlib
+description=ANTEX天线改正文件，含TRM57971.00和SEPPOLANT_R4两种天线，测试用精简版

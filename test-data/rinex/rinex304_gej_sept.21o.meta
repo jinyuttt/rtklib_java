@@ -1,0 +1,13 @@
+scenario=open-sky
+role=base
+systems=G+E+J
+date=2021-03-19
+source=cssrlib
+station=SEPT
+duration=1min
+interval=30s
+description=cssrlib样例，G+E+J三系统多频，RINEX 3.04格式，仅1分钟数据，与3034同地点同时间
+location=Japan
+receiver=Septentrio POLARX5
+antenna=SEPPOLANT_R4
+base.distance=0.0
