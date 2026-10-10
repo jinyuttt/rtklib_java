@@ -195,12 +195,12 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **城市峡谷RTK** | 有SPP数据(MobileGNSS downtown)，有准静态RTK(Net_Diff urban) | 缺**动态**城市峡谷RTK base+rover对 | ✅ |
 | **PPP-AR完整验证** | 有精密产品(SP3+CLK+UPD+OSB+ATX) | 缺24h长时段+参考Fixed解对比 | ✅ |
 | **多频(≥3频)RTK** | 有BDS双频数据 | 缺三频BDS/GAL数据 | ✅ |
+| **RTCM流式RTK** | 本地私有RTCM3 base+rover文件已验证通过 | 缺可公开的同步base+rover RTCM3文件对 | ✅ |
 
 #### ❌ 根本没有真实数据测试的场景
 
 | 场景 | 需要的数据 | 欢迎上传 |
 |------|-----------|----------|
-| **RTCM流式RTK** | 同步base+rover两路RTCM3实时流文件（时间对齐） | ✅ |
 | **峡谷/深城市RTK** | 两侧高楼遮挡，天空角严重受限的base+rover对 | ✅ |
 | **车载动态RTK** | 真实**高速动态**轨迹base+rover（>50km/h） | ✅ |
 | **长基线RTK (>10km)** | 长基线base+rover，需估计大气参数 | ✅ |
@@ -208,7 +208,7 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **森林/林冠** | 树冠遮挡，信噪比低 | ✅ |
 | **室内定位** | 严重遮挡 | ✅ |
 
-> **RTCM流式定位说明**：当前SPP已有RTCM直接定位测试（`SppTest`、`SppProcessorTest`），但RTK尚无RTCM流式端到端测试。RTK需要基站和流动站两路RTCM3流同步输入，现有公共数据只有单路RTCM文件（`rtcm3_gmsd`为rover，`open-sky_base`为VRS差分改正流而非标准base观测值流），无法构成RTK双流输入。如有可公开的同步base+rover RTCM3文件对，欢迎上传补充。
+> **RTCM流式定位说明**：当前SPP已有RTCM直接定位测试（`SppTest`、`SppProcessorTest`）。RTK的RTCM流式端到端测试已有本地私有数据验证（`RtkIonoptTest`），但私有数据含设备ID不可公开。现有公共RTCM文件中，`rtcm3_gmsd`为rover观测流，`open-sky_base`为VRS差分改正流而非标准base观测值流，无法构成RTK双流输入。如有可公开的同步base+rover RTCM3文件对，欢迎上传补充。
 
 ---
 
@@ -667,132 +667,16 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 按优先级排序：
 
-1. **RTCM流式RTK** — 同步base+rover两路RTCM3流，验证实时RTK处理器端到端流程（已有RTCM→SPP，缺RTCM→RTK）
-2. **城市峡谷动态RTK** — 动态base+rover对，含NLOS/多路径，验证IGGIII/SNR中值/残差编辑（已有准静态RTK和动态SPP，缺动态RTK）
-3. **车载高速动态RTK** — >50km/h真实动态轨迹base+rover，验证自适应Q/逐级AR（已有手机低速动态SPP，缺高速RTK）
-4. **长基线RTK (>10km)** — 验证梯度/参数噪声/大气冻结
-5. **PPP-AR精度验证** — 24h静态+参考Fixed解，与GREAT-PVT结果对比（已有端到端测试，缺精度验证）
-6. **PPP-RTK** — SSR实时流，验证PPP-RTK处理器
-7. **多频(≥3频)** — 三频BDS/GAL，验证逐级AR多频扩展（已有双频BDS，缺三频）
-8. **峡谷/深城市RTK** — 两侧高楼遮挡，天空角严重受限
-9. **森林/林冠** — 树冠遮挡，信噪比低
+1. **城市峡谷动态RTK** — 动态base+rover对，含NLOS/多路径，验证IGGIII/SNR中值/残差编辑（已有准静态RTK和动态SPP，缺动态RTK）
+2. **车载高速动态RTK** — >50km/h真实动态轨迹base+rover，验证自适应Q/逐级AR（已有手机低速动态SPP，缺高速RTK）
+3. **长基线RTK (>10km)** — 验证梯度/参数噪声/大气冻结
+4. **PPP-AR精度验证** — 24h静态+参考Fixed解，与GREAT-PVT结果对比（已有端到端测试，缺精度验证）
+5. **PPP-RTK** — SSR实时流，验证PPP-RTK处理器
+6. **多频(≥3频)** — 三频BDS/GAL，验证逐级AR多频扩展（已有双频BDS，缺三频）
+7. **峡谷/深城市RTK** — 两侧高楼遮挡，天空角严重受限
+8. **森林/林冠** — 树冠遮挡，信噪比低
+9. **RTCM流式RTK公开数据** — 可公开的同步base+rover RTCM3文件对（本地私有数据已验证，缺可公开数据）
 
 ---
 
-## 8. 如何新增一个测试（端到端示例）
-
-以下以"新增一个RTK Static定位测试"为例，展示从数据准备到测试编写到文档更新的完整流程。
-
-### Step 1: 准备测试数据
-
-假设有一组短基线RTK数据（base+rover RINEX文件）：
-
-```powershell
-# 1. 放入公共数据目录
-test-data/rinex/open-sky_rover_20260101.25o
-test-data/rinex/open-sky_base_20260101.25o
-test-data/nav/open-sky_20260101.25n
-
-# 2. 创建同名.meta文件
-test-data/rinex/open-sky_rover_20260101.25o.meta
-test-data/rinex/open-sky_base_20260101.25o.meta
-test-data/nav/open-sky_20260101.25n.meta
-```
-
-`.meta` 文件内容：
-
-```
-# open-sky_rover_20260101.25o.meta
-scenario=open-sky
-role=rover
-systems=G+E+C
-date=2026-01-01
-source=MyProject
-sample_rate=1s
-duration=30min
-receiver=u-blox F9P
-license=MIT
-description=短基线RTK流动站
-test_ids=MyNewRtkTest
-```
-
-```
-# open-sky_base_20260101.25o.meta
-scenario=open-sky
-role=base
-systems=G+E+C
-date=2026-01-01
-source=MyProject
-sample_rate=1s
-duration=30min
-receiver=u-blox F9P
-base.id=BASE01
-base.distance=1.5km
-license=MIT
-description=短基线RTK基站
-test_ids=MyNewRtkTest
-```
-
-### Step 2: 编写测试类
-
-```java
-package org.rtklib.java;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.DisplayName;
-import org.rtklib.java.config.PrcOpt;
-import org.rtklib.java.constants.Constants;
-import org.rtklib.java.rinex.PostPosProcessor;
-import static org.junit.jupiter.api.Assertions.*;
-
-@DisplayName("My new RTK Static test")
-class MyNewRtkTest {
-
-    private static final String ROVER_OBS =
-        TestDataConfig.getTestDataFile("rinex/open-sky_rover_20260101.25o");
-    private static final String BASE_OBS =
-        TestDataConfig.getTestDataFile("rinex/open-sky_base_20260101.25o");
-    private static final String NAV =
-        TestDataConfig.getTestDataFile("nav/open-sky_20260101.25n");
-
-    @Test
-    @DisplayName("RTK Static positioning with G+E+C short baseline")
-    void testRtkStatic() {
-        PrcOpt opt = new PrcOpt();
-        opt.mode = Constants.PMODE_STATIC;
-        opt.nf = 2;
-        opt.navsys = Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP;
-        opt.elmin = 15.0 * Constants.D2R;
-        opt.ionoopt = Constants.IONOOPT_BRDC;
-        opt.tropopt = Constants.TROPOPT_SAAS;
-        opt.soltype = Constants.SOLTYPE_FORWARD;
-
-        PostPosProcessor proc = new PostPosProcessor(opt);
-        PostPosProcessor.PostPosResult result = proc.process(ROVER_OBS, BASE_OBS, NAV);
-
-        assertTrue(result.successCount > 0, "RTK Static should solve at least one epoch");
-    }
-}
-```
-
-### Step 3: 验证测试通过
-
-```powershell
-mvn test -pl rtklib-core -Dtest="MyNewRtkTest"
-```
-
-### Step 4: 更新本文档
-
-在以下位置添加条目：
-
-1. **1.1 总览表** — 新增一行 `| **MyNewRtkTest** | RTK-Static | RINEX3.04 (G+E+C) | 公共: open-sky | ✅ |`
-2. **2.1/2.2 数据清单** — 新增数据文件条目
-3. **3.2 测试详情** — 新增 `#### MyNewRtkTest` 小节
-4. **4.2 优化矩阵**（如涉及优化项）— 补充对应行
-
-### Step 5: 提交
-
-```powershell
-git add test-data/ rtklib-core/src/test/ docs/DATA_GUIDE.md
-git commit -m "test: add MyNewRtkTest for RTK Static with G+E+C short baseline"
-```
+> 📖 **如何新增一个测试**：参见 [TEST_DEVELOPMENT_GUIDE.md](TEST_DEVELOPMENT_GUIDE.md)
