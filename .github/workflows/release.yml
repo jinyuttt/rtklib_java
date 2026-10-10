@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+          cache: maven
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Verify version matches pom.xml
+        run: |
+          POM_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          TAG_VERSION="${{ steps.version.outputs.VERSION }}"
+          if [ "$POM_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Version mismatch: pom.xml=$POM_VERSION, tag=$TAG_VERSION"
+            exit 1
+          fi
+
+      - name: Build and package
+        run: mvn -B package -DskipTests
+
+      - name: Run tests
+        run: mvn -B test
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            rtklib-core/target/rtklib-core-*.jar
+            rtklib-stream/target/rtklib-stream-*.jar
+            rtklib-adjust/target/rtklib-adjust-*.jar
+            rtklib-product/target/rtklib-product-*.jar
