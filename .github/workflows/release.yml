@@ -21,6 +21,17 @@ jobs:
           distribution: temurin
           cache: maven
 
+      - name: Download test data
+        run: |
+          git clone --depth 1 https://github.com/jinyurrr/rtklib-java-data.git /tmp/rtklib-java-data
+          for subdir in rinex nav rtcm product reference nmea config tle; do
+            if [ -d "/tmp/rtklib-java-data/$subdir" ]; then
+              mkdir -p "test-data/$subdir"
+              cp -n /tmp/rtklib-java-data/$subdir/* "test-data/$subdir/" 2>/dev/null || true
+            fi
+          done
+          rm -rf /tmp/rtklib-java-data
+
       - name: Extract version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
