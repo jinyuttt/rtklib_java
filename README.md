@@ -157,6 +157,7 @@ org.rtklib.java.otl
 | [矩阵存储参考](docs/MATRIX_DIMENSION_REFERENCE.md) | Kalman 滤波矩阵维度、存储约定及运算差异 |
 | [优化介绍](docs/RTK_Extra_Optimizations.md) | Java 版额外优化项（C 版没有的），独立开关控制 |
 | [优化功能矩阵](docs/CORE_OPTIMIZATION_MATRIX.md) | 按定位模式×场景分类的优化功能矩阵，含静态实测结论、动态适用性、基线类型标记 |
+| [测试用例与数据指南](docs/DATA_GUIDE.md) | 测试规范、测试类总览、数据依赖、优化矩阵测试用例、上传规范 |
 | [轨道模块技术参考](docs/ORBIT_MODULE_REFERENCE.md) | TLE解析、SGP4/SDP4传播、六根数转换、二体传播 |
 | [开发路线图](docs/ROADMAP.md) | 各模块完成度、Phase 1~5 规划、完好性监测 / PPP-RTK区域约束 / FGO融合等研究方向、暂缓原则 |
 
@@ -236,6 +237,46 @@ org.rtklib.java.otl
 
 > **原则**：本项目定位算法经过真实数据验证（详见开发状态），但所有集成仍建议以自有测试数据验证通过为前提。不盲目信任任何代码的精度声明。
 
+## 场景置信度
+
+本项目按**实测验证程度**将支持场景分为两级，使用者应据此评估集成风险。
+
+### ✅ 已实测验证
+
+以下场景已有公开/私有数据端到端验证，结果与参考解一致：
+
+| 场景 | 定位模式 | 数据来源 | 验证方式 |
+|------|----------|----------|----------|
+| 开阔静态 SPP | SPP | MobileGNSS-SPP (G+C) | vs C版参考结果 |
+| 城市街道 SPP | SPP | MobileGNSS-SPP (G+C) | vs C版参考结果 |
+| BDS RTCM SPP | SPP | 本地RTCM3 (C) | 逐历元成功 |
+| 短基线 RTK Kinematic | RTK | RINEX2.10 GPS base+rover | vs C版参考结果 |
+| 多系统 RTK Static | RTK-Static | GREAT-PVT RTKFLT (G+E+C+R+J) | 端到端解算 |
+| BDS RTK (RTCM) | RTK | 本地RTCM3 base+rover | 私有数据验证 |
+| 多系统 PPP Static | PPP-Static | GREAT-PVT PPPFLT (G+E+C+R) | 端到端解算 |
+| PPP + GPT3+VMF3 | PPP | 同上 + CODE产品 | 端到端解算 |
+| PPP + IERS2010 | PPP | 同上 | 端到端解算 |
+| PPP + ISB/IFCB | PPP | 同上 | 端到端解算 |
+| PPP-AR + Fix-and-Hold | PPP-AR | 同上 + WHU UPD(WL/NL) | 端到端解算 |
+| 精密产品读取 | — | IGS CODE WHU (SP3/CLK/IONEX/OSB/ATX) | 文件解析验证 |
+| 多基线间接平差 | Adjust | 本地RTCM3 2基站9小时 | σ₀+Baarda验证 |
+
+### 🔧 框架已实现，待外部数据验证
+
+以下功能代码已实现且通过单元测试，但缺少真实场景数据端到端验证：
+
+| 场景 | 定位模式 | 缺少的数据 | 欢迎贡献 |
+|------|----------|------------|----------|
+| 动态车载 RTK | RTK-Kinematic | 高速动态 base+rover 对 | ✅ |
+| 长基线 RTK (>10km) | RTK-Static | 长基线 base+rover | ✅ |
+| 城市峡谷/深城市 RTK | RTK | 高遮挡 base+rover | ✅ |
+| Moving-Base RTK | RTK-MoveB | 双移动接收机同步观测 | ✅ |
+| PPP-RTK 实时 | PPP-RTK | SSR 实时流 | ✅ |
+| 三频 RTK/PPP | RTK/PPP | 三频 BDS/GAL 数据 | ✅ |
+| PPP-AR 精度验证 | PPP-AR | 24h 静态 + Fixed 参考解 | ✅ |
+
+> 如有可公开的上述数据，欢迎上传至 `test-data/` 目录或提交 Issue。详见 [测试用例与数据指南](docs/DATA_GUIDE.md)。
+
 ## 环境要求
 
 - Java 17+
@@ -262,7 +303,7 @@ org.rtklib.java.otl
 
 剩余：RTKLIB C 版 RAIM FDE（`pntpos.c raim_fde()`）未移植、PPP-RTK 区域大气约束未接入。这两项与完好性保护级、ARAIM、固定解完好性同属**Phase 4 研究深化方向，暂缓开发**。
 
-**Phase 3 🟢 — 测试加固与工程质量**（待启动）：多系统多频 PPP 长时段验证、动态车载数据、C 版差异消除、性能基准。
+**Phase 3 🟢 — 测试加固与工程质量**（部分启动）：工程质量可推进（单元测试补充、CI回归、性能基准、C版差异消除）；场景验证（动态车载、长基线、城市峡谷RTK等）为🤝**社区贡献项**，核心依赖外部测试数据。
 
 **未实现的C版功能**（设计上不实现）：TCP/UDP服务端、NTRIP Caster、接收机原始协议（u-blox/NovAtel等）、NMEA输出、GPX/KML输出、大地水准面/基准转换。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
