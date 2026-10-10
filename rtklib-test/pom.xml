@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.rtklib</groupId>
         <artifactId>rtklib-java</artifactId>
-        <version>2.2.5</version>
+        <version>2.2.6</version>
     </parent>
 
     <artifactId>rtklib-test</artifactId>
@@ -17,12 +17,12 @@
         <dependency>
             <groupId>org.rtklib</groupId>
             <artifactId>rtklib-core</artifactId>
-            <version>2.2.5</version>
+            <version>2.2.6</version>
         </dependency>
         <dependency>
             <groupId>org.rtklib</groupId>
             <artifactId>rtklib-product</artifactId>
-            <version>2.2.5</version>
+            <version>2.2.6</version>
         </dependency>
         <dependency>
             <groupId>ch.qos.logback</groupId>

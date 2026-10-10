@@ -6,6 +6,29 @@
 
 ---
 
+## [2.2.6] - 2026-10-10
+
+### Added
+
+- **测试覆盖扩展（基于公共数据）**：使用 GREAT-PVT / MobileGNSS-SPP / IGS 等公开数据集扩展测试用例
+  - `VerifyPositioningTest`：新增 RTK-Static、DGPS、RTK-Fixed 模式定位测试
+  - `GreatPvtPositioningTest`：新增 PPP-Static、PPP+GPT3+VMF3、PPP+IERS2010、PPP+ISB/IFCB/IFB、PPP-AR+FixHold、RTK-Static 多系统测试
+  - `ProductReaderTest`：新增 SP3/CLK/IONEX/OSB/ATX 精密产品文件读取测试
+  - `RtkOptimizationsConfigTest`：新增 R2 模糊度锚固、R3 大气冻结、R6 PAR 重选、R7 梯度、R13 参数噪声配置与数值验证
+
+- **测试开发指南**：新增 `docs/TEST_DEVELOPMENT_GUIDE.md`，包含数据准备、.meta 字段枚举、测试模板（RINEX 后处理 / RTCM 流式 / 私有数据）、定位模式速查表
+
+### Changed
+
+- **DATA_GUIDE.md 修正**：
+  - 统一 `sample_rate` 字段，删除冗余 `interval`
+  - 补全 `scenario`/`role`/`mode`/`systems` 字段完整枚举
+  - 修正 GreatPvtPositioningTest / SppCompareTest 数据来源标注为"公开"
+  - RTCM 流式 RTK 从"❌根本没有"移至"⚠️有数据但不完整"（本地私有数据已验证，缺可公开数据）
+  - 拆分"如何新增测试"章节至独立文档
+
+---
+
 ## [2.2.5] - 2026-10-08
 
 ### Added
