@@ -14,7 +14,7 @@
 |------|----------|----------|------|
 | 测试夹具 | `src/test/resources/` | ✅ 提交 | 单元测试必需的小文件（验证参考值、标准TLE等） |
 | 公共测试数据 | `test-data/` | ✅ 提交 | GNSS观测/星历/参考解等，≤2MB，无隐私 |
-| 私有测试数据 | 本地磁盘 | ❌ 不提交 | 大文件/含设备ID，通过 `test-data.properties` 配置 |
+| 私有测试数据 | 本地磁盘 | ❌ 不提交 | 含设备ID/不可公开的RTCM流，通过 `test-data.properties` 配置 |
 | 大文件数据 | 独立数据仓库 | ❌ 不提交 | >2MB，通过下载脚本获取 |
 
 ### 0.2 元数据文件规范（.meta）
@@ -97,8 +97,8 @@ test_ids=SppOptimizationTest
 |----------|----------|----------|-------------|
 | 单元测试 | `src/test/resources/` 内置 | 始终运行 | N/A |
 | 算法验证 | `test-data/` 公共数据 | 始终运行 | 跳过（AssumeTrue） |
-| 精度验证 | 私有RTCM+精密产品 | 需本地配置 | 跳过 |
-| 集成测试 | 私有base/rover对 | 需本地配置 | 跳过 |
+| 精度验证 | 公开精密产品+观测数据 | 始终运行 | 跳过（AssumeTrue） |
+| 集成测试 | 特定场景数据（部分无公开来源） | 需本地配置 | 跳过 |
 
 ### 0.6 获取测试数据
 
@@ -163,13 +163,13 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **AmbiguityStateSerializationTest** | 序列化 | 无（构造输入） | 内置 | ✅ |
 | **EpochCacheTest** | 缓存 | 无（构造输入） | 内置 | ✅ |
 
-### 1.2 必须使用私有数据的测试
+### 1.2 需要私有数据的测试
+
+> **核心障碍不是"私有数据"，而是特定场景的公开数据不存在。** 大部分测试已使用公开数据集（GREAT-PVT sample_data、RTKLIB_EX_2.5.0、IGS产品等）。仅 RtkIonoptTest 因使用含设备ID的RTCM3流而依赖私有数据。
 
 | 测试类 | 原因 | 所需数据 | 配置方式 |
 |--------|------|----------|----------|
-| **RtkIonoptTest** | 需要完整RTCM3基站+流动站多小时数据 | 设备ID+日期+时段 | `test-data.properties` 中 `baserover.group1` + `ionopt.date` |
-
-> **注**：GreatPvtPositioningTest 和 SppCompareTest 虽需外部数据目录，但均使用公开数据集（GREAT-PVT sample_data、RTKLIB_EX_2.5.0），不属于私有数据依赖。
+| **RtkIonoptTest** | 需要完整RTCM3基站+流动站多小时数据（含设备ID，不可公开） | 设备ID+日期+时段 | `test-data.properties` 中 `baserover.group1` + `ionopt.date` |
 
 ### 1.3 数据覆盖与缺口分析
 
@@ -195,7 +195,7 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **城市峡谷RTK** | 有SPP数据(MobileGNSS downtown)，有准静态RTK(Net_Diff urban) | 缺**动态**城市峡谷RTK base+rover对 | ✅ |
 | **PPP-AR完整验证** | 有精密产品(SP3+CLK+UPD+OSB+ATX) | 缺24h长时段+参考Fixed解对比 | ✅ |
 | **多频(≥3频)RTK** | 有BDS双频数据 | 缺三频BDS/GAL数据 | ✅ |
-| **RTCM流式RTK** | 本地私有RTCM3 base+rover文件已验证通过 | 缺可公开的同步base+rover RTCM3文件对 | ✅ |
+| **RTCM流式RTK** | 本地RTCM3 base+rover文件已验证通过（含设备ID不可公开） | 缺可公开的同步base+rover RTCM3文件对 | ✅ |
 
 #### ❌ 根本没有真实数据测试的场景
 
@@ -208,7 +208,7 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **森林/林冠** | 树冠遮挡，信噪比低 | ✅ |
 | **室内定位** | 严重遮挡 | ✅ |
 
-> **RTCM流式定位说明**：当前SPP已有RTCM直接定位测试（`SppTest`、`SppProcessorTest`）。RTK的RTCM流式端到端测试已有本地私有数据验证（`RtkIonoptTest`），但私有数据含设备ID不可公开。现有公共RTCM文件中，`rtcm3_gmsd`为rover观测流，`open-sky_base`为VRS差分改正流而非标准base观测值流，无法构成RTK双流输入。如有可公开的同步base+rover RTCM3文件对，欢迎上传补充。
+> **RTCM流式定位说明**：当前SPP已有RTCM直接定位测试（`SppTest`、`SppProcessorTest`）。RTK的RTCM流式端到端测试已有本地数据验证（`RtkIonoptTest`），但该数据含设备ID不可公开。现有公共RTCM文件中，`rtcm3_gmsd`为rover观测流，`open-sky_base`为VRS差分改正流而非标准base观测值流，无法构成RTK双流输入。如有可公开的同步base+rover RTCM3文件对，欢迎上传补充。
 
 ---
 
@@ -367,8 +367,8 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 | 项目 | 说明 |
 |------|------|
-| 数据 | **私有**: RTCM3基站+流动站多小时数据 |
-| ⚠️ | 需配置私有设备ID和日期 |
+| 数据 | 本地RTCM3基站+流动站多小时数据（含设备ID，不可公开） |
+| ⚠️ | 需配置 `test-data.properties` 中设备ID和日期 |
 
 #### LandslideMonitorTest — 滑坡监测
 
@@ -675,7 +675,7 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 6. **多频(≥3频)** — 三频BDS/GAL，验证逐级AR多频扩展（已有双频BDS，缺三频）
 7. **峡谷/深城市RTK** — 两侧高楼遮挡，天空角严重受限
 8. **森林/林冠** — 树冠遮挡，信噪比低
-9. **RTCM流式RTK公开数据** — 可公开的同步base+rover RTCM3文件对（本地私有数据已验证，缺可公开数据）
+9. **RTCM流式RTK公开数据** — 可公开的同步base+rover RTCM3文件对（本地数据已验证但含设备ID不可公开，缺可公开数据）
 
 ---
 
