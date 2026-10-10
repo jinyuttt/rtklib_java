@@ -195,10 +195,10 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 | 场景 | 当前数据 | 缺口 | 欢迎上传 |
 |------|----------|------|----------|
-| **城市峡谷RTK** | 有SPP数据(MobileGNSS opensky/street/downtown/elevated，原始在D:\code\MobileGNSS-SPP\data，test-data仅复制elevated)，有准静态RTK(Net_Diff urban)；**动态数据已到位**: PPC-Dataset (Tokyo/Nagoya, 2024) + UrbanNav (Tokyo, 2018) | 数据已到位但RTK引擎城市峡谷Fix率为0%，RtkBenchmarkTest仅验证不崩溃(阈值2%)，待引擎修复后做精度验证 | ✅ |
+| **城市峡谷RTK** | 有SPP数据(MobileGNSS 4场景: elevated/street≤2MB在test-data，opensky/downtown>2MB在独立数据仓库)，有准静态RTK(Net_Diff urban)；**动态数据已到位**: PPC-Dataset (Tokyo/Nagoya, 2024) + UrbanNav (Tokyo, 2018) | 数据已到位但RTK引擎城市峡谷Fix率为0%，RtkBenchmarkTest仅验证不崩溃(阈值2%)，待引擎修复后做精度验证 | ✅ |
 | **RTCM二进制RTK** | RtkTest/RtkLocalTest等6个测试用`rtcm3_gmsd`同一文件同时作rover和base，走RTCM二进制路径，当前全部失败(success=0) | 需真正的base+rover RTCM3文件对，或改走RINEX路径 | ✅ |
-| **PPP-AR完整验证** | 有精密产品(SP3+CLK+OSB+ATX+IONEX)+UPD WL/EWL(≤2MB已提交)，缺UPD NL(>2MB走独立仓库) | 缺UPD NL大文件+24h长时段+参考Fixed解对比 | ✅ |
-| **多频(≥3频)RTK** | 无（BDS双频数据已清除） | 缺双频/三频BDS/GAL数据 | ✅ |
+| **PPP-AR完整验证** | 有精密产品(SP3+CLK+OSB+ATX+IONEX)+UPD WL/EWL(≤2MB在test-data)+UPD NL(>2MB在独立数据仓库)+SP3/BSX(≤2MB在test-data)+CLK/brdc(>2MB在独立数据仓库) | 缺24h长时段+参考Fixed解对比 | ✅ |
+| **多频(≥3频)RTK** | GODN站RINEX3.04含BDS B1I+B3I双频+多频(10min≤2MB在test-data，24h>2MB在独立数据仓库) | 缺BDS三频数据 | ✅ |
 | **RTCM流式RTK** | 本地RTCM3 base+rover文件已验证通过（含设备ID不可公开） | 缺可公开的同步base+rover RTCM3文件对 | ✅ |
 
 #### ❌ 根本没有真实数据测试的场景
@@ -227,6 +227,10 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | `rinex304_gej_3034.21o` | RINEX 3.04 | G+E+J | open-sky | rover | 多系统1min采样 |
 | `rinex304_gej_sept.21o` | RINEX 3.04 | G+E+J | open-sky | rover | Septentrio接收机1min |
 | `rinex304_gejc_elevated.25o` | RINEX 3.04 | G+E+J+C | urban | rover | 手机高架桥场景(SPP优化测试) |
+| `rinex304_gejc_street.25o` | RINEX 3.04 | G+E+J+C | street | rover | 手机街道场景(SPP优化测试) |
+| `rinex304_godn_10min.23o` | RINEX 3.04 | G+R+E+C | open-sky | rover | IGS GODN站10分钟截取，含BDS多频 |
+
+> **大文件(>2MB)在独立数据仓库**：`opensky_rover_20250408.25o`、`downtown_rover_20250408.25o`、`godn3050.23o`(24h)、`harb3050.23o`，通过 `download-test-data.ps1` 获取。
 
 ### 2.2 RINEX 导航文件
 
@@ -254,6 +258,13 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | `igsg1570.18i` | IONEX电离层 | IGS电离层格网 |
 | `test.atx` | ANTEX天线改正 | 天线PCV/PCO改正 |
 | `cod_osb_2021265.bia` | Bias-SINEX | CODE码偏差(OSB) |
+| `cod0mgxfin_2023305.sp3` | SP3精密轨道 | CODE MGEX最终轨道(2023 DOY305) |
+| `cas0mgxrap_2023305.bsx` | Bias-SINEX | CAS MGEX DCB/OSB(2023 DOY305) |
+| `upd/upd_wl_2023305_G/E/C` | UPD宽巷 | WHU宽巷UPD(GPS/GAL/BDS) |
+| `upd/upd_ewl_2023305_G/E/C` | UPD超宽巷 | WHU超宽巷UPD(GPS/GAL/BDS) |
+| `upd/upd_ewl24/25_2023305_C/E` | UPD超宽巷24/25 | WHU超宽巷UPD(BDS/GAL) |
+
+> **大文件(>2MB)在独立数据仓库**：`cod0mgxfin_2023305.clk`(CLK 33.9MB)、`upd_nl_2023305_G/E/C`(NL窄巷 2.5~3.6MB)、`ifcb_2023305`(IFCB 3.3MB)、`brdc3050.23p`(广播星历 11.6MB)，通过 `download-test-data.ps1` 获取。
 
 ### 2.5 PPC-Dataset 城市峡谷RTK数据
 

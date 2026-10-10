@@ -26,7 +26,8 @@ public class SppOptimizationTest {
 
     private static final Logger log = LoggerFactory.getLogger(SppOptimizationTest.class);
     private static final String DATA_BASE =
-            TestDataConfig.hasTestDataFile("rinex/rinex304_gejc_elevated.25o")
+            TestDataConfig.hasTestDataFile("rinex/rinex304_gejc_elevated.25o") ||
+            TestDataConfig.hasTestDataFile("rinex/opensky_rover_20250408.25o")
                 ? TestDataConfig.getTestDataDir()
                 : "D:\\rtklib\\rtklib_java\\reference-projects\\MobileGNSS-SPP\\data";
 
@@ -162,21 +163,38 @@ public class SppOptimizationTest {
         }
     }
 
+    private static String getScenarioDate(String scenarioName) {
+        switch (scenarioName) {
+            case "opensky": return "20250408";
+            case "street": return "20250312";
+            case "downtown": return "20250408";
+            case "elevated": return "20250521";
+            default: return "20250408";
+        }
+    }
+
     private static boolean loadData(String scenario, String dataId) {
-        boolean useTestData = TestDataConfig.hasTestDataFile("rinex/rinex304_gejc_elevated.25o");
+        String scenarioName = scenario.replace("01-opensky", "opensky")
+                .replace("02-street", "street")
+                .replace("03-downtown", "downtown")
+                .replace("04-elevated", "elevated");
         String obsFile, navFile, baselineFile;
-        if (useTestData) {
-            String scenarioName = scenario.replace("01-opensky", "opensky")
-                    .replace("02-street", "street")
-                    .replace("03-downtown", "downtown")
-                    .replace("04-elevated", "elevated");
-            obsFile = TestDataConfig.getTestDataFile("rinex/rinex304_gejc_" + scenarioName + ".25o");
-            navFile = TestDataConfig.getTestDataFile("nav/rinex304_gejc_" + scenarioName + ".25n");
-            baselineFile = TestDataConfig.getTestDataFile("nmea/phone_" + scenarioName + ".nmea");
-            if (!new java.io.File(obsFile).exists()) {
-                log.warn("公共测试数据不存在: {}", obsFile);
-                return false;
-            }
+
+        String obsSmall = TestDataConfig.getTestDataFile("rinex/rinex304_gejc_" + scenarioName + ".25o");
+        String obsLarge = TestDataConfig.getTestDataFile("rinex/" + scenarioName + "_rover_" + getScenarioDate(scenarioName) + ".25o");
+        String navSmall = TestDataConfig.getTestDataFile("nav/rinex304_gejc_" + scenarioName + ".25n");
+        String navLarge = TestDataConfig.getTestDataFile("nav/" + scenarioName + "_rover_" + getScenarioDate(scenarioName) + ".25n");
+        String nmeaSmall = TestDataConfig.getTestDataFile("nmea/phone_" + scenarioName + ".nmea");
+        String nmeaLarge = TestDataConfig.getTestDataFile("nmea/" + scenarioName + "_base_" + getScenarioDate(scenarioName) + ".nmea");
+
+        if (new java.io.File(obsSmall).exists() && new java.io.File(navSmall).exists()) {
+            obsFile = obsSmall;
+            navFile = navSmall;
+            baselineFile = nmeaSmall;
+        } else if (new java.io.File(obsLarge).exists() && new java.io.File(navLarge).exists()) {
+            obsFile = obsLarge;
+            navFile = navLarge;
+            baselineFile = nmeaLarge;
         } else {
             obsFile = DATA_BASE + "\\" + scenario + "\\" + dataId + "\\rover.obs";
             navFile = DATA_BASE + "\\" + scenario + "\\" + dataId + "\\rover.nav";

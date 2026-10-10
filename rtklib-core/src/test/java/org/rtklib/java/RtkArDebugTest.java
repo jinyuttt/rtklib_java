@@ -19,18 +19,13 @@ public class RtkArDebugTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtkArDebugTest.class);
 
-    private static final String BASE_PATH =
-            TestDataConfig.getBaseFile().isEmpty()
-                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                    : null)
-                : TestDataConfig.getBaseFile();
-    private static final String ROVER_PATH =
-            TestDataConfig.getRoverFile().isEmpty()
-                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                    : null)
-                : TestDataConfig.getRoverFile();
+    private static final String ROVER_PATH = resolveLocalPath(TestDataConfig.getRoverFile());
+    private static final String BASE_PATH = resolveLocalPath(TestDataConfig.getBaseFile());
+
+    private static String resolveLocalPath(String path) {
+        if (path != null && !path.isEmpty() && new java.io.File(path).exists()) return path;
+        return null;
+    }
 
     @Test
     @DisplayName("调试 AR 为什么没有 Fix 解")
