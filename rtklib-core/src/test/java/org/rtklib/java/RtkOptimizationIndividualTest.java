@@ -24,18 +24,13 @@ public class RtkOptimizationIndividualTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtkOptimizationIndividualTest.class);
 
-    private static final String ROVER_PATH =
-            TestDataConfig.getRoverFile().isEmpty()
-                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                    : null)
-                : TestDataConfig.getRoverFile();
-    private static final String BASE_PATH =
-            TestDataConfig.getBaseFile().isEmpty()
-                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                    : null)
-                : TestDataConfig.getBaseFile();
+    private static final String ROVER_PATH = resolveLocalPath(TestDataConfig.getRoverFile());
+    private static final String BASE_PATH = resolveLocalPath(TestDataConfig.getBaseFile());
+
+    private static String resolveLocalPath(String path) {
+        if (path != null && !path.isEmpty() && new File(path).exists()) return path;
+        return null;
+    }
     private static final String RESULT_DIR = TestDataConfig.getResultDir() + "\\optimization_tests";
 
     private static byte[] roverData;

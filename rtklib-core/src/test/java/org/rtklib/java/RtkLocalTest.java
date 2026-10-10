@@ -18,14 +18,13 @@ public class RtkLocalTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtkLocalTest.class);
 
-    private static final String ROVER_PATH =
-            TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                : null;
-    private static final String BASE_PATH =
-            TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                : null;
+    private static final String ROVER_PATH = resolveLocalPath(TestDataConfig.getRoverFile());
+    private static final String BASE_PATH = resolveLocalPath(TestDataConfig.getBaseFile());
+
+    private static String resolveLocalPath(String path) {
+        if (path != null && !path.isEmpty() && new java.io.File(path).exists()) return path;
+        return null;
+    }
 
     private static byte[] roverData;
     private static byte[] baseData;

@@ -37,8 +37,8 @@ RTKLIB_EX_2.5.1/
 # Antenna files (large, use test-data/product/ instead)
 atx/
 
-# Compiled class files outside target/
-org/
+# Compiled class files outside target/ (only root-level org/)
+/org/
 
 # Build output
 target/
@@ -91,3 +91,10 @@ test-data/product/*.bsx
 test-data/product/*.blq
 test-data/product/*.dat
 test-data/reference/*.pos
+
+# Large test data directories (not for git, use download-test-data.ps1)
+test-data/ppc/
+test-data/urbannav/
+
+# Debug log config (local only)
+logback-debug.xml

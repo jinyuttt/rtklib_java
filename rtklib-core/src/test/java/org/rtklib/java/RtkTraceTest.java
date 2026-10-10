@@ -20,31 +20,33 @@ import java.util.*;
 import java.util.concurrent.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.*;
 
 @DisplayName("RTK Trace Log Test")
 public class RtkTraceTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtkTraceTest.class);
 
-    private static final String ROVER_PATH =
-            TestDataConfig.getRoverFile().isEmpty()
-                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                    : TestDataConfig.getRtcmBaseDir() + "\\<ROVER_DEVICE_ID>\\2026-06-08\\1.rtcm3")
-                : TestDataConfig.getRoverFile();
-    private static final String BASE_PATH =
-            TestDataConfig.getBaseFile().isEmpty()
-                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
-                    : TestDataConfig.getRtcmBaseDir() + "\\<BASE_DEVICE_ID>\\2026-06-08\\1.rtcm3")
-                : TestDataConfig.getBaseFile();
+    private static final String ROVER_PATH = resolveLocalPath(TestDataConfig.getRoverFile());
+    private static final String BASE_PATH = resolveLocalPath(TestDataConfig.getBaseFile());
+
+    private static String resolveLocalPath(String path) {
+        if (path != null && !path.isEmpty() && new java.io.File(path).exists()) return path;
+        return null;
+    }
     private static final String RESULT_DIR = TestDataConfig.getResultDir();
 
     private static byte[] roverData;
     private static byte[] baseData;
+    private static boolean dataAvailable;
 
     @BeforeAll
     static void loadData() throws IOException {
+        dataAvailable = ROVER_PATH != null && BASE_PATH != null;
+        if (!dataAvailable) {
+            log.warn("RTCM3 base+rover data not available (requires local private data), skipping tests");
+            return;
+        }
         try (FileInputStream fis = new FileInputStream(ROVER_PATH)) {
             roverData = fis.readAllBytes();
         }
@@ -58,6 +60,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("1. Trace all stages")
     void testTraceAllStages() throws Exception {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
         String traceFile = RESULT_DIR + "\\rtk_trace_all_stages.log";
         PrintWriter fileWriter = new PrintWriter(new BufferedWriter(new FileWriter(traceFile)));
@@ -112,6 +115,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("2. Trace only STAGE_INPUT and STAGE_RESULT")
     void testTraceInputAndResultOnly() {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
@@ -149,6 +153,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("3. Trace with samplerate")
     void testTraceWithSamplerate() {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
@@ -187,6 +192,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("4. Trace with maxEpochs limit")
     void testTraceWithMaxEpochs() {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
@@ -222,6 +228,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("5. Trace disabled (default)")
     void testTraceDisabled() {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
@@ -244,6 +251,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("6. Trace with null control (no output)")
     void testTraceNullControl() {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         List<String> traceLines = new ArrayList<>();
 
         PrcOpt opt = RtkProcessor.createDefaultOpt();
@@ -259,6 +267,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("7. Trace with null callback (no crash)")
     void testTraceNullCallback() {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         TraceControl ctrl = new TraceControl();
         ctrl.enabled = true;
         ctrl.stages = 0x7F;
@@ -278,6 +287,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("8. Trace STAGE6 format validation")
     void testTraceStage6Format() {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
