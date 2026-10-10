@@ -1,9 +1,0 @@
-scenario=open-sky
-role=base
-systems=C
-date=2026-07-09
-source=self-collected
-duration=1h
-interval=1s
-description=BDS单频观测数据，RINEX 3.02格式，含B1I频点6种观测类型
-receiver=Trimble NetR9

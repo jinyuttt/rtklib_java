@@ -36,10 +36,18 @@ public class RinexConversionTest {
     private static final Logger log = LoggerFactory.getLogger(RinexConversionTest.class);
 
     private static final String ROVER_PATH =
-            TestDataConfig.getRoverFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<ROVER_DEVICE_ID>\\2026-06-08\\1.rtcm3" : TestDataConfig.getRoverFile();
+            TestDataConfig.getRoverFile().isEmpty()
+                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    : TestDataConfig.getRtcmBaseDir() + "\\<ROVER_DEVICE_ID>\\2026-06-08\\1.rtcm3")
+                : TestDataConfig.getRoverFile();
 
     private static final String BASE_PATH =
-            TestDataConfig.getBaseFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<BASE_DEVICE_ID>\\2026-06-08\\1.rtcm3" : TestDataConfig.getBaseFile();
+            TestDataConfig.getBaseFile().isEmpty()
+                ? (TestDataConfig.hasTestDataFile("rtcm/open-sky_base_20090515.rtcm3")
+                    ? TestDataConfig.getTestDataFile("rtcm/open-sky_base_20090515.rtcm3")
+                    : TestDataConfig.getRtcmBaseDir() + "\\<BASE_DEVICE_ID>\\2026-06-08\\1.rtcm3")
+                : TestDataConfig.getBaseFile();
 
     private static byte[] roverData;
     private static byte[] baseData;
@@ -140,7 +148,7 @@ public class RinexConversionTest {
 //    @Test
 //    @DisplayName("RTCM to RINEX 2.11 conversion")
 //    void testRtcmToRinex211(@TempDir Path tempDir) throws IOException {
-//        String outputDir = " D:\\code\\rtklib_java\\temp_compare\\java";
+//        String outputDir = tempDir.toString();
 //        RtcmToRinexConverter converter = new RtcmToRinexConverter(2.11, outputDir, "ROVER");
 //
 //        boolean result = converter.convert(roverData, roverData.length);
@@ -205,7 +213,7 @@ public class RinexConversionTest {
         assertTrue(Files.exists(javaObsFile), "Java obs file should exist");
 
         RinexObsData javaData = parseRinex3ObsWithTypes(javaObsFile.toString());
-        RinexObsData cData = parseRinex3ObsWithTypes("D:\\code\\rtklib_java\\<DEVICE_ID>\\2026-06-08\\full.obs");
+        RinexObsData cData = parseRinex3ObsWithTypes(TestDataConfig.get("rinex.c.obs", ""));
 
         log.info("Java obs types: {}", javaData.obsTypesBySys);
         log.info("C obs types: {}", cData.obsTypesBySys);
@@ -371,7 +379,7 @@ public class RinexConversionTest {
         assertTrue(Files.exists(javaNavFile), "Java nav file should exist");
 
         Map<String, double[]> javaNav = parseRinexNav(javaNavFile.toString());
-        Map<String, double[]> cNav = parseRinexNav("D:\\code\\rtklib_java\\<DEVICE_ID>\\2026-06-08\\full.nav");
+        Map<String, double[]> cNav = parseRinexNav(TestDataConfig.get("rinex.c.nav", ""));
 
         log.info("Java nav entries: {}, C nav entries: {}", javaNav.size(), cNav.size());
 

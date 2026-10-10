@@ -27,9 +27,17 @@ public class RtkTraceTest {
     private static final Logger log = LoggerFactory.getLogger(RtkTraceTest.class);
 
     private static final String ROVER_PATH =
-            TestDataConfig.getRoverFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<ROVER_DEVICE_ID>\\2026-06-08\\1.rtcm3" : TestDataConfig.getRoverFile();
+            TestDataConfig.getRoverFile().isEmpty()
+                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    : TestDataConfig.getRtcmBaseDir() + "\\<ROVER_DEVICE_ID>\\2026-06-08\\1.rtcm3")
+                : TestDataConfig.getRoverFile();
     private static final String BASE_PATH =
-            TestDataConfig.getBaseFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<BASE_DEVICE_ID>\\2026-06-08\\1.rtcm3" : TestDataConfig.getBaseFile();
+            TestDataConfig.getBaseFile().isEmpty()
+                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    : TestDataConfig.getRtcmBaseDir() + "\\<BASE_DEVICE_ID>\\2026-06-08\\1.rtcm3")
+                : TestDataConfig.getBaseFile();
     private static final String RESULT_DIR = TestDataConfig.getResultDir();
 
     private static byte[] roverData;

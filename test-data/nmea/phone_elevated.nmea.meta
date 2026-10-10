@@ -1,0 +1,13 @@
+scenario=elevated
+role=reference
+systems=G+E+J+C
+date=2025-05-21
+source=MobileGNSS-SPP
+sample_rate=1s
+duration=21min
+receiver=UNISOC uis7865_6h10_go_a32b
+license=MIT
+description=手机高架桥场景参考位置(baseline NMEA)
+location=Beijing elevated
+mode=rtk-fixed
+test_ids=SppOptimizationTest

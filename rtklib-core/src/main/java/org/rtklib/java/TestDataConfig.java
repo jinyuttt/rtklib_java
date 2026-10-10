@@ -56,11 +56,11 @@ public final class TestDataConfig {
     }
 
     public static String getRtcmBaseDir() {
-        return get("rtcm.base.dir", "D:\\rtcm3\\rtcm");
+        return get("rtcm.base.dir", getTestDataDir() + File.separator + "rtcm");
     }
 
     public static String getProductDir() {
-        return get("product.dir", "D:\\rtcm3\\product");
+        return get("product.dir", getTestDataDir() + File.separator + "product");
     }
 
     public static String getGreatPvtPppDir() {
@@ -80,20 +80,20 @@ public final class TestDataConfig {
         String val = props.getProperty("baserover." + group);
         if (val != null) return val.split("[,\\s]+");
         switch (group) {
-            case "group1": return new String[]{"DEVICE_ID_REDACTED"};
-            case "rover1": return new String[]{"DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED"};
-            case "group2": return new String[]{"DEVICE_ID_REDACTED"};
-            case "rover2": return new String[]{"DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED"};
+            case "group1": return new String[]{"YOUR_BASE_ID"};
+            case "rover1": return new String[]{"YOUR_ROVER_ID"};
+            case "group2": return new String[]{"YOUR_BASE_ID_2"};
+            case "rover2": return new String[]{"YOUR_ROVER_ID_2"};
             default: return new String[0];
         }
     }
 
     public static String getStation() {
-        return get("station.id", "DEVICE_ID_REDACTED");
+        return get("station.id", "");
     }
 
     public static String getStationDate() {
-        return get("station.date", "2026-06-29");
+        return get("station.date", "");
     }
 
     public static String getTestDataDir() {

@@ -25,7 +25,10 @@ import static org.junit.jupiter.api.Assertions.*;
 public class SppOptimizationTest {
 
     private static final Logger log = LoggerFactory.getLogger(SppOptimizationTest.class);
-    private static final String DATA_BASE = "D:\\rtklib\\rtklib_java\\reference-projects\\MobileGNSS-SPP\\data";
+    private static final String DATA_BASE =
+            TestDataConfig.hasTestDataFile("rinex/rinex304_gejc_elevated.25o")
+                ? TestDataConfig.getTestDataDir()
+                : "D:\\rtklib\\rtklib_java\\reference-projects\\MobileGNSS-SPP\\data";
 
     static class ObsEpoch {
         final GTime time;
@@ -160,9 +163,25 @@ public class SppOptimizationTest {
     }
 
     private static boolean loadData(String scenario, String dataId) {
-        String obsFile = DATA_BASE + "\\" + scenario + "\\" + dataId + "\\rover.obs";
-        String navFile = DATA_BASE + "\\" + scenario + "\\" + dataId + "\\rover.nav";
-        String baselineFile = DATA_BASE + "\\" + scenario + "\\" + dataId + "\\baseline.nmea";
+        boolean useTestData = TestDataConfig.hasTestDataFile("rinex/rinex304_gejc_elevated.25o");
+        String obsFile, navFile, baselineFile;
+        if (useTestData) {
+            String scenarioName = scenario.replace("01-opensky", "opensky")
+                    .replace("02-street", "street")
+                    .replace("03-downtown", "downtown")
+                    .replace("04-elevated", "elevated");
+            obsFile = TestDataConfig.getTestDataFile("rinex/rinex304_gejc_" + scenarioName + ".25o");
+            navFile = TestDataConfig.getTestDataFile("nav/rinex304_gejc_" + scenarioName + ".25n");
+            baselineFile = TestDataConfig.getTestDataFile("nmea/phone_" + scenarioName + ".nmea");
+            if (!new java.io.File(obsFile).exists()) {
+                log.warn("公共测试数据不存在: {}", obsFile);
+                return false;
+            }
+        } else {
+            obsFile = DATA_BASE + "\\" + scenario + "\\" + dataId + "\\rover.obs";
+            navFile = DATA_BASE + "\\" + scenario + "\\" + dataId + "\\rover.nav";
+            baselineFile = DATA_BASE + "\\" + scenario + "\\" + dataId + "\\baseline.nmea";
+        }
 
         RinexParser parser = new RinexParser();
         if (!parser.parseObs(obsFile)) {

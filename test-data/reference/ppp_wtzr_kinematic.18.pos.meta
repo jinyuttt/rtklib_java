@@ -5,4 +5,7 @@ date=2018-06-06
 source=Net_Diff
 mode=ppp
 software=RTKLIB
-description=PPP动态解算结果参考，WTZR站(Wettzell,德国)，Q=6动态解
+description=PPP动态解算结果参考，WTZR�?Wettzell,德国)，Q=6动态解
+license=public
+
+test_ids=PppKinematicTest

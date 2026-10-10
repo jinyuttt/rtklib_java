@@ -21,10 +21,15 @@ public class LandslideMonitorTest {
 
     private static final Logger log = LoggerFactory.getLogger(LandslideMonitorTest.class);
 
-    private static final String BASE_DIR = System.getProperty("user.dir");
-    private static final String ROVER_PATH = BASE_DIR + "\\testdat\\rover.rtcm";
-    private static final String BASE_PATH = BASE_DIR + "\\testdat\\base.rtcm";
-    private static final String RESULT_DIR = BASE_DIR + "\\testdat\\landslide_results";
+    private static final String ROVER_PATH =
+            TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                : System.getProperty("user.dir") + "\\testdat\\rover.rtcm";
+    private static final String BASE_PATH =
+            TestDataConfig.hasTestDataFile("rtcm/open-sky_base_20090515.rtcm3")
+                ? TestDataConfig.getTestDataFile("rtcm/open-sky_base_20090515.rtcm3")
+                : System.getProperty("user.dir") + "\\testdat\\base.rtcm";
+    private static final String RESULT_DIR = TestDataConfig.getResultDir() + "\\landslide";
 
     private static byte[] roverData;
     private static byte[] baseData;

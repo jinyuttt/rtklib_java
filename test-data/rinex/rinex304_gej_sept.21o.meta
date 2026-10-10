@@ -11,3 +11,5 @@ location=Japan
 receiver=Septentrio POLARX5
 antenna=SEPPOLANT_R4
 base.distance=0.0
+license=MIT
+test_ids=RinexFormatTest

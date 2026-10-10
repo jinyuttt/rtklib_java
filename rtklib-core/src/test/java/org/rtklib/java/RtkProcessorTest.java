@@ -27,16 +27,31 @@ public class RtkProcessorTest {
     private static final Logger log = LoggerFactory.getLogger(RtkProcessorTest.class);
 
     private static final String ROVER_PATH =
-            TestDataConfig.getRoverFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<ROVER_DEVICE_ID>\\2026-06-30\\16.rtcm3" : TestDataConfig.getRoverFile();
+            TestDataConfig.getRoverFile().isEmpty()
+                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    : null)
+                : TestDataConfig.getRoverFile();
     private static final String BASE_PATH =
-            TestDataConfig.getBaseFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<BASE_DEVICE_ID>\\2026-06-30\\16.rtcm3" : TestDataConfig.getBaseFile();
+            TestDataConfig.getBaseFile().isEmpty()
+                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    : null)
+                : TestDataConfig.getBaseFile();
     private static final String RESULT_DIR = TestDataConfig.getResultDir();
 
     private static byte[] roverData;
     private static byte[] baseData;
+    private static boolean dataAvailable;
 
     @BeforeAll
     static void loadData() throws IOException {
+        dataAvailable = ROVER_PATH != null && BASE_PATH != null
+                && new File(ROVER_PATH).exists() && new File(BASE_PATH).exists();
+        if (!dataAvailable) {
+            log.warn("RTCM3 base+rover data not available, skipping data-dependent tests");
+            return;
+        }
         try (FileInputStream fis = new FileInputStream(ROVER_PATH)) {
             roverData = fis.readAllBytes();
         }
@@ -47,9 +62,14 @@ public class RtkProcessorTest {
         log.info("Loaded Rover: {} bytes, Base: {} bytes", roverData.length, baseData.length);
     }
 
+    private void skipIfNoData() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM3 base+rover data");
+    }
+
     @Test
     @DisplayName("1. RTK from byte[] with callback")
     void testRtkFromBytesWithCallback() {
+        skipIfNoData();
         List<Sol> callbackSolutions = Collections.synchronizedList(new ArrayList<>());
         List<String> failMsgs = Collections.synchronizedList(new ArrayList<>());
         int[] finishInfo = {0, 0, 0};
@@ -95,6 +115,7 @@ public class RtkProcessorTest {
     @Test
     @DisplayName("2. RTK from byte[] without callback")
     void testRtkFromBytesNoCallback() {
+        skipIfNoData();
         PrcOpt opt = RtkProcessor.createDefaultOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         RtkProcessor.RtkResult result = rtk.process(roverData, baseData);
@@ -128,6 +149,7 @@ public class RtkProcessorTest {
     @Test
     @DisplayName("4. RTK single stream (rover only, fallback to SPP)")
     void testRtkSingleStream() {
+        skipIfNoData();
         PrcOpt opt = RtkProcessor.createDefaultOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         RtkProcessor.RtkResult result = rtk.process(roverData);
@@ -195,6 +217,7 @@ public class RtkProcessorTest {
     @Test
     @DisplayName("7. RTK with custom configuration")
     void testRtkCustomConfig() {
+        skipIfNoData();
         PrcOpt opt = RtkProcessor.createDefaultOpt();
         opt.navsys = Constants.SYS_CMP;
         opt.nf = 2;
@@ -211,6 +234,7 @@ public class RtkProcessorTest {
     @Test
     @DisplayName("8. RTK with manual base position")
     void testRtkManualBasePosition() {
+        skipIfNoData();
         PrcOpt opt = RtkProcessor.createDefaultOpt();
         opt.refpos = Constants.POSOPT_POS_XYZ;
 
@@ -227,6 +251,7 @@ public class RtkProcessorTest {
     @Test
     @DisplayName("9. RTK streaming mode (feedRover/feedBase)")
     void testRtkStreamingMode() {
+        skipIfNoData();
         PrcOpt opt = RtkProcessor.createDefaultOpt();
         List<Sol> solutions = new ArrayList<>();
 
@@ -263,6 +288,7 @@ public class RtkProcessorTest {
     @Test
     @DisplayName("10. RTK result statistics")
     void testRtkResultStatistics() {
+        skipIfNoData();
         PrcOpt opt = RtkProcessor.createDefaultOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         RtkProcessor.RtkResult result = rtk.process(roverData, baseData);

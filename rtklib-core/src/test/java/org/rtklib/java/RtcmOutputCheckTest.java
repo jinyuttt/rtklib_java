@@ -20,7 +20,9 @@ public class RtcmOutputCheckTest {
     @Test
     @DisplayName("Check all 5 output types from RTCM")
     public void testRtcmOutput() throws IOException {
-        String filePath = TestDataConfig.getRtcmBaseDir() + "\\<DEVICE_ID>\\2026-07-31\\1.rtcm3";
+        String filePath = TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                : TestDataConfig.getRtcmBaseDir() + "\\<DEVICE_ID>\\2026-07-31\\1.rtcm3";
 
         System.out.println("=== Reading: " + filePath + " ===");
         byte[] data;

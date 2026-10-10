@@ -3,4 +3,6 @@ role=reference
 systems=G
 date=2005-09-20
 source=RTKLIB-sample
-description=GPS广播星历，RINEX 2.10格式，配合0759观测数据
+description=GPS广播星历，RINEX 2.10格式，配�?759观测数据
+license=BSD-2-Clause
+test_ids=RtkTest,ForwardBackwardFilterTest,VerifyPositioningTest

@@ -3,4 +3,6 @@ role=reference
 systems=G+E+J
 date=2021-03-19
 source=cssrlib
-description=G+E+J多系统混合广播星历，RINEX 3.04格式，含电离层参数
+description=G+E+J多系统混合广播星历，RINEX 3.04格式，含电离层参�
+license=MIT
+test_ids=RinexFormatTest

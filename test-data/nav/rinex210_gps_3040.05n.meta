@@ -1,0 +1,8 @@
+scenario=open-sky
+role=reference
+systems=G
+date=2005-09-20
+source=RTKLIB-sample
+description=GPS广播星历，RINEX 2.10格式，配�?040观测数据
+license=BSD-2-Clause
+test_ids=RtkTest,VerifyPositioningTest

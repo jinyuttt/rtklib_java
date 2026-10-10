@@ -18,9 +18,14 @@ public class RtkLocalTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtkLocalTest.class);
 
-    private static final String BASE_DIR = System.getProperty("user.dir");
-    private static final String ROVER_PATH = BASE_DIR + "\\testdat\\rover.rtcm";
-    private static final String BASE_PATH = BASE_DIR + "\\testdat\\base.rtcm";
+    private static final String ROVER_PATH =
+            TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                : null;
+    private static final String BASE_PATH =
+            TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                : null;
 
     private static byte[] roverData;
     private static byte[] baseData;
@@ -32,7 +37,8 @@ public class RtkLocalTest {
 
     @BeforeAll
     static void loadData() {
-        dataAvailable = new File(ROVER_PATH).exists() && new File(BASE_PATH).exists();
+        dataAvailable = ROVER_PATH != null && BASE_PATH != null
+                && new File(ROVER_PATH).exists() && new File(BASE_PATH).exists();
         if (!dataAvailable) {
             log.warn("Test data not found: rover={}, base={}", ROVER_PATH, BASE_PATH);
             return;

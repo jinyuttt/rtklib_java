@@ -4,3 +4,5 @@ systems=G+E+J+C
 date=2025-05-21
 source=MobileGNSS-SPP
 description=手机GNSS高架桥场景导航星历，G+E+J+C四系统，RINEX 3.04格式
+license=MIT
+test_ids=SppOptimizationTest

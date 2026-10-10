@@ -1,0 +1,15 @@
+scenario=open-sky
+role=base
+systems=G
+date=2009-05-15
+source=RTKLIB-sample
+station=0263
+duration=1h
+interval=1s
+description=RTKLIB自带样例数据，日本山梨县韮崎(Nirasaki)开阔地VRS差分改正数流(1Hz)，作为RTK基站数据。注意：使用NovAtel私有RTCM3消息类型(7872/7888/7920/8160)，非标准1005/1006
+location=Nirasaki, Yamanashi, Japan
+lat=35.715
+lon=138.451
+receiver=NovAtel OEMV
+license=public
+test_ids=SampleDataRtcmTest,RtcmFileParserTest,RtcmSampleDataTest,RtcmCallbackDecoderTest,RinexConversionTest,RinexObsWriterTest,LandslideMonitorTest

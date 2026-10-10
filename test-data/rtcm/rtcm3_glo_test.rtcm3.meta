@@ -4,3 +4,6 @@ systems=R
 date=unknown
 source=RTKLIB-sample
 description=RTKLIB样例，GLONASS RTCM3消息，适合GLONASS解码测试
+license=BSD-2-Clause
+
+test_ids=Rtcm3DecodeTest

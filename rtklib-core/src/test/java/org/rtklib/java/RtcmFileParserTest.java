@@ -23,7 +23,10 @@ public class RtcmFileParserTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtcmFileParserTest.class);
 
-    private static final String FILE_PATH = TestDataConfig.getRtcmBaseDir() + "\\<DEVICE_ID>\\2026-07-09\\1.rtcm3";
+    private static final String FILE_PATH =
+            TestDataConfig.hasTestDataFile("rtcm/open-sky_base_20090515.rtcm3")
+                ? TestDataConfig.getTestDataFile("rtcm/open-sky_base_20090515.rtcm3")
+                : TestDataConfig.getRtcmBaseDir() + "\\<DEVICE_ID>\\2026-07-09\\1.rtcm3";
 
     @Test
     @DisplayName("Parse RTCM3 binary file")

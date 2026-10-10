@@ -60,12 +60,12 @@
 | P3 | IERS2010潮汐 | `enableIers2010` | false | ✅ | ✅ | ✅ | ✅ | **通用（静态效果更显著）**：固体潮(dehanttideinel)、极潮(9mm/9mm/-33mm)、大气潮(S1/S2) `【mm级改正，动态下噪声淹没】` |
 | P4 | ISB/IFCB/IFB偏差 | `enableIsbIfcbIfb` | false | ✅ | ✅ | ✅ | ✅ | **多系统通用**：估系统间/频间偏差参数，显著改善多GNSS融合PPP收敛 `【ISB 60m²初方差，IFCB 30m²】` |
 | P5 | OSB偏差改正 | `enableOsb` | false | ✅ | ✅ | ✅ | ✅ | **通用（PPP-AR前提）**：观测值特异性偏差注入观测方程 |
-| P6 | PPP-AR WL+NL固定 | `enablePppAR` | false | ✅ | ✅ | ✅ | ✅ | **通用**：WL(λ≈86cm)→NL(λ≈11cm)两步固定，浮点解→固定解 `【需FCB/OSB产品】` |
+| P6 | PPP-AR WL+NL固定 | `enablePppAR` | false | ✅ | ✅ | ✅ | ✅ | **通用**：WL(λ≈86cm)→NL(λ≈11cm)两步固定，浮点解→固定解 `【需FCB/OSB产品；C版pppambfix()为空白壳直接return 0，Java版完整实现】` |
 | P7 | PPP-AR Fix-and-Hold | `enablePppArFixHold` | false | ✅ | ✅ | ✅ | ✅ | **通用（AR增强）**：连续FIX≥50历元→方差收紧至1e-6，防回浮点 |
 | P8 | PPP Partial AR | `enablePppPartialAR` | false | ✅ | ✅ | ✅ | ✅ | **通用（AR增强）**：全局Ratio失败→最少4星子集→最多10次尝试 |
 | P9 | BDS-3 PPP-AR | `enableBds3PppAR` | false | ✅ | ✅ | ✅ | ✅ | **BDS-3专用**：PRN 19~46 MEO/IGSO卫星的B1C/B2a固定 |
 | P10 | 多频PPP-AR | `enableMultiFreqAR` | false | ✅ | ✅ | ✅ | ✅ | **≥3频通用**：EWL→WL→NL三级联固定 |
-| P11 | PPP-RTK处理器 | `enablePppRtk` | false | — | — | ✅ | ✅ | **PPP-RTK专用**：接收SSR改正（轨道/钟差/码偏差/相位偏差），替代标准PPP |
+| P11 | PPP-RTK处理器 | `enablePppRtk` | false | — | — | ✅ | ✅ | **PPP-RTK专用**：接收SSR改正（轨道/钟差/码偏差/相位偏差），替代标准PPP `【C版完全不具备此模块，Java版全新实现】` |
 | P12 | PPP-RTK AR | `enablePppRtkAR` | false | — | — | ✅ | ✅ | **PPP-RTK专用**：LAMBDA+ratio test+Fix-and-Hold |
 | P13 | PPP-RTK Fix-and-Hold | `enablePppRtkFixHold` | false | — | — | ✅ | ✅ | **PPP-RTK专用**：FIX后收紧方差至1e-4 |
 | P14 | 紧凑SSR解码 | `enableCompactSsr` | false | — | — | ✅ | ✅ | **QZSS CLAS专用**：L6专有格式解码，MT1-12消息类型+网格插值 |
@@ -94,9 +94,10 @@
 | T3 | 基站稳定性监测 | `BaseStationMonitor` | — | — | ✅ | ✅ | ✅ | ✅ | **监控工具**：SPP窗口差分检测基站位移 `【检测阈值10m/突变+5m/漂移】` |
 | T4 | 滑坡监测专用配置 | `LandslideMonitorTest` 用例 | — | — | ✅ | — | — | — | **静态长基线示例**：自适应Q+锚固+大气冻结组合 `【BDS三频+ARMODE_FIXHOLD】` |
 | T5 | SSR电离层 | `ionoopt=SSR/IONOOPT_TEC` | — | — | — | — | ✅ | ✅ | **PPP通用**：外部IONEX/SSR产品提供电离层先验→收敛加速 |
-| T6 | S1/S2大气潮 | `enableAt1S2` | false | — | — | — | — | ✅ | ✅ | **PPP通用**：IERS2010扩展，S1/S2大气潮改正 `【mm级，需enableIers2010=true】` |
+| T6 | S1/S2大气潮 | `enableAt1S2` | false | — | — | — | — | ✅ | ✅ | **PPP通用**：IERS2010扩展，S1/S2大气潮改正 `【mm级，需enableIers2010=true；C版RTKLIB未实现S1/S2大气潮，Java版新增】` |
 | T7 | MW组合DCB校正 | 自动（mwmeas内） | false | — | — | — | — | ✅ | ✅ | **PPP-AR基础**：从nav.cbias读码偏差改正P1/P2→提升WL整数性 |
 | T8 | DCB文件独立读取 | `DcbReader` | — | — | — | — | — | ✅ | ✅ | **PPP工具**：支持CODE .DCB + IGS .BIA/.BSX格式 |
+| T9 | Joseph形式协方差更新 | `KalmanFilter.update()` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **通用（数值稳定性）**：C版用标准形式`P=(I-KH)P`，Java版用Joseph形式`P=(I-KH)P(I-KH)ᵀ+KRKᵀ`，保证协方差正半定 `【病态条件下差异可达厘米级】` |
 
 ---
 
@@ -254,6 +255,7 @@ PrcOpt:    PMODE_SINGLE, dynamics=1 (需要速度状态), navsys=SYS_ALL
 │  S2 IGGIII抗差 ──→ 抑制粗差+权重调整                     │
 ├─────────────────────────────────────────────────────────┤
 │                    滤波鲁棒层                            │
+│  T9 Joseph形式 ──→ 协方差正半定保证（数值稳定性基础）    │
 │  R4 IGGIII + R1 自适应Q ──→ 静态低噪/动态高响应          │
 │  R3 大气冻结 + R13 参数噪声 ──→ 防少星漂移（长基线↕）    │
 ├─────────────────────────────────────────────────────────┤

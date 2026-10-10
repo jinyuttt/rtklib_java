@@ -10,3 +10,5 @@ description=RTKLIB样例，GPS双频L1/L2，RINEX 2.10格式，短基线RTK基�
 location=Japan
 receiver=NovAtel OEMV
 base.distance=0.015
+license=BSD-2-Clause
+test_ids=RtkTest,RtkOptimizationTest,RtkOptimizationIndividualTest,RtkArDebugTest,RtkTraceTest,LogTraceTest,ForwardBackwardFilterTest,VerifyPositioningTest

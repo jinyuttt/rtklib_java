@@ -3,6 +3,7 @@ package org.rtklib.java;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Assumptions;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
@@ -23,11 +24,14 @@ public class SppCompareTest {
 
     private static final Logger log = LoggerFactory.getLogger(SppCompareTest.class);
 
-    private static final String DATA_DIR = "D:\\rtklib\\rtklib_java\\RTKLIB_EX_2.5.0";
+    private static final String DATA_DIR =
+            TestDataConfig.get("sppcompare.data.dir",
+                    "D:\\rtklib\\rtklib_java\\RTKLIB_EX_2.5.0");
     private static final String OBS_FILE = DATA_DIR + "\\1.obs";
     private static final String NAV_FILE = DATA_DIR + "\\1.nav";
     private static final String C_REF_FILE = DATA_DIR + "\\spp_bds.pos";
     private static final String JAVA_RESULT_FILE = DATA_DIR + "\\spp_java_result.pos";
+    private static boolean dataAvailable;
 
     private static List<ObsEpoch> obsEpochs;
     private static Nav nav;
@@ -47,6 +51,12 @@ public class SppCompareTest {
 
     @BeforeAll
     static void loadRinexData() {
+        dataAvailable = new File(OBS_FILE).exists() && new File(NAV_FILE).exists();
+        if (!dataAvailable) {
+            log.warn("SPP对比测试数据不可用: {} 或 {} 不存在，测试将跳过", OBS_FILE, NAV_FILE);
+            log.warn("可通过 test-data.properties 中 sppcompare.data.dir 配置数据目录");
+            return;
+        }
         log.info("===== 加载 RINEX 数据 =====");
 
         RinexParser parser = new RinexParser();
@@ -93,6 +103,7 @@ public class SppCompareTest {
     @Test
     @DisplayName("SPP 全历元定位 + 写入 .pos 文件")
     void testSppAllEpochs() throws IOException {
+        Assumptions.assumeTrue(dataAvailable, "SPP对比测试数据不可用，跳过");
         PrcOpt opt = new PrcOpt();
         opt.mode = Constants.PMODE_SINGLE;
         opt.nf = 2;
@@ -164,6 +175,7 @@ public class SppCompareTest {
     @Test
     @DisplayName("SPP Java vs RTKLIB C 逐历元对比")
     void testSppCompareWithRtklibC() throws IOException {
+        Assumptions.assumeTrue(dataAvailable, "SPP对比测试数据不可用，跳过");
         // 先运行 SPP 获取 Java 结果
         PrcOpt opt = new PrcOpt();
         opt.mode = Constants.PMODE_SINGLE;

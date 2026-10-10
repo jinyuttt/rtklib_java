@@ -24,7 +24,10 @@ public class RtcmCallbackDecoderTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtcmCallbackDecoderTest.class);
     private static final String ROVER_PATH =
-            TestDataConfig.get("spp.rover.file", TestDataConfig.getRtcmBaseDir() + "\\<DEVICE_ID>\\2026-06-08\\1.rtcm3");
+            TestDataConfig.get("spp.rover.file",
+                TestDataConfig.hasTestDataFile("rtcm/open-sky_base_20090515.rtcm3")
+                    ? TestDataConfig.getTestDataFile("rtcm/open-sky_base_20090515.rtcm3")
+                    : TestDataConfig.getRtcmBaseDir() + "\\<DEVICE_ID>\\2026-06-08\\1.rtcm3");
     private static byte[] roverData;
 
     @BeforeAll
