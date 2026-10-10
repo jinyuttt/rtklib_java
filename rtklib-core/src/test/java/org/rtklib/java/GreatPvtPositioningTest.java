@@ -419,4 +419,323 @@ public class GreatPvtPositioningTest {
         assertEquals(nonZeroBefore, nonZeroAfter,
                 "compactObsFreq should preserve total non-zero pseudorange count");
     }
+
+    @Test
+    @DisplayName("PPP static (G+E+C) with CODE precise products")
+    void testPppStatic() {
+        Assumptions.assumeTrue(pppOk && pppParser.nav.ne > 0 && pppParser.nav.nc > 0,
+                "GREAT-PVT PPP data or precise products not available");
+
+        Obsd[] allObs = pppParser.obs.data;
+        int totalObs = pppParser.obs.n;
+
+        List<GTime> epochs = new ArrayList<>();
+        List<Integer> epochStarts = new ArrayList<>();
+        for (int i = 0; i < totalObs; i++) {
+            if (i == 0 || !allObs[i].time.equals(allObs[i - 1].time)) {
+                epochs.add(allObs[i].time);
+                epochStarts.add(i);
+            }
+        }
+        epochStarts.add(totalObs);
+
+        PrcOpt opt = new PrcOpt();
+        opt.mode = Constants.PMODE_PPP_STATIC;
+        opt.nf = 2;
+        opt.navsys = Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP;
+        opt.elmin = 15.0 * Constants.D2R;
+        opt.ionoopt = Constants.IONOOPT_IFLC;
+        opt.tropopt = Constants.TROPOPT_EST;
+        opt.sateph = Constants.EPHOPT_PREC;
+
+        Rtk rtk = new Rtk();
+        rtk.opt = opt;
+
+        int solvedCount = 0;
+        int maxEpochs = Math.min(epochs.size(), 30);
+        for (int ei = 0; ei < maxEpochs; ei++) {
+            int start = epochStarts.get(ei);
+            int end = epochStarts.get(ei + 1);
+            Obsd[] epochObs = java.util.Arrays.copyOfRange(allObs, start, end);
+            for (Obsd o : epochObs) o.rcv = 1;
+
+            RtkCore.rtkpos(rtk, epochObs, epochObs.length, pppParser.nav);
+
+            if (rtk.sol.stat == Constants.SOLQ_PPP || rtk.sol.stat == Constants.SOLQ_SINGLE) solvedCount++;
+        }
+
+        log.info("PPP Static summary: solved={}/{}", solvedCount, maxEpochs);
+        assertTrue(solvedCount > 0, "PPP Static should solve at least one epoch");
+    }
+
+    @Test
+    @DisplayName("PPP kinematic with GPT3+VMF3 troposphere (P1)")
+    void testPppGpt3Vmf3() {
+        Assumptions.assumeTrue(pppOk && pppParser.nav.ne > 0 && pppParser.nav.nc > 0,
+                "GREAT-PVT PPP data or precise products not available");
+
+        Obsd[] allObs = pppParser.obs.data;
+        int totalObs = pppParser.obs.n;
+
+        List<GTime> epochs = new ArrayList<>();
+        List<Integer> epochStarts = new ArrayList<>();
+        for (int i = 0; i < totalObs; i++) {
+            if (i == 0 || !allObs[i].time.equals(allObs[i - 1].time)) {
+                epochs.add(allObs[i].time);
+                epochStarts.add(i);
+            }
+        }
+        epochStarts.add(totalObs);
+
+        PrcOpt opt = new PrcOpt();
+        opt.mode = Constants.PMODE_PPP_KINEMA;
+        opt.nf = 2;
+        opt.navsys = Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP;
+        opt.elmin = 15.0 * Constants.D2R;
+        opt.ionoopt = Constants.IONOOPT_IFLC;
+        opt.tropopt = Constants.TROPOPT_EST;
+        opt.sateph = Constants.EPHOPT_PREC;
+
+        RtkConfig cfg = new RtkConfig();
+        cfg.enableGpt3Vmf3 = true;
+
+        Rtk rtk = new Rtk();
+        rtk.opt = opt;
+
+        int solvedCount = 0;
+        int maxEpochs = Math.min(epochs.size(), 30);
+        for (int ei = 0; ei < maxEpochs; ei++) {
+            int start = epochStarts.get(ei);
+            int end = epochStarts.get(ei + 1);
+            Obsd[] epochObs = java.util.Arrays.copyOfRange(allObs, start, end);
+            for (Obsd o : epochObs) o.rcv = 1;
+            RtklibCommon.compactObsFreq(epochObs, epochObs.length, opt.nf, pppParser.nav);
+
+            if (ei == 0) {
+                Sol sppSol = new Sol();
+                PntPos.pntpos(epochObs, epochObs.length, pppParser.nav, opt, sppSol, null, rtk.ssat);
+                if (sppSol.stat != Constants.SOLQ_NONE) {
+                    System.arraycopy(sppSol.rr, 0, rtk.sol.rr, 0, 3);
+                }
+            }
+
+            PppCoreEx.ppos(rtk, epochObs, epochObs.length, pppParser.nav, cfg);
+
+            if (rtk.sol.stat == Constants.SOLQ_PPP || rtk.sol.stat == Constants.SOLQ_SINGLE) solvedCount++;
+        }
+
+        log.info("PPP+GPT3+VMF3 summary: solved={}/{}", solvedCount, maxEpochs);
+        assertTrue(solvedCount > 0, "PPP+GPT3+VMF3 should solve at least one epoch");
+    }
+
+    @Test
+    @DisplayName("PPP kinematic with IERS2010 tides (P3)")
+    void testPppIers2010() {
+        Assumptions.assumeTrue(pppOk && pppParser.nav.ne > 0 && pppParser.nav.nc > 0,
+                "GREAT-PVT PPP data or precise products not available");
+
+        Obsd[] allObs = pppParser.obs.data;
+        int totalObs = pppParser.obs.n;
+
+        List<GTime> epochs = new ArrayList<>();
+        List<Integer> epochStarts = new ArrayList<>();
+        for (int i = 0; i < totalObs; i++) {
+            if (i == 0 || !allObs[i].time.equals(allObs[i - 1].time)) {
+                epochs.add(allObs[i].time);
+                epochStarts.add(i);
+            }
+        }
+        epochStarts.add(totalObs);
+
+        PrcOpt opt = new PrcOpt();
+        opt.mode = Constants.PMODE_PPP_KINEMA;
+        opt.nf = 2;
+        opt.navsys = Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP;
+        opt.elmin = 15.0 * Constants.D2R;
+        opt.ionoopt = Constants.IONOOPT_IFLC;
+        opt.tropopt = Constants.TROPOPT_EST;
+        opt.sateph = Constants.EPHOPT_PREC;
+
+        RtkConfig cfg = new RtkConfig();
+        cfg.enableIers2010 = true;
+
+        Rtk rtk = new Rtk();
+        rtk.opt = opt;
+
+        int solvedCount = 0;
+        int maxEpochs = Math.min(epochs.size(), 30);
+        for (int ei = 0; ei < maxEpochs; ei++) {
+            int start = epochStarts.get(ei);
+            int end = epochStarts.get(ei + 1);
+            Obsd[] epochObs = java.util.Arrays.copyOfRange(allObs, start, end);
+            for (Obsd o : epochObs) o.rcv = 1;
+            RtklibCommon.compactObsFreq(epochObs, epochObs.length, opt.nf, pppParser.nav);
+
+            if (ei == 0) {
+                Sol sppSol = new Sol();
+                PntPos.pntpos(epochObs, epochObs.length, pppParser.nav, opt, sppSol, null, rtk.ssat);
+                if (sppSol.stat != Constants.SOLQ_NONE) {
+                    System.arraycopy(sppSol.rr, 0, rtk.sol.rr, 0, 3);
+                }
+            }
+
+            PppCoreEx.ppos(rtk, epochObs, epochObs.length, pppParser.nav, cfg);
+
+            if (rtk.sol.stat == Constants.SOLQ_PPP || rtk.sol.stat == Constants.SOLQ_SINGLE) solvedCount++;
+        }
+
+        log.info("PPP+IERS2010 summary: solved={}/{}", solvedCount, maxEpochs);
+        assertTrue(solvedCount > 0, "PPP+IERS2010 should solve at least one epoch");
+    }
+
+    @Test
+    @DisplayName("PPP kinematic with ISB/IFCB/IFB (P4)")
+    void testPppIsbIfcbIfb() {
+        Assumptions.assumeTrue(pppOk && pppParser.nav.ne > 0 && pppParser.nav.nc > 0,
+                "GREAT-PVT PPP data or precise products not available");
+
+        Obsd[] allObs = pppParser.obs.data;
+        int totalObs = pppParser.obs.n;
+
+        List<GTime> epochs = new ArrayList<>();
+        List<Integer> epochStarts = new ArrayList<>();
+        for (int i = 0; i < totalObs; i++) {
+            if (i == 0 || !allObs[i].time.equals(allObs[i - 1].time)) {
+                epochs.add(allObs[i].time);
+                epochStarts.add(i);
+            }
+        }
+        epochStarts.add(totalObs);
+
+        PrcOpt opt = new PrcOpt();
+        opt.mode = Constants.PMODE_PPP_KINEMA;
+        opt.nf = 2;
+        opt.navsys = Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP;
+        opt.elmin = 15.0 * Constants.D2R;
+        opt.ionoopt = Constants.IONOOPT_IFLC;
+        opt.tropopt = Constants.TROPOPT_EST;
+        opt.sateph = Constants.EPHOPT_PREC;
+
+        RtkConfig cfg = new RtkConfig();
+        cfg.enableIsbIfcbIfb = true;
+
+        Rtk rtk = new Rtk();
+        rtk.opt = opt;
+
+        int solvedCount = 0;
+        int maxEpochs = Math.min(epochs.size(), 30);
+        for (int ei = 0; ei < maxEpochs; ei++) {
+            int start = epochStarts.get(ei);
+            int end = epochStarts.get(ei + 1);
+            Obsd[] epochObs = java.util.Arrays.copyOfRange(allObs, start, end);
+            for (Obsd o : epochObs) o.rcv = 1;
+            RtklibCommon.compactObsFreq(epochObs, epochObs.length, opt.nf, pppParser.nav);
+
+            if (ei == 0) {
+                Sol sppSol = new Sol();
+                PntPos.pntpos(epochObs, epochObs.length, pppParser.nav, opt, sppSol, null, rtk.ssat);
+                if (sppSol.stat != Constants.SOLQ_NONE) {
+                    System.arraycopy(sppSol.rr, 0, rtk.sol.rr, 0, 3);
+                }
+            }
+
+            PppCoreEx.ppos(rtk, epochObs, epochObs.length, pppParser.nav, cfg);
+
+            if (rtk.sol.stat == Constants.SOLQ_PPP || rtk.sol.stat == Constants.SOLQ_SINGLE) solvedCount++;
+        }
+
+        log.info("PPP+ISB summary: solved={}/{}", solvedCount, maxEpochs);
+        assertTrue(solvedCount > 0, "PPP+ISB should solve at least one epoch");
+    }
+
+    @Test
+    @DisplayName("PPP-AR with Fix-and-Hold (P6+P7)")
+    void testPppArFixHold() {
+        boolean hasUpd = pppOk
+                && pppParser.nav.updWl != null && pppParser.nav.updWl.length > 0
+                && pppParser.nav.updNl != null && pppParser.nav.updNl.length > 0;
+        Assumptions.assumeTrue(hasUpd,
+                "GREAT-PVT PPP data with UPD products not available");
+
+        Obsd[] allObs = pppParser.obs.data;
+        int totalObs = pppParser.obs.n;
+
+        List<GTime> epochs = new ArrayList<>();
+        List<Integer> epochStarts = new ArrayList<>();
+        for (int i = 0; i < totalObs; i++) {
+            if (i == 0 || !allObs[i].time.equals(allObs[i - 1].time)) {
+                epochs.add(allObs[i].time);
+                epochStarts.add(i);
+            }
+        }
+        epochStarts.add(totalObs);
+
+        PrcOpt opt = new PrcOpt();
+        opt.mode = Constants.PMODE_PPP_KINEMA;
+        opt.nf = 2;
+        opt.navsys = Constants.SYS_GPS;
+        opt.elmin = 15.0 * Constants.D2R;
+        opt.ionoopt = Constants.IONOOPT_IFLC;
+        opt.tropopt = Constants.TROPOPT_EST;
+        opt.sateph = Constants.EPHOPT_PREC;
+
+        RtkConfig cfg = new RtkConfig();
+        cfg.enablePppAR = true;
+        cfg.enablePppArFixHold = true;
+        cfg.pppArRatioWl = 2.0;
+        cfg.pppArRatioNl = 3.0;
+        cfg.pppArFixHoldMinEp = 10;
+
+        Rtk rtk = new Rtk();
+        rtk.opt = opt;
+
+        int floatCount = 0, fixCount = 0;
+        int maxEpochs = Math.min(epochs.size(), 60);
+        for (int ei = 0; ei < maxEpochs; ei++) {
+            int start = epochStarts.get(ei);
+            int end = epochStarts.get(ei + 1);
+            Obsd[] epochObs = java.util.Arrays.copyOfRange(allObs, start, end);
+            for (Obsd o : epochObs) o.rcv = 1;
+            RtklibCommon.compactObsFreq(epochObs, epochObs.length, opt.nf, pppParser.nav);
+
+            if (ei == 0) {
+                Sol sppSol = new Sol();
+                PntPos.pntpos(epochObs, epochObs.length, pppParser.nav, opt, sppSol, null, rtk.ssat);
+                if (sppSol.stat != Constants.SOLQ_NONE) {
+                    System.arraycopy(sppSol.rr, 0, rtk.sol.rr, 0, 3);
+                }
+            }
+
+            PppCoreEx.ppos(rtk, epochObs, epochObs.length, pppParser.nav, cfg);
+
+            if (rtk.sol.stat == Constants.SOLQ_FIX) fixCount++;
+            else if (rtk.sol.stat == Constants.SOLQ_PPP) floatCount++;
+        }
+
+        log.info("PPP-AR+FixHold summary: float={}/{}, fix={}/{}", floatCount, maxEpochs, fixCount, maxEpochs);
+        assertTrue(floatCount + fixCount > 0, "PPP-AR+FixHold should solve at least one epoch");
+    }
+
+    @Test
+    @DisplayName("RTK Static multi-GNSS (G+E+C)")
+    void testRtkStaticMultiGnss() {
+        Assumptions.assumeTrue(rtkDataAvailable(),
+                "GREAT-PVT RTK data not available");
+
+        PrcOpt opt = new PrcOpt();
+        opt.mode = Constants.PMODE_STATIC;
+        opt.nf = 2;
+        opt.navsys = Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP;
+        opt.elmin = 15.0 * Constants.D2R;
+        opt.ionoopt = Constants.IONOOPT_BRDC;
+        opt.tropopt = Constants.TROPOPT_SAAS;
+        opt.soltype = Constants.SOLTYPE_FORWARD;
+
+        PostPosProcessor proc = new PostPosProcessor(opt);
+        PostPosProcessor.PostPosResult result = proc.process(RTK_ROVER, RTK_BASE, RTK_NAV);
+
+        log.info("RTK Static multi-GNSS: totalEpochs={}, successCount={}, failCount={}",
+                result.totalEpochs, result.successCount, result.failCount);
+        assertTrue(result.successCount > 0, "RTK Static multi-GNSS should solve at least one epoch");
+    }
 }
