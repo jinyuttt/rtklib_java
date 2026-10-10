@@ -18,7 +18,7 @@
 *.zip
 *.tar.gz
 *.rar
-*ps1
+# Note: *.ps1 is NOT ignored - download-test-data.ps1 is committed
 
 # Virtual machine crash logs
 hs_err_pid*
@@ -33,6 +33,13 @@ RTKLIB_EX-2.5.0/
 RTKLIB_EX_2.5.0/
 RTKLIB_EX-2.5.1/
 RTKLIB_EX_2.5.1/
+
+# Antenna files (large, use test-data/product/ instead)
+atx/
+
+# Compiled class files outside target/
+org/
+
 # Build output
 target/
 
@@ -61,11 +68,8 @@ test_output*
 orekit_src/
 python-sgp4/
 
-# rtk_compare intermediate data (keep .md reports)
-rtk_compare/*.nav
-rtk_compare/*.obs
-rtk_compare/*.conf
-rtk_compare/*.pos
+# rtk_compare removed (intermediate data, no longer used)
+rtk_compare/
 
 # Downloaded precise products (SP3/CLK/ERP/DCB/GPT3/VMF3/FCB/BLQ etc.)
 rtklib-product/product/
@@ -73,3 +77,17 @@ rtklib-product/product/
 # Local credentials config (contains passwords, NEVER commit)
 **/credentials.properties
 credentials.properties
+
+# Test data: keep README.md, .meta, .conf, .txt, small sample files
+# Only ignore large binary data files (>2MB) in specific subdirs
+test-data/rinex/*.obs
+test-data/rinex/*.nav
+test-data/product/*.sp3
+test-data/product/*.clk
+test-data/product/*.erp
+test-data/product/*.dcb
+test-data/product/*.bia
+test-data/product/*.bsx
+test-data/product/*.blq
+test-data/product/*.dat
+test-data/reference/*.pos
