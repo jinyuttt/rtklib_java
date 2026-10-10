@@ -261,19 +261,33 @@ org.rtklib.java.otl
 | 精密产品读取 | — | IGS CODE WHU (SP3/CLK/IONEX/OSB/ATX) | 文件解析验证 |
 | 多基线间接平差 | Adjust | 本地RTCM3 2基站9小时 | σ₀+Baarda验证 |
 
-### 🔧 框架已实现，待外部数据验证
+### 🔧 框架已实现，待场景数据验证
 
-以下功能代码已实现且通过单元测试，但缺少真实场景数据端到端验证：
+以下功能代码已实现且通过单元测试，但缺少真实场景数据端到端验证。按数据可得性分三级：
 
-| 场景 | 定位模式 | 缺少的数据 | 欢迎贡献 |
-|------|----------|------------|----------|
-| 动态车载 RTK | RTK-Kinematic | 高速动态 base+rover 对 | ✅ |
-| 长基线 RTK (>10km) | RTK-Static | 长基线 base+rover | ✅ |
-| 城市峡谷/深城市 RTK | RTK | 高遮挡 base+rover | ✅ |
-| Moving-Base RTK | RTK-MoveB | 双移动接收机同步观测 | ✅ |
-| PPP-RTK 实时 | PPP-RTK | SSR 实时流 | ✅ |
-| 三频 RTK/PPP | RTK/PPP | 三频 BDS/GAL 数据 | ✅ |
-| PPP-AR 精度验证 | PPP-AR | 24h 静态 + Fixed 参考解 | ✅ |
+**数据公开可得，缺集成验证**（优先级高，可自行下载）：
+
+| 场景 | 定位模式 | 数据获取方式 |
+|------|----------|-------------|
+| PPP-AR 24h 静态精度 | PPP-AR | IGS 24h RINEX + CODE MGEX SP3/CLK + WHU UPD，CDDIS 免费注册下载 |
+| 长基线 RTK (>10km) | RTK-Static | IGS 双站 RINEX（如 WTZR+BRUX ~600km），CDDIS 免费注册下载 |
+| 动态车载 RTK | RTK-Kinematic | RTKLIB sample / rtkexplorer F9P 数据 / Google Smartphone Decimeter Challenge |
+
+> 下载脚本：`test-data/download-igs-data.ps1`（CDDIS 需先配置 [NASA Earthdata Login](https://urs.earthdata.nasa.gov/users/new)）
+
+**数据部分可得，需筛选适配**（工程量中等）：
+
+| 场景 | 定位模式 | 数据获取方式 |
+|------|----------|-------------|
+| PPP-RTK 实时 | PPP-RTK | MADOCA/Galileo HAS/QZSS CLAS SSR 流可注册获取，需录制+事后产品对齐 |
+| 三频 RTK/PPP | RTK/PPP | IGS MGEX 三频测站 RINEX（BDS-3 B1c/B2a/B3i 或 GAL E1/E5a/E5b） |
+
+**数据确实稀缺，需自采或社区贡献**：
+
+| 场景 | 定位模式 | 障碍 |
+|------|----------|------|
+| 城市峡谷/深遮挡 RTK | RTK | 带真值的 base+rover 深遮挡成对数据基本无公开来源 |
+| Moving-Base RTK | RTK-MoveB | 公开双移动接收机同步观测数据极少 |
 
 > 如有可公开的上述数据，欢迎上传至 `test-data/` 目录或提交 Issue。详见 [测试用例与数据指南](docs/DATA_GUIDE.md)。
 
