@@ -665,17 +665,27 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 ### 7.3 亟需的数据场景
 
-按优先级排序：
+按数据可得性分级：
 
-1. **城市峡谷动态RTK** — 动态base+rover对，含NLOS/多路径，验证IGGIII/SNR中值/残差编辑（已有准静态RTK和动态SPP，缺动态RTK）
-2. **车载高速动态RTK** — >50km/h真实动态轨迹base+rover，验证自适应Q/逐级AR（已有手机低速动态SPP，缺高速RTK）
-3. **长基线RTK (>10km)** — 验证梯度/参数噪声/大气冻结
-4. **PPP-AR精度验证** — 24h静态+参考Fixed解，与GREAT-PVT结果对比（已有端到端测试，缺精度验证）
-5. **PPP-RTK** — SSR实时流，验证PPP-RTK处理器
-6. **多频(≥3频)** — 三频BDS/GAL，验证逐级AR多频扩展（已有双频BDS，缺三频）
-7. **峡谷/深城市RTK** — 两侧高楼遮挡，天空角严重受限
-8. **森林/林冠** — 树冠遮挡，信噪比低
-9. **RTCM流式RTK公开数据** — 可公开的同步base+rover RTCM3文件对（本地数据已验证但含设备ID不可公开，缺可公开数据）
+**数据公开可得，缺集成验证**（可自行下载，优先级高）：
+
+1. **PPP-AR 24h 静态精度** — IGS 24h RINEX + CODE MGEX SP3/CLK + WHU UPD，CDDIS 免费注册下载
+2. **长基线 RTK (>10km)** — IGS 双站 RINEX（如 WTZR+BRUX ~600km），CDDIS 免费注册下载
+3. **车载动态 RTK** — RTKLIB sample / rtkexplorer F9P 数据 / Google Smartphone Decimeter Challenge
+
+> 下载脚本：`test-data/download-igs-data.ps1`（CDDIS 需先配置 [NASA Earthdata Login](https://urs.earthdata.nasa.gov/users/new)）
+
+**数据部分可得，需筛选适配**（工程量中等）：
+
+4. **PPP-RTK** — MADOCA/Galileo HAS/QZSS CLAS SSR 流可注册获取，需录制+事后产品对齐
+5. **多频(≥3频)** — IGS MGEX 三频测站 RINEX（BDS-3 B1c/B2a/B3i 或 GAL E1/E5a/E5b）
+
+**数据确实稀缺，需自采或社区贡献**：
+
+6. **城市峡谷/深遮挡 RTK** — 带真值的 base+rover 深遮挡成对数据基本无公开来源
+7. **Moving-Base RTK** — 公开双移动接收机同步观测数据极少
+8. **森林/林冠** — 树冠遮挡，信噪比低，公开数据稀缺
+9. **RTCM流式RTK公开数据** — 可公开的同步base+rover RTCM3文件对（本地数据已验证但含设备ID不可公开）
 
 ---
 
