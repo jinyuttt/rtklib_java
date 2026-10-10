@@ -6,6 +6,28 @@
 
 ---
 
+## [2.2.7] - 2026-10-10
+
+### Added
+
+- **GitHub Actions CI 工作流**：push/PR 自动触发 JDK17 maven test，缓存 test-data，上传测试报告
+- **GitHub Actions Release 工作流**：tag v* 触发，版本校验，构建打包，自动创建 GitHub Release 并上传 jar
+
+### Changed
+
+- **README 场景置信度声明**：前置 13 项已实测验证 + 7 项框架已实现待外部数据验证，提前管理使用者预期
+- **DATA_GUIDE.md "私有"标注修正**：7 处"私有数据"措辞修正为"含设备ID不可公开"，明确核心障碍是特定场景公开数据不存在
+- **ROADMAP.md Phase3 拆分**：场景验证标记为🤝社区贡献项，工程质量为作者可推进项
+- **CI 工作流优化**：缓存 glob 从 `*.meta` 修正为 `**/*.meta` 覆盖子目录；增加缓存未命中时自动下载大文件测试数据步骤
+- **Release 工作流优化**：合并冗余的 `package -DskipTests` + `test` 为单步 `package`
+
+### Removed
+
+- **删除重复工作流**：移除 GitHub 自动生成的 `maven.yml` 和 `maven-publish-github-packages.yml`，由 `ci.yml` + `release.yml` 统一接管
+- **归档开发期文档**：`RTK_TraceLog_Design.md`、`PPP-AR-C-vs-Java-Comparison.md`、`PPP_RTK_Development_Plan.md` 移入 `docs/archive/`
+
+---
+
 ## [2.2.6] - 2026-10-10
 
 ### Added
