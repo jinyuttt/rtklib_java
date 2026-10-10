@@ -201,12 +201,15 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 | 场景 | 需要的数据 | 欢迎上传 |
 |------|-----------|----------|
+| **RTCM流式RTK** | 同步base+rover两路RTCM3实时流文件（时间对齐） | ✅ |
 | **峡谷/深城市RTK** | 两侧高楼遮挡，天空角严重受限的base+rover对 | ✅ |
 | **车载动态RTK** | 真实**高速动态**轨迹base+rover（>50km/h） | ✅ |
 | **长基线RTK (>10km)** | 长基线base+rover，需估计大气参数 | ✅ |
 | **PPP-RTK实时** | SSR实时流数据 | ✅ |
 | **森林/林冠** | 树冠遮挡，信噪比低 | ✅ |
 | **室内定位** | 严重遮挡 | ✅ |
+
+> **RTCM流式定位说明**：当前SPP已有RTCM直接定位测试（`SppTest`、`SppProcessorTest`），但RTK尚无RTCM流式端到端测试。RTK需要基站和流动站两路RTCM3流同步输入，现有公共数据只有单路RTCM文件（`rtcm3_gmsd`为rover，`open-sky_base`为VRS差分改正流而非标准base观测值流），无法构成RTK双流输入。如有可公开的同步base+rover RTCM3文件对，欢迎上传补充。
 
 ---
 
@@ -665,11 +668,12 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 按优先级排序：
 
-1. **城市峡谷动态RTK** — 动态base+rover对，含NLOS/多路径，验证IGGIII/SNR中值/残差编辑（已有准静态RTK和动态SPP，缺动态RTK）
-2. **车载高速动态RTK** — >50km/h真实动态轨迹base+rover，验证自适应Q/逐级AR（已有手机低速动态SPP，缺高速RTK）
-3. **长基线RTK (>10km)** — 验证梯度/参数噪声/大气冻结
-4. **PPP-AR精度验证** — 24h静态+参考Fixed解，与GREAT-PVT结果对比（已有端到端测试，缺精度验证）
-5. **PPP-RTK** — SSR实时流，验证PPP-RTK处理器
-6. **多频(≥3频)** — 三频BDS/GAL，验证逐级AR多频扩展（已有双频BDS，缺三频）
-7. **峡谷/深城市RTK** — 两侧高楼遮挡，天空角严重受限
-8. **森林/林冠** — 树冠遮挡，信噪比低
+1. **RTCM流式RTK** — 同步base+rover两路RTCM3流，验证实时RTK处理器端到端流程（已有RTCM→SPP，缺RTCM→RTK）
+2. **城市峡谷动态RTK** — 动态base+rover对，含NLOS/多路径，验证IGGIII/SNR中值/残差编辑（已有准静态RTK和动态SPP，缺动态RTK）
+3. **车载高速动态RTK** — >50km/h真实动态轨迹base+rover，验证自适应Q/逐级AR（已有手机低速动态SPP，缺高速RTK）
+4. **长基线RTK (>10km)** — 验证梯度/参数噪声/大气冻结
+5. **PPP-AR精度验证** — 24h静态+参考Fixed解，与GREAT-PVT结果对比（已有端到端测试，缺精度验证）
+6. **PPP-RTK** — SSR实时流，验证PPP-RTK处理器
+7. **多频(≥3频)** — 三频BDS/GAL，验证逐级AR多频扩展（已有双频BDS，缺三频）
+8. **峡谷/深城市RTK** — 两侧高楼遮挡，天空角严重受限
+9. **森林/林冠** — 树冠遮挡，信噪比低
