@@ -581,8 +581,8 @@ public class RtkIonoptTest {
     @Test
     @DisplayName("C版RTKLIB IFLC对比测试")
     void testCRtklibIflc() throws IOException, InterruptedException {
-        String rtklibDir = "D:\\code\\rtklib_java\\RTKLIB_EX_2.5.0";
-        String workDir = "D:\\code\\rtklib_java\\rtk_compare\\c_rtklib_test";
+        String rtklibDir = TestDataConfig.get("rtklib.c.dir", "D:\\RTKLIB_EX_2.5.0");
+        String workDir = TestDataConfig.getResultDir() + "\\c_rtklib_test";
         new java.io.File(workDir).mkdirs();
 
         String roverObs = workDir + "\\rover.obs";

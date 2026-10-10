@@ -418,12 +418,12 @@ rtklib-adjust 已通过2基站1测站连续9小时RTCM实测数据完整验证�
 实测数据测试通过 `test-data.properties` 配置（不提交到仓库），模板文件为 `test-data.properties.template`：
 
 ```properties
-data.root=D:\\iot-dm\\jetlinks-data\\device_rtcmbin_storage
+data.root=test-data/rtcm
 base.a=YOUR_BASE_A_ID
 base.b=YOUR_BASE_B_ID
 rover=YOUR_ROVER_ID
 rover2=YOUR_ROVER2_ID
-date=2026-09-17
+date=YYYY-MM-DD
 ```
 
 无数据配置时测试自动跳过，不影响CI构建。

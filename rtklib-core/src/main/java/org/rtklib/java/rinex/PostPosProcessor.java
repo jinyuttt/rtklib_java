@@ -24,6 +24,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 public class PostPosProcessor {
@@ -421,6 +422,10 @@ public class PostPosProcessor {
                 }
             }
         }
+
+        // Sort by (rcv, sat) to match RTKLIB C sortobs() behavior
+        // selsat() uses two-pointer merge-join requiring both segments sorted by sat
+        epochObs.sort(Comparator.comparingInt((Obsd o) -> o.rcv).thenComparingInt(o -> o.sat));
 
         return epochObs.toArray(new Obsd[0]);
     }

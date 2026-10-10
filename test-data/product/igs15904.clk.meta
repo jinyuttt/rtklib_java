@@ -3,4 +3,6 @@ role=reference
 systems=G
 date=2005-09-04
 source=IGS
-description=IGS精密钟差，CLK格式，30秒间隔，配合RTKLIB样例数据
+description=IGS精密钟差，CLK格式�?0秒间隔，配合RTKLIB样例数据
+license=IGS-data-policy
+test_ids=VerifyPositioningTest

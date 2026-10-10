@@ -20,9 +20,18 @@ public class ForwardBackwardFilterTest {
 
     private static final Logger log = LoggerFactory.getLogger(ForwardBackwardFilterTest.class);
 
-    private static final String ROVER_OBS = "D:/code/rtklib_java/rtk_compare/over.obs";
-    private static final String BASE_OBS  = "D:/code/rtklib_java/rtk_compare/base.obs";
-    private static final String NAV_PATH  = "D:/code/rtklib_java/rtk_compare/over.nav";
+    private static final String ROVER_OBS =
+            TestDataConfig.hasTestDataFile("rinex/rinex304_gej_3034.21o")
+                ? TestDataConfig.getTestDataFile("rinex/rinex304_gej_3034.21o")
+                : TestDataConfig.get("rtk.data.dir", TestDataConfig.getRtcmBaseDir()) + "\\rover.obs";
+    private static final String BASE_OBS =
+            TestDataConfig.hasTestDataFile("rinex/rinex304_gej_sept.21o")
+                ? TestDataConfig.getTestDataFile("rinex/rinex304_gej_sept.21o")
+                : TestDataConfig.get("rtk.data.dir", TestDataConfig.getRtcmBaseDir()) + "\\base.obs";
+    private static final String NAV_PATH =
+            TestDataConfig.hasTestDataFile("nav/rinex304_mixed_sept.21p")
+                ? TestDataConfig.getTestDataFile("nav/rinex304_mixed_sept.21p")
+                : TestDataConfig.get("rtk.data.dir", TestDataConfig.getRtcmBaseDir()) + "\\rover.nav";
 
     private static boolean dataAvailable = false;
 

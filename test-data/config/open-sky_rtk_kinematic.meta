@@ -10,3 +10,6 @@ description=RTKLIB自带样例RTK配置，日本新潟县开阔地kinematic定�
 location=Nirasaki, Yamanashi, Japan
 lat=35.715
 lon=138.451
+license=public
+
+test_ids=RtkTest

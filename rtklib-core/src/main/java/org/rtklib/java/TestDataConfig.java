@@ -56,11 +56,11 @@ public final class TestDataConfig {
     }
 
     public static String getRtcmBaseDir() {
-        return get("rtcm.base.dir", "D:\\rtcm3\\rtcm");
+        return get("rtcm.base.dir", getTestDataDir() + File.separator + "rtcm");
     }
 
     public static String getProductDir() {
-        return get("product.dir", "D:\\rtcm3\\product");
+        return get("product.dir", getTestDataDir() + File.separator + "product");
     }
 
     public static String getGreatPvtPppDir() {
@@ -80,20 +80,20 @@ public final class TestDataConfig {
         String val = props.getProperty("baserover." + group);
         if (val != null) return val.split("[,\\s]+");
         switch (group) {
-            case "group1": return new String[]{"540423231901"};
-            case "rover1": return new String[]{"540423187770", "540423379882", "540423211132", "540423230321", "540423124124", "540423147354", "540423503435", "540423128131"};
-            case "group2": return new String[]{"540423214120"};
-            case "rover2": return new String[]{"540423156203", "540423128507", "540423276898", "540423355855", "540423860355", "540423268595"};
+            case "group1": return new String[]{"YOUR_BASE_ID"};
+            case "rover1": return new String[]{"YOUR_ROVER_ID"};
+            case "group2": return new String[]{"YOUR_BASE_ID_2"};
+            case "rover2": return new String[]{"YOUR_ROVER_ID_2"};
             default: return new String[0];
         }
     }
 
     public static String getStation() {
-        return get("station.id", "540423124124");
+        return get("station.id", "");
     }
 
     public static String getStationDate() {
-        return get("station.date", "2026-06-29");
+        return get("station.date", "");
     }
 
     public static String getTestDataDir() {

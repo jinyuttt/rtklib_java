@@ -1,0 +1,10 @@
+scenario=static
+role=product
+systems=E
+date=2023-11-01
+source=GREAT-PVT
+mode=ppp-ar
+duration=1D
+description=WHU format UPD wide-lane for Galileo, GREAT-PVT PPP-AR
+license=MIT
+test_ids=GreatPvtPositioningTest

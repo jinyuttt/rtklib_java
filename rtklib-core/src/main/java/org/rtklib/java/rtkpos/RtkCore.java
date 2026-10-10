@@ -40,6 +40,15 @@ public final class RtkCore {
         String[] msg = new String[1];
         double[] azel = new double[n * 2];
 
+        if (opt.rb != null && Math.abs(rtk.rb[0]) < 0.1 && Math.abs(rtk.rb[1]) < 0.1 && Math.abs(rtk.rb[2]) < 0.1) {
+            for (i = 0; i < 3; i++) rtk.rb[i] = opt.rb[i];
+        }
+
+        int nfOpt = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
+        if (opt.mode != Constants.PMODE_SINGLE) {
+            RtklibCommon.compactObsFreq(obs, n, nfOpt, nav);
+        }
+
         for (nu = 0; nu < n && obs[nu].rcv == 1; nu++) ;
         for (nr = 0; nu + nr < n && obs[nu + nr].rcv == 2; nr++) ;
 
@@ -166,10 +175,6 @@ public final class RtkCore {
         Trace.emit("SATELLITE", "START", v2cfg, v2cb, rtk.epoch, obs[0].time,
                 "rover_ns", nu, "base_ns", nr, "common_ns", ns);
 
-        if (rtk.epoch == 0) {
-            LOG.info("relpos: ns={}, nf={}, nu={}, nr={}", ns, nf, nu, nr);
-        }
-
         int nx_new = NR(rtk) + NB(rtk);
         rtk.na = NR(rtk);
         if (rtk.nx != nx_new) {
@@ -225,6 +230,7 @@ public final class RtkCore {
         double[] bias = new double[nx];
 
         int stat = opt.mode <= Constants.PMODE_DGPS ? Constants.SOLQ_DGPS : Constants.SOLQ_FLOAT;
+
 
         double[] rr_rover = new double[3];
 
@@ -1068,13 +1074,17 @@ public final class RtkCore {
             double[] rsi = new double[]{rs[idx * 6], rs[idx * 6 + 1], rs[idx * 6 + 2]};
             double[] ei = new double[3];
             double r = RtklibCommon.geodist(rsi, rr_, ei);
-            if (r <= 0.0) continue;
+            if (r <= 0.0) {
+                continue;
+            }
 
             double[] ae = new double[2];
             double el = RtklibCommon.satazel(pos, ei, ae);
             azel[idx * 2] = ae[0];
             azel[idx * 2 + 1] = el;
-            if (el < opt.elmin) continue;
+            if (el < opt.elmin) {
+                continue;
+            }
 
             if (RtklibCommon.satexclude(obs[idx].sat, vare[idx], svh[idx], opt) != 0) continue;
 
@@ -1122,8 +1132,7 @@ public final class RtkCore {
                         continue;
                     }
 
-                    int snrRet = RtklibCommon.testsnr(base, f, el, obs[idx].SNR[f], opt.snrmask);
-                    if (snrRet != 0) {
+                    if (RtklibCommon.testsnr(base, f, el, obs[idx].SNR[f], opt.snrmask) != 0) {
                         continue;
                     }
 
@@ -1317,6 +1326,7 @@ public final class RtkCore {
                      continue;
                 }
 
+
                 int cntBefore = nv;
                 for (j = 0; j < ns; j++) {
                     if (j == refIdx) continue;
@@ -1437,8 +1447,12 @@ public final class RtkCore {
                         }
                     }
                     if (Math.abs(v[nv]) > opt.maxinno[code ? 1 : 0] * threshadj) {
-                        rtk.ssat[sat[j] - 1].vsat[frq] = 0;
-                        rtk.ssat[sat[j] - 1].rejc[frq]++;
+                        if (code) {
+                            rtk.ssat[sat[j] - 1].rejc[frq]++;
+                        } else {
+                            rtk.ssat[sat[j] - 1].vsat[frq] = 0;
+                            rtk.ssat[sat[j] - 1].rejc[frq]++;
+                        }
                         continue;
                     }
 

@@ -1,0 +1,8 @@
+scenario=open-sky
+role=reference
+systems=G
+date=2018-06-06
+source=IGS
+description=IGS全球电离层格网，IONEX格式�?小时间隔，配合Net_Diff PPP数据
+license=IGS-data-policy
+test_ids=PppTest

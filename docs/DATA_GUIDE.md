@@ -127,19 +127,20 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **SppSmoothAndSbasTest** | SPP | 无（纯数值） | 内置 | ✅ |
 | **RinexSppTest** | SPP | RTCM3→RINEX→SPP | 公共: rtcm3_gmsd + open-sky_base | ✅ |
 | **RinexSppProcessorTest** | SPP | RTCM3→RINEX→SPP | 公共: rtcm3_gmsd | ✅ |
-| **RtkTest** | RTK | RINEX2.10 (GPS双频) | 公共: 0759+3040 | ✅ |
-| **RtkProcessorTest** | RTK | RINEX2.10 (GPS双频) | 公共: 0759+3040 | ✅ |
-| **RtkLocalTest** | RTK | RINEX2.10 (GPS双频) | 公共: 0759+3040 | ✅ |
-| **RtkOptimizationTest** | RTK | RINEX2.10 (GPS双频) | 公共: 0759+3040 | ✅ |
-| **RtkOptimizationIndividualTest** | RTK | RINEX2.10 (GPS双频) | 公共: 0759+3040 | ✅ |
-| **RtkArDebugTest** | RTK | RINEX2.10 (GPS双频) | 公共: 0759+3040 | ✅ |
-| **RtkTraceTest** | RTK | RINEX2.10 (GPS双频) | 公共: 0759+3040 | ✅ |
-| **LogTraceTest** | RTK | RINEX2.10 (GPS双频) | 公共: 0759+3040 | ✅ |
+| **RtkTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (rover=base同文件) | ✅ |
+| **RtkProcessorTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (rover=base同文件) | ✅ |
+| **RtkLocalTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (rover=base同文件) | ✅ |
+| **RtkOptimizationTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (rover=base同文件) | ✅ |
+| **RtkOptimizationIndividualTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (rover=base同文件) | ✅ |
+| **RtkArDebugTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (rover=base同文件) | ✅ |
+| **RtkTraceTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (fallback本地配置) | ✅ |
+| **RtkBenchmarkTest** | RTK | RINEX3.02/3.04 (G+R+E+J+C) | 公共: PPC-Dataset + UrbanNav | ✅ |
+| **LogTraceTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (fallback本地配置) | ✅ |
 | **RtkIonoptTest** | RTK | RTCM3 (私有设备ID) | **私有: rtcm.base.dir** | ❌ |
 | **LandslideMonitorTest** | RTK | RTCM3 (G+R+C) + RTCM3 | 公共: rtcm3_gmsd + open-sky_base | ✅ |
 | **ForwardBackwardFilterTest** | RTK | RINEX2.10 + NAV | 公共: 0759+3040+0759n | ✅ |
-| **VerifyPositioningTest** | SPP/RTK/RTK-Static/DGPS/RTK-Fixed | RINEX2.10 + NAV | 公共: 0759+3040+0759n+3040n | ✅ |
-| **GreatPvtPositioningTest** | SPP/RTK/RTK-Static/PPP/PPP-Static/PPP-AR/PPP-AR+FixHold/PPP+GPT3/PPP+IERS/PPP+ISB | RINEX3.04+SP3+CLK+UPD | 公开: GREAT-PVT sample_data | ✅ |
+| **VerifyPositioningTest** | SPP/RTK/RTK-Static/DGPS/RTK-Fixed | RINEX3.02 BDS (已清除) | 公共: rinex302_bds (数据已清除，测试跳过) | ❌ |
+| **GreatPvtPositioningTest** | SPP/RTK/RTK-Static/PPP/PPP-Static/PPP-AR/PPP-AR+FixHold/PPP+GPT3/PPP+IERS/PPP+ISB | RINEX3.04+SP3+CLK+UPD | 公开: GREAT-PVT sample_data (未下载) | ❌ |
 | **PppOptimizationsTest** | PPP | 无（纯配置验证） | 内置 | ✅ |
 | **PppArFixVerificationTest** | PPP-AR | 无（构造输入） | 内置 | ✅ |
 | **B1OsbEquivalenceTest** | PPP-AR | 无（构造输入） | 内置 | ✅ |
@@ -182,6 +183,8 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **开阔地SPP** | MobileGNSS-SPP opensky | RINEX3.04 G+E+J+C 单频 | **动态**（~6km移动） | 手机开阔地，车载长距离 |
 | **高架桥SPP** | MobileGNSS-SPP elevated | RINEX3.04 G+E+J+C 单频 | **动态**（~500m移动） | 手机高架桥场景 |
 | **城市RTK** | Net_Diff urban | RINEX3.02 G+E+J+C 双频 | **准静态**（~3m微动） | base+rover对，含参考固定解 |
+| **城市峡谷动态RTK** | PPC-Dataset | RINEX3.04 G+R+E+J+C 双频 | **动态**（车载） | Tokyo/Nagoya 6 runs, Septentrio+Trimble, 含参考真值 |
+| **城市峡谷动态RTK** | UrbanNav | RINEX3.02 G+R+E+J+C 三频 | **动态**（车载） | Tokyo 2018, Trimble NetR9, 10Hz |
 | **开阔地RTK** | rtklib test | RINEX2.10 GPS 双频 | 静态 | 短基线0759+3040 |
 | **PPP** | Net_Diff | RINEX3.02+SP3+CLK+IONEX | 静态/动态 | wtza/wtzr/hksl站 |
 | **多系统PPP** | GREAT-PVT PPPFLT | RINEX3.04 G+E+C+R + CODE SP3/CLK | 静态 | IGS站GODN, 30s采样 |
@@ -192,17 +195,18 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 | 场景 | 当前数据 | 缺口 | 欢迎上传 |
 |------|----------|------|----------|
-| **城市峡谷RTK** | 有SPP数据(MobileGNSS downtown)，有准静态RTK(Net_Diff urban) | 缺**动态**城市峡谷RTK base+rover对 | ✅ |
-| **PPP-AR完整验证** | 有精密产品(SP3+CLK+UPD+OSB+ATX) | 缺24h长时段+参考Fixed解对比 | ✅ |
-| **多频(≥3频)RTK** | 有BDS双频数据 | 缺三频BDS/GAL数据 | ✅ |
+| **城市峡谷RTK** | 有SPP数据(MobileGNSS opensky/street/downtown/elevated，原始在D:\code\MobileGNSS-SPP\data，test-data仅复制elevated)，有准静态RTK(Net_Diff urban)；**动态数据已到位**: PPC-Dataset (Tokyo/Nagoya, 2024) + UrbanNav (Tokyo, 2018) | 数据已到位但RTK引擎城市峡谷Fix率为0%，RtkBenchmarkTest仅验证不崩溃(阈值2%)，待引擎修复后做精度验证 | ✅ |
+| **RTCM二进制RTK** | RtkTest/RtkLocalTest等6个测试用`rtcm3_gmsd`同一文件同时作rover和base，走RTCM二进制路径，当前全部失败(success=0) | 需真正的base+rover RTCM3文件对，或改走RINEX路径 | ✅ |
+| **PPP-AR完整验证** | 有精密产品(SP3+CLK+OSB+ATX+IONEX)+UPD WL/EWL(≤2MB已提交)，缺UPD NL(>2MB走独立仓库) | 缺UPD NL大文件+24h长时段+参考Fixed解对比 | ✅ |
+| **多频(≥3频)RTK** | 无（BDS双频数据已清除） | 缺双频/三频BDS/GAL数据 | ✅ |
 | **RTCM流式RTK** | 本地RTCM3 base+rover文件已验证通过（含设备ID不可公开） | 缺可公开的同步base+rover RTCM3文件对 | ✅ |
 
 #### ❌ 根本没有真实数据测试的场景
 
 | 场景 | 需要的数据 | 欢迎上传 |
 |------|-----------|----------|
-| **峡谷/深城市RTK** | 两侧高楼遮挡，天空角严重受限的base+rover对 | ✅ |
-| **车载动态RTK** | 真实**高速动态**轨迹base+rover（>50km/h） | ✅ |
+| **深城市/峡谷RTK** | PPC-Dataset已有downtown，但缺更极端场景（天空角<30°，多路径严重）的base+rover对 | ✅ |
+| **高速动态RTK** | PPC-Dataset/UrbanNav为车载（~30km/h），缺高速(>80km/h)动态轨迹base+rover对 | ✅ |
 | **长基线RTK (>10km)** | 长基线base+rover，需估计大气参数 | ✅ |
 | **PPP-RTK实时** | SSR实时流数据 | ✅ |
 | **森林/林冠** | 树冠遮挡，信噪比低 | ✅ |
@@ -223,9 +227,6 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | `rinex304_gej_3034.21o` | RINEX 3.04 | G+E+J | open-sky | rover | 多系统1min采样 |
 | `rinex304_gej_sept.21o` | RINEX 3.04 | G+E+J | open-sky | rover | Septentrio接收机1min |
 | `rinex304_gejc_elevated.25o` | RINEX 3.04 | G+E+J+C | urban | rover | 手机高架桥场景(SPP优化测试) |
-| `rinex304_bds_base.26o` | RINEX 3.04 | C | open-sky | base | BDS多频基站 |
-| `rinex302_bds_base.26o` | RINEX 3.02 | C | open-sky | base | BDS单频基站 |
-| `rinex302_bds_rover.26o` | RINEX 3.02 | C | open-sky | rover | BDS流动站 |
 
 ### 2.2 RINEX 导航文件
 
@@ -236,7 +237,6 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | `rinex304_mixed_sept.21p` | RINEX 3.04 | G+E+J | 多系统混合导航 |
 | `rinex304_gejc_elevated.25n` | RINEX 3.04 | G+E+J+C | 手机场景导航星历 |
 | `rinex302_qzss.21q` | RINEX 3.02 | J | QZSS导航星历 |
-| `rinex302_bds_rover.26n` | RINEX 3.02 | C | BDS导航星历 |
 
 ### 2.3 RTCM3 文件
 
@@ -255,7 +255,36 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | `test.atx` | ANTEX天线改正 | 天线PCV/PCO改正 |
 | `cod_osb_2021265.bia` | Bias-SINEX | CODE码偏差(OSB) |
 
-### 2.5 配置文件
+### 2.5 PPC-Dataset 城市峡谷RTK数据
+
+| 文件 | 格式 | 系统 | 场景 | 角色 | 用途 |
+|------|------|------|------|------|------|
+| `ppc/PPC-Dataset/tokyo/run1/rover.obs` | RINEX 3.04 | G+R+E+J+C | downtown | rover | Septentrio Mosaic-X5, 5Hz |
+| `ppc/PPC-Dataset/tokyo/run1/base.obs` | RINEX 3.04 | G+R+E+J+C | downtown | base | Trimble Alloy, 1Hz |
+| `ppc/PPC-Dataset/tokyo/run1/base.nav` | RINEX 3.04 | G+R+E+J+C | downtown | nav | 广播星历 |
+| `ppc/PPC-Dataset/tokyo/run1/reference.csv` | CSV | - | downtown | reference | Applanix真值 (5Hz, RMSE 5cm) |
+| `ppc/PPC-Dataset/tokyo/run2/*` | 同上 | 同上 | downtown | 同上 | Tokyo run2 |
+| `ppc/PPC-Dataset/tokyo/run3/*` | 同上 | 同上 | downtown | 同上 | Tokyo run3 |
+| `ppc/PPC-Dataset/nagoya/run1/*` | 同上 | 同上 | urban | 同上 | Nagoya run1 |
+| `ppc/PPC-Dataset/nagoya/run2/*` | 同上 | 同上 | urban | 同上 | Nagoya run2 |
+| `ppc/PPC-Dataset/nagoya/run3/*` | 同上 | 同上 | urban | 同上 | Nagoya run3 |
+
+> **来源**: [taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset) (千叶工业大学), License: CC-BY-4.0
+> **下载**: OneDrive (155MB zip), 详见 `test-data/ppc/PPC-Dataset/README.md`
+
+### 2.6 UrbanNav 城市峡谷RTK数据
+
+| 文件 | 格式 | 系统 | 场景 | 角色 | 用途 |
+|------|------|------|------|------|------|
+| `urbannav/tokyo/data_tokyo/tokyo3530.18o` | RINEX 3.02 | G+R+E+J+C | downtown | rover | Trimble NetR9, 10Hz |
+| `urbannav/tokyo/data_tokyo/tokyo3530_base.18o` | RINEX 3.02 | G+R+E+J+C | downtown | base | Trimble NetR9, 1Hz |
+| `urbannav/tokyo/data_tokyo/brdm3530.18p` | RINEX 3.03 | G+R+E+J+C | downtown | nav | MGEX广播星历 |
+| `urbannav/tokyo/data_tokyo/tokyo_pva_ref.mat` | MATLAB | - | downtown | reference | 参考真值 |
+
+> **来源**: [IPNL-POLYU/UrbanNavDataset](https://github.com/IPNL-POLYU/UrbanNavDataset) (香港理工大学), License: CC-BY-4.0
+> **下载**: Dropbox (4.14GB zip) 或 GINav Gitee镜像 (12.3MB 7z), 详见 `test-data/urbannav/`
+
+### 2.7 配置文件
 
 | 文件 | 用途 |
 |------|------|
@@ -326,20 +355,34 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 | 项目 | 说明 |
 |------|------|
-| 数据 | rover: `rinex210_gps_0759.05o`, base: `rinex210_gps_3040.05o` |
+| 数据 | RTCM3二进制: `rtcm3_gmsd_20121014.rtcm3` (rover=base同文件，G+R+C) |
 | 模式 | RTK Kinematic (PMODE_KINEMA) |
-| 配置 | GPS双频, IONOOPT_IFLC, ARMODE_FIXHOLD |
+| 配置 | GPS+BDS双频, IONOOPT_BRDC, ARMODE_FIXHOLD |
 | 验证 | 历元数>0，FIX率统计 |
+| 注意 | 走RTCM二进制路径（ephTypes={1019,1020}），不经PostPosProcessor.buildEpochObs()排序 |
+
+#### RtkBenchmarkTest — RTK基准测试（公共城市峡谷数据集）
+
+| 项目 | 说明 |
+|------|------|
+| 数据 | PPC-Dataset (Tokyo run1/run2, Nagoya run1) + UrbanNav (Tokyo 2018) |
+| 模式 | RTK Kinematic (PMODE_KINEMA) |
+| 配置 | G+R+E+J+C双频, IONOOPT_BRDC, TROPOPT_SAAS, ARMODE_FIXHOLD, elmin=15° |
+| 验证 | 历元数>0, 成功率>2%, Fix率≥阈值, 水平RMSE<阈值(仅Fix率达标时) |
+| 参考真值 | PPC-Dataset: reference.csv (Applanix POS LVX-120, 5Hz, RMSE 5cm) |
+| 场景 | downtown (Tokyo), urban (Nagoya) |
+| 实测结论 | Fix率0%~0.1%, 成功率2%~20%, 当前仅验证不崩溃(阈值2%), 精度验证被跳过 |
+| 待解决 | SPP初始化发散导致RTK Fix率低, 修复后应收紧阈值并启用精度验证 |
 
 #### RtkOptimizationTest — RTK优化逐项测试
 
 | 项目 | 说明 |
 |------|------|
-| 数据 | rover: `rinex210_gps_0759.05o`, base: `rinex210_gps_3040.05o` |
+| 数据 | RTCM3二进制: `rtcm3_gmsd_20121014.rtcm3` (rover=base同文件，G+R+C) |
 | 模式 | RTK Kinematic |
 | 测试组 | 0_基准AR, 1_自适应Q, 2_IGGIII, 3_SNR中值, 4_PAR重选, 5_锚固, 6_残差编辑, 7_逐级AR, 8_部分AR, 9_Bootstrapping, 10_BDS码偏差, 11_参数噪声, 12_大气冻结, 13_全开 |
 | 验证 | 各组FIX率、平均坐标、STD统计 |
-| 实测结论 | Static下自适应Q: FIX率81.0%→81.0%(等价性) |
+| 实测结论 | 走RTCM二进制路径，当前全部失败(success=0)，待修复 |
 
 #### RtkOptimizationIndividualTest — RTK优化逐项独立测试
 
@@ -389,8 +432,9 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 | 项目 | 说明 |
 |------|------|
-| 数据 | RINEX2.10 GPS双频(obs+nav) |
+| 数据 | RINEX3.02 BDS双频 (rinex302_bds_rover/base.26o/26n，**数据已清除**) |
 | 验证 | SPP/RTK/PPP三种模式基本功能 |
+| 状态 | 数据已清除，测试跳过 |
 
 ---
 
@@ -421,11 +465,12 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 | 项目 | 说明 |
 |------|------|
-| 数据 | 公开: GREAT-PVT PPPFLT+RTKFLT (RINEX3.04+SP3+CLK+UPD) |
+| 数据 | 公开: GREAT-PVT PPPFLT+RTKFLT (RINEX3.04+SP3+CLK+UPD)，**未下载** |
 | 配置 | `greatpvt.ppp.dir` + `greatpvt.rtk.dir` |
 | 测试用例 | 8个：RINEX3.04解析、SP3/CLK/UPD加载、SPP多系统、PPP浮点、PPP-AR(WL+NL)、RTK多系统、RTK GPS-only、compactObsFreq |
 | 验证 | 各模式历元成功率>0，PPP-AR有FLOAT解 |
 | 场景 | IGS站GODN(PPP), SEPT+WUDA(RTK), 多系统G+E+C+R |
+| 状态 | 数据未下载，测试跳过 |
 
 > **UPD产品格式**：GREAT-PVT提供WHU格式的UPD文件（`upd_wl_2023305_G`/`upd_nl_2023305_G`等），
 > 与WHU/PRIDE标准格式不同（sat在首列而非time在首列）。`UpdReader` 已兼容两种格式，
@@ -578,8 +623,8 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **SPP开阔地** | EKF + 多普勒SNR | SppOptimizationTest | rinex304_gejc_elevated |
 | **SPP城市** | EKF + 抗差 + 多普勒SNR | SppOptimizationTest | rinex304_gejc_elevated |
 | **SPP静态监测** | EKF + 抗差 + 零速 + 多普勒SNR | SppOptimizationTest | rinex304_gejc_elevated |
-| **RTK短基线静态** | 自适应Q + 锚固 + 大气冻结 | LandslideMonitorTest | rtcm3_gmsd + open-sky_base |
-| **RTK短基线动态** | 自适应Q + IGGIII + SNR中值 + 逐级AR + 部分AR + Bootstrapping | RtkOptimizationTest | rinex210 GPS双频 |
+| **RTK短基线静态** | 自适应Q + 锚固 + 大气冻结 | LandslideMonitorTest | open-sky_base (RTKLIB sample) |
+| **RTK短基线动态** | 自适应Q + IGGIII + SNR中值 + 逐级AR + 部分AR + Bootstrapping | RtkOptimizationTest | rinex210 GPS双频 (RTKLIB sample) |
 | **RTK长基线** | 梯度 + 参数噪声 + 大气冻结 | RtkOptimizationTest | **需长基线数据** |
 | **PPP静态** | GPT3+VMF3 + IERS2010 + ISB + PPP-AR + Fix-Hold | PppOptimizationsTest | **需长时段+产品** |
 | **PPP-RTK** | PPP-RTK + PPP-RTK AR + Fix-Hold | CompactSsrDecoderTest | **需SSR数据** |

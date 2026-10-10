@@ -33,18 +33,14 @@ jobs:
       - name: Download large test data
         if: steps.cache-test-data.outputs.cache-hit != 'true'
         run: |
-          if command -v pwsh &> /dev/null; then
-            pwsh test-data/download-test-data.ps1
-          else
-            git clone --depth 1 https://github.com/jinyurrr/rtklib-java-data.git /tmp/rtklib-java-data
-            for subdir in rinex nav rtcm product reference nmea config tle; do
-              if [ -d "/tmp/rtklib-java-data/$subdir" ]; then
-                mkdir -p "test-data/$subdir"
-                cp -n /tmp/rtklib-java-data/$subdir/* "test-data/$subdir/" 2>/dev/null || true
-              fi
-            done
-            rm -rf /tmp/rtklib-java-data
-          fi
+          git clone --depth 1 https://github.com/jinyurrr/rtklib-java-data.git /tmp/rtklib-java-data
+          for subdir in rinex nav rtcm product reference nmea config tle; do
+            if [ -d "/tmp/rtklib-java-data/$subdir" ]; then
+              mkdir -p "test-data/$subdir"
+              cp -n /tmp/rtklib-java-data/$subdir/* "test-data/$subdir/" 2>/dev/null || true
+            fi
+          done
+          rm -rf /tmp/rtklib-java-data
 
       - name: Build
         run: mvn -B compile

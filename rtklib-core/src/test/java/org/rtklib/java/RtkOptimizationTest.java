@@ -21,9 +21,17 @@ public class RtkOptimizationTest {
     private static final Logger log = LoggerFactory.getLogger(RtkOptimizationTest.class);
 
     private static final String BASE_PATH =
-            TestDataConfig.getBaseFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<BASE_DEVICE_ID>\\2026-07-20\\12.rtcm3" : TestDataConfig.getBaseFile();
+            TestDataConfig.getBaseFile().isEmpty()
+                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    : null)
+                : TestDataConfig.getBaseFile();
     private static final String ROVER_PATH =
-            TestDataConfig.getRoverFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<ROVER_DEVICE_ID>\\2026-07-20\\12.rtcm3" : TestDataConfig.getRoverFile();
+            TestDataConfig.getRoverFile().isEmpty()
+                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    : null)
+                : TestDataConfig.getRoverFile();
 
     private static final String RESULT_DIR = TestDataConfig.getResultDir();
 
@@ -50,6 +58,12 @@ public class RtkOptimizationTest {
     @Test
     @DisplayName("逐项开启优化测试")
     void testOptimizationsOneByOne() throws IOException {
+        boolean dataAvailable = ROVER_PATH != null && BASE_PATH != null
+                && new java.io.File(ROVER_PATH).exists() && new java.io.File(BASE_PATH).exists();
+        if (!dataAvailable) {
+            log.warn("RTCM3 base+rover data not available, skipping test");
+            return;
+        }
         new java.io.File(RESULT_DIR).mkdirs();
 
         byte[] roverData, baseData;

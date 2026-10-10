@@ -1,0 +1,13 @@
+scenario=open-sky
+role=rover
+systems=G+R+E+C
+date=2023-11-01
+source=IGS-MGEX
+sample_rate=30s
+duration=10min
+receiver=JAVAD TRE_3 DELTA
+antenna=TPSCR.G3 SCIS
+location=GODN NASA Goddard
+license=IGS-data-policy
+description=IGS MGEX站GODN 10分钟截取，含GPS/GLONASS/Galileo/BDS多频
+test_ids=GreatPvtPositioningTest

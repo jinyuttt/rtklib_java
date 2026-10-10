@@ -2,32 +2,82 @@
 # Copy this file to test-data.properties and fill in your paths.
 # The file test-data.properties is in .gitignore and will NOT be committed.
 
-# --- RTCM data directory ---
-# Base directory containing device RTCM3 data organized as: <dir>/<device_id>/<date>/<hour>.rtcm3
-rtcm.base.dir=D:\\rtcm3\\rtcm
+# === Public Test Data ===
 
-# --- Product directory ---
-# Contains SP3, CLK, ERP, DCB, GPT3, VMF3, FCB/OSB, BLQ files
-product.dir=D:\\rtcm3\\product
+# test-data/ directory (auto-detected if not set)
+# Contains: tle/, rinex/, rtcm/, product/, reference/, config/
+# test-data.dir=test-data
 
-# --- Result output directory ---
-result.dir=C:\\Users\\jinyu\\rtklib_java_results
+# === Core Data Paths ===
 
-# --- Station / Device IDs ---
-station.id=540423124124
-station.date=2026-06-29
+# RTCM data directory (defaults to test-data/rtcm)
+# rtcm.base.dir=test-data/rtcm
 
-# --- Base-Rover pairs ---
-# Group 1
-baserover.group1=540423231901
-baserover.rover1=540423187770,540423379882,540423211132,540423230321,540423124124,540423147354,540423503435,540423128131
-# Group 2
-baserover.group2=540423214120
-baserover.rover2=540423156203,540423128507,540423276898,540423355855,540423860355,540423268595
+# Product directory (SP3, CLK, ERP, DCB, GPT3, VMF3, FCB/OSB, BLQ)
+# product.dir=test-data/product
 
-# --- Custom base-rover pairs (optional, semicolon separated, format: baseId=rover1,rover2,...) ---
-# custom.bases=540423231901=540423187770,540423211132;540423214120=540423860355
+# Result output directory
+# result.dir=
 
-# --- Direct file paths (optional, override directory-based discovery) ---
-# rover.file=D:\\rtcm3\\rtcm\\540423187770\\2026-06-29\\12.rtcm3
-# base.file=D:\\rtcm3\\rtcm\\540423231901\\2026-06-29\\12.rtcm3
+# === Station / Device IDs (fill in your own) ===
+
+# station.id=YOUR_STATION_ID
+# station.date=YYYY-MM-DD
+
+# === Base-Rover Pairs (fill in your own) ===
+
+# baserover.group1=YOUR_BASE_ID
+# baserover.rover1=YOUR_ROVER_ID_1,YOUR_ROVER_ID_2
+
+# baserover.group2=YOUR_BASE_ID_2
+# baserover.rover2=YOUR_ROVER_ID_3,YOUR_ROVER_ID_4
+
+# Custom base-rover pairs (optional, semicolon separated, format: baseId=rover1,rover2,...)
+# custom.bases=BASE_ID=ROVER1,ROVER2;BASE2=ROVER3
+
+# === Direct File Paths (optional, override directory-based discovery) ===
+
+# rover.file=test-data/rtcm/ROVER_ID/YYYY-MM-DD/12.rtcm3
+# base.file=test-data/rtcm/BASE_ID/YYYY-MM-DD/12.rtcm3
+
+# === RINEX Data (for VerifyPositioningTest, ForwardBackwardFilterTest) ===
+
+# RINEX data directory containing rover/ and base/ subdirectories
+# rinex.data.dir=test-data/rinex
+
+# RTK data directory for ForwardBackwardFilterTest (rover.obs, base.obs, rover.nav)
+# rtk.data.dir=test-data/rinex
+
+# === GREAT-PVT sample data (public, auto-detected) ===
+
+# greatpvt.ppp.dir=D:/code/GREAT-PVT/sample_data/PPPFLT_2023305/PPPFLT_2023305
+# greatpvt.rtk.dir=D:/code/GREAT-PVT/sample_data/RTKFLT_2020351/RTKFLT_2020351
+
+# === C Version Comparison (optional) ===
+
+# Path to C RTKLIB rnx2rtkp executable
+# rtklib.rnx2rtkp=RTKLIB_EX_2.5.0/rnx2rtkp.exe
+
+# Path to C RTKLIB directory (for RtkIonoptTest C comparison)
+# rtklib.c.dir=RTKLIB_EX_2.5.0
+
+# SPP Compare Test data directory (contains 1.obs, 1.nav, spp_bds.pos)
+# sppcompare.data.dir=RTKLIB_EX_2.5.0
+
+# C version SPP result file (for SppProcessorTest comparison)
+# spp.c.result.file=test-data/reference/spp_c_full.pos
+
+# C version RINEX files (for RinexConversionTest comparison)
+# rinex.c.obs=test-data/rinex/full.obs
+# rinex.c.nav=test-data/rinex/full.nav
+
+# === SBAS Test Data (optional) ===
+
+# Path to .sbs SBAS message file
+# sbs.file=test-data/test.sbs
+
+# === Ionopt Test (optional) ===
+
+# ionopt.date=2026-05-20
+# ionopt.start.hour=8
+# ionopt.end.hour=10

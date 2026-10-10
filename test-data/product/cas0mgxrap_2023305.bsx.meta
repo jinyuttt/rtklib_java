@@ -1,0 +1,10 @@
+scenario=static
+role=product
+systems=G+R+E+C+J
+date=2023-11-01
+source=CAS-MGEX
+type=bia
+license=IGS-data-policy
+description=CAS MGEX DCB/OSB Bias-SINEX产品
+mode=ppp-ar
+test_ids=GreatPvtPositioningTest,ProductReaderTest

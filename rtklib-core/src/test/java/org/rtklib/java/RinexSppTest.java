@@ -38,10 +38,18 @@ public class RinexSppTest {
     private static final Logger log = LoggerFactory.getLogger(RinexSppTest.class);
 
     private static final String ROVER_PATH =
-            TestDataConfig.getRoverFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<ROVER_DEVICE_ID>\\2026-06-08\\1.rtcm3" : TestDataConfig.getRoverFile();
+            TestDataConfig.getRoverFile().isEmpty()
+                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    : TestDataConfig.getRtcmBaseDir() + "\\<ROVER_DEVICE_ID>\\2026-06-08\\1.rtcm3")
+                : TestDataConfig.getRoverFile();
 
     private static final String BASE_PATH =
-            TestDataConfig.getBaseFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<BASE_DEVICE_ID>\\2026-06-08\\1.rtcm3" : TestDataConfig.getBaseFile();
+            TestDataConfig.getBaseFile().isEmpty()
+                ? (TestDataConfig.hasTestDataFile("rtcm/open-sky_base_20090515.rtcm3")
+                    ? TestDataConfig.getTestDataFile("rtcm/open-sky_base_20090515.rtcm3")
+                    : TestDataConfig.getRtcmBaseDir() + "\\<BASE_DEVICE_ID>\\2026-06-08\\1.rtcm3")
+                : TestDataConfig.getBaseFile();
 
     private static byte[] roverData;
     private static byte[] baseData;
@@ -435,7 +443,7 @@ public class RinexSppTest {
         assertTrue(java.nio.file.Files.exists(navFile), "nav 文件应存在");
 
         // rtklib C rnx2rtkp SPP
-        String rnx2rtkp = "D:\\code\\rtklib_java\\RTKLIB_EX_2.5.0\\rnx2rtkp.exe";
+        String rnx2rtkp = TestDataConfig.get("rtklib.rnx2rtkp", "rnx2rtkp.exe");
         Path posFile = tempDir.resolve("rover_spp.pos");
 
         String[] cmdArray = {

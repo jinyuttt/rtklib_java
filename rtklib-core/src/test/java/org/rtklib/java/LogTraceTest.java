@@ -25,16 +25,31 @@ public class LogTraceTest {
     private static final Logger log = LoggerFactory.getLogger(LogTraceTest.class);
 
     private static final String ROVER_PATH =
-            TestDataConfig.getRoverFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<ROVER_DEVICE_ID>\\2026-06-08\\1.rtcm3" : TestDataConfig.getRoverFile();
+            TestDataConfig.getRoverFile().isEmpty()
+                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    : null)
+                : TestDataConfig.getRoverFile();
     private static final String BASE_PATH =
-            TestDataConfig.getBaseFile().isEmpty() ? TestDataConfig.getRtcmBaseDir() + "\\<BASE_DEVICE_ID>\\2026-06-08\\1.rtcm3" : TestDataConfig.getBaseFile();
+            TestDataConfig.getBaseFile().isEmpty()
+                ? (TestDataConfig.hasTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    ? TestDataConfig.getTestDataFile("rtcm/rtcm3_gmsd_20121014.rtcm3")
+                    : null)
+                : TestDataConfig.getBaseFile();
     private static final String RESULT_DIR = TestDataConfig.getResultDir();
 
     private static byte[] roverData;
     private static byte[] baseData;
+    private static boolean dataAvailable;
 
     @BeforeAll
     static void loadData() throws IOException {
+        dataAvailable = ROVER_PATH != null && BASE_PATH != null
+                && new File(ROVER_PATH).exists() && new File(BASE_PATH).exists();
+        if (!dataAvailable) {
+            log.warn("RTCM3 base+rover data not available, skipping data-dependent tests");
+            return;
+        }
         try (FileInputStream fis = new FileInputStream(ROVER_PATH)) {
             roverData = fis.readAllBytes();
         }
@@ -45,9 +60,14 @@ public class LogTraceTest {
         log.info("Loaded Rover: {} bytes, Base: {} bytes", roverData.length, baseData.length);
     }
 
+    private void skipIfNoData() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM3 base+rover data");
+    }
+
     @Test
     @DisplayName("1. Trace all stages")
     void testTraceAllStages() {
+        skipIfNoData();
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
@@ -98,6 +118,7 @@ public class LogTraceTest {
     @Test
     @DisplayName("2. Trace only STAGE_INPUT and STAGE_RESULT")
     void testTraceInputAndResultOnly() {
+        skipIfNoData();
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
@@ -135,6 +156,7 @@ public class LogTraceTest {
     @Test
     @DisplayName("3. Trace with samplerate")
     void testTraceWithSamplerate() {
+        skipIfNoData();
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
@@ -173,6 +195,7 @@ public class LogTraceTest {
     @Test
     @DisplayName("4. Trace with maxEpochs limit")
     void testTraceWithMaxEpochs() {
+        skipIfNoData();
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
@@ -208,6 +231,7 @@ public class LogTraceTest {
     @Test
     @DisplayName("5. Trace disabled (default)")
     void testTraceDisabled() {
+        skipIfNoData();
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
@@ -230,6 +254,7 @@ public class LogTraceTest {
     @Test
     @DisplayName("6. Trace with null control (no output)")
     void testTraceNullControl() {
+        skipIfNoData();
         List<String> traceLines = new ArrayList<>();
 
         PrcOpt opt = RtkProcessor.createDefaultOpt();
@@ -245,6 +270,7 @@ public class LogTraceTest {
     @Test
     @DisplayName("7. Trace with null callback (no crash)")
     void testTraceNullCallback() {
+        skipIfNoData();
         TraceControl ctrl = new TraceControl();
         ctrl.enabled = true;
         ctrl.stages = 0x7F;
@@ -264,6 +290,7 @@ public class LogTraceTest {
     @Test
     @DisplayName("8. Trace STAGE6 format validation")
     void testTraceStage6Format() {
+        skipIfNoData();
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
@@ -306,6 +333,7 @@ public class LogTraceTest {
     @Test
     @DisplayName("9. Trace with CONTENT_H_MATRIX flag")
     void testTraceWithHMatrix() {
+        skipIfNoData();
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
@@ -340,6 +368,7 @@ public class LogTraceTest {
     @Test
     @DisplayName("10. Trace with CONTENT_SUMMARY_ONLY flag")
     void testTraceWithSummaryOnly() {
+        skipIfNoData();
         List<String> traceLinesFull = Collections.synchronizedList(new ArrayList<>());
         List<String> traceLinesSummary = Collections.synchronizedList(new ArrayList<>());
 
@@ -459,6 +488,7 @@ public class LogTraceTest {
     @Test
     @DisplayName("13. Trace STAGE0 satellite detail lines")
     void testTraceStage0SatelliteDetails() {
+        skipIfNoData();
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
@@ -495,6 +525,7 @@ public class LogTraceTest {
     @Test
     @DisplayName("14. Trace callback exception safety")
     void testTraceCallbackExceptionSafety() {
+        skipIfNoData();
         TraceControl ctrl = new TraceControl();
         ctrl.enabled = true;
         ctrl.stages = 0x7F;

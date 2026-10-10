@@ -1,0 +1,10 @@
+scenario=static
+role=product
+systems=G+R+E+C+J
+date=2023-11-01
+source=CODE-MGEX
+type=sp3
+license=IGS-data-policy
+description=CODE MGEX最终精密轨道 5分钟采样
+mode=ppp-ar
+test_ids=GreatPvtPositioningTest,ProductReaderTest

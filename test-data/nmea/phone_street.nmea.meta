@@ -1,0 +1,13 @@
+scenario=street
+role=reference
+systems=G+E+J+C
+date=2025-03-12
+source=MobileGNSS-SPP
+sample_rate=1s
+duration=21min
+receiver=UNISOC uis7865_6h10_go_a32b
+license=MIT
+description=手机街道场景参考位置(baseline NMEA)
+location=Beijing street
+mode=rtk-fixed
+test_ids=SppOptimizationTest

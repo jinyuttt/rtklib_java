@@ -3,6 +3,7 @@ package org.rtklib.java.orbit;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.rtklib.java.TestDataConfig;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -21,7 +22,6 @@ class Sgp4PropagatorTest {
     static void loadTle() {
         tleData = new Tle();
         String[] paths = {
-            "D:/code/rtklib_java/rtklib-core/src/test/resources/sgp4-ver.tle",
             "rtklib-core/src/test/resources/sgp4-ver.tle",
             "src/test/resources/sgp4-ver.tle"
         };
@@ -193,15 +193,17 @@ class Sgp4PropagatorTest {
     void testRealTleCrossValidation() {
         Tle gpsTle = new Tle();
         Tle bdsTle = new Tle();
-        boolean gpsOk = TleParser.tleRead("D:/code/rtklib_java/data/tle.txt", gpsTle);
-        boolean bdsOk = TleParser.tleRead("D:/code/rtklib_java/data/tle-bds.txt", bdsTle);
+        String gpsTlePath = TestDataConfig.getTestDataFile("tle/tle_gps.txt");
+        String bdsTlePath = TestDataConfig.getTestDataFile("tle/tle_bds.txt");
+        boolean gpsOk = TleParser.tleRead(gpsTlePath, gpsTle);
+        boolean bdsOk = TleParser.tleRead(bdsTlePath, bdsTle);
         assertTrue(gpsOk, "GPS TLE读取失败");
         assertTrue(bdsOk, "BDS TLE读取失败");
 
         String refContent;
         try {
             refContent = java.nio.file.Files.readString(
-                    java.nio.file.Paths.get("D:/code/rtklib_java/rtklib-core/src/test/resources/real-tle-ref.csv"));
+                    java.nio.file.Paths.get(resolveTestData("rtklib-core/src/test/resources/real-tle-ref.csv")));
         } catch (java.io.IOException e) {
             fail("参考文件读取失败: " + e.getMessage());
             return;
@@ -268,6 +270,21 @@ class Sgp4PropagatorTest {
 
         assertTrue(passCount > 0, "应至少有一颗卫星通过验证");
         assertTrue(failCount < passCount, "失败数不应超过通过数，失败详情:\n" + failures);
+    }
+
+    private static String resolveTestData(String name) {
+        String[] candidates = {
+            name,
+            "rtklib-core/" + name,
+            "../" + name,
+        };
+        for (String c : candidates) {
+            if (java.nio.file.Files.exists(java.nio.file.Paths.get(c))) return c;
+        }
+        String resName = name.substring(name.lastIndexOf('/') + 1);
+        java.net.URL url = Sgp4PropagatorTest.class.getResource("/" + resName);
+        if (url != null) return url.getFile();
+        return name;
     }
 
     private TleData findTleInCollection(String satno, Tle tle1, Tle tle2) {

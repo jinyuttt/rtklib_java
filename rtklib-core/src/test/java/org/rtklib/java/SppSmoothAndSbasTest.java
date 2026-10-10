@@ -370,13 +370,8 @@ public class SppSmoothAndSbasTest {
     @Test
     @DisplayName("SBAS：读取项目data目录下的.sbs测试文件")
     void testReadProjectSbsFile() {
-        String sbsPath = "data/rtcm3_test/test.sbs";
-        java.io.File f = new java.io.File(sbsPath);
-        if (!f.exists()) {
-            sbsPath = "D:/code/rtklib_java/data/rtcm3_test/test.sbs";
-            f = new java.io.File(sbsPath);
-        }
-        if (!f.exists()) {
+        String sbsPath = TestDataConfig.get("sbs.file", "");
+        if (sbsPath.isEmpty() || !new java.io.File(sbsPath).exists()) {
             return;
         }
 
@@ -391,13 +386,8 @@ public class SppSmoothAndSbasTest {
     @Test
     @DisplayName("SBAS：按历元逐步应用.sbs文件中的改正")
     void testEpochByEpochSbsFromFile() {
-        String sbsPath = "data/rtcm3_test/test.sbs";
-        java.io.File f = new java.io.File(sbsPath);
-        if (!f.exists()) {
-            sbsPath = "D:/code/rtklib_java/data/rtcm3_test/test.sbs";
-            f = new java.io.File(sbsPath);
-        }
-        if (!f.exists()) {
+        String sbsPath = TestDataConfig.get("sbs.file", "");
+        if (sbsPath.isEmpty() || !new java.io.File(sbsPath).exists()) {
             return;
         }
 

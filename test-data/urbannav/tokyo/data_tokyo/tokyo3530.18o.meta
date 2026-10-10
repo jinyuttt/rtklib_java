@@ -1,0 +1,12 @@
+scenario=downtown
+role=rover
+systems=G+R+E+J+C
+date=2018-12-19
+source=UrbanNav
+sample_rate=10Hz
+duration=20min
+receiver=Trimble NetR9
+license=CC-BY-4.0
+description=UrbanNav Tokyo rover, Trimble NetR9, downtown urban canyon vehicle
+location=Tokyo downtown (Odaiba/Shinjuku)
+test_ids=RtkBenchmarkTest

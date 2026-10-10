@@ -14,7 +14,6 @@ class OrbitalElementsTest {
     static void loadTle() {
         tleData = new Tle();
         String[] paths = {
-            "D:/code/rtklib_java/rtklib-core/src/test/resources/sgp4-ver.tle",
             "rtklib-core/src/test/resources/sgp4-ver.tle",
             "src/test/resources/sgp4-ver.tle"
         };
