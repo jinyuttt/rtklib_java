@@ -46,7 +46,7 @@ jobs:
           fi
 
       - name: Package
-        run: mvn -B package -DskipTests
+        run: mvn -B -e package -DskipTests
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
