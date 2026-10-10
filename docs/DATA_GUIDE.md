@@ -25,9 +25,9 @@
 
 | 字段 | 说明 | 示例 |
 |------|------|------|
-| `scenario` | 数据场景 | `open-sky`, `urban`, `downtown`, `street`, `elevated`, `forest`, `indoor` |
-| `role` | 数据角色 | `rover`, `base`, `reference`, `nav` |
-| `systems` | 卫星系统 | `G`, `G+R`, `G+E+J+C`, `G+R+E+C+J+S` |
+| `scenario` | 数据场景 | `open-sky`, `urban`, `downtown`, `street`, `elevated`, `forest`, `indoor`, `highway`, `long-baseline` |
+| `role` | 数据角色 | `rover`, `base`, `reference`, `nav`, `product` |
+| `systems` | 卫星系统 | `G`, `G+R`, `G+E+J+C`, `G+R+E+C+J+S`（G=GPS, R=GLONASS, E=Galileo, J=QZSS, C=BDS, S=SBAS） |
 | `date` | 观测日期 | `2025-04-08` |
 | `source` | 数据来源项目 | `MobileGNSS-SPP`, `Net_Diff`, `rtklib`, `IGS`, `GFZ` |
 
@@ -39,10 +39,9 @@
 | `duration` | 数据时长 | `30min`, `24h` |
 | `receiver` | 接收机型号 | `UNISOC uis7865`, `u-blox`, `Leica GR50` |
 | `antenna` | 天线型号 | `unknown`, `LEIAR25.R4` |
-| `interval` | 采样间隔（同sample_rate） | `1s` |
 | `base.id` | 基站标识（RTK数据） | `3040`, `VRS-001` |
 | `base.distance` | 基线长度（RTK数据） | `1.2km`, `15km` |
-| `mode` | 定位模式（参考解） | `spp`, `rtk`, `ppp`, `ppp-ar` |
+| `mode` | 定位模式（参考解） | `spp`, `dgps`, `rtk`, `rtk-static`, `rtk-fixed`, `ppp`, `ppp-ar`, `ppp-rtk` |
 | `software` | 解算软件（参考解） | `RTKLIB demo5 b34k`, `LAMBDA` |
 | `license` | 数据许可 | `MIT`, `IGS-data-policy`, `public` |
 | `description` | 自由描述 | `城市峡谷手机GNSS数据，含NLOS/多路径` |
@@ -315,9 +314,9 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 | 项目 | 说明 |
 |------|------|
-| 数据 | **私有**: RTKLIB_EX_2.5.0目录下的RINEX+C版参考结果 |
+| 数据 | 公开: RTKLIB_EX_2.5.0目录下的RINEX+C版参考结果 |
 | 验证 | Java SPP结果与C版spp_bds.pos逐历元对比 |
-| ⚠️ | **必须使用自己的数据**，需本地RTKLIB C版参考结果 |
+| ⚠️ | 需本地RTKLIB C版参考结果目录 |
 
 ---
 
@@ -369,7 +368,7 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | 项目 | 说明 |
 |------|------|
 | 数据 | **私有**: RTCM3基站+流动站多小时数据 |
-| ⚠️ | **必须使用自己的数据**，需配置设备ID和日期 |
+| ⚠️ | 需配置私有设备ID和日期 |
 
 #### LandslideMonitorTest — 滑坡监测
 
@@ -422,7 +421,7 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 | 项目 | 说明 |
 |------|------|
-| 数据 | **私有**: GREAT-PVT PPPFLT+RTKFLT (RINEX3.04+SP3+CLK+UPD) |
+| 数据 | 公开: GREAT-PVT PPPFLT+RTKFLT (RINEX3.04+SP3+CLK+UPD) |
 | 配置 | `greatpvt.ppp.dir` + `greatpvt.rtk.dir` |
 | 测试用例 | 8个：RINEX3.04解析、SP3/CLK/UPD加载、SPP多系统、PPP浮点、PPP-AR(WL+NL)、RTK多系统、RTK GPS-only、compactObsFreq |
 | 验证 | 各模式历元成功率>0，PPP-AR有FLOAT解 |
@@ -677,3 +676,123 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 7. **多频(≥3频)** — 三频BDS/GAL，验证逐级AR多频扩展（已有双频BDS，缺三频）
 8. **峡谷/深城市RTK** — 两侧高楼遮挡，天空角严重受限
 9. **森林/林冠** — 树冠遮挡，信噪比低
+
+---
+
+## 8. 如何新增一个测试（端到端示例）
+
+以下以"新增一个RTK Static定位测试"为例，展示从数据准备到测试编写到文档更新的完整流程。
+
+### Step 1: 准备测试数据
+
+假设有一组短基线RTK数据（base+rover RINEX文件）：
+
+```powershell
+# 1. 放入公共数据目录
+test-data/rinex/open-sky_rover_20260101.25o
+test-data/rinex/open-sky_base_20260101.25o
+test-data/nav/open-sky_20260101.25n
+
+# 2. 创建同名.meta文件
+test-data/rinex/open-sky_rover_20260101.25o.meta
+test-data/rinex/open-sky_base_20260101.25o.meta
+test-data/nav/open-sky_20260101.25n.meta
+```
+
+`.meta` 文件内容：
+
+```
+# open-sky_rover_20260101.25o.meta
+scenario=open-sky
+role=rover
+systems=G+E+C
+date=2026-01-01
+source=MyProject
+sample_rate=1s
+duration=30min
+receiver=u-blox F9P
+license=MIT
+description=短基线RTK流动站
+test_ids=MyNewRtkTest
+```
+
+```
+# open-sky_base_20260101.25o.meta
+scenario=open-sky
+role=base
+systems=G+E+C
+date=2026-01-01
+source=MyProject
+sample_rate=1s
+duration=30min
+receiver=u-blox F9P
+base.id=BASE01
+base.distance=1.5km
+license=MIT
+description=短基线RTK基站
+test_ids=MyNewRtkTest
+```
+
+### Step 2: 编写测试类
+
+```java
+package org.rtklib.java;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DisplayName;
+import org.rtklib.java.config.PrcOpt;
+import org.rtklib.java.constants.Constants;
+import org.rtklib.java.rinex.PostPosProcessor;
+import static org.junit.jupiter.api.Assertions.*;
+
+@DisplayName("My new RTK Static test")
+class MyNewRtkTest {
+
+    private static final String ROVER_OBS =
+        TestDataConfig.getTestDataFile("rinex/open-sky_rover_20260101.25o");
+    private static final String BASE_OBS =
+        TestDataConfig.getTestDataFile("rinex/open-sky_base_20260101.25o");
+    private static final String NAV =
+        TestDataConfig.getTestDataFile("nav/open-sky_20260101.25n");
+
+    @Test
+    @DisplayName("RTK Static positioning with G+E+C short baseline")
+    void testRtkStatic() {
+        PrcOpt opt = new PrcOpt();
+        opt.mode = Constants.PMODE_STATIC;
+        opt.nf = 2;
+        opt.navsys = Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP;
+        opt.elmin = 15.0 * Constants.D2R;
+        opt.ionoopt = Constants.IONOOPT_BRDC;
+        opt.tropopt = Constants.TROPOPT_SAAS;
+        opt.soltype = Constants.SOLTYPE_FORWARD;
+
+        PostPosProcessor proc = new PostPosProcessor(opt);
+        PostPosProcessor.PostPosResult result = proc.process(ROVER_OBS, BASE_OBS, NAV);
+
+        assertTrue(result.successCount > 0, "RTK Static should solve at least one epoch");
+    }
+}
+```
+
+### Step 3: 验证测试通过
+
+```powershell
+mvn test -pl rtklib-core -Dtest="MyNewRtkTest"
+```
+
+### Step 4: 更新本文档
+
+在以下位置添加条目：
+
+1. **1.1 总览表** — 新增一行 `| **MyNewRtkTest** | RTK-Static | RINEX3.04 (G+E+C) | 公共: open-sky | ✅ |`
+2. **2.1/2.2 数据清单** — 新增数据文件条目
+3. **3.2 测试详情** — 新增 `#### MyNewRtkTest` 小节
+4. **4.2 优化矩阵**（如涉及优化项）— 补充对应行
+
+### Step 5: 提交
+
+```powershell
+git add test-data/ rtklib-core/src/test/ docs/DATA_GUIDE.md
+git commit -m "test: add MyNewRtkTest for RTK Static with G+E+C short baseline"
+```
