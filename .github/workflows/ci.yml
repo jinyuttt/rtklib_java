@@ -23,11 +23,16 @@ jobs:
           cache: maven
 
       - name: Cache test-data
+        id: cache-test-data
         uses: actions/cache@v4
         with:
           path: test-data
-          key: test-data-${{ hashFiles('test-data/*.meta') }}
+          key: test-data-${{ hashFiles('test-data/**/*.meta') }}
           restore-keys: test-data-
+
+      - name: Download large test data
+        if: steps.cache-test-data.outputs.cache-hit != 'true'
+        run: pwsh test-data/download-test-data.ps1
 
       - name: Build
         run: mvn -B compile
