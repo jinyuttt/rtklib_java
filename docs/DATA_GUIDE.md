@@ -139,8 +139,8 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **RtkIonoptTest** | RTK | RTCM3 (私有设备ID) | **私有: rtcm.base.dir** | ❌ |
 | **LandslideMonitorTest** | RTK | RTCM3 (G+R+C) + RTCM3 | 公共: rtcm3_gmsd + open-sky_base | ✅ |
 | **ForwardBackwardFilterTest** | RTK | RINEX2.10 + NAV | 公共: 0759+3040+0759n | ✅ |
-| **VerifyPositioningTest** | SPP/RTK | RINEX2.10 + NAV | 公共: 0759+3040+0759n+3040n | ✅ |
-| **GreatPvtPositioningTest** | SPP/RTK/PPP/PPP-AR | RINEX3.04+SP3+CLK+UPD | **私有: GREAT-PVT** | ❌ |
+| **VerifyPositioningTest** | SPP/RTK/RTK-Static/DGPS/RTK-Fixed | RINEX2.10 + NAV | 公共: 0759+3040+0759n+3040n | ✅ |
+| **GreatPvtPositioningTest** | SPP/RTK/RTK-Static/PPP/PPP-Static/PPP-AR/PPP-AR+FixHold/PPP+GPT3/PPP+IERS/PPP+ISB | RINEX3.04+SP3+CLK+UPD | **私有: GREAT-PVT** | ❌ |
 | **PppOptimizationsTest** | PPP | 无（纯配置验证） | 内置 | ✅ |
 | **PppArFixVerificationTest** | PPP-AR | 无（构造输入） | 内置 | ✅ |
 | **B1OsbEquivalenceTest** | PPP-AR | 无（构造输入） | 内置 | ✅ |
@@ -149,6 +149,8 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **RtkOptimizationsCascadeARTest** | RTK | 无（纯数值） | 内置 | ✅ |
 | **RtkOptimizationsResEditTest** | RTK | 无（纯数值） | 内置 | ✅ |
 | **RtkOptimizationsBootstrapTest** | RTK | 无（纯数值） | 内置 | ✅ |
+| **RtkOptimizationsConfigTest** | RTK | 无（配置+数值） | 内置 | ✅ |
+| **ProductReaderTest** | 产品读取 | SP3+CLK+IONEX+OSB+ATX | 公共: product/ | ✅ |
 | **CompactSsrDecoderTest** | PPP-RTK | 无（构造输入） | 内置 | ✅ |
 | **SampleDataRtcmTest** | 数据解析 | RTCM3 (私有消息) | 公共: open-sky_base | ✅ |
 | **RtcmFileParserTest** | 数据解析 | RTCM3 (私有消息) | 公共: open-sky_base | ✅ |
@@ -510,6 +512,8 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | RtkOptimizationsCascadeARTest | R8 逐级AR | 默认关闭返回-1、单频跳过、级别常量 |
 | RtkOptimizationsResEditTest | R9 残差编辑 | 默认关闭不修改状态、短弧段重置 |
 | RtkOptimizationsBootstrapTest | R11 Bootstrapping | 高/低置信度成功率、单模糊度、空输入 |
+| RtkOptimizationsConfigTest | R2/R3/R6/R7/R13 | 默认关闭、开启配置、R3阈值触发、R13噪声注入P阵 |
+| ProductReaderTest | SP3/CLK/IONEX/OSB/ATX | 各格式文件加载、SP3+CLK联合加载 |
 
 ---
 
