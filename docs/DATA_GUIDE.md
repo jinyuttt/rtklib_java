@@ -124,7 +124,7 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **SppTest** | SPP | RTCM3 (G+R+C) | 公共: rtcm3_gmsd | ✅ |
 | **SppProcessorTest** | SPP | RTCM3 (G+R+C) | 公共: rtcm3_gmsd | ✅ |
 | **SppOptimizationTest** | SPP | RINEX3.04 (G+E+J+C) | 公共: rinex304_gejc_elevated + 数据仓库4场景 | ✅ |
-| **SppCompareTest** | SPP | RINEX2.10 (BDS) | **私有: RTKLIB_EX_2.5.0** | ❌ |
+| **SppCompareTest** | SPP | RINEX2.10 (BDS) | 公开: RTKLIB_EX_2.5.0 | ✅ |
 | **SppSmoothAndSbasTest** | SPP | 无（纯数值） | 内置 | ✅ |
 | **RinexSppTest** | SPP | RTCM3→RINEX→SPP | 公共: rtcm3_gmsd + open-sky_base | ✅ |
 | **RinexSppProcessorTest** | SPP | RTCM3→RINEX→SPP | 公共: rtcm3_gmsd | ✅ |
@@ -140,7 +140,7 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **LandslideMonitorTest** | RTK | RTCM3 (G+R+C) + RTCM3 | 公共: rtcm3_gmsd + open-sky_base | ✅ |
 | **ForwardBackwardFilterTest** | RTK | RINEX2.10 + NAV | 公共: 0759+3040+0759n | ✅ |
 | **VerifyPositioningTest** | SPP/RTK/RTK-Static/DGPS/RTK-Fixed | RINEX2.10 + NAV | 公共: 0759+3040+0759n+3040n | ✅ |
-| **GreatPvtPositioningTest** | SPP/RTK/RTK-Static/PPP/PPP-Static/PPP-AR/PPP-AR+FixHold/PPP+GPT3/PPP+IERS/PPP+ISB | RINEX3.04+SP3+CLK+UPD | **私有: GREAT-PVT** | ❌ |
+| **GreatPvtPositioningTest** | SPP/RTK/RTK-Static/PPP/PPP-Static/PPP-AR/PPP-AR+FixHold/PPP+GPT3/PPP+IERS/PPP+ISB | RINEX3.04+SP3+CLK+UPD | 公开: GREAT-PVT sample_data | ✅ |
 | **PppOptimizationsTest** | PPP | 无（纯配置验证） | 内置 | ✅ |
 | **PppArFixVerificationTest** | PPP-AR | 无（构造输入） | 内置 | ✅ |
 | **B1OsbEquivalenceTest** | PPP-AR | 无（构造输入） | 内置 | ✅ |
@@ -169,8 +169,8 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | 测试类 | 原因 | 所需数据 | 配置方式 |
 |--------|------|----------|----------|
 | **RtkIonoptTest** | 需要完整RTCM3基站+流动站多小时数据 | 设备ID+日期+时段 | `test-data.properties` 中 `baserover.group1` + `ionopt.date` |
-| **SppCompareTest** | 需要RTKLIB C版参考结果文件 | RTKLIB_EX_2.5.0目录 | 硬编码路径 `D:\rtklib\rtklib_java\RTKLIB_EX_2.5.0` |
-| **GreatPvtPositioningTest** | 需要GREAT-PVT多系统精密数据+UPD产品 | RINEX3.04+SP3+CLK+UPD(WL/NL) | `test-data.properties` 中 `greatpvt.ppp.dir` + `greatpvt.rtk.dir` |
+
+> **注**：GreatPvtPositioningTest 和 SppCompareTest 虽需外部数据目录，但均使用公开数据集（GREAT-PVT sample_data、RTKLIB_EX_2.5.0），不属于私有数据依赖。
 
 ### 1.3 数据覆盖与缺口分析
 
@@ -563,7 +563,7 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | P3 IERS2010 | `enableIers2010` | PppOptimizationsTest | 配置验证 | 内置 |
 | P4 ISB/IFCB/IFB | `enableIsbIfcbIfb` | PppOptimizationsTest | 配置验证 | 内置 |
 | P5 OSB | `enableOsb` | PppOptimizationsTest | 配置验证 | 内置 |
-| P6 PPP-AR | `enablePppAR` | PppArFixVerificationTest + GreatPvtPositioningTest | 数值验证+端到端(GREAT-PVT UPD) | 内置+私有(GREAT-PVT) |
+| P6 PPP-AR | `enablePppAR` | PppArFixVerificationTest + GreatPvtPositioningTest | 数值验证+端到端(GREAT-PVT UPD) | 内置+公开(GREAT-PVT) |
 | P7 Fix-and-Hold | `enablePppArFixHold` | PppArFixVerificationTest | 最小历元守卫 | 内置 |
 | P8 Partial AR | `enablePppPartialAR` | PppArFixVerificationTest | 周空间转换 | 内置 |
 
