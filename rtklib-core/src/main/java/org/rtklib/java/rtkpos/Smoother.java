@@ -2,8 +2,12 @@ package org.rtklib.java.rtkpos;
 
 import org.ejml.simple.SimpleMatrix;
 import org.rtklib.java.common.MatrixUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class Smoother {
+
+    private static final Logger LOG = LoggerFactory.getLogger(Smoother.class);
 
     private Smoother() {
     }
@@ -24,6 +28,7 @@ public final class Smoother {
             QfInv = QfMat.invert();
             QbInv = QbMat.invert();
         } catch (Exception e) {
+            LOG.debug("Smoother QfInv/QbInv invert failed: {}", e.getMessage());
             return -1;
         }
 
@@ -32,6 +37,7 @@ public final class Smoother {
         try {
             QsMat = QsInv.invert();
         } catch (Exception e) {
+            LOG.debug("Smoother QsInv invert failed: {}", e.getMessage());
             return -1;
         }
 

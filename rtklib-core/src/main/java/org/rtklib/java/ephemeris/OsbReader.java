@@ -80,8 +80,8 @@ public final class OsbReader {
                                 nav.fcbFromOsb = true;
                                 nPhaseOsb++;
                                 if (sys == Constants.SYS_CMP) {
-                                    System.out.printf("OSB-DIAG prn=%s obs=%s code=%d value=%.4e%n",
-                                        prn, obs1, code, value * 1E-9 * Constants.CLIGHT);
+                                    LOG.debug("OSB-DIAG prn={} obs={} code={} value={}", 
+                                        prn, obs1, code, String.format("%.4e", value * 1E-9 * Constants.CLIGHT));
                                 }
                             }
                         }
@@ -127,15 +127,13 @@ public final class OsbReader {
             LOG.info("OSB/BIA loaded from {}: phaseOSB={}, codeOSB={}, DSB={}", file, nPhaseOsb, nCodeOsb, nDsb);
             
             // Diagnostic: show BDS satellite mapping
-            System.err.printf("OSB-MAP-DEBUG fcbWlByCode=%s fcbFromOsb=%s%n",
+            LOG.debug("OSB-MAP fcbWlByCode={} fcbFromOsb={}",
                 nav.fcbWlByCode != null ? "not-null" : "null", nav.fcbFromOsb);
-            System.err.flush();
             if (nav.fcbWlByCode != null && nav.fcbFromOsb) {
-                System.err.println("OSB-MAP BDS satellite index mapping:");
+                LOG.debug("OSB-MAP BDS satellite index mapping:");
                 for (int prn = 1; prn <= 46; prn++) {
                     int sat = SatUtils.satno(Constants.SYS_CMP, prn);
                     if (sat > 0 && sat <= Constants.MAXSAT) {
-                        // Check if this satellite has any OSB data
                         boolean hasOsb = false;
                         for (int code = 0; code <= Constants.MAXCODE; code++) {
                             if (nav.fcbWlByCode[sat - 1][code] != 0.0) {
@@ -144,11 +142,10 @@ public final class OsbReader {
                             }
                         }
                         if (hasOsb) {
-                            System.err.printf("OSB-MAP C%02d -> sat=%d (index=%d)%n", prn, sat, sat - 1);
+                            LOG.debug("OSB-MAP C{:02d} -> sat={} (index={})", prn, sat, sat - 1);
                         }
                     }
                 }
-                System.err.flush();
             }
         } else {
             LOG.warn("No OSB/BIA data loaded from {}", file);

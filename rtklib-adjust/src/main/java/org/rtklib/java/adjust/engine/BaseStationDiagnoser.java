@@ -248,9 +248,12 @@ public class BaseStationDiagnoser {
         for (SolData sd : fixSol) {
             Position p = sd.getPosition(CoordType.ECEF);
             if (p != null) {
-                varX += Math.pow(p.v1 - meanEcef.v1, 2);
-                varY += Math.pow(p.v2 - meanEcef.v2, 2);
-                varZ += Math.pow(p.v3 - meanEcef.v3, 2);
+                double dx = p.v1 - meanEcef.v1;
+                double dy = p.v2 - meanEcef.v2;
+                double dz = p.v3 - meanEcef.v3;
+                varX += dx * dx;
+                varY += dy * dy;
+                varZ += dz * dz;
             }
         }
         double stdX = Math.sqrt(varX / fixSol.size());

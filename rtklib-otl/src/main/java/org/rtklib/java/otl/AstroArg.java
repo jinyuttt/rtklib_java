@@ -118,15 +118,23 @@ public final class AstroArg {
         f[6] = f[5];
         f[8] = 1.024 + 0.286 * cosn + 0.008 * cos2n;
         f[7] = f[8];
-        f[9] = Math.sqrt(Math.pow(1.0 + 0.189 * cosn - 0.0058 * cos2n, 2)
-                + Math.pow(0.189 * sinn - 0.0058 * sin2n, 2));
+        double f9a = 1.0 + 0.189 * cosn - 0.0058 * cos2n;
+        double f9b = 0.189 * sinn - 0.0058 * sin2n;
+        f[9] = Math.sqrt(f9a * f9a + f9b * f9b);
         f[10] = f[9];
         f[11] = f[9];
-        f[12] = Math.sqrt(Math.pow(1.0 + 0.185 * cosn, 2) + Math.pow(0.185 * sinn, 2));
-        f[13] = Math.sqrt(Math.pow(1.0 + 0.198 * cosn, 2) + Math.pow(0.198 * sinn, 2));
-        f[14] = Math.sqrt(Math.pow(1.0 + 0.640 * cosn + 0.134 * cos2n, 2)
-                + Math.pow(0.640 * sinn + 0.134 * sin2n, 2));
-        f[15] = Math.sqrt(Math.pow(1.0 - 0.0373 * cosn, 2) + Math.pow(0.0373 * sinn, 2));
+        double f12a = 1.0 + 0.185 * cosn;
+        double f12b = 0.185 * sinn;
+        f[12] = Math.sqrt(f12a * f12a + f12b * f12b);
+        double f13a = 1.0 + 0.198 * cosn;
+        double f13b = 0.198 * sinn;
+        f[13] = Math.sqrt(f13a * f13a + f13b * f13b);
+        double f14a = 1.0 + 0.640 * cosn + 0.134 * cos2n;
+        double f14b = 0.640 * sinn + 0.134 * sin2n;
+        f[14] = Math.sqrt(f14a * f14a + f14b * f14b);
+        double f15a = 1.0 - 0.0373 * cosn;
+        double f15b = 0.0373 * sinn;
+        f[15] = Math.sqrt(f15a * f15a + f15b * f15b);
         f[16] = f[15];
         f[17] = f[15];
         f[18] = f[15];

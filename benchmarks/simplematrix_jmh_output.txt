@@ -1,0 +1,3186 @@
+﻿[WARNING] 
+[WARNING] Some problems were encountered while building the effective settings
+[WARNING] Expected root element 'settings' but found 'mirrors' (position: START_TAG seen <mirrors>... @1:10)  @ C:\Users\jinyu\.m2\settings.xml, line 1, column 10
+[WARNING] 
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] -----------------------< org.rtklib:rtklib-core >-----------------------
+[INFO] Building rtklib-core 2.2.9
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ rtklib-core ---
+[INFO] Copying 0 resource from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ rtklib-core ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ rtklib-core ---
+[INFO] Copying 4 resources from src\test\resources to target\test-classes
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ rtklib-core ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.2.3:test (default-test) @ rtklib-core ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running org.rtklib.java.benchmarks.JmhRunnerTest
+00:38:23.833 [main] INFO org.rtklib.java.benchmarks.JmhRunnerTest -- === SimpleMatrix Operations JMH Benchmark ===
+00:38:23.835 [main] INFO org.rtklib.java.benchmarks.JmhRunnerTest -- Warmup=5, Measurement=5, Fork=3, G1GC, GC Profiler
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk
+# Parameters: (dim = 50_20)
+
+# Run progress: 0.00% complete, ETA 00:18:00
+# Fork: 1 of 3
+# Warmup Iteration   1: 275402.190 ns/op
+# Warmup Iteration   2: 230347.898 ns/op
+# Warmup Iteration   3: 255495.518 ns/op
+# Warmup Iteration   4: 235982.950 ns/op
+# Warmup Iteration   5: 234151.244 ns/op
+Iteration   1: 235727.829 ns/op
+                 gc.alloc.rate:      166.171 MB/sec
+                 gc.alloc.rate.norm: 41111.864 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 230589.840 ns/op
+                 gc.alloc.rate:      169.881 MB/sec
+                 gc.alloc.rate.norm: 41111.668 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   3: 210060.676 ns/op
+                 gc.alloc.rate:      186.488 MB/sec
+                 gc.alloc.rate.norm: 41111.011 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 211012.154 ns/op
+                 gc.alloc.rate:      185.669 MB/sec
+                 gc.alloc.rate.norm: 41111.039 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 203737.442 ns/op
+                 gc.alloc.rate:      192.378 MB/sec
+                 gc.alloc.rate.norm: 41110.947 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+
+# Run progress: 1.39% complete, ETA 00:18:54
+# Fork: 2 of 3
+# Warmup Iteration   1: 295111.053 ns/op
+# Warmup Iteration   2: 245893.052 ns/op
+# Warmup Iteration   3: 245888.943 ns/op
+# Warmup Iteration   4: 219328.915 ns/op
+# Warmup Iteration   5: 224622.562 ns/op
+Iteration   1: 233898.320 ns/op
+                 gc.alloc.rate:      167.473 MB/sec
+                 gc.alloc.rate.norm: 41111.797 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 251370.236 ns/op
+                 gc.alloc.rate:      155.812 MB/sec
+                 gc.alloc.rate.norm: 41112.389 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+Iteration   3: 215320.539 ns/op
+                 gc.alloc.rate:      181.937 MB/sec
+                 gc.alloc.rate.norm: 41111.178 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 221491.064 ns/op
+                 gc.alloc.rate:      176.889 MB/sec
+                 gc.alloc.rate.norm: 41111.388 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 224848.281 ns/op
+                 gc.alloc.rate:      174.261 MB/sec
+                 gc.alloc.rate.norm: 41111.472 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 2.78% complete, ETA 00:18:37
+# Fork: 3 of 3
+# Warmup Iteration   1: 291913.932 ns/op
+# Warmup Iteration   2: 223131.588 ns/op
+# Warmup Iteration   3: 236119.784 ns/op
+# Warmup Iteration   4: 227831.392 ns/op
+# Warmup Iteration   5: 227316.269 ns/op
+Iteration   1: 231047.888 ns/op
+                 gc.alloc.rate:      169.610 MB/sec
+                 gc.alloc.rate.norm: 41111.715 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 223643.766 ns/op
+                 gc.alloc.rate:      175.219 MB/sec
+                 gc.alloc.rate.norm: 41111.429 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   3: 205350.841 ns/op
+                 gc.alloc.rate:      190.790 MB/sec
+                 gc.alloc.rate.norm: 41110.815 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 212860.350 ns/op
+                 gc.alloc.rate:      184.029 MB/sec
+                 gc.alloc.rate.norm: 41111.086 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 221096.851 ns/op
+                 gc.alloc.rate:      177.180 MB/sec
+                 gc.alloc.rate.norm: 41111.536 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk":
+  222137.072 ±(99.9%) 13886.140 ns/op [Average]
+  (min, avg, max) = (203737.442, 222137.072, 251370.236), stdev = 12989.104
+  CI (99.9%): [208250.932, 236023.211] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk:gc.alloc.rate":
+  176.919 ±(99.9%) 10.837 MB/sec [Average]
+  (min, avg, max) = (155.812, 176.919, 192.378), stdev = 10.136
+  CI (99.9%): [166.083, 187.756] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk:gc.alloc.rate.norm":
+  41111.422 ±(99.9%) 0.453 B/op [Average]
+  (min, avg, max) = (41110.815, 41111.422, 41112.389), stdev = 0.424
+  CI (99.9%): [41110.969, 41111.876] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk:gc.count":
+  5.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (≈ 0, 0.333, 1.000), stdev = 0.488
+  CI (99.9%): [5.000, 5.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk:gc.time":
+  32.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (≈ 0, 2.133, 7.000), stdev = 3.137
+  CI (99.9%): [32.000, 32.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk
+# Parameters: (dim = 150_40)
+
+# Run progress: 4.17% complete, ETA 00:18:22
+# Fork: 1 of 3
+# Warmup Iteration   1: 5517628.962 ns/op
+# Warmup Iteration   2: 4431797.788 ns/op
+# Warmup Iteration   3: 4432095.197 ns/op
+# Warmup Iteration   4: 4368163.913 ns/op
+# Warmup Iteration   5: 4523871.749 ns/op
+Iteration   1: 4720765.808 ns/op
+                 gc.alloc.rate:      73.326 MB/sec
+                 gc.alloc.rate.norm: 363822.482 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 4648294.931 ns/op
+                 gc.alloc.rate:      74.470 MB/sec
+                 gc.alloc.rate.norm: 363801.751 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 4698656.308 ns/op
+                 gc.alloc.rate:      73.677 MB/sec
+                 gc.alloc.rate.norm: 363817.215 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 4688603.030 ns/op
+                 gc.alloc.rate:      73.831 MB/sec
+                 gc.alloc.rate.norm: 363814.881 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 4741452.941 ns/op
+                 gc.alloc.rate:      73.012 MB/sec
+                 gc.alloc.rate.norm: 363824.998 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 5.56% complete, ETA 00:18:08
+# Fork: 2 of 3
+# Warmup Iteration   1: 5551326.374 ns/op
+# Warmup Iteration   2: 4907446.635 ns/op
+# Warmup Iteration   3: 4574841.364 ns/op
+# Warmup Iteration   4: 4551426.244 ns/op
+# Warmup Iteration   5: 4948458.128 ns/op
+Iteration   1: 4829377.273 ns/op
+                 gc.alloc.rate:      71.674 MB/sec
+                 gc.alloc.rate.norm: 363846.565 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 4608848.284 ns/op
+                 gc.alloc.rate:      75.106 MB/sec
+                 gc.alloc.rate.norm: 363794.215 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 4716228.806 ns/op
+                 gc.alloc.rate:      73.403 MB/sec
+                 gc.alloc.rate.norm: 363819.822 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 4872304.866 ns/op
+                 gc.alloc.rate:      71.059 MB/sec
+                 gc.alloc.rate.norm: 363863.533 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 4825234.458 ns/op
+                 gc.alloc.rate:      71.746 MB/sec
+                 gc.alloc.rate.norm: 363852.010 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 6.94% complete, ETA 00:17:53
+# Fork: 3 of 3
+# Warmup Iteration   1: 5553008.287 ns/op
+# Warmup Iteration   2: 4208497.107 ns/op
+# Warmup Iteration   3: 4515456.951 ns/op
+# Warmup Iteration   4: 4622987.615 ns/op
+# Warmup Iteration   5: 4514416.667 ns/op
+Iteration   1: 4902151.582 ns/op
+                 gc.alloc.rate:      70.591 MB/sec
+                 gc.alloc.rate.norm: 363866.024 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 4830798.554 ns/op
+                 gc.alloc.rate:      71.665 MB/sec
+                 gc.alloc.rate.norm: 363852.010 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 4494775.278 ns/op
+                 gc.alloc.rate:      77.098 MB/sec
+                 gc.alloc.rate.norm: 363765.078 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 4463732.294 ns/op
+                 gc.alloc.rate:      77.634 MB/sec
+                 gc.alloc.rate.norm: 363765.399 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 4664126.157 ns/op
+                 gc.alloc.rate:      74.220 MB/sec
+                 gc.alloc.rate.norm: 363806.833 B/op
+                 gc.count:           ≈ 0 counts
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk":
+  4713690.038 ±(99.9%) 137033.696 ns/op [Average]
+  (min, avg, max) = (4463732.294, 4713690.038, 4902151.582), stdev = 128181.405
+  CI (99.9%): [4576656.342, 4850723.734] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk:gc.alloc.rate":
+  73.501 ±(99.9%) 2.189 MB/sec [Average]
+  (min, avg, max) = (70.591, 73.501, 77.634), stdev = 2.047
+  CI (99.9%): [71.312, 75.690] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk:gc.alloc.rate.norm":
+  363820.854 ±(99.9%) 33.796 B/op [Average]
+  (min, avg, max) = (363765.078, 363820.854, 363866.024), stdev = 31.613
+  CI (99.9%): [363787.058, 363854.651] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk:gc.count":
+  ≈ 0 counts
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk
+# Parameters: (dim = 300_60)
+
+# Run progress: 8.33% complete, ETA 00:17:37
+# Fork: 1 of 3
+# Warmup Iteration   1: 40423544.000 ns/op
+# Warmup Iteration   2: 35348620.690 ns/op
+# Warmup Iteration   3: 37791055.556 ns/op
+# Warmup Iteration   4: 35505851.724 ns/op
+# Warmup Iteration   5: 35481900.000 ns/op
+Iteration   1: 33221042.623 ns/op
+                 gc.alloc.rate:      42.162 MB/sec
+                 gc.alloc.rate.norm: 1474028.984 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 34434150.847 ns/op
+                 gc.alloc.rate:      40.534 MB/sec
+                 gc.alloc.rate.norm: 1475010.034 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 39111596.154 ns/op
+                 gc.alloc.rate:      35.919 MB/sec
+                 gc.alloc.rate.norm: 1479035.231 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 36434778.182 ns/op
+                 gc.alloc.rate:      38.381 MB/sec
+                 gc.alloc.rate.norm: 1477184.436 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 35635343.860 ns/op
+                 gc.alloc.rate:      39.232 MB/sec
+                 gc.alloc.rate.norm: 1476059.930 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 9.72% complete, ETA 00:17:23
+# Fork: 2 of 3
+# Warmup Iteration   1: 38698866.667 ns/op
+# Warmup Iteration   2: 37485050.000 ns/op
+# Warmup Iteration   3: 36272207.143 ns/op
+# Warmup Iteration   4: 33248941.935 ns/op
+# Warmup Iteration   5: 37608662.963 ns/op
+Iteration   1: 36391583.929 ns/op
+                 gc.alloc.rate:      38.439 MB/sec
+                 gc.alloc.rate.norm: 1476611.571 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 37974890.566 ns/op
+                 gc.alloc.rate:      36.838 MB/sec
+                 gc.alloc.rate.norm: 1478395.019 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 37038636.364 ns/op
+                 gc.alloc.rate:      37.900 MB/sec
+                 gc.alloc.rate.norm: 1477184.436 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 36653647.273 ns/op
+                 gc.alloc.rate:      38.280 MB/sec
+                 gc.alloc.rate.norm: 1477185.018 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 36014335.714 ns/op
+                 gc.alloc.rate:      38.962 MB/sec
+                 gc.alloc.rate.norm: 1476612.714 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 11.11% complete, ETA 00:17:08
+# Fork: 3 of 3
+# Warmup Iteration   1: 44855165.217 ns/op
+# Warmup Iteration   2: 38791623.077 ns/op
+# Warmup Iteration   3: 35028341.379 ns/op
+# Warmup Iteration   4: 36050767.857 ns/op
+# Warmup Iteration   5: 34243976.667 ns/op
+Iteration   1: 35199414.035 ns/op
+                 gc.alloc.rate:      39.676 MB/sec
+                 gc.alloc.rate.norm: 1476058.807 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 35486691.228 ns/op
+                 gc.alloc.rate:      39.352 MB/sec
+                 gc.alloc.rate.norm: 1476058.807 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 33347990.164 ns/op
+                 gc.alloc.rate:      41.829 MB/sec
+                 gc.alloc.rate.norm: 1474028.984 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 36019805.357 ns/op
+                 gc.alloc.rate:      38.788 MB/sec
+                 gc.alloc.rate.norm: 1476611.571 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 34875744.828 ns/op
+                 gc.alloc.rate:      40.036 MB/sec
+                 gc.alloc.rate.norm: 1475526.759 B/op
+                 gc.count:           ≈ 0 counts
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk":
+  35855976.742 ±(99.9%) 1681352.193 ns/op [Average]
+  (min, avg, max) = (33221042.623, 35855976.742, 39111596.154), stdev = 1572737.885
+  CI (99.9%): [34174624.548, 37537328.935] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk:gc.alloc.rate":
+  39.089 ±(99.9%) 1.775 MB/sec [Average]
+  (min, avg, max) = (35.919, 39.089, 42.162), stdev = 1.660
+  CI (99.9%): [37.314, 40.863] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk:gc.alloc.rate.norm":
+  1476372.820 ±(99.9%) 1489.622 B/op [Average]
+  (min, avg, max) = (1474028.984, 1476372.820, 1479035.231), stdev = 1393.393
+  CI (99.9%): [1474883.198, 1477862.442] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_kk:gc.count":
+  ≈ 0 counts
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv
+# Parameters: (dim = 50_20)
+
+# Run progress: 12.50% complete, ETA 00:16:53
+# Fork: 1 of 3
+# Warmup Iteration   1: 31667.491 ns/op
+# Warmup Iteration   2: 22891.532 ns/op
+# Warmup Iteration   3: 23743.555 ns/op
+# Warmup Iteration   4: 22344.461 ns/op
+# Warmup Iteration   5: 24625.471 ns/op
+Iteration   1: 20578.095 ns/op
+                 gc.alloc.rate:      325.263 MB/sec
+                 gc.alloc.rate.norm: 7024.687 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            8.000 ms
+
+Iteration   2: 22177.295 ns/op
+                 gc.alloc.rate:      301.821 MB/sec
+                 gc.alloc.rate.norm: 7024.740 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 23774.819 ns/op
+                 gc.alloc.rate:      281.540 MB/sec
+                 gc.alloc.rate.norm: 7024.794 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   4: 22452.299 ns/op
+                 gc.alloc.rate:      298.171 MB/sec
+                 gc.alloc.rate.norm: 7024.750 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 21445.520 ns/op
+                 gc.alloc.rate:      312.191 MB/sec
+                 gc.alloc.rate.norm: 7024.716 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+
+# Run progress: 13.89% complete, ETA 00:16:36
+# Fork: 2 of 3
+# Warmup Iteration   1: 28414.972 ns/op
+# Warmup Iteration   2: 25964.446 ns/op
+# Warmup Iteration   3: 24251.669 ns/op
+# Warmup Iteration   4: 25928.336 ns/op
+# Warmup Iteration   5: 23817.162 ns/op
+Iteration   1: 21527.354 ns/op
+                 gc.alloc.rate:      310.872 MB/sec
+                 gc.alloc.rate.norm: 7024.719 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+Iteration   2: 20658.519 ns/op
+                 gc.alloc.rate:      324.017 MB/sec
+                 gc.alloc.rate.norm: 7024.686 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 21381.191 ns/op
+                 gc.alloc.rate:      313.055 MB/sec
+                 gc.alloc.rate.norm: 7024.714 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   4: 20786.079 ns/op
+                 gc.alloc.rate:      322.071 MB/sec
+                 gc.alloc.rate.norm: 7024.694 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 21192.988 ns/op
+                 gc.alloc.rate:      314.962 MB/sec
+                 gc.alloc.rate.norm: 7024.705 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+
+# Run progress: 15.28% complete, ETA 00:16:20
+# Fork: 3 of 3
+# Warmup Iteration   1: 29428.201 ns/op
+# Warmup Iteration   2: 25046.714 ns/op
+# Warmup Iteration   3: 24359.519 ns/op
+# Warmup Iteration   4: 25822.487 ns/op
+# Warmup Iteration   5: 26436.055 ns/op
+Iteration   1: 22782.638 ns/op
+                 gc.alloc.rate:      293.783 MB/sec
+                 gc.alloc.rate.norm: 7024.758 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            9.000 ms
+
+Iteration   2: 22179.570 ns/op
+                 gc.alloc.rate:      301.796 MB/sec
+                 gc.alloc.rate.norm: 7024.741 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 21103.287 ns/op
+                 gc.alloc.rate:      317.287 MB/sec
+                 gc.alloc.rate.norm: 7024.705 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            5.000 ms
+
+Iteration   4: 22321.109 ns/op
+                 gc.alloc.rate:      300.002 MB/sec
+                 gc.alloc.rate.norm: 7024.745 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 20891.334 ns/op
+                 gc.alloc.rate:      320.494 MB/sec
+                 gc.alloc.rate.norm: 7024.698 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv":
+  21683.473 ±(99.9%) 969.941 ns/op [Average]
+  (min, avg, max) = (20578.095, 21683.473, 23774.819), stdev = 907.284
+  CI (99.9%): [20713.532, 22653.414] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv:gc.alloc.rate":
+  309.155 ±(99.9%) 13.444 MB/sec [Average]
+  (min, avg, max) = (281.540, 309.155, 325.263), stdev = 12.576
+  CI (99.9%): [295.711, 322.599] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv:gc.alloc.rate.norm":
+  7024.723 ±(99.9%) 0.032 B/op [Average]
+  (min, avg, max) = (7024.686, 7024.723, 7024.794), stdev = 0.030
+  CI (99.9%): [7024.691, 7024.756] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv:gc.count":
+  9.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (≈ 0, 0.600, 1.000), stdev = 0.507
+  CI (99.9%): [9.000, 9.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv:gc.time":
+  59.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (≈ 0, 3.933, 9.000), stdev = 3.453
+  CI (99.9%): [59.000, 59.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv
+# Parameters: (dim = 150_40)
+
+# Run progress: 16.67% complete, ETA 00:16:03
+# Fork: 1 of 3
+# Warmup Iteration   1: 158107.673 ns/op
+# Warmup Iteration   2: 130166.735 ns/op
+# Warmup Iteration   3: 137723.501 ns/op
+# Warmup Iteration   4: 131552.444 ns/op
+# Warmup Iteration   5: 135690.714 ns/op
+Iteration   1: 123333.939 ns/op
+                 gc.alloc.rate:      205.213 MB/sec
+                 gc.alloc.rate.norm: 26573.247 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 125946.680 ns/op
+                 gc.alloc.rate:      200.761 MB/sec
+                 gc.alloc.rate.norm: 26574.087 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            8.000 ms
+
+Iteration   3: 128640.809 ns/op
+                 gc.alloc.rate:      196.608 MB/sec
+                 gc.alloc.rate.norm: 26574.627 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 114971.834 ns/op
+                 gc.alloc.rate:      220.168 MB/sec
+                 gc.alloc.rate.norm: 26571.360 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 123483.015 ns/op
+                 gc.alloc.rate:      204.805 MB/sec
+                 gc.alloc.rate.norm: 26573.354 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+
+# Run progress: 18.06% complete, ETA 00:15:47
+# Fork: 2 of 3
+# Warmup Iteration   1: 155485.745 ns/op
+# Warmup Iteration   2: 134516.459 ns/op
+# Warmup Iteration   3: 140399.861 ns/op
+# Warmup Iteration   4: 139525.976 ns/op
+# Warmup Iteration   5: 126515.034 ns/op
+Iteration   1: 134446.790 ns/op
+                 gc.alloc.rate:      188.079 MB/sec
+                 gc.alloc.rate.norm: 26575.934 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 129523.167 ns/op
+                 gc.alloc.rate:      195.441 MB/sec
+                 gc.alloc.rate.norm: 26574.938 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   3: 115853.004 ns/op
+                 gc.alloc.rate:      218.478 MB/sec
+                 gc.alloc.rate.norm: 26571.444 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 131911.572 ns/op
+                 gc.alloc.rate:      191.901 MB/sec
+                 gc.alloc.rate.norm: 26575.348 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 124416.201 ns/op
+                 gc.alloc.rate:      203.276 MB/sec
+                 gc.alloc.rate.norm: 26573.565 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+
+# Run progress: 19.44% complete, ETA 00:15:31
+# Fork: 3 of 3
+# Warmup Iteration   1: 142909.048 ns/op
+# Warmup Iteration   2: 121316.021 ns/op
+# Warmup Iteration   3: 130052.065 ns/op
+# Warmup Iteration   4: 140158.223 ns/op
+# Warmup Iteration   5: 130520.794 ns/op
+Iteration   1: 128027.038 ns/op
+                 gc.alloc.rate:      197.481 MB/sec
+                 gc.alloc.rate.norm: 26574.276 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 127650.967 ns/op
+                 gc.alloc.rate:      198.087 MB/sec
+                 gc.alloc.rate.norm: 26574.307 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   3: 121622.560 ns/op
+                 gc.alloc.rate:      208.150 MB/sec
+                 gc.alloc.rate.norm: 26572.950 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 121415.482 ns/op
+                 gc.alloc.rate:      208.506 MB/sec
+                 gc.alloc.rate.norm: 26572.854 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 114588.910 ns/op
+                 gc.alloc.rate:      220.925 MB/sec
+                 gc.alloc.rate.norm: 26571.253 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv":
+  124388.798 ±(99.9%) 6417.580 ns/op [Average]
+  (min, avg, max) = (114588.910, 124388.798, 134446.790), stdev = 6003.009
+  CI (99.9%): [117971.217, 130806.378] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv:gc.alloc.rate":
+  203.859 ±(99.9%) 10.740 MB/sec [Average]
+  (min, avg, max) = (188.079, 203.859, 220.925), stdev = 10.046
+  CI (99.9%): [193.118, 214.599] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv:gc.alloc.rate.norm":
+  26573.570 ±(99.9%) 1.535 B/op [Average]
+  (min, avg, max) = (26571.253, 26573.570, 26575.934), stdev = 1.436
+  CI (99.9%): [26572.034, 26575.105] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv:gc.count":
+  6.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (≈ 0, 0.400, 1.000), stdev = 0.507
+  CI (99.9%): [6.000, 6.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv:gc.time":
+  40.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (≈ 0, 2.667, 8.000), stdev = 3.416
+  CI (99.9%): [40.000, 40.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv
+# Parameters: (dim = 300_60)
+
+# Run progress: 20.83% complete, ETA 00:15:15
+# Fork: 1 of 3
+# Warmup Iteration   1: 403453.216 ns/op
+# Warmup Iteration   2: 365498.052 ns/op
+# Warmup Iteration   3: 361070.032 ns/op
+# Warmup Iteration   4: 401070.769 ns/op
+# Warmup Iteration   5: 386813.697 ns/op
+Iteration   1: 379926.347 ns/op
+                 gc.alloc.rate:      147.410 MB/sec
+                 gc.alloc.rate.norm: 59198.678 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 376852.453 ns/op
+                 gc.alloc.rate:      148.698 MB/sec
+                 gc.alloc.rate.norm: 59195.608 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 346842.978 ns/op
+                 gc.alloc.rate:      161.407 MB/sec
+                 gc.alloc.rate.norm: 59168.442 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+Iteration   4: 372337.558 ns/op
+                 gc.alloc.rate:      151.055 MB/sec
+                 gc.alloc.rate.norm: 59189.972 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 331094.716 ns/op
+                 gc.alloc.rate:      169.169 MB/sec
+                 gc.alloc.rate.norm: 59154.445 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 22.22% complete, ETA 00:14:59
+# Fork: 2 of 3
+# Warmup Iteration   1: 486369.913 ns/op
+# Warmup Iteration   2: 397081.051 ns/op
+# Warmup Iteration   3: 368181.001 ns/op
+# Warmup Iteration   4: 380770.537 ns/op
+# Warmup Iteration   5: 362936.134 ns/op
+Iteration   1: 385869.719 ns/op
+                 gc.alloc.rate:      145.157 MB/sec
+                 gc.alloc.rate.norm: 59203.443 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 374675.028 ns/op
+                 gc.alloc.rate:      150.138 MB/sec
+                 gc.alloc.rate.norm: 59193.558 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 354067.360 ns/op
+                 gc.alloc.rate:      158.514 MB/sec
+                 gc.alloc.rate.norm: 59175.135 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            8.000 ms
+
+Iteration   4: 377488.644 ns/op
+                 gc.alloc.rate:      148.504 MB/sec
+                 gc.alloc.rate.norm: 59196.283 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 349630.092 ns/op
+                 gc.alloc.rate:      160.278 MB/sec
+                 gc.alloc.rate.norm: 59171.456 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 23.61% complete, ETA 00:14:43
+# Fork: 3 of 3
+# Warmup Iteration   1: 441021.832 ns/op
+# Warmup Iteration   2: 377680.292 ns/op
+# Warmup Iteration   3: 336736.744 ns/op
+# Warmup Iteration   4: 404314.634 ns/op
+# Warmup Iteration   5: 391856.397 ns/op
+Iteration   1: 370267.753 ns/op
+                 gc.alloc.rate:      151.269 MB/sec
+                 gc.alloc.rate.norm: 59188.940 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 390648.693 ns/op
+                 gc.alloc.rate:      143.397 MB/sec
+                 gc.alloc.rate.norm: 59208.083 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 372898.276 ns/op
+                 gc.alloc.rate:      150.626 MB/sec
+                 gc.alloc.rate.norm: 59191.058 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+Iteration   4: 362413.910 ns/op
+                 gc.alloc.rate:      155.176 MB/sec
+                 gc.alloc.rate.norm: 59181.920 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 357734.790 ns/op
+                 gc.alloc.rate:      156.653 MB/sec
+                 gc.alloc.rate.norm: 59178.632 B/op
+                 gc.count:           ≈ 0 counts
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv":
+  366849.888 ±(99.9%) 17363.983 ns/op [Average]
+  (min, avg, max) = (331094.716, 366849.888, 390648.693), stdev = 16242.281
+  CI (99.9%): [349485.905, 384213.871] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv:gc.alloc.rate":
+  153.163 ±(99.9%) 7.437 MB/sec [Average]
+  (min, avg, max) = (143.397, 153.163, 169.169), stdev = 6.956
+  CI (99.9%): [145.727, 160.600] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv:gc.alloc.rate.norm":
+  59186.377 ±(99.9%) 15.545 B/op [Average]
+  (min, avg, max) = (59154.445, 59186.377, 59208.083), stdev = 14.541
+  CI (99.9%): [59170.832, 59201.922] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv:gc.count":
+  3.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (≈ 0, 0.200, 1.000), stdev = 0.414
+  CI (99.9%): [3.000, 3.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.invert_nv_nv:gc.time":
+  22.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (≈ 0, 1.467, 8.000), stdev = 3.044
+  CI (99.9%): [22.000, 22.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k
+# Parameters: (dim = 50_20)
+
+# Run progress: 25.00% complete, ETA 00:14:27
+# Fork: 1 of 3
+# Warmup Iteration   1: 54815.882 ns/op
+# Warmup Iteration   2: 50486.781 ns/op
+# Warmup Iteration   3: 55261.060 ns/op
+# Warmup Iteration   4: 52992.157 ns/op
+# Warmup Iteration   5: 46801.773 ns/op
+Iteration   1: 50900.005 ns/op
+                 gc.alloc.rate:      376.234 MB/sec
+                 gc.alloc.rate.norm: 20097.700 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 44724.706 ns/op
+                 gc.alloc.rate:      428.338 MB/sec
+                 gc.alloc.rate.norm: 20097.489 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   3: 46675.325 ns/op
+                 gc.alloc.rate:      410.296 MB/sec
+                 gc.alloc.rate.norm: 20097.560 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+Iteration   4: 46651.056 ns/op
+                 gc.alloc.rate:      410.477 MB/sec
+                 gc.alloc.rate.norm: 20097.557 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            5.000 ms
+
+Iteration   5: 48708.838 ns/op
+                 gc.alloc.rate:      393.159 MB/sec
+                 gc.alloc.rate.norm: 20097.626 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 26.39% complete, ETA 00:14:11
+# Fork: 2 of 3
+# Warmup Iteration   1: 56988.828 ns/op
+# Warmup Iteration   2: 55888.363 ns/op
+# Warmup Iteration   3: 52389.154 ns/op
+# Warmup Iteration   4: 59466.763 ns/op
+# Warmup Iteration   5: 49821.219 ns/op
+Iteration   1: 47683.126 ns/op
+                 gc.alloc.rate:      401.582 MB/sec
+                 gc.alloc.rate.norm: 20097.589 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 44892.765 ns/op
+                 gc.alloc.rate:      426.724 MB/sec
+                 gc.alloc.rate.norm: 20097.490 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   3: 46494.369 ns/op
+                 gc.alloc.rate:      411.952 MB/sec
+                 gc.alloc.rate.norm: 20097.555 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            5.000 ms
+
+Iteration   4: 48673.523 ns/op
+                 gc.alloc.rate:      393.636 MB/sec
+                 gc.alloc.rate.norm: 20097.624 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 45581.016 ns/op
+                 gc.alloc.rate:      420.268 MB/sec
+                 gc.alloc.rate.norm: 20097.513 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+
+# Run progress: 27.78% complete, ETA 00:13:54
+# Fork: 3 of 3
+# Warmup Iteration   1: 55590.437 ns/op
+# Warmup Iteration   2: 54397.832 ns/op
+# Warmup Iteration   3: 55823.166 ns/op
+# Warmup Iteration   4: 56511.147 ns/op
+# Warmup Iteration   5: 51858.669 ns/op
+Iteration   1: 46348.417 ns/op
+                 gc.alloc.rate:      413.323 MB/sec
+                 gc.alloc.rate.norm: 20097.545 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 42988.422 ns/op
+                 gc.alloc.rate:      445.476 MB/sec
+                 gc.alloc.rate.norm: 20097.429 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   3: 48668.532 ns/op
+                 gc.alloc.rate:      393.481 MB/sec
+                 gc.alloc.rate.norm: 20097.627 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+Iteration   4: 47701.744 ns/op
+                 gc.alloc.rate:      401.417 MB/sec
+                 gc.alloc.rate.norm: 20097.592 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            5.000 ms
+
+Iteration   5: 47667.035 ns/op
+                 gc.alloc.rate:      401.828 MB/sec
+                 gc.alloc.rate.norm: 20097.591 B/op
+                 gc.count:           ≈ 0 counts
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k":
+  46957.259 ±(99.9%) 2094.193 ns/op [Average]
+  (min, avg, max) = (42988.422, 46957.259, 50900.005), stdev = 1958.909
+  CI (99.9%): [44863.066, 49051.451] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k:gc.alloc.rate":
+  408.546 ±(99.9%) 18.382 MB/sec [Average]
+  (min, avg, max) = (376.234, 408.546, 445.476), stdev = 17.195
+  CI (99.9%): [390.164, 426.928] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k:gc.alloc.rate.norm":
+  20097.566 ±(99.9%) 0.072 B/op [Average]
+  (min, avg, max) = (20097.429, 20097.566, 20097.700), stdev = 0.068
+  CI (99.9%): [20097.493, 20097.638] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k:gc.count":
+  9.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (≈ 0, 0.600, 1.000), stdev = 0.507
+  CI (99.9%): [9.000, 9.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k:gc.time":
+  54.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (≈ 0, 3.600, 7.000), stdev = 3.112
+  CI (99.9%): [54.000, 54.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k
+# Parameters: (dim = 150_40)
+
+# Run progress: 29.17% complete, ETA 00:13:38
+# Fork: 1 of 3
+# Warmup Iteration   1: 811911.183 ns/op
+# Warmup Iteration   2: 775804.381 ns/op
+# Warmup Iteration   3: 777393.416 ns/op
+# Warmup Iteration   4: 830949.794 ns/op
+# Warmup Iteration   5: 782379.329 ns/op
+Iteration   1: 775123.705 ns/op
+                 gc.alloc.rate:      221.284 MB/sec
+                 gc.alloc.rate.norm: 180280.254 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+Iteration   2: 744519.069 ns/op
+                 gc.alloc.rate:      230.435 MB/sec
+                 gc.alloc.rate.norm: 180272.062 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 656394.325 ns/op
+                 gc.alloc.rate:      261.343 MB/sec
+                 gc.alloc.rate.norm: 180251.418 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   4: 663298.742 ns/op
+                 gc.alloc.rate:      258.630 MB/sec
+                 gc.alloc.rate.norm: 180253.704 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 658744.020 ns/op
+                 gc.alloc.rate:      260.403 MB/sec
+                 gc.alloc.rate.norm: 180251.712 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+
+# Run progress: 30.56% complete, ETA 00:13:22
+# Fork: 2 of 3
+# Warmup Iteration   1: 890765.149 ns/op
+# Warmup Iteration   2: 852606.920 ns/op
+# Warmup Iteration   3: 819758.306 ns/op
+# Warmup Iteration   4: 827749.836 ns/op
+# Warmup Iteration   5: 903995.320 ns/op
+Iteration   1: 698206.829 ns/op
+                 gc.alloc.rate:      245.900 MB/sec
+                 gc.alloc.rate.norm: 180262.021 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+Iteration   2: 702541.428 ns/op
+                 gc.alloc.rate:      244.447 MB/sec
+                 gc.alloc.rate.norm: 180262.710 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 697564.186 ns/op
+                 gc.alloc.rate:      246.166 MB/sec
+                 gc.alloc.rate.norm: 180261.675 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+Iteration   4: 678266.610 ns/op
+                 gc.alloc.rate:      253.162 MB/sec
+                 gc.alloc.rate.norm: 180257.019 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 685543.620 ns/op
+                 gc.alloc.rate:      250.499 MB/sec
+                 gc.alloc.rate.norm: 180259.033 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+
+# Run progress: 31.94% complete, ETA 00:13:06
+# Fork: 3 of 3
+# Warmup Iteration   1: 872174.202 ns/op
+# Warmup Iteration   2: 821995.809 ns/op
+# Warmup Iteration   3: 870817.866 ns/op
+# Warmup Iteration   4: 770318.147 ns/op
+# Warmup Iteration   5: 717194.318 ns/op
+Iteration   1: 757836.531 ns/op
+                 gc.alloc.rate:      226.563 MB/sec
+                 gc.alloc.rate.norm: 180275.263 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   2: 723769.820 ns/op
+                 gc.alloc.rate:      237.048 MB/sec
+                 gc.alloc.rate.norm: 180267.376 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 664467.240 ns/op
+                 gc.alloc.rate:      258.423 MB/sec
+                 gc.alloc.rate.norm: 180253.525 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+Iteration   4: 673856.827 ns/op
+                 gc.alloc.rate:      254.587 MB/sec
+                 gc.alloc.rate.norm: 180255.467 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 676025.827 ns/op
+                 gc.alloc.rate:      253.769 MB/sec
+                 gc.alloc.rate.norm: 180256.886 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            5.000 ms
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k":
+  697077.252 ±(99.9%) 39975.764 ns/op [Average]
+  (min, avg, max) = (656394.325, 697077.252, 775123.705), stdev = 37393.355
+  CI (99.9%): [657101.488, 737053.016] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k:gc.alloc.rate":
+  246.844 ±(99.9%) 13.599 MB/sec [Average]
+  (min, avg, max) = (221.284, 246.844, 261.343), stdev = 12.720
+  CI (99.9%): [233.245, 260.443] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k:gc.alloc.rate.norm":
+  180261.342 ±(99.9%) 9.451 B/op [Average]
+  (min, avg, max) = (180251.418, 180261.342, 180280.254), stdev = 8.841
+  CI (99.9%): [180251.890, 180270.793] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k:gc.count":
+  9.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (≈ 0, 0.600, 1.000), stdev = 0.507
+  CI (99.9%): [9.000, 9.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k:gc.time":
+  57.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (≈ 0, 3.800, 7.000), stdev = 3.256
+  CI (99.9%): [57.000, 57.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k
+# Parameters: (dim = 300_60)
+
+# Run progress: 33.33% complete, ETA 00:12:50
+# Fork: 1 of 3
+# Warmup Iteration   1: 5267786.010 ns/op
+# Warmup Iteration   2: 4677996.279 ns/op
+# Warmup Iteration   3: 4625691.743 ns/op
+# Warmup Iteration   4: 4473236.564 ns/op
+# Warmup Iteration   5: 4322340.948 ns/op
+Iteration   1: 4282187.872 ns/op
+                 gc.alloc.rate:      160.678 MB/sec
+                 gc.alloc.rate.norm: 723874.094 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 4249025.105 ns/op
+                 gc.alloc.rate:      161.940 MB/sec
+                 gc.alloc.rate.norm: 723842.599 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   3: 4291100.851 ns/op
+                 gc.alloc.rate:      160.363 MB/sec
+                 gc.alloc.rate.norm: 723874.094 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 4452583.370 ns/op
+                 gc.alloc.rate:      154.564 MB/sec
+                 gc.alloc.rate.norm: 724035.193 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            5.000 ms
+
+Iteration   5: 4338601.290 ns/op
+                 gc.alloc.rate:      158.612 MB/sec
+                 gc.alloc.rate.norm: 723914.460 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 34.72% complete, ETA 00:12:34
+# Fork: 2 of 3
+# Warmup Iteration   1: 4814538.571 ns/op
+# Warmup Iteration   2: 4490386.099 ns/op
+# Warmup Iteration   3: 4451841.593 ns/op
+# Warmup Iteration   4: 4492937.946 ns/op
+# Warmup Iteration   5: 4463195.175 ns/op
+Iteration   1: 4311186.296 ns/op
+                 gc.alloc.rate:      159.613 MB/sec
+                 gc.alloc.rate.norm: 723898.278 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 4286985.319 ns/op
+                 gc.alloc.rate:      160.515 MB/sec
+                 gc.alloc.rate.norm: 723874.213 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            5.000 ms
+
+Iteration   3: 4331089.247 ns/op
+                 gc.alloc.rate:      158.885 MB/sec
+                 gc.alloc.rate.norm: 723914.460 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 4420404.605 ns/op
+                 gc.alloc.rate:      155.687 MB/sec
+                 gc.alloc.rate.norm: 723992.193 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            5.000 ms
+
+Iteration   5: 4290730.983 ns/op
+                 gc.alloc.rate:      160.293 MB/sec
+                 gc.alloc.rate.norm: 723890.205 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 36.11% complete, ETA 00:12:18
+# Fork: 3 of 3
+# Warmup Iteration   1: 5097424.242 ns/op
+# Warmup Iteration   2: 4518123.874 ns/op
+# Warmup Iteration   3: 4552326.364 ns/op
+# Warmup Iteration   4: 4491873.214 ns/op
+# Warmup Iteration   5: 4279505.085 ns/op
+Iteration   1: 4157257.764 ns/op
+                 gc.alloc.rate:      165.494 MB/sec
+                 gc.alloc.rate.norm: 723773.052 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 4291910.874 ns/op
+                 gc.alloc.rate:      160.308 MB/sec
+                 gc.alloc.rate.norm: 723882.286 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            5.000 ms
+
+Iteration   3: 4226278.947 ns/op
+                 gc.alloc.rate:      162.749 MB/sec
+                 gc.alloc.rate.norm: 723834.577 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 4257228.662 ns/op
+                 gc.alloc.rate:      161.626 MB/sec
+                 gc.alloc.rate.norm: 723868.943 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            5.000 ms
+
+Iteration   5: 4260500.000 ns/op
+                 gc.alloc.rate:      161.507 MB/sec
+                 gc.alloc.rate.norm: 723850.351 B/op
+                 gc.count:           ≈ 0 counts
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k":
+  4296471.413 ±(99.9%) 77032.446 ns/op [Average]
+  (min, avg, max) = (4157257.764, 4296471.413, 4452583.370), stdev = 72056.197
+  CI (99.9%): [4219438.967, 4373503.858] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k:gc.alloc.rate":
+  160.189 ±(99.9%) 2.834 MB/sec [Average]
+  (min, avg, max) = (154.564, 160.189, 165.494), stdev = 2.651
+  CI (99.9%): [157.355, 163.023] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k:gc.alloc.rate.norm":
+  723887.933 ±(99.9%) 66.733 B/op [Average]
+  (min, avg, max) = (723773.052, 723887.933, 724035.193), stdev = 62.422
+  CI (99.9%): [723821.200, 723954.666] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k:gc.count":
+  6.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (≈ 0, 0.400, 1.000), stdev = 0.507
+  CI (99.9%): [6.000, 6.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_k_nv_by_nv_k:gc.time":
+  31.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (≈ 0, 2.067, 6.000), stdev = 2.631
+  CI (99.9%): [31.000, 31.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk
+# Parameters: (dim = 50_20)
+
+# Run progress: 37.50% complete, ETA 00:12:02
+# Fork: 1 of 3
+# Warmup Iteration   1: 117804.494 ns/op
+# Warmup Iteration   2: 103412.154 ns/op
+# Warmup Iteration   3: 113774.685 ns/op
+# Warmup Iteration   4: 108025.622 ns/op
+# Warmup Iteration   5: 107166.940 ns/op
+Iteration   1: 108144.607 ns/op
+                 gc.alloc.rate:      177.161 MB/sec
+                 gc.alloc.rate.norm: 20099.607 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 114199.213 ns/op
+                 gc.alloc.rate:      167.779 MB/sec
+                 gc.alloc.rate.norm: 20099.816 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+Iteration   3: 113954.770 ns/op
+                 gc.alloc.rate:      168.139 MB/sec
+                 gc.alloc.rate.norm: 20099.808 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 106702.113 ns/op
+                 gc.alloc.rate:      179.565 MB/sec
+                 gc.alloc.rate.norm: 20099.564 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 105813.461 ns/op
+                 gc.alloc.rate:      181.065 MB/sec
+                 gc.alloc.rate.norm: 20099.532 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 38.89% complete, ETA 00:11:45
+# Fork: 2 of 3
+# Warmup Iteration   1: 114768.059 ns/op
+# Warmup Iteration   2: 108659.783 ns/op
+# Warmup Iteration   3: 106782.622 ns/op
+# Warmup Iteration   4: 110933.667 ns/op
+# Warmup Iteration   5: 108285.182 ns/op
+Iteration   1: 110837.637 ns/op
+                 gc.alloc.rate:      172.870 MB/sec
+                 gc.alloc.rate.norm: 20101.126 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 117737.355 ns/op
+                 gc.alloc.rate:      162.733 MB/sec
+                 gc.alloc.rate.norm: 20099.912 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            8.000 ms
+
+Iteration   3: 107245.272 ns/op
+                 gc.alloc.rate:      178.658 MB/sec
+                 gc.alloc.rate.norm: 20099.593 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 110918.120 ns/op
+                 gc.alloc.rate:      172.745 MB/sec
+                 gc.alloc.rate.norm: 20099.704 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 111139.076 ns/op
+                 gc.alloc.rate:      172.396 MB/sec
+                 gc.alloc.rate.norm: 20099.702 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 40.28% complete, ETA 00:11:29
+# Fork: 3 of 3
+# Warmup Iteration   1: 121667.581 ns/op
+# Warmup Iteration   2: 105609.500 ns/op
+# Warmup Iteration   3: 108891.150 ns/op
+# Warmup Iteration   4: 110980.512 ns/op
+# Warmup Iteration   5: 106723.249 ns/op
+Iteration   1: 111167.430 ns/op
+                 gc.alloc.rate:      172.353 MB/sec
+                 gc.alloc.rate.norm: 20099.699 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 116414.169 ns/op
+                 gc.alloc.rate:      164.578 MB/sec
+                 gc.alloc.rate.norm: 20099.883 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   3: 106432.429 ns/op
+                 gc.alloc.rate:      180.018 MB/sec
+                 gc.alloc.rate.norm: 20099.568 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 101798.546 ns/op
+                 gc.alloc.rate:      188.206 MB/sec
+                 gc.alloc.rate.norm: 20099.405 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 105544.433 ns/op
+                 gc.alloc.rate:      181.527 MB/sec
+                 gc.alloc.rate.norm: 20099.523 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk":
+  109869.909 ±(99.9%) 4759.684 ns/op [Average]
+  (min, avg, max) = (101798.546, 109869.909, 117737.355), stdev = 4452.211
+  CI (99.9%): [105110.225, 114629.593] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk:gc.alloc.rate":
+  174.653 ±(99.9%) 7.547 MB/sec [Average]
+  (min, avg, max) = (162.733, 174.653, 188.206), stdev = 7.060
+  CI (99.9%): [167.105, 182.200] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk:gc.alloc.rate.norm":
+  20099.763 ±(99.9%) 0.431 B/op [Average]
+  (min, avg, max) = (20099.405, 20099.763, 20101.126), stdev = 0.404
+  CI (99.9%): [20099.331, 20100.194] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk:gc.count":
+  4.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (≈ 0, 0.267, 1.000), stdev = 0.458
+  CI (99.9%): [4.000, 4.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk:gc.time":
+  27.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (≈ 0, 1.800, 8.000), stdev = 3.121
+  CI (99.9%): [27.000, 27.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk
+# Parameters: (dim = 150_40)
+
+# Run progress: 41.67% complete, ETA 00:11:13
+# Fork: 1 of 3
+# Warmup Iteration   1: 2932662.573 ns/op
+# Warmup Iteration   2: 3031373.874 ns/op
+# Warmup Iteration   3: 3023568.675 ns/op
+# Warmup Iteration   4: 2613776.104 ns/op
+# Warmup Iteration   5: 3009764.371 ns/op
+Iteration   1: 2840206.941 ns/op
+                 gc.alloc.rate:      60.631 MB/sec
+                 gc.alloc.rate.norm: 180794.901 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   2: 3006512.985 ns/op
+                 gc.alloc.rate:      57.245 MB/sec
+                 gc.alloc.rate.norm: 180832.931 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 2647765.390 ns/op
+                 gc.alloc.rate:      64.955 MB/sec
+                 gc.alloc.rate.norm: 180749.358 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 2741779.456 ns/op
+                 gc.alloc.rate:      62.729 MB/sec
+                 gc.alloc.rate.norm: 180768.196 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 2866751.636 ns/op
+                 gc.alloc.rate:      60.007 MB/sec
+                 gc.alloc.rate.norm: 180797.747 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 43.06% complete, ETA 00:10:57
+# Fork: 2 of 3
+# Warmup Iteration   1: 3176054.430 ns/op
+# Warmup Iteration   2: 2667897.105 ns/op
+# Warmup Iteration   3: 2696875.806 ns/op
+# Warmup Iteration   4: 2760753.825 ns/op
+# Warmup Iteration   5: 2689841.711 ns/op
+Iteration   1: 2909001.445 ns/op
+                 gc.alloc.rate:      59.140 MB/sec
+                 gc.alloc.rate.norm: 180808.601 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            5.000 ms
+
+Iteration   2: 2736414.578 ns/op
+                 gc.alloc.rate:      62.873 MB/sec
+                 gc.alloc.rate.norm: 180770.768 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 3089409.538 ns/op
+                 gc.alloc.rate:      55.761 MB/sec
+                 gc.alloc.rate.norm: 180852.960 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 2949799.414 ns/op
+                 gc.alloc.rate:      58.328 MB/sec
+                 gc.alloc.rate.norm: 180817.593 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 3019167.368 ns/op
+                 gc.alloc.rate:      57.050 MB/sec
+                 gc.alloc.rate.norm: 180836.427 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 44.44% complete, ETA 00:10:41
+# Fork: 3 of 3
+# Warmup Iteration   1: 3142316.667 ns/op
+# Warmup Iteration   2: 3123738.390 ns/op
+# Warmup Iteration   3: 3012827.545 ns/op
+# Warmup Iteration   4: 2953096.774 ns/op
+# Warmup Iteration   5: 2768901.381 ns/op
+Iteration   1: 2839143.484 ns/op
+                 gc.alloc.rate:      60.653 MB/sec
+                 gc.alloc.rate.norm: 180794.822 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 2877378.143 ns/op
+                 gc.alloc.rate:      59.791 MB/sec
+                 gc.alloc.rate.norm: 180802.377 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 3219830.560 ns/op
+                 gc.alloc.rate:      53.451 MB/sec
+                 gc.alloc.rate.norm: 180882.381 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 2823927.451 ns/op
+                 gc.alloc.rate:      60.980 MB/sec
+                 gc.alloc.rate.norm: 180787.261 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 2941034.599 ns/op
+                 gc.alloc.rate:      58.505 MB/sec
+                 gc.alloc.rate.norm: 180815.509 B/op
+                 gc.count:           ≈ 0 counts
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk":
+  2900541.533 ±(99.9%) 155985.824 ns/op [Average]
+  (min, avg, max) = (2647765.390, 2900541.533, 3219830.560), stdev = 145909.237
+  CI (99.9%): [2744555.708, 3056527.357] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk:gc.alloc.rate":
+  59.473 ±(99.9%) 3.141 MB/sec [Average]
+  (min, avg, max) = (53.451, 59.473, 64.955), stdev = 2.938
+  CI (99.9%): [56.332, 62.614] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk:gc.alloc.rate.norm":
+  180807.455 ±(99.9%) 36.645 B/op [Average]
+  (min, avg, max) = (180749.358, 180807.455, 180882.381), stdev = 34.278
+  CI (99.9%): [180770.810, 180844.100] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk:gc.count":
+  2.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (≈ 0, 0.133, 1.000), stdev = 0.352
+  CI (99.9%): [2.000, 2.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk:gc.time":
+  11.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (≈ 0, 0.733, 6.000), stdev = 1.944
+  CI (99.9%): [11.000, 11.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk
+# Parameters: (dim = 300_60)
+
+# Run progress: 45.83% complete, ETA 00:10:25
+# Fork: 1 of 3
+# Warmup Iteration   1: 2989879.882 ns/op
+# Warmup Iteration   2: 2463338.537 ns/op
+# Warmup Iteration   3: 2261280.089 ns/op
+# Warmup Iteration   4: 2133795.781 ns/op
+# Warmup Iteration   5: 2134146.186 ns/op
+Iteration   1: 2205620.637 ns/op
+                 gc.alloc.rate:      315.259 MB/sec
+                 gc.alloc.rate.norm: 731481.150 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            4.000 ms
+
+Iteration   2: 2165441.145 ns/op
+                 gc.alloc.rate:      321.092 MB/sec
+                 gc.alloc.rate.norm: 731448.251 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            4.000 ms
+
+Iteration   3: 2143233.511 ns/op
+                 gc.alloc.rate:      324.408 MB/sec
+                 gc.alloc.rate.norm: 731419.532 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            4.000 ms
+
+Iteration   4: 2142823.504 ns/op
+                 gc.alloc.rate:      324.466 MB/sec
+                 gc.alloc.rate.norm: 731416.009 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            4.000 ms
+
+Iteration   5: 2133549.043 ns/op
+                 gc.alloc.rate:      325.857 MB/sec
+                 gc.alloc.rate.norm: 731395.787 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            4.000 ms
+
+
+# Run progress: 47.22% complete, ETA 00:10:09
+# Fork: 2 of 3
+# Warmup Iteration   1: 2829033.799 ns/op
+# Warmup Iteration   2: 2465073.479 ns/op
+# Warmup Iteration   3: 2270918.919 ns/op
+# Warmup Iteration   4: 2136858.650 ns/op
+# Warmup Iteration   5: 2141880.932 ns/op
+Iteration   1: 2145038.936 ns/op
+                 gc.alloc.rate:      324.127 MB/sec
+                 gc.alloc.rate.norm: 731421.106 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            4.000 ms
+
+Iteration   2: 2131713.936 ns/op
+                 gc.alloc.rate:      326.147 MB/sec
+                 gc.alloc.rate.norm: 731419.736 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            5.000 ms
+
+Iteration   3: 2127357.643 ns/op
+                 gc.alloc.rate:      326.823 MB/sec
+                 gc.alloc.rate.norm: 731415.907 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            4.000 ms
+
+Iteration   4: 2150273.048 ns/op
+                 gc.alloc.rate:      323.346 MB/sec
+                 gc.alloc.rate.norm: 731416.984 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            4.000 ms
+
+Iteration   5: 2129448.301 ns/op
+                 gc.alloc.rate:      326.492 MB/sec
+                 gc.alloc.rate.norm: 731392.357 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            4.000 ms
+
+
+# Run progress: 48.61% complete, ETA 00:09:53
+# Fork: 3 of 3
+# Warmup Iteration   1: 2884760.172 ns/op
+# Warmup Iteration   2: 2478773.956 ns/op
+# Warmup Iteration   3: 2268195.506 ns/op
+# Warmup Iteration   4: 2143869.936 ns/op
+# Warmup Iteration   5: 2152741.113 ns/op
+Iteration   1: 2145425.561 ns/op
+                 gc.alloc.rate:      324.076 MB/sec
+                 gc.alloc.rate.norm: 731431.298 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            4.000 ms
+
+Iteration   2: 2132851.915 ns/op
+                 gc.alloc.rate:      325.983 MB/sec
+                 gc.alloc.rate.norm: 731420.043 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            4.000 ms
+
+Iteration   3: 2127657.309 ns/op
+                 gc.alloc.rate:      326.774 MB/sec
+                 gc.alloc.rate.norm: 731411.890 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            4.000 ms
+
+Iteration   4: 2181157.530 ns/op
+                 gc.alloc.rate:      318.774 MB/sec
+                 gc.alloc.rate.norm: 731442.011 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            4.000 ms
+
+Iteration   5: 2123547.246 ns/op
+                 gc.alloc.rate:      327.388 MB/sec
+                 gc.alloc.rate.norm: 731388.119 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            4.000 ms
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk":
+  2145675.951 ±(99.9%) 24241.286 ns/op [Average]
+  (min, avg, max) = (2123547.246, 2145675.951, 2205620.637), stdev = 22675.314
+  CI (99.9%): [2121434.665, 2169917.237] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk:gc.alloc.rate":
+  324.068 ±(99.9%) 3.595 MB/sec [Average]
+  (min, avg, max) = (315.259, 324.068, 327.388), stdev = 3.362
+  CI (99.9%): [320.473, 327.662] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk:gc.alloc.rate.norm":
+  731421.345 ±(99.9%) 24.906 B/op [Average]
+  (min, avg, max) = (731388.119, 731421.345, 731481.150), stdev = 23.297
+  CI (99.9%): [731396.440, 731446.251] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk:gc.count":
+  15.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (1.000, 1.000, 1.000), stdev = 0.001
+  CI (99.9%): [15.000, 15.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_kk_kk:gc.time":
+  61.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (4.000, 4.067, 5.000), stdev = 0.258
+  CI (99.9%): [61.000, 61.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv
+# Parameters: (dim = 50_20)
+
+# Run progress: 50.00% complete, ETA 00:09:36
+# Fork: 1 of 3
+# Warmup Iteration   1: 23524.276 ns/op
+# Warmup Iteration   2: 22860.320 ns/op
+# Warmup Iteration   3: 22362.516 ns/op
+# Warmup Iteration   4: 24156.962 ns/op
+# Warmup Iteration   5: 23880.825 ns/op
+Iteration   1: 25852.165 ns/op
+                 gc.alloc.rate:      121.502 MB/sec
+                 gc.alloc.rate.norm: 3296.862 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 24496.531 ns/op
+                 gc.alloc.rate:      128.281 MB/sec
+                 gc.alloc.rate.norm: 3296.818 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 22735.745 ns/op
+                 gc.alloc.rate:      138.219 MB/sec
+                 gc.alloc.rate.norm: 3296.761 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+Iteration   4: 22384.110 ns/op
+                 gc.alloc.rate:      140.380 MB/sec
+                 gc.alloc.rate.norm: 3296.747 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 22984.506 ns/op
+                 gc.alloc.rate:      136.724 MB/sec
+                 gc.alloc.rate.norm: 3296.765 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 51.39% complete, ETA 00:09:20
+# Fork: 2 of 3
+# Warmup Iteration   1: 26150.617 ns/op
+# Warmup Iteration   2: 21958.187 ns/op
+# Warmup Iteration   3: 23177.401 ns/op
+# Warmup Iteration   4: 26247.974 ns/op
+# Warmup Iteration   5: 24600.492 ns/op
+Iteration   1: 24420.676 ns/op
+                 gc.alloc.rate:      128.624 MB/sec
+                 gc.alloc.rate.norm: 3296.814 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 22711.179 ns/op
+                 gc.alloc.rate:      138.313 MB/sec
+                 gc.alloc.rate.norm: 3296.758 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 24145.573 ns/op
+                 gc.alloc.rate:      130.096 MB/sec
+                 gc.alloc.rate.norm: 3296.807 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            8.000 ms
+
+Iteration   4: 22575.697 ns/op
+                 gc.alloc.rate:      139.172 MB/sec
+                 gc.alloc.rate.norm: 3296.754 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 22874.311 ns/op
+                 gc.alloc.rate:      137.365 MB/sec
+                 gc.alloc.rate.norm: 3296.762 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 52.78% complete, ETA 00:09:04
+# Fork: 3 of 3
+# Warmup Iteration   1: 27820.283 ns/op
+# Warmup Iteration   2: 23908.334 ns/op
+# Warmup Iteration   3: 25353.616 ns/op
+# Warmup Iteration   4: 21913.075 ns/op
+# Warmup Iteration   5: 26535.421 ns/op
+Iteration   1: 25101.662 ns/op
+                 gc.alloc.rate:      125.137 MB/sec
+                 gc.alloc.rate.norm: 3296.838 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 24647.982 ns/op
+                 gc.alloc.rate:      127.453 MB/sec
+                 gc.alloc.rate.norm: 3296.821 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 23995.081 ns/op
+                 gc.alloc.rate:      130.914 MB/sec
+                 gc.alloc.rate.norm: 3296.803 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 22590.201 ns/op
+                 gc.alloc.rate:      139.080 MB/sec
+                 gc.alloc.rate.norm: 3296.752 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            7.000 ms
+
+Iteration   5: 20991.683 ns/op
+                 gc.alloc.rate:      149.681 MB/sec
+                 gc.alloc.rate.norm: 3296.700 B/op
+                 gc.count:           ≈ 0 counts
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv":
+  23500.474 ±(99.9%) 1370.285 ns/op [Average]
+  (min, avg, max) = (20991.683, 23500.474, 25852.165), stdev = 1281.766
+  CI (99.9%): [22130.188, 24870.759] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv:gc.alloc.rate":
+  134.063 ±(99.9%) 7.868 MB/sec [Average]
+  (min, avg, max) = (121.502, 134.063, 149.681), stdev = 7.359
+  CI (99.9%): [126.195, 141.930] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv:gc.alloc.rate.norm":
+  3296.784 ±(99.9%) 0.046 B/op [Average]
+  (min, avg, max) = (3296.700, 3296.784, 3296.862), stdev = 0.043
+  CI (99.9%): [3296.738, 3296.830] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv:gc.count":
+  3.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (≈ 0, 0.200, 1.000), stdev = 0.414
+  CI (99.9%): [3.000, 3.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv:gc.time":
+  22.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (≈ 0, 1.467, 8.000), stdev = 3.044
+  CI (99.9%): [22.000, 22.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv
+# Parameters: (dim = 150_40)
+
+# Run progress: 54.17% complete, ETA 00:08:48
+# Fork: 1 of 3
+# Warmup Iteration   1: 239686.780 ns/op
+# Warmup Iteration   2: 221080.433 ns/op
+# Warmup Iteration   3: 238739.758 ns/op
+# Warmup Iteration   4: 248500.370 ns/op
+# Warmup Iteration   5: 206337.505 ns/op
+Iteration   1: 214444.759 ns/op
+                 gc.alloc.rate:      57.460 MB/sec
+                 gc.alloc.rate.norm: 12947.018 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 220870.144 ns/op
+                 gc.alloc.rate:      55.780 MB/sec
+                 gc.alloc.rate.norm: 12948.375 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 194979.090 ns/op
+                 gc.alloc.rate:      63.159 MB/sec
+                 gc.alloc.rate.norm: 12942.104 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 218678.977 ns/op
+                 gc.alloc.rate:      56.336 MB/sec
+                 gc.alloc.rate.norm: 12947.738 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 241959.315 ns/op
+                 gc.alloc.rate:      50.985 MB/sec
+                 gc.alloc.rate.norm: 12956.870 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 55.56% complete, ETA 00:08:32
+# Fork: 2 of 3
+# Warmup Iteration   1: 229323.385 ns/op
+# Warmup Iteration   2: 218186.438 ns/op
+# Warmup Iteration   3: 220395.793 ns/op
+# Warmup Iteration   4: 231000.000 ns/op
+# Warmup Iteration   5: 225093.193 ns/op
+Iteration   1: 222177.163 ns/op
+                 gc.alloc.rate:      55.528 MB/sec
+                 gc.alloc.rate.norm: 12948.717 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 222360.264 ns/op
+                 gc.alloc.rate:      55.408 MB/sec
+                 gc.alloc.rate.norm: 12948.898 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 205739.894 ns/op
+                 gc.alloc.rate:      59.869 MB/sec
+                 gc.alloc.rate.norm: 12944.635 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 212780.829 ns/op
+                 gc.alloc.rate:      57.955 MB/sec
+                 gc.alloc.rate.norm: 12946.636 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 238950.036 ns/op
+                 gc.alloc.rate:      51.592 MB/sec
+                 gc.alloc.rate.norm: 12956.146 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 56.94% complete, ETA 00:08:16
+# Fork: 3 of 3
+# Warmup Iteration   1: 266671.643 ns/op
+# Warmup Iteration   2: 232566.858 ns/op
+# Warmup Iteration   3: 205664.122 ns/op
+# Warmup Iteration   4: 229207.462 ns/op
+# Warmup Iteration   5: 219744.721 ns/op
+Iteration   1: 210376.811 ns/op
+                 gc.alloc.rate:      58.565 MB/sec
+                 gc.alloc.rate.norm: 12945.948 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   2: 221452.825 ns/op
+                 gc.alloc.rate:      55.633 MB/sec
+                 gc.alloc.rate.norm: 12948.676 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 216240.307 ns/op
+                 gc.alloc.rate:      56.973 MB/sec
+                 gc.alloc.rate.norm: 12947.431 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 238304.166 ns/op
+                 gc.alloc.rate:      51.773 MB/sec
+                 gc.alloc.rate.norm: 12952.707 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 222850.858 ns/op
+                 gc.alloc.rate:      55.302 MB/sec
+                 gc.alloc.rate.norm: 12952.005 B/op
+                 gc.count:           ≈ 0 counts
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv":
+  220144.362 ±(99.9%) 13456.737 ns/op [Average]
+  (min, avg, max) = (194979.090, 220144.362, 241959.315), stdev = 12587.441
+  CI (99.9%): [206687.625, 233601.100] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv:gc.alloc.rate":
+  56.155 ±(99.9%) 3.418 MB/sec [Average]
+  (min, avg, max) = (50.985, 56.155, 63.159), stdev = 3.198
+  CI (99.9%): [52.736, 59.573] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv:gc.alloc.rate.norm":
+  12948.927 ±(99.9%) 4.293 B/op [Average]
+  (min, avg, max) = (12942.104, 12948.927, 12956.870), stdev = 4.016
+  CI (99.9%): [12944.634, 12953.220] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv:gc.count":
+  ≈ 0 counts
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv
+# Parameters: (dim = 300_60)
+
+# Run progress: 58.33% complete, ETA 00:08:00
+# Fork: 1 of 3
+# Warmup Iteration   1: 943748.166 ns/op
+# Warmup Iteration   2: 1026837.335 ns/op
+# Warmup Iteration   3: 1002684.585 ns/op
+# Warmup Iteration   4: 945760.242 ns/op
+# Warmup Iteration   5: 941832.865 ns/op
+Iteration   1: 919586.633 ns/op
+                 gc.alloc.rate:      30.709 MB/sec
+                 gc.alloc.rate.norm: 29708.972 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            6.000 ms
+
+Iteration   2: 879566.317 ns/op
+                 gc.alloc.rate:      32.050 MB/sec
+                 gc.alloc.rate.norm: 29666.827 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 924008.536 ns/op
+                 gc.alloc.rate:      30.549 MB/sec
+                 gc.alloc.rate.norm: 29705.740 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 853503.776 ns/op
+                 gc.alloc.rate:      33.002 MB/sec
+                 gc.alloc.rate.norm: 29644.589 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 825078.478 ns/op
+                 gc.alloc.rate:      34.114 MB/sec
+                 gc.alloc.rate.norm: 29617.941 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 59.72% complete, ETA 00:07:44
+# Fork: 2 of 3
+# Warmup Iteration   1: 1022649.439 ns/op
+# Warmup Iteration   2: 950195.660 ns/op
+# Warmup Iteration   3: 918156.621 ns/op
+# Warmup Iteration   4: 980532.681 ns/op
+# Warmup Iteration   5: 937488.458 ns/op
+Iteration   1: 886426.114 ns/op
+                 gc.alloc.rate:      31.703 MB/sec
+                 gc.alloc.rate.norm: 29676.432 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            5.000 ms
+
+Iteration   2: 884533.627 ns/op
+                 gc.alloc.rate:      31.777 MB/sec
+                 gc.alloc.rate.norm: 29673.636 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 830960.772 ns/op
+                 gc.alloc.rate:      33.898 MB/sec
+                 gc.alloc.rate.norm: 29628.430 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 850533.615 ns/op
+                 gc.alloc.rate:      33.115 MB/sec
+                 gc.alloc.rate.norm: 29642.057 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 914970.222 ns/op
+                 gc.alloc.rate:      30.829 MB/sec
+                 gc.alloc.rate.norm: 29696.919 B/op
+                 gc.count:           ≈ 0 counts
+
+
+# Run progress: 61.11% complete, ETA 00:07:28
+# Fork: 3 of 3
+# Warmup Iteration   1: 1060472.890 ns/op
+# Warmup Iteration   2: 1044753.870 ns/op
+# Warmup Iteration   3: 901219.166 ns/op
+# Warmup Iteration   4: 971591.962 ns/op
+# Warmup Iteration   5: 1016488.597 ns/op
+Iteration   1: 953567.918 ns/op
+                 gc.alloc.rate:      29.533 MB/sec
+                 gc.alloc.rate.norm: 29738.719 B/op
+                 gc.count:           1.000 counts
+                 gc.time:            5.000 ms
+
+Iteration   2: 857763.706 ns/op
+                 gc.alloc.rate:      32.760 MB/sec
+                 gc.alloc.rate.norm: 29649.411 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   3: 858190.103 ns/op
+                 gc.alloc.rate:      32.715 MB/sec
+                 gc.alloc.rate.norm: 29651.979 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   4: 889267.511 ns/op
+                 gc.alloc.rate:      31.726 MB/sec
+                 gc.alloc.rate.norm: 29680.203 B/op
+                 gc.count:           ≈ 0 counts
+
+Iteration   5: 929032.285 ns/op
+                 gc.alloc.rate:      30.258 MB/sec
+                 gc.alloc.rate.norm: 29712.107 B/op
+                 gc.count:           ≈ 0 counts
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv":
+  883799.308 ±(99.9%) 40844.990 ns/op [Average]
+  (min, avg, max) = (825078.478, 883799.308, 953567.918), stdev = 38206.429
+  CI (99.9%): [842954.318, 924644.297] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv:gc.alloc.rate":
+  31.916 ±(99.9%) 1.451 MB/sec [Average]
+  (min, avg, max) = (29.533, 31.916, 34.114), stdev = 1.357
+  CI (99.9%): [30.465, 33.367] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv:gc.alloc.rate.norm":
+  29672.931 ±(99.9%) 36.889 B/op [Average]
+  (min, avg, max) = (29617.941, 29672.931, 29738.719), stdev = 34.506
+  CI (99.9%): [29636.042, 29709.820] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv:gc.count":
+  3.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (≈ 0, 0.200, 1.000), stdev = 0.414
+  CI (99.9%): [3.000, 3.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.multiply_nv_k_by_k_nv:gc.time":
+  16.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (≈ 0, 1.067, 6.000), stdev = 2.219
+  CI (99.9%): [16.000, 16.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix
+# Parameters: (dim = 50_20)
+
+# Run progress: 62.50% complete, ETA 00:07:12
+# Fork: 1 of 3
+# Warmup Iteration   1: 9451.888 ns/op
+# Warmup Iteration   2: 4564.790 ns/op
+# Warmup Iteration   3: 4555.961 ns/op
+# Warmup Iteration   4: 4557.841 ns/op
+# Warmup Iteration   5: 4563.672 ns/op
+Iteration   1: 4521.452 ns/op
+                 gc.alloc.rate:      4234.679 MB/sec
+                 gc.alloc.rate.norm: 20096.151 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            27.000 ms
+
+Iteration   2: 4492.448 ns/op
+                 gc.alloc.rate:      4263.782 MB/sec
+                 gc.alloc.rate.norm: 20096.150 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            27.000 ms
+
+Iteration   3: 4507.813 ns/op
+                 gc.alloc.rate:      4249.547 MB/sec
+                 gc.alloc.rate.norm: 20096.150 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            28.000 ms
+
+Iteration   4: 4576.821 ns/op
+                 gc.alloc.rate:      4185.142 MB/sec
+                 gc.alloc.rate.norm: 20096.153 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            27.000 ms
+
+Iteration   5: 4504.282 ns/op
+                 gc.alloc.rate:      4253.094 MB/sec
+                 gc.alloc.rate.norm: 20096.150 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            28.000 ms
+
+
+# Run progress: 63.89% complete, ETA 00:06:56
+# Fork: 2 of 3
+# Warmup Iteration   1: 9263.410 ns/op
+# Warmup Iteration   2: 4586.656 ns/op
+# Warmup Iteration   3: 4528.478 ns/op
+# Warmup Iteration   4: 4536.813 ns/op
+# Warmup Iteration   5: 4597.514 ns/op
+Iteration   1: 4560.082 ns/op
+                 gc.alloc.rate:      4199.735 MB/sec
+                 gc.alloc.rate.norm: 20096.152 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            27.000 ms
+
+Iteration   2: 4538.686 ns/op
+                 gc.alloc.rate:      4220.787 MB/sec
+                 gc.alloc.rate.norm: 20096.151 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            27.000 ms
+
+Iteration   3: 4533.514 ns/op
+                 gc.alloc.rate:      4225.519 MB/sec
+                 gc.alloc.rate.norm: 20096.151 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            28.000 ms
+
+Iteration   4: 4544.175 ns/op
+                 gc.alloc.rate:      4213.766 MB/sec
+                 gc.alloc.rate.norm: 20096.152 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            27.000 ms
+
+Iteration   5: 4500.212 ns/op
+                 gc.alloc.rate:      4256.939 MB/sec
+                 gc.alloc.rate.norm: 20096.150 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            26.000 ms
+
+
+# Run progress: 65.28% complete, ETA 00:06:40
+# Fork: 3 of 3
+# Warmup Iteration   1: 9326.967 ns/op
+# Warmup Iteration   2: 4544.938 ns/op
+# Warmup Iteration   3: 4585.471 ns/op
+# Warmup Iteration   4: 4544.892 ns/op
+# Warmup Iteration   5: 4577.758 ns/op
+Iteration   1: 4521.828 ns/op
+                 gc.alloc.rate:      4236.168 MB/sec
+                 gc.alloc.rate.norm: 20096.151 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            27.000 ms
+
+Iteration   2: 4538.069 ns/op
+                 gc.alloc.rate:      4219.357 MB/sec
+                 gc.alloc.rate.norm: 20096.152 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            27.000 ms
+
+Iteration   3: 4562.534 ns/op
+                 gc.alloc.rate:      4198.504 MB/sec
+                 gc.alloc.rate.norm: 20096.152 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            28.000 ms
+
+Iteration   4: 4577.421 ns/op
+                 gc.alloc.rate:      4184.964 MB/sec
+                 gc.alloc.rate.norm: 20096.153 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            27.000 ms
+
+Iteration   5: 4521.180 ns/op
+                 gc.alloc.rate:      4237.103 MB/sec
+                 gc.alloc.rate.norm: 20096.151 B/op
+                 gc.count:           6.000 counts
+                 gc.time:            23.000 ms
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix":
+  4533.368 ±(99.9%) 28.936 ns/op [Average]
+  (min, avg, max) = (4492.448, 4533.368, 4577.421), stdev = 27.067
+  CI (99.9%): [4504.431, 4562.304] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix:gc.alloc.rate":
+  4225.272 ±(99.9%) 27.087 MB/sec [Average]
+  (min, avg, max) = (4184.964, 4225.272, 4263.782), stdev = 25.337
+  CI (99.9%): [4198.185, 4252.359] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix:gc.alloc.rate.norm":
+  20096.151 ±(99.9%) 0.001 B/op [Average]
+  (min, avg, max) = (20096.150, 20096.151, 20096.153), stdev = 0.001
+  CI (99.9%): [20096.150, 20096.152] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix:gc.count":
+  104.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (6.000, 6.933, 7.000), stdev = 0.258
+  CI (99.9%): [104.000, 104.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix:gc.time":
+  404.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (23.000, 26.933, 28.000), stdev = 1.223
+  CI (99.9%): [404.000, 404.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix
+# Parameters: (dim = 150_40)
+
+# Run progress: 66.67% complete, ETA 00:06:24
+# Fork: 1 of 3
+# Warmup Iteration   1: 39916.446 ns/op
+# Warmup Iteration   2: 22267.612 ns/op
+# Warmup Iteration   3: 21742.010 ns/op
+# Warmup Iteration   4: 21237.144 ns/op
+# Warmup Iteration   5: 22414.336 ns/op
+Iteration   1: 22168.065 ns/op
+                 gc.alloc.rate:      7739.292 MB/sec
+                 gc.alloc.rate.norm: 180101.243 B/op
+                 gc.count:           14.000 counts
+                 gc.time:            53.000 ms
+
+Iteration   2: 21753.751 ns/op
+                 gc.alloc.rate:      7887.326 MB/sec
+                 gc.alloc.rate.norm: 180101.168 B/op
+                 gc.count:           15.000 counts
+                 gc.time:            61.000 ms
+
+Iteration   3: 21710.846 ns/op
+                 gc.alloc.rate:      7902.718 MB/sec
+                 gc.alloc.rate.norm: 180101.161 B/op
+                 gc.count:           16.000 counts
+                 gc.time:            63.000 ms
+
+Iteration   4: 21276.865 ns/op
+                 gc.alloc.rate:      8062.727 MB/sec
+                 gc.alloc.rate.norm: 180101.049 B/op
+                 gc.count:           15.000 counts
+                 gc.time:            58.000 ms
+
+Iteration   5: 21340.345 ns/op
+                 gc.alloc.rate:      8039.877 MB/sec
+                 gc.alloc.rate.norm: 180101.072 B/op
+                 gc.count:           15.000 counts
+                 gc.time:            58.000 ms
+
+
+# Run progress: 68.06% complete, ETA 00:06:08
+# Fork: 2 of 3
+# Warmup Iteration   1: 42671.395 ns/op
+# Warmup Iteration   2: 22380.935 ns/op
+# Warmup Iteration   3: 21289.426 ns/op
+# Warmup Iteration   4: 21415.568 ns/op
+# Warmup Iteration   5: 21135.019 ns/op
+Iteration   1: 21632.919 ns/op
+                 gc.alloc.rate:      7930.665 MB/sec
+                 gc.alloc.rate.norm: 180101.137 B/op
+                 gc.count:           15.000 counts
+                 gc.time:            58.000 ms
+
+Iteration   2: 21400.062 ns/op
+                 gc.alloc.rate:      8017.417 MB/sec
+                 gc.alloc.rate.norm: 180101.093 B/op
+                 gc.count:           15.000 counts
+                 gc.time:            60.000 ms
+
+Iteration   3: 21699.328 ns/op
+                 gc.alloc.rate:      7907.169 MB/sec
+                 gc.alloc.rate.norm: 180101.148 B/op
+                 gc.count:           15.000 counts
+                 gc.time:            59.000 ms
+
+Iteration   4: 21403.344 ns/op
+                 gc.alloc.rate:      8016.924 MB/sec
+                 gc.alloc.rate.norm: 180101.078 B/op
+                 gc.count:           16.000 counts
+                 gc.time:            62.000 ms
+
+Iteration   5: 21371.817 ns/op
+                 gc.alloc.rate:      8028.139 MB/sec
+                 gc.alloc.rate.norm: 180101.057 B/op
+                 gc.count:           15.000 counts
+                 gc.time:            62.000 ms
+
+
+# Run progress: 69.44% complete, ETA 00:05:52
+# Fork: 3 of 3
+# Warmup Iteration   1: 50497.215 ns/op
+# Warmup Iteration   2: 24487.904 ns/op
+# Warmup Iteration   3: 22693.944 ns/op
+# Warmup Iteration   4: 22896.746 ns/op
+# Warmup Iteration   5: 22054.210 ns/op
+Iteration   1: 21537.642 ns/op
+                 gc.alloc.rate:      7957.677 MB/sec
+                 gc.alloc.rate.norm: 180101.123 B/op
+                 gc.count:           16.000 counts
+                 gc.time:            65.000 ms
+
+Iteration   2: 21544.891 ns/op
+                 gc.alloc.rate:      7963.332 MB/sec
+                 gc.alloc.rate.norm: 180101.129 B/op
+                 gc.count:           15.000 counts
+                 gc.time:            59.000 ms
+
+Iteration   3: 22234.653 ns/op
+                 gc.alloc.rate:      7716.446 MB/sec
+                 gc.alloc.rate.norm: 180101.288 B/op
+                 gc.count:           14.000 counts
+                 gc.time:            53.000 ms
+
+Iteration   4: 24816.175 ns/op
+                 gc.alloc.rate:      6912.957 MB/sec
+                 gc.alloc.rate.norm: 180101.911 B/op
+                 gc.count:           14.000 counts
+                 gc.time:            57.000 ms
+
+Iteration   5: 22360.806 ns/op
+                 gc.alloc.rate:      7672.474 MB/sec
+                 gc.alloc.rate.norm: 180101.313 B/op
+                 gc.count:           14.000 counts
+                 gc.time:            56.000 ms
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix":
+  21883.434 ±(99.9%) 938.942 ns/op [Average]
+  (min, avg, max) = (21276.865, 21883.434, 24816.175), stdev = 878.287
+  CI (99.9%): [20944.492, 22822.375] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix:gc.alloc.rate":
+  7850.343 ±(99.9%) 305.995 MB/sec [Average]
+  (min, avg, max) = (6912.957, 7850.343, 8062.727), stdev = 286.228
+  CI (99.9%): [7544.347, 8156.338] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix:gc.alloc.rate.norm":
+  180101.198 ±(99.9%) 0.227 B/op [Average]
+  (min, avg, max) = (180101.049, 180101.198, 180101.911), stdev = 0.213
+  CI (99.9%): [180100.971, 180101.425] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix:gc.count":
+  224.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (14.000, 14.933, 16.000), stdev = 0.704
+  CI (99.9%): [224.000, 224.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix:gc.time":
+  884.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (53.000, 58.933, 65.000), stdev = 3.411
+  CI (99.9%): [884.000, 884.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix
+# Parameters: (dim = 300_60)
+
+# Run progress: 70.83% complete, ETA 00:05:36
+# Fork: 1 of 3
+# Warmup Iteration   1: 148318.409 ns/op
+# Warmup Iteration   2: 100579.072 ns/op
+# Warmup Iteration   3: 87457.562 ns/op
+# Warmup Iteration   4: 88155.883 ns/op
+# Warmup Iteration   5: 87726.069 ns/op
+Iteration   1: 87889.084 ns/op
+                 gc.alloc.rate:      7784.983 MB/sec
+                 gc.alloc.rate.norm: 720173.043 B/op
+                 gc.count:           25.000 counts
+                 gc.time:            78.000 ms
+
+Iteration   2: 89230.673 ns/op
+                 gc.alloc.rate:      7671.764 MB/sec
+                 gc.alloc.rate.norm: 720174.119 B/op
+                 gc.count:           25.000 counts
+                 gc.time:            81.000 ms
+
+Iteration   3: 89329.203 ns/op
+                 gc.alloc.rate:      7663.684 MB/sec
+                 gc.alloc.rate.norm: 720174.267 B/op
+                 gc.count:           25.000 counts
+                 gc.time:            78.000 ms
+
+Iteration   4: 87028.597 ns/op
+                 gc.alloc.rate:      7863.696 MB/sec
+                 gc.alloc.rate.norm: 720172.641 B/op
+                 gc.count:           25.000 counts
+                 gc.time:            78.000 ms
+
+Iteration   5: 88203.707 ns/op
+                 gc.alloc.rate:      7717.963 MB/sec
+                 gc.alloc.rate.norm: 720173.500 B/op
+                 gc.count:           25.000 counts
+                 gc.time:            76.000 ms
+
+
+# Run progress: 72.22% complete, ETA 00:05:20
+# Fork: 2 of 3
+# Warmup Iteration   1: 148511.013 ns/op
+# Warmup Iteration   2: 89029.568 ns/op
+# Warmup Iteration   3: 93927.346 ns/op
+# Warmup Iteration   4: 87802.195 ns/op
+# Warmup Iteration   5: 90920.943 ns/op
+Iteration   1: 88402.543 ns/op
+                 gc.alloc.rate:      7739.120 MB/sec
+                 gc.alloc.rate.norm: 720173.619 B/op
+                 gc.count:           25.000 counts
+                 gc.time:            78.000 ms
+
+Iteration   2: 87930.575 ns/op
+                 gc.alloc.rate:      7786.391 MB/sec
+                 gc.alloc.rate.norm: 720173.171 B/op
+                 gc.count:           25.000 counts
+                 gc.time:            80.000 ms
+
+Iteration   3: 88086.662 ns/op
+                 gc.alloc.rate:      7770.376 MB/sec
+                 gc.alloc.rate.norm: 720173.169 B/op
+                 gc.count:           25.000 counts
+                 gc.time:            77.000 ms
+
+Iteration   4: 86872.102 ns/op
+                 gc.alloc.rate:      7879.134 MB/sec
+                 gc.alloc.rate.norm: 720172.282 B/op
+                 gc.count:           25.000 counts
+                 gc.time:            77.000 ms
+
+Iteration   5: 88206.480 ns/op
+                 gc.alloc.rate:      7757.133 MB/sec
+                 gc.alloc.rate.norm: 720173.367 B/op
+                 gc.count:           25.000 counts
+                 gc.time:            79.000 ms
+
+
+# Run progress: 73.61% complete, ETA 00:05:04
+# Fork: 3 of 3
+# Warmup Iteration   1: 137111.096 ns/op
+# Warmup Iteration   2: 88780.168 ns/op
+# Warmup Iteration   3: 86013.745 ns/op
+# Warmup Iteration   4: 87410.903 ns/op
+# Warmup Iteration   5: 87945.957 ns/op
+Iteration   1: 86496.450 ns/op
+                 gc.alloc.rate:      7913.105 MB/sec
+                 gc.alloc.rate.norm: 720171.753 B/op
+                 gc.count:           26.000 counts
+                 gc.time:            81.000 ms
+
+Iteration   2: 88400.700 ns/op
+                 gc.alloc.rate:      7744.493 MB/sec
+                 gc.alloc.rate.norm: 720173.669 B/op
+                 gc.count:           25.000 counts
+                 gc.time:            79.000 ms
+
+Iteration   3: 87211.960 ns/op
+                 gc.alloc.rate:      7849.197 MB/sec
+                 gc.alloc.rate.norm: 720172.412 B/op
+                 gc.count:           25.000 counts
+                 gc.time:            78.000 ms
+
+Iteration   4: 87416.421 ns/op
+                 gc.alloc.rate:      7831.798 MB/sec
+                 gc.alloc.rate.norm: 720172.655 B/op
+                 gc.count:           26.000 counts
+                 gc.time:            86.000 ms
+
+Iteration   5: 86976.749 ns/op
+                 gc.alloc.rate:      7840.178 MB/sec
+                 gc.alloc.rate.norm: 720172.585 B/op
+                 gc.count:           25.000 counts
+                 gc.time:            80.000 ms
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix":
+  87845.460 ±(99.9%) 896.242 ns/op [Average]
+  (min, avg, max) = (86496.450, 87845.460, 89329.203), stdev = 838.345
+  CI (99.9%): [86949.219, 88741.702] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix:gc.alloc.rate":
+  7787.534 ±(99.9%) 79.539 MB/sec [Average]
+  (min, avg, max) = (7663.684, 7787.534, 7913.105), stdev = 74.401
+  CI (99.9%): [7707.995, 7867.073] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix:gc.alloc.rate.norm":
+  720173.083 ±(99.9%) 0.749 B/op [Average]
+  (min, avg, max) = (720171.753, 720173.083, 720174.267), stdev = 0.700
+  CI (99.9%): [720172.335, 720173.832] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix:gc.count":
+  377.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (25.000, 25.133, 26.000), stdev = 0.352
+  CI (99.9%): [377.000, 377.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.newSquareMatrix:gc.time":
+  1186.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (76.000, 79.067, 86.000), stdev = 2.404
+  CI (99.9%): [1186.000, 1186.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv
+# Parameters: (dim = 50_20)
+
+# Run progress: 75.00% complete, ETA 00:04:48
+# Fork: 1 of 3
+# Warmup Iteration   1: 5143.372 ns/op
+# Warmup Iteration   2: 2569.688 ns/op
+# Warmup Iteration   3: 2596.013 ns/op
+# Warmup Iteration   4: 2472.547 ns/op
+# Warmup Iteration   5: 2605.223 ns/op
+Iteration   1: 2525.141 ns/op
+                 gc.alloc.rate:      3055.759 MB/sec
+                 gc.alloc.rate.norm: 8096.084 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            26.000 ms
+
+Iteration   2: 2446.581 ns/op
+                 gc.alloc.rate:      3154.386 MB/sec
+                 gc.alloc.rate.norm: 8096.082 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            18.000 ms
+
+Iteration   3: 2543.092 ns/op
+                 gc.alloc.rate:      3034.646 MB/sec
+                 gc.alloc.rate.norm: 8096.085 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            21.000 ms
+
+Iteration   4: 2574.221 ns/op
+                 gc.alloc.rate:      2996.605 MB/sec
+                 gc.alloc.rate.norm: 8096.086 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            20.000 ms
+
+Iteration   5: 2645.292 ns/op
+                 gc.alloc.rate:      2917.323 MB/sec
+                 gc.alloc.rate.norm: 8096.088 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            19.000 ms
+
+
+# Run progress: 76.39% complete, ETA 00:04:32
+# Fork: 2 of 3
+# Warmup Iteration   1: 5581.788 ns/op
+# Warmup Iteration   2: 2507.376 ns/op
+# Warmup Iteration   3: 2511.799 ns/op
+# Warmup Iteration   4: 2589.215 ns/op
+# Warmup Iteration   5: 2560.104 ns/op
+Iteration   1: 2613.892 ns/op
+                 gc.alloc.rate:      2952.341 MB/sec
+                 gc.alloc.rate.norm: 8096.087 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            27.000 ms
+
+Iteration   2: 2754.983 ns/op
+                 gc.alloc.rate:      2800.083 MB/sec
+                 gc.alloc.rate.norm: 8096.091 B/op
+                 gc.count:           4.000 counts
+                 gc.time:            17.000 ms
+
+Iteration   3: 2651.884 ns/op
+                 gc.alloc.rate:      2909.815 MB/sec
+                 gc.alloc.rate.norm: 8096.089 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            18.000 ms
+
+Iteration   4: 2683.302 ns/op
+                 gc.alloc.rate:      2875.879 MB/sec
+                 gc.alloc.rate.norm: 8096.089 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            20.000 ms
+
+Iteration   5: 2621.514 ns/op
+                 gc.alloc.rate:      2942.385 MB/sec
+                 gc.alloc.rate.norm: 8096.087 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            19.000 ms
+
+
+# Run progress: 77.78% complete, ETA 00:04:16
+# Fork: 3 of 3
+# Warmup Iteration   1: 5545.648 ns/op
+# Warmup Iteration   2: 2594.867 ns/op
+# Warmup Iteration   3: 2643.182 ns/op
+# Warmup Iteration   4: 2618.665 ns/op
+# Warmup Iteration   5: 2441.662 ns/op
+Iteration   1: 2601.185 ns/op
+                 gc.alloc.rate:      2966.625 MB/sec
+                 gc.alloc.rate.norm: 8096.086 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            28.000 ms
+
+Iteration   2: 2647.418 ns/op
+                 gc.alloc.rate:      2915.057 MB/sec
+                 gc.alloc.rate.norm: 8096.088 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            19.000 ms
+
+Iteration   3: 2735.636 ns/op
+                 gc.alloc.rate:      2821.117 MB/sec
+                 gc.alloc.rate.norm: 8096.091 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            17.000 ms
+
+Iteration   4: 2542.512 ns/op
+                 gc.alloc.rate:      3035.219 MB/sec
+                 gc.alloc.rate.norm: 8096.085 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            20.000 ms
+
+Iteration   5: 2505.266 ns/op
+                 gc.alloc.rate:      3079.704 MB/sec
+                 gc.alloc.rate.norm: 8096.084 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            18.000 ms
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv":
+  2606.128 ±(99.9%) 91.146 ns/op [Average]
+  (min, avg, max) = (2446.581, 2606.128, 2754.983), stdev = 85.258
+  CI (99.9%): [2514.982, 2697.274] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv:gc.alloc.rate":
+  2963.796 ±(99.9%) 103.944 MB/sec [Average]
+  (min, avg, max) = (2800.083, 2963.796, 3154.386), stdev = 97.229
+  CI (99.9%): [2859.852, 3067.740] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv:gc.alloc.rate.norm":
+  8096.087 ±(99.9%) 0.003 B/op [Average]
+  (min, avg, max) = (8096.082, 8096.087, 8096.091), stdev = 0.003
+  CI (99.9%): [8096.084, 8096.090] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv:gc.count":
+  74.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (4.000, 4.933, 5.000), stdev = 0.258
+  CI (99.9%): [74.000, 74.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv:gc.time":
+  307.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (17.000, 20.467, 28.000), stdev = 3.583
+  CI (99.9%): [307.000, 307.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv
+# Parameters: (dim = 150_40)
+
+# Run progress: 79.17% complete, ETA 00:04:00
+# Fork: 1 of 3
+# Warmup Iteration   1: 33534.302 ns/op
+# Warmup Iteration   2: 13485.875 ns/op
+# Warmup Iteration   3: 13580.388 ns/op
+# Warmup Iteration   4: 12397.625 ns/op
+# Warmup Iteration   5: 13089.526 ns/op
+Iteration   1: 11834.730 ns/op
+                 gc.alloc.rate:      3871.020 MB/sec
+                 gc.alloc.rate.norm: 48098.811 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            29.000 ms
+
+Iteration   2: 12471.882 ns/op
+                 gc.alloc.rate:      3673.537 MB/sec
+                 gc.alloc.rate.norm: 48098.950 B/op
+                 gc.count:           6.000 counts
+                 gc.time:            24.000 ms
+
+Iteration   3: 12375.327 ns/op
+                 gc.alloc.rate:      3698.637 MB/sec
+                 gc.alloc.rate.norm: 48098.928 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            25.000 ms
+
+Iteration   4: 12737.381 ns/op
+                 gc.alloc.rate:      3593.877 MB/sec
+                 gc.alloc.rate.norm: 48099.027 B/op
+                 gc.count:           6.000 counts
+                 gc.time:            22.000 ms
+
+Iteration   5: 11591.158 ns/op
+                 gc.alloc.rate:      3953.316 MB/sec
+                 gc.alloc.rate.norm: 48098.754 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            26.000 ms
+
+
+# Run progress: 80.56% complete, ETA 00:03:44
+# Fork: 2 of 3
+# Warmup Iteration   1: 27327.420 ns/op
+# Warmup Iteration   2: 11933.667 ns/op
+# Warmup Iteration   3: 12224.826 ns/op
+# Warmup Iteration   4: 12891.252 ns/op
+# Warmup Iteration   5: 11810.269 ns/op
+Iteration   1: 11683.283 ns/op
+                 gc.alloc.rate:      3921.781 MB/sec
+                 gc.alloc.rate.norm: 48098.767 B/op
+                 gc.count:           6.000 counts
+                 gc.time:            24.000 ms
+
+Iteration   2: 12334.368 ns/op
+                 gc.alloc.rate:      3715.203 MB/sec
+                 gc.alloc.rate.norm: 48098.920 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            26.000 ms
+
+Iteration   3: 12113.737 ns/op
+                 gc.alloc.rate:      3781.451 MB/sec
+                 gc.alloc.rate.norm: 48098.881 B/op
+                 gc.count:           6.000 counts
+                 gc.time:            23.000 ms
+
+Iteration   4: 11641.820 ns/op
+                 gc.alloc.rate:      3936.166 MB/sec
+                 gc.alloc.rate.norm: 48098.756 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            26.000 ms
+
+Iteration   5: 11915.421 ns/op
+                 gc.alloc.rate:      3845.619 MB/sec
+                 gc.alloc.rate.norm: 48098.832 B/op
+                 gc.count:           6.000 counts
+                 gc.time:            23.000 ms
+
+
+# Run progress: 81.94% complete, ETA 00:03:28
+# Fork: 3 of 3
+# Warmup Iteration   1: 32650.286 ns/op
+# Warmup Iteration   2: 11808.591 ns/op
+# Warmup Iteration   3: 12806.054 ns/op
+# Warmup Iteration   4: 11934.290 ns/op
+# Warmup Iteration   5: 13332.672 ns/op
+Iteration   1: 12419.001 ns/op
+                 gc.alloc.rate:      3689.389 MB/sec
+                 gc.alloc.rate.norm: 48098.953 B/op
+                 gc.count:           6.000 counts
+                 gc.time:            27.000 ms
+
+Iteration   2: 12872.631 ns/op
+                 gc.alloc.rate:      3556.082 MB/sec
+                 gc.alloc.rate.norm: 48099.066 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            28.000 ms
+
+Iteration   3: 13173.621 ns/op
+                 gc.alloc.rate:      3474.598 MB/sec
+                 gc.alloc.rate.norm: 48099.115 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            18.000 ms
+
+Iteration   4: 12706.675 ns/op
+                 gc.alloc.rate:      3606.137 MB/sec
+                 gc.alloc.rate.norm: 48099.024 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            27.000 ms
+
+Iteration   5: 12370.598 ns/op
+                 gc.alloc.rate:      3703.864 MB/sec
+                 gc.alloc.rate.norm: 48098.945 B/op
+                 gc.count:           6.000 counts
+                 gc.time:            28.000 ms
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv":
+  12282.776 ±(99.9%) 512.223 ns/op [Average]
+  (min, avg, max) = (11591.158, 12282.776, 13173.621), stdev = 479.134
+  CI (99.9%): [11770.552, 12794.999] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv:gc.alloc.rate":
+  3734.712 ±(99.9%) 156.702 MB/sec [Average]
+  (min, avg, max) = (3474.598, 3734.712, 3953.316), stdev = 146.579
+  CI (99.9%): [3578.010, 3891.413] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv:gc.alloc.rate.norm":
+  48098.915 ±(99.9%) 0.122 B/op [Average]
+  (min, avg, max) = (48098.754, 48098.915, 48099.115), stdev = 0.114
+  CI (99.9%): [48098.793, 48099.038] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv:gc.count":
+  96.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (5.000, 6.400, 7.000), stdev = 0.632
+  CI (99.9%): [96.000, 96.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv:gc.time":
+  376.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (18.000, 25.067, 29.000), stdev = 2.840
+  CI (99.9%): [376.000, 376.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv
+# Parameters: (dim = 300_60)
+
+# Run progress: 83.33% complete, ETA 00:03:12
+# Fork: 1 of 3
+# Warmup Iteration   1: 84838.825 ns/op
+# Warmup Iteration   2: 34667.618 ns/op
+# Warmup Iteration   3: 35379.094 ns/op
+# Warmup Iteration   4: 35908.741 ns/op
+# Warmup Iteration   5: 34765.670 ns/op
+Iteration   1: 35149.920 ns/op
+                 gc.alloc.rate:      3878.657 MB/sec
+                 gc.alloc.rate.norm: 144126.961 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            28.000 ms
+
+Iteration   2: 37581.723 ns/op
+                 gc.alloc.rate:      3637.741 MB/sec
+                 gc.alloc.rate.norm: 144129.050 B/op
+                 gc.count:           6.000 counts
+                 gc.time:            21.000 ms
+
+Iteration   3: 34283.323 ns/op
+                 gc.alloc.rate:      3996.047 MB/sec
+                 gc.alloc.rate.norm: 144126.234 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            28.000 ms
+
+Iteration   4: 33517.367 ns/op
+                 gc.alloc.rate:      4087.406 MB/sec
+                 gc.alloc.rate.norm: 144125.556 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            27.000 ms
+
+Iteration   5: 34084.289 ns/op
+                 gc.alloc.rate:      4019.565 MB/sec
+                 gc.alloc.rate.norm: 144126.061 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            24.000 ms
+
+
+# Run progress: 84.72% complete, ETA 00:02:56
+# Fork: 2 of 3
+# Warmup Iteration   1: 84354.693 ns/op
+# Warmup Iteration   2: 37233.441 ns/op
+# Warmup Iteration   3: 35724.382 ns/op
+# Warmup Iteration   4: 34354.222 ns/op
+# Warmup Iteration   5: 34779.946 ns/op
+Iteration   1: 35668.842 ns/op
+                 gc.alloc.rate:      3839.422 MB/sec
+                 gc.alloc.rate.norm: 144127.302 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            27.000 ms
+
+Iteration   2: 35617.723 ns/op
+                 gc.alloc.rate:      3846.496 MB/sec
+                 gc.alloc.rate.norm: 144127.260 B/op
+                 gc.count:           6.000 counts
+                 gc.time:            24.000 ms
+
+Iteration   3: 36264.821 ns/op
+                 gc.alloc.rate:      3777.705 MB/sec
+                 gc.alloc.rate.norm: 144127.942 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            26.000 ms
+
+Iteration   4: 34759.083 ns/op
+                 gc.alloc.rate:      3939.834 MB/sec
+                 gc.alloc.rate.norm: 144126.477 B/op
+                 gc.count:           6.000 counts
+                 gc.time:            22.000 ms
+
+Iteration   5: 35443.565 ns/op
+                 gc.alloc.rate:      3865.407 MB/sec
+                 gc.alloc.rate.norm: 144127.051 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            27.000 ms
+
+
+# Run progress: 86.11% complete, ETA 00:02:40
+# Fork: 3 of 3
+# Warmup Iteration   1: 78878.409 ns/op
+# Warmup Iteration   2: 36453.997 ns/op
+# Warmup Iteration   3: 37025.020 ns/op
+# Warmup Iteration   4: 39013.956 ns/op
+# Warmup Iteration   5: 41553.035 ns/op
+Iteration   1: 37640.208 ns/op
+                 gc.alloc.rate:      3627.170 MB/sec
+                 gc.alloc.rate.norm: 144128.965 B/op
+                 gc.count:           6.000 counts
+                 gc.time:            26.000 ms
+
+Iteration   2: 36350.059 ns/op
+                 gc.alloc.rate:      3767.550 MB/sec
+                 gc.alloc.rate.norm: 144128.057 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            24.000 ms
+
+Iteration   3: 36096.144 ns/op
+                 gc.alloc.rate:      3781.132 MB/sec
+                 gc.alloc.rate.norm: 144127.703 B/op
+                 gc.count:           6.000 counts
+                 gc.time:            22.000 ms
+
+Iteration   4: 36678.866 ns/op
+                 gc.alloc.rate:      3735.289 MB/sec
+                 gc.alloc.rate.norm: 144128.173 B/op
+                 gc.count:           7.000 counts
+                 gc.time:            28.000 ms
+
+Iteration   5: 36649.627 ns/op
+                 gc.alloc.rate:      3736.675 MB/sec
+                 gc.alloc.rate.norm: 144128.095 B/op
+                 gc.count:           6.000 counts
+                 gc.time:            22.000 ms
+
+
+
+Result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv":
+  35719.037 ±(99.9%) 1299.977 ns/op [Average]
+  (min, avg, max) = (33517.367, 35719.037, 37640.208), stdev = 1215.999
+  CI (99.9%): [34419.061, 37019.014] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv:gc.alloc.rate":
+  3835.740 ±(99.9%) 142.894 MB/sec [Average]
+  (min, avg, max) = (3627.170, 3835.740, 4087.406), stdev = 133.663
+  CI (99.9%): [3692.846, 3978.634] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv:gc.alloc.rate.norm":
+  144127.393 ±(99.9%) 1.100 B/op [Average]
+  (min, avg, max) = (144125.556, 144127.393, 144129.050), stdev = 1.029
+  CI (99.9%): [144126.293, 144128.492] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv:gc.count":
+  99.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (6.000, 6.600, 7.000), stdev = 0.507
+  CI (99.9%): [99.000, 99.000] (assumes normal distribution)
+
+Secondary result "org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_k_nv:gc.time":
+  376.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (21.000, 25.067, 28.000), stdev = 2.492
+  CI (99.9%): [376.000, 376.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 21.0.8, Java HotSpot(TM) 64-Bit Server VM, 21.0.8+12-LTS-250
+# VM invoker: C:\Program Files\Java\jdk-21\bin\java.exe
+# VM options: -Xms2g -Xmx2g -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 1 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: org.rtklib.java.benchmarks.SimpleMatrixBenchmark.transpose_kk
+# Parameters: (dim = 50_20)
+
+# Run progress: 87.50% complete, ETA 00:02:24
+# Fork: 1 of 3
+# Warmup Iteration   1: 14116.598 ns/op
+# Warmup Iteration   2: 7401.234 ns/op
+# Warmup Iteration   3: 7188.416 ns/op
+# Warmup Iteration   4: 7216.041 ns/op
+# Warmup Iteration   5: 7450.658 ns/op
+Iteration   1: 7151.651 ns/op
+                 gc.alloc.rate:      2678.272 MB/sec
+                 gc.alloc.rate.norm: 20096.239 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            30.000 ms
+
+Iteration   2: 7040.458 ns/op
+                 gc.alloc.rate:      2720.733 MB/sec
+                 gc.alloc.rate.norm: 20096.235 B/op
+                 gc.count:           4.000 counts
+                 gc.time:            14.000 ms
+
+Iteration   3: 6932.131 ns/op
+                 gc.alloc.rate:      2763.050 MB/sec
+                 gc.alloc.rate.norm: 20096.232 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            19.000 ms
+
+Iteration   4: 7076.099 ns/op
+                 gc.alloc.rate:      2705.970 MB/sec
+                 gc.alloc.rate.norm: 20096.236 B/op
+                 gc.count:           4.000 counts
+                 gc.time:            15.000 ms
+
+Iteration   5: 7044.243 ns/op
+                 gc.alloc.rate:      2718.433 MB/sec
+                 gc.alloc.rate.norm: 20096.235 B/op
+                 gc.count:           4.000 counts
+                 gc.time:            15.000 ms
+
+
+# Run progress: 88.89% complete, ETA 00:02:08
+# Fork: 2 of 3
+# Warmup Iteration   1: 14717.574 ns/op
+# Warmup Iteration   2: 7700.527 ns/op
+# Warmup Iteration   3: 6968.332 ns/op
+# Warmup Iteration   4: 7098.645 ns/op
+# Warmup Iteration   5: 8126.850 ns/op
+Iteration   1: 6890.112 ns/op
+                 gc.alloc.rate:      2780.125 MB/sec
+                 gc.alloc.rate.norm: 20096.230 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            31.000 ms
+
+Iteration   2: 6793.844 ns/op
+                 gc.alloc.rate:      2818.484 MB/sec
+                 gc.alloc.rate.norm: 20096.227 B/op
+                 gc.count:           4.000 counts
+                 gc.time:            16.000 ms
+
+Iteration   3: 6937.170 ns/op
+                 gc.alloc.rate:      2761.263 MB/sec
+                 gc.alloc.rate.norm: 20096.232 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            19.000 ms
+
+Iteration   4: 6737.086 ns/op
+                 gc.alloc.rate:      2843.189 MB/sec
+                 gc.alloc.rate.norm: 20096.225 B/op
+                 gc.count:           4.000 counts
+                 gc.time:            15.000 ms
+
+Iteration   5: 6712.436 ns/op
+                 gc.alloc.rate:      2852.978 MB/sec
+                 gc.alloc.rate.norm: 20096.224 B/op
+                 gc.count:           5.000 counts
+                 gc.time:            19.000 ms
+
+
+# Run progress: 90.28% complete, ETA 00:01:52
+# Fork: 3 of 3
+# Warmup Iteration   1: 14467.954 ns/op

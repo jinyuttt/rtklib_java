@@ -148,6 +148,7 @@ public final class ClkReader {
             double[] ep = {year, month, day, hour, min, sec};
             return TimeSystem.epoch2time(ep);
         } catch (Exception e) {
+            LOG.warn("CLK time parse error: {} — {}", e.getMessage(), line);
             return new GTime();
         }
     }

@@ -600,9 +600,11 @@ public class PppAmbFix {
             double osbL2 = getOsb(nav, sat, code1);
             double wlFcb = osbL1 / lam1 - osbL2 / lam2;
             String prn = SatUtils.satno2id(sat);
-            System.out.printf(Locale.US,
-                "FCB-DIAG prn=%s sat=%d code0=%d code1=%d osbL1=%.6f osbL2=%.6f lam1=%.6f lam2=%.6f wlFcb=%.6f%n",
-                prn, sat, code0, code1, osbL1, osbL2, lam1, lam2, wlFcb);
+            LOG.debug("FCB-DIAG prn={} sat={} code0={} code1={} osbL1={} osbL2={} lam1={} lam2={} wlFcb={}",
+                prn, sat, code0, code1, 
+                String.format("%.6f", osbL1), String.format("%.6f", osbL2),
+                String.format("%.6f", lam1), String.format("%.6f", lam2),
+                String.format("%.6f", wlFcb));
             return wlFcb;
         }
         return FcbReader.getFcbWl(nav, sat, time);

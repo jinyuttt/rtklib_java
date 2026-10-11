@@ -10,6 +10,9 @@ import org.rtklib.java.data.SnrMask;
 import org.rtklib.java.time.TimeSystem;
 import java.util.Arrays;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * RTKLIB通用工具函数。
  *
@@ -29,6 +32,8 @@ import java.util.Arrays;
  * </ul>
  */
 public final class RtklibCommon {
+    private static final Logger LOG = LoggerFactory.getLogger(RtklibCommon.class);
+
     private RtklibCommon() {
     }
 
@@ -281,6 +286,7 @@ public final class RtklibCommon {
 
             return 0;
         } catch (Exception e) {
+            LOG.warn("Least squares solve failed: {}", e.getMessage());
             return -1;
         }
     }
