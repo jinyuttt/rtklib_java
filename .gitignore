@@ -55,7 +55,6 @@ target/
 # Script files
 *.py
 *.js
-*.txt
 
 # Test output directories
 test_results/
@@ -63,6 +62,7 @@ test_output*
 
 # Local test data config (contains device IDs, not for open source)
 **/test-data.properties
+**/adjust-test-data.properties
 
 # Reference source code (not part of Java project)
 orekit_src/
@@ -98,3 +98,9 @@ test-data/urbannav/
 
 # Debug log config (local only)
 logback-debug.xml
+
+# Reference projects (embedded git repos, not part of Java project)
+reference-projects/
+
+# Test output files
+test_bds_output.txt

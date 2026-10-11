@@ -295,8 +295,21 @@ public class RtkProcessorTest {
             else if (sd.status == SolutionStatus.SINGLE) singleCount++;
         }
 
-        log.info("Solution types: Fix={}, Float={}, Single={}", fixCount, floatCount, singleCount);
+        log.info("Solution types [SYS_ALL]: Fix={}, Float={}, Single={}", fixCount, floatCount, singleCount);
         log.info("Total: {}, Success: {}, Fail: {}", result.totalEpochs, result.successCount, result.failCount);
+
+        PrcOpt optCmp = RtkProcessor.createDefaultOpt();
+        optCmp.navsys = Constants.SYS_CMP;
+        RtkProcessor rtkCmp = new RtkProcessor(optCmp);
+        RtkProcessor.RtkResult resultCmp = rtkCmp.process(roverData, baseData);
+        int fixC = 0, floatC = 0, singleC = 0;
+        for (SolData sd : resultCmp.solutions) {
+            if (sd.status == SolutionStatus.FIX) fixC++;
+            else if (sd.status == SolutionStatus.FLOAT) floatC++;
+            else if (sd.status == SolutionStatus.SINGLE) singleC++;
+        }
+        log.info("Solution types [SYS_CMP]: Fix={}, Float={}, Single={}", fixC, floatC, singleC);
+
         assertEquals(result.successCount, fixCount + floatCount + singleCount, "Solution type counts should sum to success count");
 
         if (!result.solutions.isEmpty()) {
@@ -309,5 +322,141 @@ public class RtkProcessorTest {
                         String.format("%.3f", llh2.v3), last.status, last.numSat);
             }
         }
+    }
+
+    @Test
+    @DisplayName("7. GPS week rollover analysis")
+    void testGpsWeekRolloverAnalysis() {
+        int dataGpsWeek = 2419;
+        GTime dataStart = TimeSystem.gpst2time(dataGpsWeek, 0);
+        double[] dataYmd = TimeSystem.time2ymdhms(dataStart);
+        log.info("Data GPS week {} -> {} (week start)", dataGpsWeek,
+                String.format("%04d/%02d/%02d", (int)dataYmd[0], (int)dataYmd[1], (int)dataYmd[2]));
+
+        double dataTow = 11.0 * 3600 + 0.0 * 60 + 30.0;
+        GTime dataTime = TimeSystem.gpst2time(dataGpsWeek, dataTow);
+        double[] dataTimeYmd = TimeSystem.time2ymdhms(dataTime);
+        log.info("Data time: GPS_week={} TOW={}s -> {}", dataGpsWeek, (long)dataTow,
+                String.format("%04d/%02d/%02d %02d:%02d:%02d UTC",
+                        (int)dataTimeYmd[0], (int)dataTimeYmd[1], (int)dataTimeYmd[2],
+                        (int)dataTimeYmd[3], (int)dataTimeYmd[4], (int)dataTimeYmd[5]));
+
+        GTime fileTime = TimeSystem.epoch2time(new double[]{2026, 9, 16, 0, 0, 0});
+        GTime fileGps = TimeSystem.utc2gpst(fileTime);
+        int[] fileWkArr = new int[1];
+        double fileTowP = TimeSystem.time2gpst(fileGps, fileWkArr);
+        int fileGpsWeek = fileWkArr[0];
+        log.info("C adjweek: timeget()=2026-09-16 -> GPS_week={} TOW_P={}s", fileGpsWeek, (long)fileTowP);
+
+        double adjTow = dataTow;
+        if (adjTow < fileTowP - 302400.0) adjTow += 604800.0;
+        else if (adjTow > fileTowP + 302400.0) adjTow -= 604800.0;
+        GTime cResult = TimeSystem.gpst2time(fileGpsWeek, adjTow);
+        double[] cYmd = TimeSystem.time2ymdhms(cResult);
+        log.info("C adjweek result: GPS_week={} TOW={}s -> {} (WRONG!)",
+                fileGpsWeek, (long)adjTow,
+                String.format("%04d/%02d/%02d %02d:%02d:%02d UTC",
+                        (int)cYmd[0], (int)cYmd[1], (int)cYmd[2],
+                        (int)cYmd[3], (int)cYmd[4], (int)cYmd[5]));
+
+        GTime javaResult = TimeSystem.gpst2time(dataGpsWeek, dataTow);
+        double[] javaYmd = TimeSystem.time2ymdhms(javaResult);
+        log.info("Java result: GPS_week={} TOW={}s -> {} (CORRECT)",
+                dataGpsWeek, (long)dataTow,
+                String.format("%04d/%02d/%02d %02d:%02d:%02d UTC",
+                        (int)javaYmd[0], (int)javaYmd[1], (int)javaYmd[2],
+                        (int)javaYmd[3], (int)javaYmd[4], (int)javaYmd[5]));
+
+        int weekDiff = fileGpsWeek - dataGpsWeek;
+        log.info("Week diff: {} weeks = {} days -> C version time offset = {} days",
+                weekDiff, weekDiff * 7, weekDiff * 7);
+    }
+
+    @Test
+    @DisplayName("8. RTCM3 time diagnostic")
+    void testRtcm3TimeDiagnostic() throws Exception {
+        skipIfNoData();
+        org.rtklib.java.rtcm.Rtcm rtcm = new org.rtklib.java.rtcm.Rtcm();
+        java.util.List<String> timeLog = new java.util.ArrayList<>();
+        int[] msgCount = {0};
+        int[] obsCount = {0};
+        int[] ephCount = {0};
+
+        byte[][] dataArr = {roverData, baseData};
+        String[] label = {"ROVER", "BASE"};
+        for (int d = 0; d < 2; d++) {
+            rtcm = new org.rtklib.java.rtcm.Rtcm();
+            byte[] data = dataArr[d];
+            int pos = 0;
+            while (pos < data.length) {
+                int consumed = rtcm.input(data, pos, data.length - pos);
+                if (consumed > 0) {
+                    msgCount[0]++;
+                    int type = rtcm.type;
+                    if (type >= 1071 && type <= 1077 || type >= 1124 && type <= 1127) {
+                        obsCount[0]++;
+                        if (rtcm.obs.n > 0 && rtcm.obs.data[0].sat != 0) {
+                            GTime t = rtcm.obs.data[0].time;
+                            double[] ymdhms = TimeSystem.time2ymdhms(t);
+                            int[] weekArr = new int[1];
+                            double tow = TimeSystem.time2gpst(t, weekArr);
+                            String entry = String.format("%s MSM%d obs[%d] time: %04d/%02d/%02d %02d:%02d:%06.3f  GPS_week=%d tow=%.3f  timeInit=%b",
+                                    label[d], type, obsCount[0],
+                                    (int)ymdhms[0], (int)ymdhms[1], (int)ymdhms[2],
+                                    (int)ymdhms[3], (int)ymdhms[4], ymdhms[5],
+                                    weekArr[0], tow, rtcm.isTimeInitialized());
+                            timeLog.add(entry);
+                            if (obsCount[0] <= 3) log.info(entry);
+                        }
+                    }
+                    if (type == 1019 || type == 1020 || type == 1042 || type == 1044 || type == 1045 || type == 1046) {
+                        ephCount[0]++;
+                        if (rtcm.ephsat != 0) {
+                            Eph e = rtcm.nav.eph[rtcm.ephsat - 1];
+                            if (e != null && e.sat == rtcm.ephsat) {
+                                double[] ymdhms = TimeSystem.time2ymdhms(e.toe);
+                                int[] weekArr = new int[1];
+                                double tow = TimeSystem.time2gpst(e.toe, weekArr);
+                                String entry = String.format("%s EPH(type=%d sat=%d) toe: %04d/%02d/%02d %02d:%02d:%06.3f  GPS_week=%d  timeInit=%b",
+                                        label[d], type, rtcm.ephsat,
+                                        (int)ymdhms[0], (int)ymdhms[1], (int)ymdhms[2],
+                                        (int)ymdhms[3], (int)ymdhms[4], ymdhms[5],
+                                        weekArr[0], rtcm.isTimeInitialized());
+                                timeLog.add(entry);
+                                if (ephCount[0] <= 3) log.info(entry);
+                            }
+                        }
+                    }
+                    if (type == 1005 || type == 1006) {
+                        double[] ymdhms = TimeSystem.time2ymdhms(rtcm.time);
+                        String entry = String.format("%s STA1005/6 rtcm.time: %04d/%02d/%02d %02d:%02d:%06.3f  timeInit=%b",
+                                label[d],
+                                (int)ymdhms[0], (int)ymdhms[1], (int)ymdhms[2],
+                                (int)ymdhms[3], (int)ymdhms[4], ymdhms[5],
+                                rtcm.isTimeInitialized());
+                        timeLog.add(entry);
+                        if (timeLog.size() <= 6) log.info(entry);
+                    }
+                    pos += consumed;
+                } else if (consumed == 0) {
+                    break;
+                } else {
+                    pos++;
+                }
+            }
+        }
+
+        log.info("Total messages: {}, obs: {}, eph: {}", msgCount[0], obsCount[0], ephCount[0]);
+        if (!timeLog.isEmpty()) {
+            log.info("=== First 5 time entries ===");
+            for (int i = 0; i < Math.min(5, timeLog.size()); i++) {
+                log.info("  {}", timeLog.get(i));
+            }
+            log.info("=== Last 5 time entries ===");
+            for (int i = Math.max(0, timeLog.size() - 5); i < timeLog.size(); i++) {
+                log.info("  {}", timeLog.get(i));
+            }
+        }
+        assertTrue(obsCount[0] > 0, "Should have decoded MSM observations");
     }
 }

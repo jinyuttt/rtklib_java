@@ -158,6 +158,14 @@ public class PrcOpt implements Serializable {
     /** Position output format mask (bitwise OR of POS_ECEF/POS_LLH/POS_ENU) */
     public int posMask;
 
+    /**
+     * [Java扩展] 放宽RTCM3 MSM sync标志检查。
+     * 某些NTRIP源对单消息历元也设置sync=1（非标准行为），
+     * 导致按标准实现的解码器丢弃观测。设为true时兼容此类习惯性错误。
+     * 默认false，与RTKLIB C版行为一致。
+     */
+    public boolean relaxSyncFlag = false;
+
     /** Max cached epochs per source (0:no cache/forward-only, >0:cache+backward trigger) */
     public int cacheMaxEpochs = 0;
 
@@ -349,6 +357,7 @@ public class PrcOpt implements Serializable {
         this.outputThrottleSleepMs = other.outputThrottleSleepMs;
         this.ionoGradient = other.ionoGradient;
         this.posMask = other.posMask;
+        this.relaxSyncFlag = other.relaxSyncFlag;
         this.diagMask = other.diagMask;
         this.qualityWeight = other.qualityWeight;
     }

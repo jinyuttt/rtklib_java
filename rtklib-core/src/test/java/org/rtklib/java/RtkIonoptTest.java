@@ -19,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -33,14 +34,7 @@ public class RtkIonoptTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtkIonoptTest.class);
 
-    private static final String DATA_BASE = TestDataConfig.getRtcmBaseDir();
-    private static final String BASE_ID = TestDataConfig.getBaseRoverPairs("group1")[0];
-    private static final String ROVER_ID = TestDataConfig.getBaseRoverPairs("rover1")[0];
-    private static final String DATE = TestDataConfig.get("ionopt.date", "2026-05-20");
-    private static final int START_HOUR = Integer.parseInt(TestDataConfig.get("ionopt.start.hour", "8"));
-    private static final int END_HOUR = Integer.parseInt(TestDataConfig.get("ionopt.end.hour", "10"));
-
-    private static final String RESULT_DIR = TestDataConfig.getResultDir() + "\\ionopt_results";
+    private static final String RESULT_DIR = TestDataConfig.getResultDir() + File.separator + "ionopt_results";
 
     private static List<ObsEpoch> roverEpochs;
     private static List<ObsEpoch> baseEpochs;
@@ -123,8 +117,7 @@ public class RtkIonoptTest {
         }
     }
 
-    private static byte[] loadHourData(String stationId, int hour) throws IOException {
-        String path = DATA_BASE + "\\" + stationId + "\\" + DATE + "\\" + hour + ".rtcm3";
+    private static byte[] loadFile(String path) throws IOException {
         java.io.File file = new java.io.File(path);
         if (!file.exists()) {
             log.warn("文件不存在: {}", path);
@@ -135,11 +128,11 @@ public class RtkIonoptTest {
         }
     }
 
-    private static byte[] loadMultiHourData(String stationId, int startHour, int endHour) throws IOException {
+    private static byte[] loadFiles(List<String> paths) throws IOException {
         List<byte[]> chunks = new ArrayList<>();
         int totalLen = 0;
-        for (int h = startHour; h < endHour; h++) {
-            byte[] chunk = loadHourData(stationId, h);
+        for (String path : paths) {
+            byte[] chunk = loadFile(path);
             if (chunk.length > 0) {
                 chunks.add(chunk);
                 totalLen += chunk.length;
@@ -228,17 +221,25 @@ public class RtkIonoptTest {
     static void loadData() throws IOException {
         new java.io.File(RESULT_DIR).mkdirs();
 
-        log.info("加载 {} 小时数据: {} ~ {} ...", END_HOUR - START_HOUR, START_HOUR, END_HOUR);
+         List<String[]> pairs = TestDataConfig.resolveBaseRoverPairs();
+        org.junit.jupiter.api.Assumptions.assumeTrue(!pairs.isEmpty(), "No base/rover data configured");
 
-        roverData = loadMultiHourData(ROVER_ID, START_HOUR, END_HOUR);
-        baseData = loadMultiHourData(BASE_ID, START_HOUR, END_HOUR);
+        List<String> baseFiles = TestDataConfig.resolveRtcmFiles(TestDataConfig.getBaseFile());
+        List<String> roverFiles = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile());
+        org.junit.jupiter.api.Assumptions.assumeTrue(!baseFiles.isEmpty() && !roverFiles.isEmpty(),
+                "No RTCM files found");
+
+        log.info("加载 base 文件: {}, rover 文件: {}", baseFiles.size(), roverFiles.size());
+
+        roverData = loadFiles(roverFiles);
+        baseData = loadFiles(baseFiles);
         log.info("Rover 数据: {} bytes, Base 数据: {} bytes", roverData.length, baseData.length);
 
-        log.info("解析 Rover 观测数据 (station={})...", ROVER_ID);
+        log.info("解析 Rover 观测数据...");
         roverEpochs = parseObsEpochs(roverData, 1);
         log.info("Rover 历元数: {}", roverEpochs.size());
 
-        log.info("解析 Base 观测数据 (station={})...", BASE_ID);
+        log.info("解析 Base 观测数据...");
         baseEpochs = parseObsEpochs(baseData, 2);
         log.info("Base 历元数: {}", baseEpochs.size());
 
@@ -582,6 +583,9 @@ public class RtkIonoptTest {
     @DisplayName("C版RTKLIB IFLC对比测试")
     void testCRtklibIflc() throws IOException, InterruptedException {
         String rtklibDir = TestDataConfig.get("rtklib.c.dir", "D:\\RTKLIB_EX_2.5.0");
+        String rnx2rtkp = rtklibDir + "\\rnx2rtkp.exe";
+        org.junit.jupiter.api.Assumptions.assumeTrue(java.nio.file.Files.exists(java.nio.file.Paths.get(rnx2rtkp)),
+                "C版rtklib可执行文件不可用 - 跳过C版对比测试");
         String workDir = TestDataConfig.getResultDir() + "\\c_rtklib_test";
         new java.io.File(workDir).mkdirs();
 

@@ -4,6 +4,8 @@
 > **日期**：2026-10-09  
 > **前置文档**：[test-data/README.md](../test-data/README.md)（数据规范）、[优化功能矩阵](CORE_OPTIMIZATION_MATRIX.md)（优化项定义）
 
+> **适用范围**：测试规范和样例仅针对 **rtklib-core** 和 **rtklib-adjust** 算法模块。其余模块（rtklib-test、rtklib-product、rtklib-research、rtklib-stream）需自行编写测试；如有提交价值，须遵循本规范。
+
 ---
 
 ## 0. 测试规范
@@ -30,6 +32,7 @@
 | `systems` | 卫星系统 | `G`, `G+R`, `G+E+J+C`, `G+R+E+C+J+S`（G=GPS, R=GLONASS, E=Galileo, J=QZSS, C=BDS, S=SBAS） |
 | `date` | 观测日期 | `2025-04-08` |
 | `source` | 数据来源项目 | `MobileGNSS-SPP`, `Net_Diff`, `rtklib`, `IGS`, `GFZ` |
+| `license` | 数据许可 | `MIT`, `IGS-data-policy`, `public`, `BSD-2-Clause` |
 
 #### 选填字段
 
@@ -43,7 +46,6 @@
 | `base.distance` | 基线长度（RTK数据） | `1.2km`, `15km` |
 | `mode` | 定位模式（参考解） | `spp`, `dgps`, `rtk`, `rtk-static`, `rtk-fixed`, `ppp`, `ppp-ar`, `ppp-rtk` |
 | `software` | 解算软件（参考解） | `RTKLIB demo5 b34k`, `LAMBDA` |
-| `license` | 数据许可 | `MIT`, `IGS-data-policy`, `public` |
 | `description` | 自由描述 | `城市峡谷手机GNSS数据，含NLOS/多路径` |
 | `location` | 采集地点 | `Beijing downtown`, `Hong Kong IGS` |
 | `type` | 产品类型（精密产品） | `sp3`, `clk`, `ionex`, `atx`, `bia` |
@@ -59,9 +61,9 @@ date=2025-04-08
 source=MobileGNSS-SPP
 sample_rate=1s
 duration=30min
-receiver=UNISOC uis7865_6h10_go_a32b
+receiver=UNISOC uis7865
 license=MIT
-description=城市峡谷手机GNSS数据，含NLOS/多路径
+description=城市峡谷手机GNSS数据，含NLOS/多路径（数据集标识: uis7865_6h10_go_a32b）
 location=Beijing downtown
 test_ids=SppOptimizationTest
 ```
@@ -86,10 +88,12 @@ test_ids=SppOptimizationTest
 所有测试类通过 `TestDataConfig` 统一管理路径，按以下优先级解析：
 
 ```
-1. 私有配置 (test-data.properties 中的显式路径)
+1. 私有配置 (test-data.properties 中的显式路径，支持文件路径和目录路径，目录模式详见 §0.7)
 2. 公共数据 (test-data/ 目录下的文件)
 3. 占位符路径 (无数据时使用，测试自动跳过)
 ```
+
+> **目录模式**：当 `rover.file` / `base.file` 配置为目录路径时，`TestDataConfig` 自动扫描目录下所有 `.rtcm3` 文件并按相对路径配对（详见 §0.7）。目录模式仅适用于私有配置，公共数据不使用目录模式。
 
 ### 0.5 测试运行条件
 
@@ -99,6 +103,9 @@ test_ids=SppOptimizationTest
 | 算法验证 | `test-data/` 公共数据 | 始终运行 | 跳过（AssumeTrue） |
 | 精度验证 | 公开精密产品+观测数据 | 始终运行 | 跳过（AssumeTrue） |
 | 集成测试 | 特定场景数据（部分无公开来源） | 需本地配置 | 跳过 |
+| 退化测试 | 本地私有数据（有公共数据回退） | 始终运行（退化模式） | 退化为低级模式（如RTK→SPP） |
+
+> **退化测试**（⚠️）：测试始终可运行，但无私有数据时退化为低级模式。例如 RTK 测试在缺 base+rover 对时退化为 SPP，仍可验证解码和基本定位流程，但无法验证 RTK Fix 率。
 
 ### 0.6 获取测试数据
 
@@ -111,6 +118,80 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
    rtklib-core/src/test/resources/test-data.properties
 # 编辑填入本地路径
 ```
+
+### 0.7 私有 RTCM3 数据配置（目录模式）
+
+RTK/PPP 测试依赖本地私有 RTCM3 数据（含设备ID，不可公开），通过 `rover.file` 和 `base.file` 配置，**同时支持文件路径和目录路径**。
+
+#### 数据目录结构
+
+```
+设备ID/日期/小时.rtcm3
+```
+
+示例：
+
+```
+D:\rtcm3\
+├── BASE_ID\
+│   └── 2026-05-20\
+│       ├── 08.rtcm3
+│       ├── 09.rtcm3
+│       └── 10.rtcm3
+└── ROVER_ID\
+    └── 2026-05-20\
+        ├── 08.rtcm3
+        ├── 09.rtcm3
+        └── 10.rtcm3
+```
+
+#### 配置方式
+
+在 `test-data.properties` 中设置：
+
+```properties
+# 单文件（1小时）
+rover.file=D:\rtcm3\ROVER_ID\2026-05-20\08.rtcm3
+base.file=D:\rtcm3\BASE_ID\2026-05-20\08.rtcm3
+
+# 目录（整天）
+rover.file=D:\rtcm3\ROVER_ID\2026-05-20
+base.file=D:\rtcm3\BASE_ID\2026-05-20
+
+# 目录（某设备所有数据，慎用）
+rover.file=D:\rtcm3\ROVER_ID
+base.file=D:\rtcm3\BASE_ID
+```
+
+**通过目录深度控制数据范围**，无需过滤参数：
+
+| 配置路径深度 | 数据范围 | 适用场景 |
+|-------------|---------|---------|
+| `设备/日期/小时.rtcm3` | 单小时 | 快速验证 |
+| `设备/日期/` | 该日所有小时 | 整天RTK/PPP |
+| `设备/` | 所有日期和小时 | 长期统计（慎用） |
+
+#### 配对规则
+
+目录模式下自动配对：以基站目录为基准扫描 `.rtcm3` 文件，通过**相对路径**匹配流动站目录下同名文件，缺失则跳过。要求 base 和 rover 目录下**文件相对路径一致**（子目录结构和文件名相同）。程序按路径字符串排序（非时间排序），**小时文件名必须补零**（`08.rtcm3` 而非 `8.rtcm3`），否则字符串排序结果与时间顺序不符（`10.rtcm3` 会排在 `8.rtcm3` 前）。
+
+> ⚠️ 程序按路径字符串排序，不按时间排序。若文件名不满足补零约定，排序结果将与时间顺序不一致，请自行编写测试样例。
+
+#### 代码使用
+
+```java
+// 获取所有 base-rover 文件对
+List<String[]> pairs = TestDataConfig.resolveBaseRoverPairs();
+for (String[] pair : pairs) {
+    String baseFile = pair[0];
+    String roverFile = pair[1];
+}
+
+// 单独解析路径（SPP等单站场景）
+List<String> files = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile());
+```
+
+> **完整说明**详见 [TEST_DEVELOPMENT_GUIDE.md §3.5](TEST_DEVELOPMENT_GUIDE.md)。
 
 ---
 
@@ -127,13 +208,13 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **SppSmoothAndSbasTest** | SPP | 无（纯数值） | 内置 | ✅ |
 | **RinexSppTest** | SPP | RTCM3→RINEX→SPP | 公共: rtcm3_gmsd + open-sky_base | ✅ |
 | **RinexSppProcessorTest** | SPP | RTCM3→RINEX→SPP | 公共: rtcm3_gmsd | ✅ |
-| **RtkTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (rover=base同文件) | ✅ |
-| **RtkProcessorTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (rover=base同文件) | ✅ |
+| **RtkTest** | RTK | RTCM3 (BDS双频观测,全系统配置) | **私有: base+rover对**(⚠️退化SPP) | ⚠️ |
+| **RtkProcessorTest** | RTK | RTCM3 (BDS双频观测,全系统配置) | **私有: base+rover对**(⚠️退化SPP) | ⚠️ |
 | **RtkLocalTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (rover=base同文件) | ✅ |
-| **RtkOptimizationTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (rover=base同文件) | ✅ |
-| **RtkOptimizationIndividualTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (rover=base同文件) | ✅ |
-| **RtkArDebugTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (rover=base同文件) | ✅ |
-| **RtkTraceTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (fallback本地配置) | ✅ |
+| **RtkOptimizationTest** | RTK | RTCM3 (BDS双频观测,全系统配置) | **私有: base+rover对**(⚠️退化SPP) | ⚠️ |
+| **RtkOptimizationIndividualTest** | RTK | RTCM3 (BDS双频观测,全系统配置) | **私有: base+rover对**(⚠️退化SPP) | ⚠️ |
+| **RtkArDebugTest** | RTK | RTCM3 (BDS双频观测,全系统配置) | **私有: base+rover对**(⚠️退化SPP) | ⚠️ |
+| **RtkTraceTest** | RTK | RTCM3 (私有设备ID) | **私有: base+rover对**(无公共回退) | ❌ |
 | **RtkBenchmarkTest** | RTK | RINEX3.02/3.04 (G+R+E+J+C) | 公共: PPC-Dataset + UrbanNav | ✅ |
 | **LogTraceTest** | RTK | RTCM3 (G+R+C) | 公共: rtcm3_gmsd (fallback本地配置) | ✅ |
 | **RtkIonoptTest** | RTK | RTCM3 (私有设备ID) | **私有: rtcm.base.dir** | ❌ |
@@ -164,13 +245,19 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **AmbiguityStateSerializationTest** | 序列化 | 无（构造输入） | 内置 | ✅ |
 | **EpochCacheTest** | 缓存 | 无（构造输入） | 内置 | ✅ |
 
-### 1.2 需要私有数据的测试
+### 1.2 需要本地/私有数据的测试
 
-> **核心障碍不是"私有数据"，而是特定场景的公开数据不存在。** 大部分测试已使用公开数据集（GREAT-PVT sample_data、RTKLIB_EX_2.5.0、IGS产品等）。仅 RtkIonoptTest 因使用含设备ID的RTCM3流而依赖私有数据。
+> **核心障碍**：特定场景的公开数据不存在，而非"私有数据"本身。大部分测试已使用公开数据集（GREAT-PVT sample_data、RTKLIB_EX_2.5.0、IGS产品等）。仅 RtkIonoptTest 因使用含设备ID的RTCM3流而依赖本地私有数据；RtkTest/RtkOptimizationTest等虽有本地私有数据验证结果，但缺可公开的同步base+rover RTCM3文件对。
 
-| 测试类 | 原因 | 所需数据 | 配置方式 |
-|--------|------|----------|----------|
-| **RtkIonoptTest** | 需要完整RTCM3基站+流动站多小时数据（含设备ID，不可公开） | 设备ID+日期+时段 | `test-data.properties` 中 `baserover.group1` + `ionopt.date` |
+| 测试类 | 原因 | 所需数据 | 无私有数据时行为 | 配置方式 |
+|--------|------|----------|------------------|----------|
+| **RtkTest** | 需base+rover RTCM3对（含设备ID，不可公开） | base+rover对(BDS双频) | ⚠️退化SPP | `test-data.properties` 中 `rover.file` + `base.file` |
+| **RtkProcessorTest** | 同RtkTest | 同上 | ⚠️退化SPP | 同上 |
+| **RtkOptimizationTest** | 同RtkTest | 同上 | ⚠️退化SPP | 同上 |
+| **RtkOptimizationIndividualTest** | 同RtkTest | 同上 | ⚠️退化SPP | 同上 |
+| **RtkArDebugTest** | 同RtkTest | 同上 | ⚠️退化SPP | 同上 |
+| **RtkTraceTest** | 需base+rover RTCM3对（含设备ID，不可公开），无公共数据回退 | base+rover对 | ❌跳过 | `test-data.properties` 中 `rover.file` + `base.file` |
+| **RtkIonoptTest** | 需完整RTCM3基站+流动站多小时数据（含设备ID，不可公开） | 设备ID+日期+时段 | ❌跳过 | `test-data.properties` 中 `rover.file` + `base.file`（支持目录模式，详见 §0.7） |
 
 ### 1.3 数据覆盖与缺口分析
 
@@ -195,8 +282,8 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 | 场景 | 当前数据 | 缺口 | 欢迎上传 |
 |------|----------|------|----------|
-| **城市峡谷RTK** | 有SPP数据(MobileGNSS 4场景: elevated/street≤2MB在test-data，opensky/downtown>2MB在独立数据仓库)，有准静态RTK(Net_Diff urban)；**动态数据已到位**: PPC-Dataset (Tokyo/Nagoya, 2024) + UrbanNav (Tokyo, 2018) | 数据已到位但RTK引擎城市峡谷Fix率为0%，RtkBenchmarkTest仅验证不崩溃(阈值2%)，待引擎修复后做精度验证 | ✅ |
-| **RTCM二进制RTK** | RtkTest/RtkLocalTest等6个测试用`rtcm3_gmsd`同一文件同时作rover和base，走RTCM二进制路径，当前全部失败(success=0) | 需真正的base+rover RTCM3文件对，或改走RINEX路径 | ✅ |
+| **城市峡谷RTK** | PPC-Dataset (Tokyo/Nagoya, 2024) + UrbanNav (Tokyo, 2018)，含base+rover对和参考真值 | RtkBenchmarkTest待收紧阈值并启用精度验证 | ✅ |
+| **RTCM二进制RTK** | 本地私有数据(base+rover RTCM3对)已验证通过：RtkTest Fix率69.5%(Fix=82/118)，RtkProcessorTest全部通过 | 缺可公开的同步base+rover RTCM3文件对 | ✅ |
 | **PPP-AR完整验证** | 有精密产品(SP3+CLK+OSB+ATX+IONEX)+UPD WL/EWL(≤2MB在test-data)+UPD NL(>2MB在独立数据仓库)+SP3/BSX(≤2MB在test-data)+CLK/brdc(>2MB在独立数据仓库) | 缺24h长时段+参考Fixed解对比 | ✅ |
 | **多频(≥3频)RTK** | GODN站RINEX3.04含BDS B1I+B3I双频+多频(10min≤2MB在test-data，24h>2MB在独立数据仓库) | 缺BDS三频数据 | ✅ |
 | **RTCM流式RTK** | 本地RTCM3 base+rover文件已验证通过（含设备ID不可公开） | 缺可公开的同步base+rover RTCM3文件对 | ✅ |
@@ -205,14 +292,14 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 | 场景 | 需要的数据 | 欢迎上传 |
 |------|-----------|----------|
-| **深城市/峡谷RTK** | PPC-Dataset已有downtown，但缺更极端场景（天空角<30°，多路径严重）的base+rover对 | ✅ |
+| **深城市/峡谷RTK** | 更极端场景（天空角<30°，多路径严重）的base+rover对 | ✅ |
 | **高速动态RTK** | PPC-Dataset/UrbanNav为车载（~30km/h），缺高速(>80km/h)动态轨迹base+rover对 | ✅ |
 | **长基线RTK (>10km)** | 长基线base+rover，需估计大气参数 | ✅ |
 | **PPP-RTK实时** | SSR实时流数据 | ✅ |
 | **森林/林冠** | 树冠遮挡，信噪比低 | ✅ |
 | **室内定位** | 严重遮挡 | ✅ |
 
-> **RTCM流式定位说明**：当前SPP已有RTCM直接定位测试（`SppTest`、`SppProcessorTest`）。RTK的RTCM流式端到端测试已有本地数据验证（`RtkIonoptTest`），但该数据含设备ID不可公开。现有公共RTCM文件中，`rtcm3_gmsd`为rover观测流，`open-sky_base`为VRS差分改正流而非标准base观测值流，无法构成RTK双流输入。如有可公开的同步base+rover RTCM3文件对，欢迎上传补充。
+> **RTCM流式定位说明**：当前SPP已有RTCM直接定位测试（`SppTest`、`SppProcessorTest`）。RTK的RTCM流式端到端测试已有本地私有数据验证（`RtkTest` Fix率69.5%、`RtkProcessorTest`全部通过、`RtkOptimizationTest` Fix率62.7%~69.5%），但该数据含设备ID不可公开。公共数据下这些测试退化为SPP回退，无法产生RTK Fix率。现有公共RTCM文件中，`rtcm3_gmsd`为rover观测流，`open-sky_base`为VRS差分改正流而非标准base观测值流，无法构成RTK双流输入。如有可公开的同步base+rover RTCM3文件对，欢迎上传补充。
 
 ---
 
@@ -224,8 +311,8 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 |------|------|------|------|------|------|
 | `rinex210_gps_0759.05o` | RINEX 2.10 | G | open-sky | rover | RTK流动站(GPS双频L1/L2) |
 | `rinex210_gps_3040.05o` | RINEX 2.10 | G | open-sky | base | RTK基站(GPS双频L1/L2) |
-| `rinex304_gej_3034.21o` | RINEX 3.04 | G+E+J | open-sky | rover | 多系统1min采样 |
-| `rinex304_gej_sept.21o` | RINEX 3.04 | G+E+J | open-sky | rover | Septentrio接收机1min |
+| `rinex304_gej_3034.21o` | RINEX 3.04 | G+E+J | open-sky | rover | 多系统1min采样（3034为测站编号） |
+| `rinex304_gej_sept.21o` | RINEX 3.04 | G+E+J | open-sky | rover | Septentrio接收机1min（sept为接收机型号缩写） |
 | `rinex304_gejc_elevated.25o` | RINEX 3.04 | G+E+J+C | urban | rover | 手机高架桥场景(SPP优化测试) |
 | `rinex304_gejc_street.25o` | RINEX 3.04 | G+E+J+C | street | rover | 手机街道场景(SPP优化测试) |
 | `rinex304_godn_10min.23o` | RINEX 3.04 | G+R+E+C | open-sky | rover | IGS GODN站10分钟截取，含BDS多频 |
@@ -246,8 +333,8 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 | 文件 | 系统 | 场景 | 角色 | 用途 |
 |------|------|------|------|------|
-| `open-sky_base_20090515.rtcm3` | G | open-sky | base | VRS差分改正数流(含NovAtel私有消息) |
-| `rtcm3_gmsd_20121014.rtcm3` | G+R+C | open-sky | rover | 标准RTCM3消息(G+R+C三系统) |
+| `open-sky_base_20090515.rtcm3` | G | open-sky | base(VRS) | VRS差分改正数流(非标准base观测值，含NovAtel私有消息) |
+| `rtcm3_gmsd_20121014.rtcm3` | G+R+C | open-sky | rover/自差分 | 标准RTCM3消息(G+R+C三系统)，可作rover或rover=base自差分 |
 
 ### 2.4 精密产品
 
@@ -260,11 +347,11 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | `cod_osb_2021265.bia` | Bias-SINEX | CODE码偏差(OSB) |
 | `cod0mgxfin_2023305.sp3` | SP3精密轨道 | CODE MGEX最终轨道(2023 DOY305) |
 | `cas0mgxrap_2023305.bsx` | Bias-SINEX | CAS MGEX DCB/OSB(2023 DOY305) |
-| `upd/upd_wl_2023305_G/E/C` | UPD宽巷 | WHU宽巷UPD(GPS/GAL/BDS) |
-| `upd/upd_ewl_2023305_G/E/C` | UPD超宽巷 | WHU超宽巷UPD(GPS/GAL/BDS) |
-| `upd/upd_ewl24/25_2023305_C/E` | UPD超宽巷24/25 | WHU超宽巷UPD(BDS/GAL) |
+| `upd/upd_wl_2023305_G`, `upd_wl_2023305_E`, `upd_wl_2023305_C` | UPD宽巷 | WHU宽巷UPD(GPS/GAL/BDS) |
+| `upd/upd_ewl_2023305_G`, `upd_ewl_2023305_E`, `upd_ewl_2023305_C` | UPD超宽巷 | WHU超宽巷UPD(GPS/GAL/BDS) |
+| `upd/upd_ewl24_2023305_C`, `upd_ewl25_2023305_E` | UPD超宽巷24/25 | WHU超宽巷UPD(BDS B1c/B2a频点, GAL E5a/E5b频点) |
 
-> **大文件(>2MB)在独立数据仓库**：`cod0mgxfin_2023305.clk`(CLK 33.9MB)、`upd_nl_2023305_G/E/C`(NL窄巷 2.5~3.6MB)、`ifcb_2023305`(IFCB 3.3MB)、`brdc3050.23p`(广播星历 11.6MB)，通过 `download-test-data.ps1` 获取。
+> **大文件(>2MB)在独立数据仓库**，完整清单见 [§6 精密产品大文件](#6-大文件数据仓库)，通过 `download-test-data.ps1` 获取。
 
 ### 2.5 PPC-Dataset 城市峡谷RTK数据
 
@@ -282,6 +369,7 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 > **来源**: [taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset) (千叶工业大学), License: CC-BY-4.0
 > **下载**: OneDrive (155MB zip), 详见 `test-data/ppc/PPC-Dataset/README.md`
+> **.meta规范**：外部数据集（PPC-Dataset、UrbanNav）沿用原始命名（如`rover.obs`、`tokyo3530.18o`），不强制要求`.meta`文件。如需新增为独立测试数据文件（如截取子集），则须按§0.2规范附带`.meta`。
 
 ### 2.6 UrbanNav 城市峡谷RTK数据
 
@@ -366,10 +454,11 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 | 项目 | 说明 |
 |------|------|
-| 数据 | RTCM3二进制: `rtcm3_gmsd_20121014.rtcm3` (rover=base同文件，G+R+C) |
+| 数据 | 本地私有RTCM3: base+rover对（BDS双频观测，含设备ID不可公开）；公共数据`rtcm3_gmsd`为单文件无法构成RTK双流，仅SPP回退 |
 | 模式 | RTK Kinematic (PMODE_KINEMA) |
-| 配置 | GPS+BDS双频, IONOOPT_BRDC, ARMODE_FIXHOLD |
+| 配置 | G+R+E+C全系统+BDS双频, IONOOPT_BRDC, ARMODE_FIXHOLD |
 | 验证 | 历元数>0，FIX率统计 |
+| 实测结论 | 本地私有数据: Fix率69.5%(Fix=82/118)；公共数据: 无RTK双流输入，仅SPP回退 |
 | 注意 | 走RTCM二进制路径（ephTypes={1019,1020}），不经PostPosProcessor.buildEpochObs()排序 |
 
 #### RtkBenchmarkTest — RTK基准测试（公共城市峡谷数据集）
@@ -382,18 +471,20 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | 验证 | 历元数>0, 成功率>2%, Fix率≥阈值, 水平RMSE<阈值(仅Fix率达标时) |
 | 参考真值 | PPC-Dataset: reference.csv (Applanix POS LVX-120, 5Hz, RMSE 5cm) |
 | 场景 | downtown (Tokyo), urban (Nagoya) |
-| 实测结论 | Fix率0%~0.1%, 成功率2%~20%, 当前仅验证不崩溃(阈值2%), 精度验证被跳过 |
-| 待解决 | SPP初始化发散导致RTK Fix率低, 修复后应收紧阈值并启用精度验证 |
+| 实测结论 | 当前仅验证不崩溃(阈值2%), 待收紧阈值并启用精度验证 |
 
 #### RtkOptimizationTest — RTK优化逐项测试
 
 | 项目 | 说明 |
 |------|------|
-| 数据 | RTCM3二进制: `rtcm3_gmsd_20121014.rtcm3` (rover=base同文件，G+R+C) |
+| 数据 | 本地私有RTCM3: base+rover对(BDS双频)；公共数据`rtcm3_gmsd`为单文件无法构成RTK双流，仅SPP回退 |
 | 模式 | RTK Kinematic |
 | 测试组 | 0_基准AR, 1_自适应Q, 2_IGGIII, 3_SNR中值, 4_PAR重选, 5_锚固, 6_残差编辑, 7_逐级AR, 8_部分AR, 9_Bootstrapping, 10_BDS码偏差, 11_参数噪声, 12_大气冻结, 13_全开 |
 | 验证 | 各组FIX率、平均坐标、STD统计 |
-| 实测结论 | 走RTCM二进制路径，当前全部失败(success=0)，待修复 |
+
+> **测试组→R编号映射**：0=基准(无R编号), 1=R1自适应Q, 2=R4 IGGIII, 3=R5 SNR中值, 4=R6 PAR重选, 5=R2锚固, 6=R9残差编辑, 7=R8逐级AR, 8=R10部分AR, 9=R11 Bootstrapping, 10=R12 BDS码偏差, 11=R7参数噪声(配置项), 12=R3大气冻结(配置项), 13=全开。R3/R7为配置项，在§4.2逐项对比中不单独列出。
+
+| 实测结论 | 本地私有数据(base+rover RTCM3对): Fix率62.7%~69.5%(AR开启)；公共数据`rtcm3_gmsd`为单文件无法构成RTK双流，仅SPP回退 |
 
 #### RtkOptimizationIndividualTest — RTK优化逐项独立测试
 
@@ -410,12 +501,19 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | 数据 | 同RtkOptimizationTest |
 | 目的 | 调试AR为何没有Fix解，逐步开启AR和优化 |
 
-#### RtkTraceTest / LogTraceTest — 追踪日志
+#### RtkTraceTest — 追踪日志
 
 | 项目 | 说明 |
 |------|------|
-| 数据 | 同RtkOptimizationTest |
+| 数据 | 本地私有RTCM3: base+rover对（含设备ID，不可公开）；无公共数据回退，缺数据时跳过 |
 | 验证 | Trace输出完整性、各阶段日志 |
+
+#### LogTraceTest — 日志追踪
+
+| 项目 | 说明 |
+|------|------|
+| 数据 | 本地私有RTCM3: base+rover对（优先）；fallback公共`rtcm3_gmsd`(rover=base同文件，G+R+C) |
+| 验证 | 日志输出完整性 |
 
 #### RtkIonoptTest — 电离层自由组合测试
 
@@ -600,9 +698,11 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 ### 4.2 RTK优化项测试
 
+> **编号说明**：R1~R12编号与[优化功能矩阵](CORE_OPTIMIZATION_MATRIX.md)一致，不连续是因为R3(电离层梯度)和R7(大气冻结)属于配置项而非独立优化开关，不适用于逐项对比测试。R13(参数噪声注入P阵)为R7的辅助配置项，用于测试噪声建模对滤波稳定性的影响，仅在RtkOptimizationsConfigTest中验证。
+
 | 优化项 | 开关 | 测试类 | 开启测试 | 关闭测试 | 数据 | 预期差异 |
 |--------|------|--------|----------|----------|------|----------|
-| R1 自适应Q | `enableAdaptiveQ` | RtkOptimizationIndividualTest | 开启 | 基线 | rinex210 GPS | Static: FIX率不变; Kinematic: 运动跟踪↑ |
+| R1 自适应Q | `enableAdaptiveQ` | RtkOptimizationIndividualTest | 开启 | 基线 | 私有RTCM3 BDS双频(⚠️退化SPP) | Static: FIX率不变; Kinematic: 运动跟踪↑ |
 | R2 模糊度锚固 | `enableAmbAnchor` | RtkOptimizationIndividualTest | 开启 | 基线 | 同上 | 长弧段FIX连续性↑ |
 | R4 IGGIII抗差 | `enableIggiii` | RtkOptimizationIndividualTest | 开启 | 基线 | 同上 | 多路径/NLOS降权 |
 | R5 SNR中值 | `enableSnrMedian` | RtkOptimizationIndividualTest | 开启 | 基线 | 同上 | 弱信号自适应降权 |
@@ -614,6 +714,8 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | R12 BDS码偏差 | `enableBdsCodeBias` | RtkOptimizationIndividualTest | 开启 | 基线 | 同上 | BDS GEO/IGSO偏差改正 |
 
 ### 4.3 PPP优化项测试
+
+> **编号说明**：P1~P8编号与[优化功能矩阵](CORE_OPTIMIZATION_MATRIX.md)一致，跳过P2(PPP-RTK)是因为PPP-RTK为独立模式而非PPP优化项，在P6/P7/P8中单独测试。
 
 | 优化项 | 开关 | 测试类 | 验证方式 | 数据需求 |
 |--------|------|--------|----------|----------|
@@ -635,7 +737,7 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | **SPP城市** | EKF + 抗差 + 多普勒SNR | SppOptimizationTest | rinex304_gejc_elevated |
 | **SPP静态监测** | EKF + 抗差 + 零速 + 多普勒SNR | SppOptimizationTest | rinex304_gejc_elevated |
 | **RTK短基线静态** | 自适应Q + 锚固 + 大气冻结 | LandslideMonitorTest | open-sky_base (RTKLIB sample) |
-| **RTK短基线动态** | 自适应Q + IGGIII + SNR中值 + 逐级AR + 部分AR + Bootstrapping | RtkOptimizationTest | rinex210 GPS双频 (RTKLIB sample) |
+| **RTK短基线动态** | 自适应Q + IGGIII + SNR中值 + 逐级AR + 部分AR + Bootstrapping | RtkOptimizationTest | 私有RTCM3 BDS双频(⚠️退化SPP) |
 | **RTK长基线** | 梯度 + 参数噪声 + 大气冻结 | RtkOptimizationTest | **需长基线数据** |
 | **PPP静态** | GPT3+VMF3 + IERS2010 + ISB + PPP-AR + Fix-Hold | PppOptimizationsTest | **需长时段+产品** |
 | **PPP-RTK** | PPP-RTK + PPP-RTK AR + Fix-Hold | CompactSsrDecoderTest | **需SSR数据** |
@@ -695,6 +797,19 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 | `reference/ppp_wtza_20180606.pos` | 0.4MB | Net_Diff | PPP参考解 |
 | `reference/ppp_wtzr_20180606.pos` | 0.4MB | Net_Diff | PPP参考解 |
 
+#### 精密产品大文件（PPP-AR / IGS MGEX）
+
+| 文件 | 大小 | 来源 | 用途 |
+|------|------|------|------|
+| `product/cod0mgxfin_2023305.clk` | 33.9MB | CODE MGEX | CODE MGEX最终钟差(2023 DOY305) |
+| `upd/upd_nl_2023305_G` | ~3.6MB | WHU | GPS窄巷UPD(PPP-AR) |
+| `upd/upd_nl_2023305_E` | ~2.5MB | WHU | Galileo窄巷UPD(PPP-AR) |
+| `upd/upd_nl_2023305_C` | ~3.0MB | WHU | BDS窄巷UPD(PPP-AR) |
+| `product/ifcb_2023305` | 3.3MB | WHU | IFCB(频间码偏差，WHU命名无扩展名) |
+| `nav/brdc3050.23p` | 11.6MB | IGS | 广播星历(2023 DOY305) |
+
+> 以上精密产品大文件通过 `download-test-data.ps1` 获取，与 §2.4 精密产品小文件（≤2MB，已在主仓库）互补。
+
 ---
 
 ## 7. 上传测试数据
@@ -705,8 +820,7 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 - [ ] 单文件 ≤ 2MB（RTCM ≤ 500KB）
 - [ ] 命名符合 `{scenario}_{role}_{date}[_{type}].{ext}` 格式
-- [ ] 附带 `.meta` 文件且必填字段完整（scenario, role, systems, date, source）
-- [ ] `.meta` 中 `license` 字段已标注（MIT / IGS-data-policy / public / BSD-2-Clause）
+- [ ] 附带 `.meta` 文件且必填字段完整（scenario, role, systems, date, source, license）
 - [ ] `.meta` 中 `test_ids` 字段已标注引用该数据的测试类
 - [ ] `.meta` 中 `scenario` 和 `role` 正确标注
 - [ ] RTK数据标注了 `base.id` 和 `base.distance`
@@ -730,6 +844,8 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 3. **车载动态 RTK** — RTKLIB sample / rtkexplorer F9P 数据 / Google Smartphone Decimeter Challenge
 
 > 下载脚本：`test-data/download-igs-data.ps1`（CDDIS 需先配置 [NASA Earthdata Login](https://urs.earthdata.nasa.gov/users/new)）
+>
+> ⚠️ 以上数据虽公开可得，但需筛选出符合本仓库 `.meta` 规范的子集，并转换为项目测试框架可直接使用的格式（RINEX/RTCM3+参考真值）。Google Smartphone Decimeter Challenge 为城市动态数据，与下方"城市峡谷/深遮挡"场景有重叠，但该数据集缺标准base+rover对和真值。
 
 **数据部分可得，需筛选适配**（工程量中等）：
 
@@ -738,7 +854,7 @@ cp rtklib-core/src/test/resources/test-data.properties.template `
 
 **数据确实稀缺，需自采或社区贡献**：
 
-6. **城市峡谷/深遮挡 RTK** — 带真值的 base+rover 深遮挡成对数据基本无公开来源
+6. **城市峡谷/深遮挡 RTK** — 带真值的 base+rover 深遮挡成对数据基本无公开来源（Google SDC 为手机单站，缺base+rover对）
 7. **Moving-Base RTK** — 公开双移动接收机同步观测数据极少
 8. **森林/林冠** — 树冠遮挡，信噪比低，公开数据稀缺
 9. **RTCM流式RTK公开数据** — 可公开的同步base+rover RTCM3文件对（本地数据已验证但含设备ID不可公开）

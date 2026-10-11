@@ -25,6 +25,10 @@ public class RtcmCallbackDecoder {
         this.handler = handler;
     }
 
+    public void setRelaxSyncFlag(boolean relaxSyncFlag) {
+        this.rtcm.relaxSyncFlag = relaxSyncFlag;
+    }
+
     public void feed(byte[] data, int offset, int length) {
         if (length <= 0 || finished) return;
         ensureCapacity(pendingLen + length);

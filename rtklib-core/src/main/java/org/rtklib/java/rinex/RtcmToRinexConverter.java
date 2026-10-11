@@ -22,6 +22,7 @@ public class RtcmToRinexConverter {
     private final List<Eph> ephList = new ArrayList<>();
     private final List<Geph> gephList = new ArrayList<>();
     private Sta stationInfo = null;
+    private boolean relaxSyncFlag = false;
 
     public RtcmToRinexConverter(double version, String outputDir, String stationName) {
         this.version = version;
@@ -38,6 +39,10 @@ public class RtcmToRinexConverter {
      */
     public void setObstype(int obstype) {
         this.obstype = obstype;
+    }
+
+    public void setRelaxSyncFlag(boolean relaxSyncFlag) {
+        this.relaxSyncFlag = relaxSyncFlag;
     }
 
     public boolean convert(byte[] rtcmData, int len) {
@@ -61,6 +66,7 @@ public class RtcmToRinexConverter {
             };
 
             RtcmCallbackDecoder decoder = new RtcmCallbackDecoder(handler);
+            decoder.setRelaxSyncFlag(this.relaxSyncFlag);
             decoder.feed(rtcmData, 0, len);
             decoder.finish();
 
@@ -134,7 +140,9 @@ public class RtcmToRinexConverter {
     }
 
     public Rtcm getRtcm() {
-        return new Rtcm();
+        Rtcm r = new Rtcm();
+        r.relaxSyncFlag = this.relaxSyncFlag;
+        return r;
     }
 
     public RinexObsWriter getObsWriter() {

@@ -24,21 +24,32 @@
 # station.id=YOUR_STATION_ID
 # station.date=YYYY-MM-DD
 
-# === Base-Rover Pairs (fill in your own) ===
+# === Direct File/Directory Paths ===
+# Supports both file and directory paths:
+#   File:   rover.file=D:\rtcm3\ROVER_ID\2026-05-20\08.rtcm3
+#   Dir:    rover.file=D:\rtcm3\ROVER_ID\2026-05-20
+# When a directory is specified, all .rtcm3 files under it are recursively
+# collected and sorted by path (lexicographic string order, NOT time order).
+# For 设备/日期/小时.rtcm3 structure, hour filenames MUST be zero-padded
+# (08.rtcm3, not 8.rtcm3), otherwise 10.rtcm3 sorts before 8.rtcm3
+# (string order: 10 < 8 < 9).
+# If your data does not follow this convention, write your own test.
+# Use directory path depth to control data scope:
+#   设备/日期/小时.rtcm3  → single hour file
+#   设备/日期/             → all hours of that day
+#   设备/                  → all dates and hours (use with caution)
+#
+# Directory pairing rule:
+#   When both rover.file and base.file are directories, the program scans
+#   base directory for .rtcm3 files, computes each file's relative path
+#   (e.g. 2026-05-20/8.rtcm3), and looks for the same relative path
+#   under the rover directory. Matched pairs are returned; unmatched
+#   base files are skipped.
+#   Requirement: base and rover directories must have identical relative
+#   file paths (same subdirectory structure and file names).
 
-# baserover.group1=YOUR_BASE_ID
-# baserover.rover1=YOUR_ROVER_ID_1,YOUR_ROVER_ID_2
-
-# baserover.group2=YOUR_BASE_ID_2
-# baserover.rover2=YOUR_ROVER_ID_3,YOUR_ROVER_ID_4
-
-# Custom base-rover pairs (optional, semicolon separated, format: baseId=rover1,rover2,...)
-# custom.bases=BASE_ID=ROVER1,ROVER2;BASE2=ROVER3
-
-# === Direct File Paths (optional, override directory-based discovery) ===
-
-# rover.file=test-data/rtcm/ROVER_ID/YYYY-MM-DD/12.rtcm3
-# base.file=test-data/rtcm/BASE_ID/YYYY-MM-DD/12.rtcm3
+# rover.file=test-data/rtcm/ROVER_ID/YYYY-MM-DD/08.rtcm3
+# base.file=test-data/rtcm/BASE_ID/YYYY-MM-DD/08.rtcm3
 
 # === RINEX Data (for VerifyPositioningTest, ForwardBackwardFilterTest) ===
 

@@ -51,16 +51,16 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class AdjustRealDataTest {
 
-    private static final TestDataConfig cfg = new TestDataConfig();
+    private static final String DATA_ROOT = TestDataConfig.getDataRoot();
+    private static final String[] BASES = TestDataConfig.getBaseGroup();
+    private static final String[] ROVERS = TestDataConfig.getRoverGroup();
+    private static final String BASE_A = BASES.length > 0 ? BASES[0] : "";
+    private static final String BASE_B = BASES.length > 1 ? BASES[1] : "";
+    private static final String ROVER = ROVERS.length > 0 ? ROVERS[0] : "";
+    private static final String ROVER2 = ROVERS.length > 1 ? ROVERS[1] : "";
+    private static final String DATE = TestDataConfig.getDate();
 
-    private static final String DATA_ROOT = cfg.getDataRoot();
-    private static final String BASE_A = cfg.getBaseA();
-    private static final String BASE_B = cfg.getBaseB();
-    private static final String ROVER = cfg.getRover();
-    private static final String ROVER2 = cfg.getRover2();
-    private static final String DATE = cfg.getDate();
-
-    private static final boolean DATA_AVAILABLE = cfg.isAvailable() && Files.isDirectory(Paths.get(DATA_ROOT));
+    private static final boolean DATA_AVAILABLE = TestDataConfig.isAvailable() && Files.isDirectory(Paths.get(DATA_ROOT));
 
     static class EpochPair {
         final String epochTag;

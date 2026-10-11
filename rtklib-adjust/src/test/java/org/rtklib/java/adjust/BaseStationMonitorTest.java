@@ -19,20 +19,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class BaseStationMonitorTest {
 
-    private static final TestDataConfig CFG = new TestDataConfig();
-    private static final boolean DATA_AVAILABLE = CFG.isAvailable()
-            && !CFG.getDataRoot().isEmpty()
-            && !CFG.getBadBase().isEmpty();
+    private static final String[] BASES = TestDataConfig.getBaseGroup();
+    private static final boolean DATA_AVAILABLE = TestDataConfig.isAvailable()
+            && !TestDataConfig.getDataRoot().isEmpty()
+            && BASES.length > 0;
 
     @BeforeAll
     static void checkData() {
         if (!DATA_AVAILABLE) {
-            System.out.println("测试数据不可用，跳过测试。" + CFG.getMissingMessage());
+            System.out.println("测试数据不可用，跳过测试。" + TestDataConfig.getMissingMessage());
         }
     }
 
     private String buildPath(String station, String date, int hour) {
-        return String.format("%s\\%s\\%s\\%d.rtcm3", CFG.getDataRoot(), station, date, hour);
+        return String.format("%s\\%s\\%s\\%d.rtcm3", TestDataConfig.getDataRoot(), station, date, hour);
     }
 
     @Test
@@ -41,7 +41,7 @@ public class BaseStationMonitorTest {
         if (!DATA_AVAILABLE) return;
 
         String date = "2026-07-04";
-        String baseStation = CFG.getBadBase();
+        String baseStation = (BASES.length > 1 ? BASES[1] : BASES[0]);
         System.out.println("\n========================================================");
         System.out.println("  基站稳定性监测测试 (RTCM文件输入)");
         System.out.printf("  基站: %s  日期=%s  17-22时%n", baseStation, date);
@@ -139,7 +139,7 @@ public class BaseStationMonitorTest {
         if (!DATA_AVAILABLE) return;
 
         String date = "2026-07-04";
-        String baseStation = CFG.getBadBase();
+        String baseStation = (BASES.length > 1 ? BASES[1] : BASES[0]);
         System.out.println("\n========================================================");
         System.out.println("  模拟基站移动检测");
         System.out.println("========================================================");
@@ -186,7 +186,7 @@ public class BaseStationMonitorTest {
         if (!DATA_AVAILABLE) return;
 
         String date = "2026-07-04";
-        String baseStation = CFG.getBadBase();
+        String baseStation = (BASES.length > 1 ? BASES[1] : BASES[0]);
         System.out.println("\n========================================================");
         System.out.println("  基站监测 (RTCM字节数据输入)");
         System.out.println("========================================================");

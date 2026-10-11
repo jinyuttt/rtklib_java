@@ -1,0 +1,26 @@
+# rtklib-adjust Test Data Configuration
+# Copy this file to adjust-test-data.properties and fill in your paths.
+# adjust-test-data.properties is in .gitignore and will NOT be committed.
+
+# Data root directory
+data.root=YOUR_DATA_ROOT
+
+# Base station IDs (comma-separated)
+# Each rover in rover.group pairs with ALL bases (Cartesian product)
+base.group=YOUR_BASE_A,YOUR_BASE_B
+
+# Rover station IDs (comma-separated)
+# Each rover pairs with every base in base.group
+rover.group=YOUR_ROVER_1,YOUR_ROVER_2
+
+# Date (used for path construction: data.root/station/date/)
+date=YYYY-MM-DD
+
+# === Directory Mode ===
+# When base.group/rover.group point to directories, all .rtcm3 files
+# are recursively collected and sorted by path string order.
+# For hour filenames, use zero-padding (08.rtcm3, not 8.rtcm3),
+# otherwise 10.rtcm3 sorts before 8.rtcm3 (string order: 10 < 8 < 9).
+# Directory pairing: base and rover directories must have identical
+# relative file paths (same subdirectory structure and file names).
+# Complex scenarios: write your own test.

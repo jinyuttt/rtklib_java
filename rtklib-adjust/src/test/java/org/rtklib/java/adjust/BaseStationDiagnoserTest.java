@@ -16,20 +16,24 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class BaseStationDiagnoserTest {
 
-    private static final TestDataConfig cfg = new TestDataConfig();
-
     @Test
     @DisplayName("基站诊断：2基站1测站，检测基站A坐标异常")
     void testDiagnoseTwoBases() {
-        org.junit.jupiter.api.Assumptions.assumeTrue(cfg.isAvailable(), cfg.getMissingMessage());
+        org.junit.jupiter.api.Assumptions.assumeTrue(TestDataConfig.isAvailable(), TestDataConfig.getMissingMessage());
+
+        String[] bases = TestDataConfig.getBaseGroup();
+        String[] rovers = TestDataConfig.getRoverGroup();
+        String baseAId = bases.length > 0 ? bases[0] : "";
+        String baseBId = bases.length > 1 ? bases[1] : "";
+        String roverId = rovers.length > 0 ? rovers[0] : "";
 
         List<String> baseAFiles = new ArrayList<>();
         List<String> baseBFiles = new ArrayList<>();
         List<String> roverFiles = new ArrayList<>();
         for (int h = 0; h <= 8; h++) {
-            baseAFiles.add(cfg.getRtcmPath(cfg.getBaseA(), h));
-            baseBFiles.add(cfg.getRtcmPath(cfg.getBaseB(), h));
-            roverFiles.add(cfg.getRtcmPath(cfg.getRover(), h));
+            baseAFiles.add(TestDataConfig.getRtcmPath(baseAId, h));
+            baseBFiles.add(TestDataConfig.getRtcmPath(baseBId, h));
+            roverFiles.add(TestDataConfig.getRtcmPath(roverId, h));
         }
 
         RtcmFileDataSource baseA = new RtcmFileDataSource("A", baseAFiles);

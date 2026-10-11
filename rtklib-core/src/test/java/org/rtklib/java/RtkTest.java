@@ -270,22 +270,27 @@ public class RtkTest {
         int singleCount = 0;
         int matchedEpochs = 0;
 
-        int baseIdx = 0;
         GTime lastMatchedBaseTime = null;
+        List<Integer> usedBaseIndices = new ArrayList<>();
 
         for (ObsEpoch roverEpoch : roverEpochs) {
             GTime roverTime = roverEpoch.time;
 
-            while (baseIdx >= 0 && baseIdx < baseEpochs.size()) {
-                double dt = TimeSystem.timediff(baseEpochs.get(baseIdx).time, roverTime);
-                if (Math.abs(dt) < 1.0) break;
-                if (dt > 0) { baseIdx = -1; break; }
-                baseIdx++;
+            int bestBaseIdx = -1;
+            double bestDt = Double.MAX_VALUE;
+            for (int bi = 0; bi < baseEpochs.size(); bi++) {
+                if (usedBaseIndices.contains(bi)) continue;
+                double dt = Math.abs(TimeSystem.timediff(baseEpochs.get(bi).time, roverTime));
+                if (dt < bestDt && dt <= 30.0) {
+                    bestDt = dt;
+                    bestBaseIdx = bi;
+                }
             }
 
-            if (baseIdx < 0 || baseIdx >= baseEpochs.size()) continue;
+            if (bestBaseIdx < 0) continue;
+            usedBaseIndices.add(bestBaseIdx);
 
-            ObsEpoch baseEpoch = baseEpochs.get(baseIdx);
+            ObsEpoch baseEpoch = baseEpochs.get(bestBaseIdx);
             if (lastMatchedBaseTime != null
                     && TimeSystem.timediff(baseEpoch.time, lastMatchedBaseTime) == 0.0) {
                 continue;
