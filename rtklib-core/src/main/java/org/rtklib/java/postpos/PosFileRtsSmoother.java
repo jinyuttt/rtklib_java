@@ -10,6 +10,9 @@ import java.io.Reader;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * 基于RTKLIB .pos文件的RTS平滑后处理工具（测试功能）。
  *
@@ -83,6 +86,8 @@ import java.util.List;
  * @see Smoother#smooth(double[], double[], double[], double[], int, double[], double[])
  */
 public class PosFileRtsSmoother {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PosFileRtsSmoother.class);
 
     /**
      * .pos文件中的单个历元数据。
@@ -442,6 +447,7 @@ public class PosFileRtsSmoother {
             try {
                 K = PPred.mult(S.invert());
             } catch (Exception e) {
+                LOG.debug("RTS smoother matrix invert failed: {}", e.getMessage());
                 xFwd[i] = xPred.copy();
                 PFwd[i] = PPred.copy();
                 continue;
@@ -625,25 +631,32 @@ public class PosFileRtsSmoother {
         }
 
         List<PosEpoch> epochs = parse(filePaths);
-        System.out.printf("Parsed %d epochs from %d file(s)%n", epochs.size(), filePaths.size());
+        LOG.info("Parsed {} epochs from {} file(s)", epochs.size(), filePaths.size());
 
         SmoothResult result = process(epochs, config);
 
-        System.out.printf("Mode: %s (processNoiseStd=%.4f, nonFixScale=%.0f)%n",
+        LOG.info("Mode: {} (processNoiseStd={}, nonFixScale={})",
                 config.useKalman ? "Kalman RTS" : "Simple reverse-pair RTS",
-                config.processNoiseStd, config.nonFixVarianceScale);
-        System.out.printf("Summary: total=%d, fixed=%d, float=%d, smoothed=%d, fallback=%d%n",
+                String.format("%.4f", config.processNoiseStd),
+                String.format("%.0f", config.nonFixVarianceScale));
+        LOG.info("Summary: total={}, fixed={}, float={}, smoothed={}, fallback={}",
                 result.totalEpochs, result.fixedCount, result.floatCount,
                 result.smoothedCount, result.fallbackCount);
-        System.out.printf("Smoothed std: E=%.4fmm  N=%.4fmm  U=%.4fmm  range: E=%.4fmm  N=%.4fmm  U=%.4fmm%n",
-                result.eStd * 1000, result.nStd * 1000, result.uStd * 1000,
-                result.eRange * 1000, result.nRange * 1000, result.uRange * 1000);
+        LOG.info("Smoothed std: E={}mm  N={}mm  U={}mm  range: E={}mm  N={}mm  U={}mm",
+                String.format("%.4f", result.eStd * 1000),
+                String.format("%.4f", result.nStd * 1000),
+                String.format("%.4f", result.uStd * 1000),
+                String.format("%.4f", result.eRange * 1000),
+                String.format("%.4f", result.nRange * 1000),
+                String.format("%.4f", result.uRange * 1000));
 
-        System.out.println("%  GPST                   e-smoothed(m)  n-smoothed(m)  u-smoothed(m)   Q  ns  smoothed");
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("%%  GPST                   e-smoothed(m)  n-smoothed(m)  u-smoothed(m)   Q  ns  smoothed%n"));
         for (SmoothedEpoch se : result.epochs) {
-            System.out.printf("%s  %12.4f  %12.4f  %12.4f  %2d  %2d  %s%n",
+            sb.append(String.format("%s  %12.4f  %12.4f  %12.4f  %2d  %2d  %s%n",
                     se.time, se.e, se.n, se.u, se.q, se.ns,
-                    se.smoothed ? "Y" : "N");
+                    se.smoothed ? "Y" : "N"));
         }
+        LOG.info(sb.toString());
     }
 }

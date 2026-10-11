@@ -123,8 +123,8 @@ public final class IonosphereModel {
         double STEC = neq[0] * Math.exp(-zenith * zenith / (2.0 * neq[1] * neq[1]));
         
         double freq_factor = 1.0;
-        if (freq == 1) freq_factor = Math.pow(Constants.FREQL1 / Constants.FREQL2, 2);
-        else if (freq == 2) freq_factor = Math.pow(Constants.FREQL1 / Constants.FREQL5, 2);
+        if (freq == 1) { double r = Constants.FREQL1 / Constants.FREQL2; freq_factor = r * r; }
+        else if (freq == 2) { double r = Constants.FREQL1 / Constants.FREQL5; freq_factor = r * r; }
         
         return STEC * 40.3 / (Constants.FREQL1 * Constants.FREQL1 / 1E6) * freq_factor;
     }
@@ -137,7 +137,8 @@ public final class IonosphereModel {
      * @return Ionosphere delay (m)
      */
     public static double ionoFree(double P1, double P2) {
-        double gamma = Math.pow(Constants.FREQL1 / Constants.FREQL2, 2);
+        double r = Constants.FREQL1 / Constants.FREQL2;
+        double gamma = r * r;
         return (gamma * P1 - P2) / (gamma - 1.0);
     }
 
@@ -150,8 +151,10 @@ public final class IonosphereModel {
      * @return Ionosphere delay (m)
      */
     public static double ionoFreeTriple(double P1, double P2, double P5) {
-        double gamma12 = Math.pow(Constants.FREQL1 / Constants.FREQL2, 2);
-        double gamma15 = Math.pow(Constants.FREQL1 / Constants.FREQL5, 2);
+        double r12 = Constants.FREQL1 / Constants.FREQL2;
+        double r15 = Constants.FREQL1 / Constants.FREQL5;
+        double gamma12 = r12 * r12;
+        double gamma15 = r15 * r15;
         
         double a = (gamma15 - gamma12) / ((gamma12 - 1.0) * (gamma15 - 1.0));
         double b = (gamma12 * (gamma15 - 1.0) - gamma15 * (gamma12 - 1.0)) / 

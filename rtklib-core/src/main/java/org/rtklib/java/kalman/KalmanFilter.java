@@ -3,6 +3,9 @@ package org.rtklib.java.kalman;
 import org.ejml.simple.SimpleMatrix;
 import org.rtklib.java.common.MatrixUtil;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Kalman filter measurement update.
  *
@@ -15,6 +18,8 @@ import org.rtklib.java.common.MatrixUtil;
  * which guarantees positive semi-definiteness of the updated covariance matrix.</p>
  */
 public final class KalmanFilter {
+
+    private static final Logger LOG = LoggerFactory.getLogger(KalmanFilter.class);
 
     /**
      * Kalman filter measurement update with state compression.
@@ -94,6 +99,7 @@ public final class KalmanFilter {
 
             return 0;
         } catch (Exception e) {
+            LOG.debug("KalmanFilter.update failed: {}", e.getMessage());
             return -1;
         }
     }

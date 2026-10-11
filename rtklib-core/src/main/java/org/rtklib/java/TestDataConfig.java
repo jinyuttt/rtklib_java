@@ -5,8 +5,12 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public final class TestDataConfig {
 
+    private static final Logger LOG = LoggerFactory.getLogger(TestDataConfig.class);
     private static final String CONFIG_FILE = "test-data.properties";
     private static final Properties props = new Properties();
     private static boolean loaded = false;
@@ -29,10 +33,10 @@ public final class TestDataConfig {
             if (Files.exists(p)) {
                 try (InputStream is = Files.newInputStream(p)) {
                     props.load(is);
-                    System.out.println("[TestDataConfig] Loaded: " + p.toAbsolutePath());
+                    LOG.info("[TestDataConfig] Loaded: {}", p.toAbsolutePath());
                     return;
                 } catch (IOException e) {
-                    System.err.println("[TestDataConfig] Failed to read " + p + ": " + e.getMessage());
+                    LOG.warn("[TestDataConfig] Failed to read {}: {}", p, e.getMessage());
                 }
             }
         }
@@ -41,14 +45,14 @@ public final class TestDataConfig {
         try (InputStream is = TestDataConfig.class.getResourceAsStream(resourcePath)) {
             if (is != null) {
                 props.load(is);
-                System.out.println("[TestDataConfig] Loaded from classpath");
+                LOG.info("[TestDataConfig] Loaded from classpath");
                 return;
             }
         } catch (IOException e) {
-            System.err.println("[TestDataConfig] Failed to read from classpath: " + e.getMessage());
+            LOG.error("[TestDataConfig] Failed to read from classpath: {}", e.getMessage());
         }
 
-        System.out.println("[TestDataConfig] No " + CONFIG_FILE + " found, using defaults");
+        LOG.info("[TestDataConfig] No {} found, using defaults", CONFIG_FILE);
     }
 
     public static String get(String key, String defaultValue) {

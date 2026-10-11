@@ -6,6 +6,9 @@ import org.rtklib.java.data.Obsd;
 import java.io.*;
 import java.util.*;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * 外部缓存实现，通过 {@link ExternalCacheProvider} 对接Redis/数据库/文件等。
  * <p>
@@ -15,6 +18,7 @@ import java.util.*;
  */
 public class ExternalEpochCache implements EpochCache {
 
+    private static final Logger LOG = LoggerFactory.getLogger(ExternalEpochCache.class);
     private final ExternalCacheProvider provider;
 
     public ExternalEpochCache(ExternalCacheProvider provider) {
@@ -84,6 +88,7 @@ public class ExternalEpochCache implements EpochCache {
              ObjectInputStream ois = new ObjectInputStream(bis)) {
             return (CachedEpoch) ois.readObject();
         } catch (Exception e) {
+            LOG.debug("Failed to deserialize cached epoch: {}", e.getMessage());
             return null;
         }
     }

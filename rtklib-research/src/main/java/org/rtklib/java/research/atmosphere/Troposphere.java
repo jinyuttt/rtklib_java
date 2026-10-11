@@ -27,8 +27,10 @@ public final class Troposphere {
         double zhd = 0.0022768 * pres / (1.0 - 0.00266 * Math.cos(2.0 * receiverLLH[0]) - 0.00028 * h / 1000.0);
         double zwd = 0.002277 * (1255.0 / temp + 0.05) * e_w;
 
-        double mapfh = 1.0 / Math.sqrt(1.0 - Math.pow(0.9782 * Math.cos(elRad), 2));
-        double mapfw = 1.0 / Math.sqrt(1.0 - Math.pow(0.9562 * Math.cos(elRad), 2));
+        double hcos_el = 0.9782 * Math.cos(elRad);
+        double wcos_el = 0.9562 * Math.cos(elRad);
+        double mapfh = 1.0 / Math.sqrt(1.0 - hcos_el * hcos_el);
+        double mapfw = 1.0 / Math.sqrt(1.0 - wcos_el * wcos_el);
 
         return zhd * mapfh + zwd * mapfw;
     }

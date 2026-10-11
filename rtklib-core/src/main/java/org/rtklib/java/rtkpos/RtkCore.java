@@ -135,20 +135,27 @@ public final class RtkCore {
             }
         }
 
-        double[] rs = new double[n * 6];
-        double[] dts = new double[n * 2];
-        double[] vare = new double[n];
-        int[] svh = new int[n];
-        double[] azel = new double[Constants.MAXSAT * 2];
+        RtkWorkBuffer wb = (RtkWorkBuffer) rtk.workBufRtk;
+        if (wb == null) {
+            wb = new RtkWorkBuffer();
+            rtk.workBufRtk = wb;
+        }
+        wb.ensureInit();
+
+        double[] rs = wb.rs;
+        double[] dts = wb.dts;
+        double[] vare = wb.vare;
+        int[] svh = wb.svh;
+        double[] azel = wb.azel;
 
         EphModel.satposs(obs[0].time, obs, n, nav, rs, dts, vare, svh, opt.sateph);
 
         RtkTrace.traceStage1(v1ctrl, v1cb, rtk.epoch, obs[0].time, null, 0, nf,
                 rs, dts, nav, rtk.rb, null);
 
-        double[] y = new double[nf * 2 * n];
-        double[] e = new double[3 * n];
-        double[] freq = new double[nf * n];
+        double[] y = wb.y;
+        double[] e = wb.e;
+        double[] freq = wb.freq;
 
         if (!zdres(1, obs, nu, nr, rs, dts, vare, svh, nav, rtk.rb, opt,
                 y, e, azel, freq, rtk.epoch)) {
@@ -162,9 +169,9 @@ public final class RtkCore {
             return 1;
         }
 
-        int[] sat = new int[Constants.MAXSAT];
-        int[] iu = new int[Constants.MAXSAT];
-        int[] ir = new int[Constants.MAXSAT];
+        int[] sat = wb.sat;
+        int[] iu = wb.iu;
+        int[] ir = wb.ir;
         ns = selsat(obs, azel, nu, nr, opt, sat, iu, ir);
         if (ns <= 0) {
             LOG.info("relpos: selsat returned 0, epoch={}", rtk.epoch);
@@ -216,23 +223,25 @@ public final class RtkCore {
         // [OPT-PARAM-NOISE] 参数类型级自适应过程噪声
         RtkOptimizations.applyParamTypeNoise(rtk, rtk.P, rtk.nx, rtk.tt);
 
-        double[] xp = new double[nx];
-        double[] Pp = new double[nx * nx];
+        wb.ensureState(nx);
+        double[] xp = wb.xp;
+        double[] Pp = wb.Pp;
         System.arraycopy(rtk.x, 0, xp, 0, nx);
         System.arraycopy(rtk.P, 0, Pp, 0, nx * nx);
 
         int ny = ns * nf * 2 + 2;
-        double[] v = new double[ny];
-        double[] H = new double[nx * ny];
-        double[] R = new double[ny * ny];
-        int[] vflg = new int[ny];
-        double[] xa = new double[nx];
-        double[] bias = new double[nx];
+        wb.ensureObs(nx, ny);
+        double[] v = wb.v;
+        double[] H = wb.H;
+        double[] R = wb.R;
+        int[] vflg = wb.vflg;
+        double[] xa = wb.xa;
+        double[] bias = wb.bias;
 
         int stat = opt.mode <= Constants.PMODE_DGPS ? Constants.SOLQ_DGPS : Constants.SOLQ_FLOAT;
 
 
-        double[] rr_rover = new double[3];
+        double[] rr_rover = wb.rr_rover;
 
         for (i = 0; i < opt.niter; i++) {
             for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xp[j];
@@ -339,8 +348,8 @@ public final class RtkCore {
                     }
                 }
             }
-            double[] bias_arr = new double[nx];
-            double[] xa_arr = new double[nx];
+            double[] bias_arr = wb.bias_arr;
+            double[] xa_arr = wb.xa_arr;
             int nb = manage_amb_LAMBDA(rtk, bias_arr, xa_arr, sat, nf, ns, nav);
 
             RtkTrace.traceStage5(v1ctrl, v1cb, rtk.epoch, obs[0].time,
@@ -2263,6 +2272,7 @@ public final class RtkCore {
                 double[] hPos = computeHPos(H, R, nv, nx);
                 rtk.sol.hPos = hPos;
             } catch (Exception e) {
+                LOG.debug("computeHPos failed: {}", e.getMessage());
                 rtk.sol.hPos = null;
             }
         }
@@ -2283,6 +2293,7 @@ public final class RtkCore {
                 rtk.sol.innovMax = maxNorm;
                 rtk.sol.ddObsCount = nv;
             } catch (Exception e) {
+                LOG.debug("computeInnovation failed: {}", e.getMessage());
                 rtk.sol.innovRms = Double.NaN;
                 rtk.sol.innovMax = Double.NaN;
                 rtk.sol.ddObsCount = 0;
@@ -2358,5 +2369,74 @@ public final class RtkCore {
         }
 
         return hPos;
+    }
+
+    public static final class RtkWorkBuffer {
+        // Fixed-size arrays (MAXSAT/MAXOBS sized, allocated once)
+        double[] rs;         // MAXOBS * 6
+        double[] dts;        // MAXOBS * 2
+        double[] vare;       // MAXOBS
+        int[] svh;           // MAXOBS
+        double[] azel;       // MAXSAT * 2
+        double[] y;          // NFREQ * 2 * MAXOBS
+        double[] e;          // 3 * MAXOBS
+        double[] freq;       // NFREQ * MAXOBS
+        int[] sat;           // MAXSAT
+        int[] iu;            // MAXSAT
+        int[] ir;            // MAXSAT
+        double[] rr_rover;   // 3
+        double[] bias_arr;   // NX_RTK (max)
+        double[] xa_arr;     // NX_RTK (max)
+
+        // Variable-size arrays (lazy resize)
+        double[] xp, Pp;
+        double[] v, H, R;
+        int[] vflg;
+        double[] xa, bias;
+
+        private void ensureInit() {
+            if (rs == null) {
+                rs = new double[Constants.MAXOBS * 6];
+                dts = new double[Constants.MAXOBS * 2];
+                vare = new double[Constants.MAXOBS];
+                svh = new int[Constants.MAXOBS];
+                azel = new double[Constants.MAXSAT * 2];
+                y = new double[Constants.NFREQ * 2 * Constants.MAXOBS];
+                e = new double[3 * Constants.MAXOBS];
+                freq = new double[Constants.NFREQ * Constants.MAXOBS];
+                sat = new int[Constants.MAXSAT];
+                iu = new int[Constants.MAXSAT];
+                ir = new int[Constants.MAXSAT];
+                rr_rover = new double[3];
+            }
+        }
+
+        void ensureState(int nx) {
+            ensureInit();
+            if (xp == null || xp.length < nx) {
+                xp = new double[nx];
+                xa = new double[nx];
+                bias = new double[nx];
+                bias_arr = new double[nx];
+                xa_arr = new double[nx];
+            }
+            if (Pp == null || Pp.length < nx * nx) {
+                Pp = new double[nx * nx];
+            }
+        }
+
+        void ensureObs(int nx, int ny) {
+            ensureState(nx);
+            if (v == null || v.length < ny) {
+                v = new double[ny];
+                vflg = new int[ny];
+            }
+            if (H == null || H.length < nx * ny) {
+                H = new double[nx * ny];
+            }
+            if (R == null || R.length < ny * ny) {
+                R = new double[ny * ny];
+            }
+        }
     }
 }

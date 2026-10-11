@@ -1,6 +1,6 @@
 # RTKLIB-Java 开发路线图
 
-> 本文档定义项目后续开发优先级、依赖关系和暂缓项。基础功能已完善，路线图集中在研究深度扩展和工程质量加固。
+> 本文档定义项目后续开发优先级、依赖关系和暂缓项。基础功能已完善，路线图集中在运行时性能、工程质量、研究深度扩展三个维度。
 
 ---
 
@@ -8,7 +8,7 @@
 
 | 模块 | 定位 | 完成度 | 状态说明 |
 |------|------|--------|----------|
-| rtklib-core | 核心定位算法（SPP/RTK/PPP/PPP-RTK） | **95%** | 四大定位模式全实现，高级优化已接齐（CascadeAR/PartialAR/GPT3+VMF3/IERS2010等），主要缺口：完好性监测、PPP-RTK区域大气约束 |
+| rtklib-core | 核心定位算法（SPP/RTK/PPP/PPP-RTK） | **95%** | 四大定位模式全实现，高级优化已接齐（CascadeAR/PartialAR/GPT3+VMF3/IERS2010等），主要缺口：运行时性能、完好性监测、PPP-RTK区域大气约束 |
 | rtklib-product | 精密产品下载 | **90%** | IGS/MGEX 11类产品全支持，多镜像源回退，可按需扩展其他中心 |
 | rtklib-stream | NTRIP/串口 | **85%** | NTRIP客户端+SSL/TLS+串口+统一监听器；缺：TCP客户端（无生产驱动） |
 | rtklib-adjust | 多基线间接平差 | **85%** | 核心流程+基站诊断+P0~P3优化；可按需扩展多时段累积平差 |
@@ -22,31 +22,45 @@
 
 ## 1. 路线图阶段概览
 
-按优先级和依赖关系分为五个阶段。
+按优先级和依赖关系分为四个梯队 + 暂缓项。梯队内按执行顺序排列，梯队间有前置依赖。
 
-### 1.1 阶段汇总
+### 1.1 梯队汇总
 
-| Phase | 状态 | 交付物 |
-|-------|------|--------|
-| **1** 基础能力建设 | ✅ 完成 | SPP/RTK/PPP/PPP-RTK + 产品/流/轨道/OTL |
-| **2** 高级优化与独立模块 | 🟡 基本完成 | CascadeAR/PartialAR/PPP-AR/FGO框架/间接平差 |
-| **3** 测试加固 + 工程质量 | 🟢 部分启动 | 真实数据回归 + C版差异消除 + 性能基准（场景验证为🤝社区贡献项） |
-| **4** 完好性 + 区域约束 | 🟠 暂缓 | RAIM FDE/保护级 PL/CLAS多项式/约束引擎 |
-| **5** 长期研究 | 🔴 暂缓 | ARAIM/固定解保护级/PP-FGO/IMU紧耦合 |
+| 梯队 | 状态 | 核心原则 | 交付物 |
+|------|------|----------|--------|
+| **0** 性能基准 | 🟢 最前置 | 无基准不优化 | JMH微基准 + 端到端计时 + GC监控基线 |
+| **1** 立刻做 | 🟢✅ 已完成 | 收益确定、难度低、不改变算法语义 | 3B数组复用 + 3C算术优化 + 3.5A日志 + 3.5C异常 + 3.5D对流层接入 + 3.5F测试 |
+| **2** 需前置验证 | 🟡 待验证 | 收益大但需数据/语义支撑 | 3A Kalman优化 + 3.5B null消除 + 各项前后对比 |
+| **3** 依赖外部条件 | 🟠 暂缓 | 代码基础好但缺数据/场景 | CI回归 + 场景验证 + CLAS多项式 + 约束引擎 |
+| **—** 暂不建议投入 | 🔴 暂缓 | 无上游场景驱动 | 完好性(4A~D) + 长期研究 |
 
-### 1.2 阶段依赖关系
+### 1.2 梯队依赖与执行顺序
 
 ```
-Phase 1 ──→ Phase 2 ──→ Phase 3
-                             │
-               ┌─────────────┼──────────────┐
-               ▼             ▼              ▼
-         Phase 4A/B     Phase 4E/F       Phase 4G/H
-         (完好性基础)   (CLAS路径打通)    (伪观测约束引擎)
-               │             │              │
-               └──────┬──────┴──────────────┘
-                      ▼
-                  Phase 5 长期研究
+梯队0 (基准建立)
+  │
+  ▼
+梯队1 (立刻做，按行内顺序)
+  3C → 3.5A → 3B-1 → 3.5C → 3.5D → 3.5F
+                 │                           │
+                 └─ RtkCore/PppCore 工作数组  └─ 回归验证覆盖
+  │
+  ▼
+梯队2 (需前置验证)
+  ├── 3A+3B-2 前置: multiply_kk_kk 基准 + 乘法路径 SimpleMatrix 开销 > 5%
+  ├── 3.5B    前置: 语义审查区分 "未配置" vs "默认配置"
+  └── 每项完成后做基准对比
+  │
+  ▼
+梯队3 (依赖外部条件)
+  ├── 3.5G CI回归 ── 依赖: 测试数据入库
+  ├── 场景验证 ── 依赖: 社区贡献数据
+  ├── 4E CLAS多项式 ── 依赖: LocalCorr结构(已就绪) + 3.5D验证
+  ├── 4F 对流层SSR验证 ── 依赖: 3.5D + 真实SSR数据
+  └── 4G 伪观测约束引擎 ── 依赖: 4E + 4F
+
+暂缓项 (无上游场景驱动，等恢复条件触发):
+  4A/B 完好性基础 → 4C/D ARAIM+固定解完好性 → Phase 5 长期研究
 
 注: rtklib-research 独立演进，不参与上述依赖链
 ```
@@ -138,19 +152,289 @@ Phase 1 ──→ Phase 2 ──→ Phase 3
 |------|------|------|
 | **pos1-posopt5 RAIM FDE** | `pntpos.c raim_fde()` 未移植，SPP/PPP 层无故障检测排除 | C 版 fde.c + pntpos.c 参考 |
 | **ssat_t / 完好性辅助** | `ssat.ura` 已部分迁入 `Ssr.ura`，但 `ssat.h` 其他字段未移植 | 无 |
-| **SPP RAIM 保护级** | C 版 RAIM 只做 FDE 不输出 PL，Java 版也没有 | Phase 4 完好性管线 |
+| **SPP RAIM 保护级** | C 版 RAIM 只做 FDE 不输出 PL，Java 版也没有 | 梯队3 完好性管线 |
 
 ---
 
-## 4. Phase 3 — 测试加固与工程质量 🟢
+## 4. 梯队0 — 性能基准建立 🟢
 
-> **状态**: 部分启动（v2.2.6 已扩展公共数据测试覆盖）
+> **编号对照**: 原 3.5E | **状态**: 最前置 | **难度**: 低
 >
-> 核心模块已全部跑通，需扩大测试覆盖面并加固工程质量。
+> 核心原则：**无基准不优化**。所有梯队1/2的优化效果必须有量化数据支撑，否则无法客观证明收益。
 
-### 4.1 场景验证（🤝 社区贡献项）
+### 4.1 基准内容
 
-> 以下任务的核心依赖是**外部测试数据**（车载RTK、长基线、城市峡谷等），非作者个人可完成。欢迎社区贡献数据或测试结果。
+| 基准维度 | 测量目标 | 工具 |
+|----------|----------|------|
+| JMH 微基准 | KalmanFilter.update() 单次耗时、矩阵运算热点 | JMH 1.36 |
+| 端到端计时 | PPP 单历元耗时、RTK relpos() 耗时 | `System.nanoTime()` 打点 |
+| GC 监控 | FullGC 频率、YoungGC 次数/停顿 | `-Xlog:gc*` 或 jstat |
+| 内存分配 | 每个历元 `new double[]` 累计大小 | async-profiler / JFR |
+
+### 4.2 基准数据与执行要求
+
+- **测试数据**: 精选 1h 静态 RINEX + 1h 车载 RINEX，存入 `test-data/` 作为基线数据集
+- **环境固定**: JDK 版本、JVM 参数（`-Xmx -Xms -XX:+UseG1GC`）
+- **结果存档**: 每个基准结果写入 `benchmarks/baseline.md`，变异系数 (CV) < 5% 才可用
+- **持续对比**: 梯队1和梯队2每项完成后，用相同基准数据做前后对比，更新 `benchmarks/` 目录
+
+---
+
+## 5. 梯队1 — 立刻做 🟢✅ 已完成
+
+> 核心原则：**收益确定、难度低、不改变算法语义**。不依赖 profiling、不依赖外部数据、不会引入精度回退风险。
+>
+> **完成时间**: 2026-10-12。全部6项执行完毕，3A+3B-2 经JMH基准实测确认放弃（详见 §6.2）。
+
+### 5.1 执行顺序与优先级矩阵
+
+| 执行顺序 | 编号 | 优化项 | 预期收益 | 难度 | 状态 |
+|----------|------|--------|----------|------|------|
+| **1** | 3C | Math.pow(x,2) → x*x | 微观性能↑ | 极低 | ✅ 5文件18处 |
+| **2** | 3.5A | System.out/err → SLF4J | 日志统一可配置 | 极低 | ✅ 7文件 |
+| **3** | 3B-1 | RtkCore/PppCore 工作数组预分配复用 | GC压力消除 | 低 | ✅ RtkWorkBuffer+PppWorkBuffer ~22处 |
+| **4** | 3.5C | 宽泛异常捕获改进 | 可调试性↑ | 低 | ✅ 13处+日志 10文件 |
+| **5** | 3.5D | SSR对流层直接改正接入 | PPP-RTK收敛加速 | 低 | ✅ modelTrop CSSR path |
+| **6** | 3.5F | 关键算法单元测试补充 | 回归保障 | 低 | ✅ 34用例 7类 |
+| — | 3B-2 | (合并至梯队2 3A) | — | — | ❌ 3A放弃→连带放弃 |
+
+### 5.2 3B-1 — RtkCore/PppCore 工作数组预分配复用
+
+**定位**: 不涉及矩阵对象的最外层工作数组复用，风险最低，可立即执行。
+**验收**: E2E GC 改善（§0.4 基线 SPP +69.4MB, RTK +89.5MB）。
+**依赖**: 无。
+
+**现状**: `RtkCore.relpos()` 每个历元分配大量临时数组，`PppCore.pppos()` 同理：
+
+```java
+// RtkCore.relpos() 内每 epoch 分配（示例）
+double[] xp = new double[nx];       // 状态向量预测
+double[] Pp = new double[nx * nx];  // 协方差预测
+double[] v = new double[ny];        // 新息向量
+double[] H = new double[nx * ny];   // 设计矩阵
+double[] R = new double[ny * ny];   // 观测噪声协方差
+// ... 还有 rs[6n], dts[2n], vare[n], svh[n], azel[2*MAXSAT],
+//     y[2*nf*n], e[3n], freq[nf*n], sat[MAXSAT], iu[MAXSAT], ir[MAXSAT]
+```
+
+**优化方案**: 将工作数组预分配到 `Rtk` / `PppState` 对象中，每 epoch 用 `Arrays.fill` 清零后复用。
+
+```
+3B-1 实现细节:
+├── Rtk 对象新增工作数组字段:
+│   ├── double[] workXp, workPp, workV, workH, workR, workXa, workBias
+│   ├── double[] workRs, workDts, workVare, workY, workE, workFreq
+│   └── int[] workSvh, workSat, workIu, workIr, workVflg
+├── 首次进入 relpos() 时按 nx/ny 上限分配（或 nx 变化时重新分配）
+├── 每 epoch 开头 Arrays.fill 清零（仅清实际使用长度，非全数组）
+├── PppCore 同理，工作数组挂到 Rtk 或独立 PppWorkBuffers
+└── 验证: 梯队0基准 vs 优化后 24h 连续运行 GC 对比
+```
+
+### 5.3 3B-2 — KalmanFilter.update() 中间 SimpleMatrix 对象复用
+
+**定位**: `KalmanFilter.update()` 内部每次调用创建 ~20 个 SimpleMatrix 中间对象，
+分配量 ~2.26 MB/op (150×40)。复用后可降至 ~0.2 MB/op。
+**验收**: JMH 150×40 分配量 2.26 MB → 0.2 MB/op。
+**依赖**: 与梯队2的 **3A** (SimpleMatrix→DMatrixRMaj) 有重叠——复用中间对象需要保留
+矩阵对象的引用，而 3A 是去掉 SimpleMatrix 封装层。建议 **3B-2 与 3A 合并考虑**，
+先做 3B-1（纯数组，不涉及矩阵对象），再统一规划 3B-2 + 3A。
+
+**现状**: `KalmanFilter.update()` 内部每个版本分配全新的 SimpleMatrix：
+
+```java
+// KalmanFilter.update() — 每次调用 new 20 个 SimpleMatrix 对象
+SimpleMatrix HcMat = MatrixUtil.createMatrix(Hc, nv, k);     // nv×k
+SimpleMatrix PcMat = MatrixUtil.createMatrix(Pc, k, k);      // k×k
+SimpleMatrix RMat = MatrixUtil.createMatrix(R, nv, nv);      // nv×nv
+SimpleMatrix Xc = MatrixUtil.createMatrix(xc, k, 1);         // k×1
+// ... 乘法/求逆/转置结果又 new 出 ~15 个中间对象
+SimpleMatrix Hct = MatrixUtil.transpose(HcMat);               // new k×nv
+SimpleMatrix HPc = MatrixUtil.multiply(HcMat, PcMat);        // new nv×k
+// ... (共 ~20 个 SimpleMatrix 对象)
+```
+
+**优化方案**: 将中间矩阵对象预分配到 KalmanFilter 上下文或 ThreadLocal 中，每次 update() 从 DMatrixRMaj 数据更新而非 new 对象。
+
+**关键问题**: 复用中间对象需要保留 DMatrixRMaj 引用——这与 3A 的 "去掉 SimpleMatrix → 改用 DMatrixRMaj" 是同一条路。因此 3B-2 与 3A 应统一规划。
+
+```
+3B-2 + 3A 合并规划:
+├── 第一步: KalmanFilter.update() 内部预分配 DMatrixRMaj 工作对象 (3B-2)
+│   ├── 按 nx/nv 上限分配各组 DMatrixRMaj
+│   ├── 每次 update() 用 DMatrixRMaj.setData() 更新数据（零分配）
+│   └── 验收集: JMH 150×40 2.26 MB → 0.2 MB/op
+├── 第二步: SimpleMatrix → DMatrixRMaj 替换 (3A)
+│   ├── MatrixUtil 层: createMatrix → wrap + setData
+│   ├── multiply/transpose/invert: SimpleMatrix → CommonOps_DDRM
+│   └── 验收集: 耗时对比 + E2E 精度不变
+└── 两步可合为一次改动，避免 SimpleMatrix→DMatrixRMaj 拆分回退
+```
+
+### 5.4 3C — Math.pow(x,2) → x*x
+
+**现状**: 7处 `Math.pow(ratio, 2)` 调用，`Math.pow` 开销是直接乘法的 10~100 倍。
+
+| 文件 | 行号 | 当前代码 | 优化后 |
+|------|------|----------|--------|
+| IonosphereModel | 126 | `Math.pow(FREQL1/FREQL2, 2)` | `(r=ratio)*r` |
+| IonosphereModel | 127 | `Math.pow(FREQL1/FREQL5, 2)` | 同上 |
+| IonosphereModel | 140 | `Math.pow(FREQL1/FREQL2, 2)` | 同上 |
+| IonosphereModel | 153-154 | `Math.pow(...)` ×2 | 同上 |
+
+> 注: `Constants.GAMMA` / `GAMMA5` 是 `static final`，编译器已常量折叠，无需修改。
+
+### 5.5 3.5A — System.out/err → SLF4J
+
+**现状**: 生产代码中 13 处 `System.out/err.println`：
+
+| 文件 | 处数 | 说明 | 处理方式 |
+|------|------|------|----------|
+| TestDataConfig.java | 5 | 配置加载日志 | 改为 Logger |
+| PosFileRtsSmoother.java | 7 | 命令行用法 + 平滑结果输出 | CLI用法保留 System.out，其余改 Logger |
+| OsdReader.java | 1 | BDS卫星索引映射调试 | 改为 Logger |
+
+### 5.6 3.5C — 宽泛异常捕获改进
+
+**现状**: 15个文件中 21 处 `catch (Exception e)`，部分静默吞掉异常。
+
+| 分类 | 文件 | 当前行为 | 优化方案 |
+|------|------|----------|----------|
+| **Kalman核心** | KalmanFilter | `return -1` | 加 `LOG.debug("Kalman update failed", e)` |
+| **Trace回调** | Trace, RtkTrace | `ignored` | 保持静默（设计意图），加注释 `// by design: trace must not throw` |
+| **文件解析** | Sp3Reader, ClkReader, PcvReader | 返回空对象 | 加 `LOG.warn` |
+| **RTCM解码** | Rtcm | `log.error` | 已有，无需改 |
+| **RINEX解析** | RinexParser | `log.warn` / 返回默认值 | 已有，无需改 |
+
+### 5.7 3.5D — SSR对流层直接改正接入
+
+**安全性保障** — 三重守卫保证无SSR产品时功能不受影响：
+1. `hasSsr == false` → 跳过直接改正分支
+2. `enableSsrTropDirect == false`（默认）→ 跳过直接改正分支
+3. `getTrop()` 返回 NaN/无效值 → fallback 到标准 `udtrop()` 估计
+
+```
+3.5D 实现细节:
+├── PppRtkCore 中 TROPOPT_SSR 分支新增:
+│   ├── if (hasSsr && rtk.rtkConfig.enableSsrTropDirect) {
+│   │   ├── trop = cssrDecoder.getTrop(dlat, dlon)
+│   │   ├── if (valid) { dtrp = trop[0]+trop[1]; dtdx[0]=0; return; }
+│   │   └── }
+│   └── fallback: udtrop() 估计 ZTD（与当前行为一致）
+├── 配置: rtkConfig.enableSsrTropDirect（默认 false）
+└── 验证: 无SSR时精度不变，有SSR时收敛曲线对比
+```
+
+### 5.8 3.5F — 关键算法单元测试补充
+
+**目标**: 覆盖梯队1所有改动路径，防止优化引入回退。
+
+| 测试类 | 覆盖内容 | 关联项 |
+|--------|----------|--------|
+| `KalmanFilterTest` | 矩阵维度正确性、Joseph更新正半定性、奇异性处理 | 3B, 3C |
+| `SsrDecoderTest` | SSR消息完整性、字段取值范围、边界条件 | 3.5C, 3.5D |
+| `IonosphereModelTest` | 频率比计算（`FREQL1/FREQL2 → ratio*ratio`）、broadcast vs IONEX一致性 | 3C |
+| `PppRtkCoreTest` | `TROPOPT_SSR` 双路径（直接改正 vs 估计ZTD）输出收敛 | 3.5D |
+| `RtkCorePerfTest` | `relpos()` 在 nx/ny 变化时工作数组维度匹配 | 3B |
+
+---
+
+## 6. 梯队2 — 需前置验证 🟡
+
+> 核心原则：**收益大但需要数据/语义支撑**，必须先完成前置验证再决定是否执行及方案选择。
+
+### 6.1 执行前提
+
+| 编号 | 优化项 | 前置验证 | 不通过则 |
+|------|--------|----------|----------|
+| 3A+3B-2 | Kalman SimpleMatrix → DMatrixRMaj + 中间对象复用 | `multiply_kk_kk` JMH 基准: SimpleMatrix 不慢，k≥150 时快 10x (EJML优化块乘法)。结论：放弃。 | ✅ 已决：不执行 |
+| 3.5B | RtkConfig null检查消除 | 语义审查区分 "未配置" vs "默认配置" | 保留 null 检查，加注释说明语义 |
+
+### 6.2 3A+3B-2 — Kalman滤波器 SimpleMatrix → DMatrixRMaj + 中间对象复用 ❌ 已放弃
+
+> **编号合并**: 原 3A (SimpleMatrix→DMatrixRMaj) 与 3B-2 (KalmanFilter 中间对象复用)
+> 共享同一条技术路径（保留 DMatrixRMaj 引用 → 复用 → 去掉 SimpleMatrix），统一规划避免拆分回退。
+> **前置验证结果 (2026-10-12)**: 执行 `multiply_kk_kk` JMH 基准 (k=50/150/300, SimpleMatrix vs 直接 double[] 三重循环)，
+> 结论：**SimpleMatrix 计算速度不是瓶颈，不执行 3A**：
+> - k=50: SimpleMatrix 125,905 ns vs 直接 122,527 ns — 几乎相同 (1.0x)
+> - k=150: SimpleMatrix 3,004,454 ns vs 直接 3,200,958 ns — SimpleMatrix **更快** (0.9x)
+> - k=300: SimpleMatrix 2,214,268 ns vs 直接 24,522,387 ns — SimpleMatrix **快 10x** (0.1x)
+>
+> EJML 的 `CommonOps_DDRM.mult()` 使用优化块乘法 + SIMD，k≥150 时碾压手写三重循环。
+> 真正开销是**分配**而非**计算**：每次 update() 创建 21 SimpleMatrix + 10 DMatrixRMaj (106~2875 KB/call)。
+> 但 3B-1 (已完成) 已将工作数组预分配，Kalman 层分配在 RTK 1Hz (106 MB/s) 下可接受。
+> 如果后续 Profiling 显示 SimpleMatrix 分配占 >5% 总耗时，再启动 DMatrixRMaj 复用优化。
+
+**优化方案**（验证通过后执行）:
+
+| 方案 | 说明 | 适用条件                               |
+|------|------|------------------------------------|
+| **方案一**: 改用 EJML `DMatrixRMaj` | 去掉 SimpleMatrix 封装层，零拷贝 wrap `double[]`，保留 EJML 线性代数能力 | 通用                                 |
+| **方案二**: 中小规模矩阵手写 | k < 50 时手写 Kalman（矩阵乘、求逆、Joseph），k ≥ 50 回退 EJML | ⛔ 不可取：手写矩阵乘/求逆维护成本高，且 EJML 的底层实现（LU 分解、缓存优化、数值稳定性）优于手写。项目规定：矩阵运算统一使用 EJML，不手写 |
+
+**关键约束**: Joseph 形式协方差更新 `P = (I-KH)P(I-KH)ᵀ + KRKᵀ` 必须保留，这是保证协方差正半定的核心（C版标准形式 `P=(I-KH)P` 在病态条件下差异可达厘米级）。
+
+```
+3A 实现细节（方案一）:
+├── KalmanFilter.update() 内部:
+│   ├── double[] → DMatrixRMaj（零拷贝 wrap，不 new 对象）
+│   ├── 矩阵运算: CommonOps_DDRM.mult / multTransB / invert / add / subtract
+│   ├── Joseph更新: 保留 (I-KH)P(I-KH)ᵀ + KRKᵀ 结构
+│   └── 结果写回 double[] x, P
+├── MatrixUtil.java:
+│   ├── 新增 wrapDMatrix(data, rows, cols) 零拷贝包装
+│   └── 保留现有 SimpleMatrix 接口供非热路径使用
+└── 验证: KalmanFilter 单元测试 + 梯队0基准对比 + RTK/PPP端到端精度不变
+```
+
+### 6.3 3.5B — RtkConfig null检查消除
+
+**前置验证必要性**: 需要确认 `rtk.rtkConfig == null` 在某些路径中是否确实表示"未配置"语义（而非可以默认初始化的"默认配置"）。
+
+**验证方法**: 全局搜索所有 `rtkConfig` 访问点，区分三类场景：
+
+| 场景 | 语义 | 处理方式 |
+|------|------|----------|
+| 初始化阶段 `rtkConfig == null` | "尚未配置" | 在 `Rtk` 构造中初始化为 `new RtkConfig()`（默认false） |
+| 运行时某路径 `rtkConfig == null` | "故意不传配置" | 保留 null 检查，加注释说明 `// rtkConfig null means XXXX` |
+| 测试代码 `rtkConfig == null` | 测试简化 | 允许测试代码设 null，但生产路径确保非 null |
+
+**优化**（语义审查通过后）:
+
+```java
+// Rtk 构造器
+public Rtk() {
+    this.rtkConfig = new RtkConfig(); // 永不为 null，所有开关默认 false
+}
+// 调用点：直接访问，无需 null 检查
+if (rtk.rtkConfig.enableIers2010) { ... }
+```
+
+---
+
+## 7. 梯队3 — 依赖外部条件 🟠
+
+> 核心原则：**代码基础好但缺数据/场景**。当前可做技术准备（数据结构/接口设计），等条件满足后快速推进。
+
+### 7.1 项目优先级矩阵
+
+| # | 优化项 | 预期收益 | 缺的外部条件 | 代码基础 |
+|---|--------|----------|-------------|----------|
+| 3.5G | CI 真实数据回归测试 | 持续集成保障 | 测试数据入库 | CI 框架已有 |
+| — | 场景验证 | 真实场景置信度 | 社区贡献数据（车载RTK/长基线/城市峡谷/多频PPP） | 测试脚本已有 |
+| 4E | CLAS STEC多项式路径打通 | PPP-RTK区域增强 | LocalCorr结构已就绪(100%) | `SsrIono.stecModel()` 优先级链已有 |
+| 4F | 对流层SSR改正验证 | 量化直接改正vs估计差距 | 梯队1 3.5D完成 + 真实SSR数据 | `getTrop()` 已实现 |
+| 4G | 伪观测值约束引擎 | 收敛加速（论文: 东向85%/高程69%） | 4E + 4F + 区域STEC/ZTD产品 | 数据结构待设计 |
+
+### 7.2 3.5G — CI 真实数据回归测试
+
+**依赖**: 精选测试数据（1h静态RINEX + 1h车载RINEX）入库 `test-data/`。
+
+**目标**: 每次 commit 自动运行端到端定位，对比参考解，精度变化超过阈值则告警。
+
+### 7.3 场景验证（🤝 社区贡献项）
+
+> 以下任务的核心依赖是**外部测试数据**。欢迎社区贡献数据或测试结果。
 
 | 任务 | 需要的数据 | 贡献方式 |
 |------|-----------|----------|
@@ -162,199 +446,118 @@ Phase 1 ──→ Phase 2 ──→ Phase 3
 | PPP-RTK 实时流验证 | IGS SSR 流 + CLAS L6 流 | 同上 |
 | 边缘场景回归 | 低仰角/高遮挡/单系统/单频/电离层活跃 | 同上 |
 
-### 4.2 工程质量（作者可推进）
+### 7.4 4E — CLAS STEC多项式路径打通
 
-| 任务 | 依赖 | 说明 |
-|------|------|------|
-| 关键算法单元测试补充 | 无 | Kalman 矩阵维度、SSAT/URA 解码、SSR 消息完整性 |
-| CI 真实数据回归测试 | 测试数据入库 | 当前仅运行单元测试，需加入 RINEX 回归 |
-| 性能基准 | 无 | PPP 单历元耗时、SSR 解码吞吐率、文件解析速度 |
-| C 版差异消除（RAIM FDE + ssat_t） | C 版 fde.c 参考 | 见 §3.4 |
-| SSR 对流层直接改正接入 | `CompactSsrDecoder.getTrop()` 已有 | `PppRtkCore` 的 `TROPOPT_SSR` 分支调用 `getTrop()` 直接改正，跳过 ZTD 估计；超出 C 版的增强 |
-
-### 4.3 rtklib-research 定位说明
-
-rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码级耦合，定位为前沿算法的实验场所（FGO/IACE/预积分/场景自适应等）。其价值在于提供独立验证途径，成熟后可按需收录到核心模块。**不要求与 rtklib-core 做数据桥接**，两者各自独立演进。
-
----
-
-## 5. Phase 4 — 完好性监测 & PPP-RTK 区域约束 🟠
-
-> **状态**: 暂缓
->
-> 深度研究方向，算法验证成本高，暂无上游场景驱动。以下为技术储备阶段可做的事：整理公式、收集参考代码、设计数据结构。
-
-### 5.1 完好性监测（RAIM → ARAIM → 保护级）
-
-#### 现状
-
-| 能力 | 状态 | 代码位置 | 完成度 |
-|------|------|----------|--------|
-| C 版 RAIM FDE（基础） | ✅ 在 Urban-RTKLIB `fde.c` / `pntpos.c` | `reference-projects/` | 100%（C代码） |
-| Java RAIM FDE | ❌ 未移植 | — | 0% |
-| 保护级 PL / HAL / VAL | ❌ 无 | — | 0% |
-| ARAIM（多系统解分离） | ❌ 无 | — | 0% |
-| 固定解完好性风险 | ❌ 无 | — | 0% |
-
-#### 开发路径
-
-| 子阶段 | 依赖 | 交付物 |
-|--------|------|--------|
-| **4A** 基础 RAIM FDE 移植 | C 版 fde.c + pntpos.c | `RaimFde.java`：完备性检测 + 最大残差排除 + 重定位验证；配置 `prcopt.raimopt`；Sol 扩展 `raimStat/raimExclSat` |
-| **4B** 保护级 PL | 4A | `ProtectionLevel.java`：HPL/VPL 计算；输入位置协方差+观测几何+卫星集合；输出 `sol.hpl/sol.vpl` + HAL/VAL 告警 |
-| **4C** ARAIM 解分离 | 4B | 故障假设子集枚举 + 各假设条件解/保护级 + 加权融合 + 固定解保护级 |
-| **4D** 固定解完好性增强 | 4C | 固定解偏差后验估计 + 固定/浮点一致性检验 + 基于 Ratio/Bootstrapping 的固定解 PL |
-
-```
-4A 实现细节:
-├── 新建包 org.rtklib.java.integrity
-├── RaimFde.java — 完备性检测 + 最大残差排除 + 重定位验证
-├── 在 PntPos / RtkCore / PppCore 的 EKF 后接入 pre-fit 一致性检验
-├── 新增配置 prcopt.raimopt（0=off, 1=检测, 2=检测+排除）
-└── Sol 输出扩展：sol.raimStat / sol.raimExclSat
-
-4B 实现细节:
-├── ProtectionLevel.java — HPL/VPL 计算
-├── 输入：位置协方差 + 观测几何 + 已用卫星集合
-├── 输出：sol.hpl / sol.vpl + HAL/VAL 告警
-└── 公式：PL = K × sqrt(diag(P))，K 基于完好性风险假设
-
-4C 实现细节:
-├── 故障假设子集枚举（多故障场景）
-├── 各假设条件解 + 条件保护级
-├── 加权融合（各假设先验概率）
-└── 固定解保护级（固定解风险 > 浮点解，需额外方差膨胀）
-
-4D 实现细节:
-├── 固定解偏差后验估计
-├── 固定解 vs 浮点解一致性检验
-└── 基于 Ratio/Bootstrapping 成功率的固定解 PL 输出
-```
-
-#### 参考资源
-
-- Urban-RTKLIB `src/fde.c`（413 行，RTK 层面 NIS/残差 FDE）
-- Urban-RTKLIB `src/pntpos.c raim_fde()`（SPP 层面 RAIM）
-- RTK-EVC `src/rtklib/pntpos.cpp`（C++ RAIM）
-- Galileo HAS ICD（完好性信息定义 SIS-A/SIS-M）
-- rtklib-research `SwitchWrapperFactor` / `SwitchPriorFactor`（故障隔离基础设施，可复用）
-
-### 5.2 PPP-RTK 区域大气约束
-
-#### 现状
-
-| 能力 | 状态 | 代码位置 | 完成度 |
-|------|------|----------|--------|
-| SSR STEC 直接改正（色散偏差 → STEC） | ✅ | `ppprtk/SsrIono.java:63-129` | ~80% |
-| SSR STEC → 残差直接改正（IONOOPT_SSR） | ✅ | `ppprtk/PppRtkCore.java:613-625` | ~75% |
-| IONEX VTEC → STEC fallback | ✅ | `ppprtk/SsrIono.java:218-259` | ~60% |
-| Compact SSR / CLAS L6 解码 | ✅ | `cssr/CompactSsrDecoder.java` | ~85% |
-| **LocalCorr 数据结构（STEC/对流层多项式）** | ✅ 结构就绪 | `cssr/LocalCorr.java:27-38` | 100% |
-| CLAS STEC 多项式插值路径 | ❌ 未打通 | — | ~20% |
-| SSR 对流层直接改正 | ⚠️ 有代码未接入 | `CompactSsrDecoder.getTrop()` 已实现多项式插值+网格残差，但无调用方；`PppRtkCore` 的 `TROPOPT_SSR` 仍走 `udtrop()` 估计 ZTD（与 C 版一致）；接入后可减少 ZTD 状态量、加速收敛，属于超出 C 版的增强 |
-| **STEC 外部产品 → 伪观测值约束滤波** | ❌ | — | 0% |
-| **ZTD 外部产品 → 伪观测值约束滤波** | ❌ | — | 0% |
-
-#### 关键差距：SSR 直接改正 ≠ 区域约束
-
-```
-当前实现（直接改正）：
-  SSR STEC 可用 → dion = C/f² × STEC → 作为已知量从残差减掉
-  无 SSR       → 走估计路径（udiono 初始化斜距电离层估计）
-
-论文目标（区域约束）：
-  区域 STEC/ZTD 产品 → 作为伪观测值约束进入 Kalman 滤波
-  → 约束状态量漂移
-  → 收敛时间东方向改善 85%、高程改善 69%
-
-两者关键区别：
-  直接改正 = 给一个值，不让滤波管
-  区域约束 = 给一个先验 + 方差，让滤波融合
-```
-
-#### 开发路径
-
-| 子阶段 | 依赖 | 交付物 |
-|--------|------|--------|
-| **4E** CLAS 多项式路径打通 | LocalCorr 结构 | `SsrIono.stecModel()` 新增 LocalCorr 分支；插值公式 `STEC = ci[0]+ci[1]×dlat+ci[2]×dlon+ci[3]×dlat×dlon+dstec`；优先级链 SSR dispBias → LocalCorr → IONEX → 广播 |
-| **4F** 对流层 SSR 改正验证 | 4E + Phase 3 SSR对流层接入 | 验证 `getTrop()` 直接改正 vs 估计 ZTD 的收敛差异；确认 H 矩阵 ZTD 偏导数置零后滤波稳定 |
-| **4G** 伪观测值约束引擎 | 4E + 4F | `ConstraintEngine.java`；STEC/ZTD 伪观测方程约束状态量；距离衰减权重 `w(dist)=1/(1+(dist/d0)²)`；配置 `prcopt.constrainstec/constrainztd` |
-| **4H** 收敛加速验证 | 4G | 对比：无约束 vs 直接改正 vs 伪观测值约束；指标：收敛时间/稳态精度/固定率；验证论文数据 |
+**现状**: `LocalCorr` 数据结构 100% 就绪（`stecQuality`, `ci[]`, `dstec`），`SsrIono.stecModel()` 中优先级链已有（SSR dispBias → IONEX → 广播），仅差 LocalCorr 分支。
 
 ```
 4E 实现细节:
-├── SsrIono.stecModel() 新增 LocalCorr 分支
-├── 插值公式: STEC = ci[0] + ci[1]×dlat + ci[2]×dlon + ci[3]×dlat×dlon + dstec
-├── 质量控制: LocalCorr.stecQuality 低时 fallback
-└── 当前优先级链: SSR dispBias → LocalCorr 多项式 → IONEX VTEC → 广播模型
+├── SsrIono.stecModel() 新增 LocalCorr 分支:
+│   ├── 插值公式: STEC = ci[0] + ci[1]×dlat + ci[2]×dlon + ci[3]×dlat×dlon + dstec
+│   ├── 质量控制: stecQuality 低时 fallback
+│   └── 优先级链: SSR dispBias → LocalCorr → IONEX VTEC → 广播模型
+└── 依赖: 梯队1 3.5D 接入后验证 LocalCorr + SSR对流层联合效果
+```
 
-4F 实现细节:
-├── Phase 3 已完成接入：PppRtkCore.modelTrop() 的 TROPOPT_SSR 分支调用 getTrop()
-├── 本阶段验证：直接改正 vs 估计 ZTD 的收敛差异
-├── H 矩阵 ZTD 偏导数置零后滤波稳定性确认
-└── 如直接改正效果优于估计，则 TROPOPT_SSR 默认走直接改正路径
+### 7.5 4F — 对流层SSR改正验证
 
+**依赖**: 梯队1 3.5D 完成 `getTrop()` 接入 + 真实SSR对流层数据（IGS SSR流或CLAS L6流）。
+
+**验证内容**: 对比 `TROPOPT_SSR` 直接改正 vs `udtrop()` 估计 ZTD 的收敛时间/稳态精度。
+
+### 7.6 4G — 伪观测值约束引擎
+
+**依赖**: 4E + 4F + 区域STEC/ZTD产品可用。
+
+**价值**: 论文报告东方向收敛改善 85%、高程改善 69%，是 Phase 4 里最有论文价值的部分。
+
+```
 4G 实现细节:
 ├── ConstraintEngine.java（org.rtklib.java.ppprtk 包下）
 ├── STEC 约束: 区域电离层产品 → 伪观测方程 → 约束斜距电离层状态量
 ├── ZTD 约束: 区域对流层产品 → 伪观测方程 → 约束 ZTD 状态量
 ├── 距离衰减权重: w(dist) = 1 / (1 + (dist/d0)²), d0=50~100km
 └── 配置: prcopt.constrainstec / prcopt.constrainztd
-
-4H 实现细节:
-├── 对比: 无约束 vs 直接改正 vs 伪观测值约束
-├── 指标: 收敛时间（东/北/高程）、稳态精度、固定率
-└── 验证论文数据: 东方向改善 85%、高程改善 69%
 ```
 
-#### 技术储备（放缓期间可做）
+#### 技术储备（可提前做）
 
 - [ ] 整理 CLAS L6 规范中 STEC/对流层多项式定义
 - [ ] 调研可用的区域 STEC/ZTD 产品源（IGS 实时电离层产品、区域监测站网）
 - [ ] LocalCorr 结构补全：当前字段已齐，可写 GridDefinition + 双线性插值器
 - [ ] 参考 CSSRlib `zdres()` 中 SSR STEC/ZTD 约束实现（Python）
 
+### 7.7 rtklib-research 定位说明
+
+rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码级耦合，定位为前沿算法的实验场所（FGO/IACE/预积分/场景自适应等）。其价值在于提供独立验证途径，成熟后可按需收录到核心模块。**不要求与 rtklib-core 做数据桥接**，两者各自独立演进。
+
 ---
 
-## 6. Phase 5 — 长期研究方向 🔴
+## 8. 暂不建议投入 🔴
 
-> **状态**: 暂缓
->
-> 依赖 Phase 4 基础设施，且无上游场景。
+> 核心原则：**无上游场景驱动**。暂不建议投入 ≠ 永远不做，等恢复条件触发后再启动。
 
-| 方向 | 说明 | 前置条件 |
+### 8.1 完好性监测（原 Phase 4A~D）
+
+| 子阶段 | 内容 | 暂缓原因 |
+|--------|------|----------|
+| 4A 基础 RAIM FDE 移植 | C版 `fde.c` / `pntpos.c raim_fde()` → Java | 无车规/航空场景驱动，算法验证成本高 |
+| 4B 保护级 PL | HPL/VPL 计算 + HAL/VAL 告警 | 依赖 4A，需风险预算公式补充 |
+| 4C ARAIM 解分离 | 故障假设子集枚举 + 多假设保护级 | 依赖 4B |
+| 4D 固定解完好性增强 | 固定解偏差后验估计 + Ratio/Bootstrapping PL | 依赖 4C |
+
+**参考资源**:
+- Urban-RTKLIB `src/fde.c`（413 行）、`src/pntpos.c raim_fde()`
+- RTK-EVC `src/rtklib/pntpos.cpp`（C++ RAIM）
+- Galileo HAS ICD（完好性信息定义 SIS-A/SIS-M）
+
+### 8.2 长期研究方向（原 Phase 5）
+
+| 方向 | 说明 | 暂缓原因 |
 |------|------|----------|
-| **PP-FGO 融合** | PPP 固定解 + 因子图优化，紧耦合 IMU/视觉/SLAM | rtklib-research FGO 成熟 + Phase 4 完好性量化 |
-| **IMU-PPP 紧耦合** | IMU 预积分（rtklib-research 已有）+ PPP 状态量融合 | IMU 硬件接入 + 状态量对齐 |
-| **学习型后端** | 使用 GNN/Transformer 做观测值质量评估或残差估计 | 大规模训练数据集 |
-| **多路径建模** | 城市峡谷场景的多路径 NLOS 检测与修正 | Phase 4 SwitchVariable 验证有效后 |
-| **VRS/CORS 扩展** | 多基站联合改正数生成（当前仅支持单站 RTCM） | 多基站网络接入 |
+| PP-FGO 融合 | PPP 固定解 + 因子图优化，紧耦合 IMU/视觉 | FGO 框架成熟度不足 + Phase 4 完好性未量化 |
+| IMU-PPP 紧耦合 | IMU 预积分 + PPP 状态量融合 | IMU 硬件接入 + 状态量对齐未完成 |
+| 学习型后端 | GNN/Transformer 做观测值质量评估 | 方向宽泛，缺训练数据、推理延迟约束 |
+| 多路径建模 | 城市峡谷 NLOS 检测与修正 | Phase 4 SwitchVariable 验证有效后才可推进 |
+| VRS/CORS 扩展 | 多基站联合改正数生成 | 多基站网络未接入 |
 
 ---
 
-## 7. 暂缓原则与恢复条件
+## 9. 暂缓原则与恢复条件
 
 ### 暂缓原则
 
 以下情况不启动新功能开发：
+- 梯队3 外部条件未满足
+- 梯队2 前置验证不通过
 - 无明确上游应用场景驱动
 - 算法验证成本高且短期无数据支撑
-- 与现有已实现功能相比提升不明显
-- 依赖外部数据源但数据源尚未准备就绪
 
 ### 恢复条件
 
-Phase 4 恢复开发的触发条件：
+**梯队2 恢复条件**:
+- 3A: ✅ 已通过 JMH 基准验证 — SimpleMatrix 计算不慢 (k≥150 快 10x)，放弃 3A。如需恢复：Profiling 显示 SimpleMatrix 分配占 >5% 总耗时 (当前 1Hz 下 106 MB/s 可接受)
+- 3.5B: 语义审查确认无"故意不传配置"路径
+
+**梯队3 恢复条件**:
+- 3.5G: 测试数据入库
+- 4E/4F: 梯队1 3.5D 完成 + 真实SSR数据可用
+- 4G: 4E + 4F + 区域STEC/ZTD产品可用
+
+**完好性/长期研究恢复条件**:
 1. 有真实车规/航空/监测场景需要完好性输出（PL + HAL/VAL）
 2. 能获取 SSR STEC/ZTD 实时产品或有区域监测站网
-3. Phase 3 测试加固完成（核心模块通过真实数据回归验证）
+3. 梯队1 + 梯队2 完成（性能优化 + 工程质量加固 + 核心模块通过回归验证）
 
 ---
 
-## 8. 变更日志
+## 10. 变更日志
 
 | 版本 | 变更 |
 |------|------|
 | v1.0 | 初始版本：整合完好性监测、PPP-RTK区域约束、FGO-PPP融合等方向；明确 Phase 1~5 划分；标记暂缓项 |
 | v1.1 | rtklib-research 定位为独立研究沙盒；Phase 4/5 子阶段改为表格+实现细节分离 |
 | v1.2 | 去掉所有时间线/时间窗口/人天估算，只保留优先级+依赖+交付物 |
+| v1.3 | 新增 Phase 3（运行时性能优化）和 Phase 3.5（工程质量加固）；原 Phase 3 场景验证移入 Phase 3.5 |
+| v1.4 | **重大重组**: 改为四梯队制（0→1→2→3）；梯队0新增性能基准；3.5E提前到梯队0；3.5D提到梯队1（只差接线）；3A降级到梯队2（需profiling前置）；3.5B降级到梯队2（需语义审查）；3.5F提到梯队1末尾（回归覆盖）；Phase 4A~D 标记暂不建议投入；原Phase 4E~G保留在梯队3；变更日志→§10 |
+| v1.5 | **梯队1全部完成**: 3C (Math.pow优化)、3.5A (SLF4J)、3B-1 (工作数组复用)、3.5C (异常日志)、3.5D (SSR对流层)、3.5F (34单元测试)；3A+3B-2 经 JMH 基准实测确认放弃（SimpleMatrix 计算不慢，EJML 优化块乘法 k≥150 快 10x）；标记 §5 完成、§6.2 放弃 |

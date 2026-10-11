@@ -229,7 +229,8 @@ public final class PppRtkCore {
         udpos(rtk, nx);
         udclk(rtk, nx);
         if (opt.tropopt == Constants.TROPOPT_EST || opt.tropopt == Constants.TROPOPT_ESTG
-            || opt.tropopt == Constants.TROPOPT_SSR) {
+            || (opt.tropopt == Constants.TROPOPT_SSR
+                && (rtk.rtkConfig == null || !rtk.rtkConfig.enableSsrTropDirect))) {
             udtrop(rtk, nx);
         }
         if (opt.ionoopt == Constants.IONOOPT_EST || opt.ionoopt == Constants.IONOOPT_SSR) {

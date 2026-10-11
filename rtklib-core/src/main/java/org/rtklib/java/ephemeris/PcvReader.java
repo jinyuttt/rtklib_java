@@ -259,6 +259,7 @@ public final class PcvReader {
             double[] ep = {year, month, day, hour, min, sec};
             return TimeSystem.epoch2time(ep);
         } catch (Exception e) {
+            LOG.warn("PCV time parse error: {} — {}", e.getMessage(), str);
             return null;
         }
     }

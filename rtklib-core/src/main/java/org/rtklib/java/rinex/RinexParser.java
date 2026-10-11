@@ -871,6 +871,8 @@ public class RinexParser {
             if (substr.isEmpty() || substr.equals("D") || substr.equals("E")) return 0.0;
             return Double.parseDouble(substr.replace('D', 'E'));
         } catch (Exception e) {
+            log.debug("RINEX double parse error in substring '{}': {}", 
+                line.substring(Math.min(start, line.length()), Math.min(start + length, line.length())), e.getMessage());
             return 0.0;
         }
     }
@@ -888,6 +890,8 @@ public class RinexParser {
             if (substr.isEmpty()) return 0;
             return Integer.parseInt(substr);
         } catch (Exception e) {
+            log.debug("RINEX int parse error in substring '{}': {}",
+                line.substring(Math.min(start, line.length()), Math.min(start + length, line.length())), e.getMessage());
             return 0;
         }
     }

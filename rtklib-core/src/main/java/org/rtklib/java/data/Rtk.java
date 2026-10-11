@@ -118,6 +118,10 @@ public class Rtk implements Serializable {
     public int diagResEditArcResetCount;
     public int diagBdsBiasApplyCount;
 
+    // 3B-1 work buffer for RtkCore.relpos() / PppCore.pppos()
+    public transient Object workBufRtk;
+    public transient Object workBufPpp;
+
     public Rtk() {
         this.sol = new Sol();
         this.rb = new double[6];

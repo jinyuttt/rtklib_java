@@ -162,6 +162,7 @@ public final class Sp3Reader {
             double[] ep = {year, month, day, hour, min, sec};
             return TimeSystem.epoch2time(ep);
         } catch (Exception e) {
+            LOG.warn("SP3 time parse error: {} — {}", e.getMessage(), s);
             return new GTime();
         }
     }

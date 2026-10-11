@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.rtklib</groupId>
         <artifactId>rtklib-java</artifactId>
-        <version>2.2.9</version>
+        <version>2.3.0</version>
     </parent>
 
     <artifactId>rtklib-core</artifactId>
@@ -29,6 +29,16 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-generator-annprocess</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

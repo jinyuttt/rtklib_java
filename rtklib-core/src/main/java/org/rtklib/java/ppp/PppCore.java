@@ -154,12 +154,19 @@ public class PppCore {
             }
         }
 
-        double[] rs = new double[n * 6];
-        double[] dts = new double[n * 2];
-        double[] var = new double[n];
-        int[] svh = new int[n];
-        double[] azel = new double[n * 2];
-        int[] exc = new int[n];
+        PppWorkBuffer wb = (PppWorkBuffer) rtk.workBufPpp;
+        if (wb == null) {
+            wb = new PppWorkBuffer();
+            rtk.workBufPpp = wb;
+        }
+        wb.ensureInit();
+
+        double[] rs = wb.rs;
+        double[] dts = wb.dts;
+        double[] var = wb.var;
+        int[] svh = wb.svh;
+        double[] azel = wb.azel;
+        int[] exc = wb.exc;
 
         for (int i = 0; i < Constants.MAXSAT; i++) {
             for (int j = 0; j < opt.nf; j++) {
@@ -221,11 +228,12 @@ public class PppCore {
                 "x", rtk.x[0], "y", rtk.x[1], "z", rtk.x[2], "nx", nx);
 
         int maxnv = n * NF(opt) * 2 + Constants.MAXSAT + 3;
-        double[] xp = new double[nx];
-        double[] Pp = new double[nx * nx];
-        double[] v = new double[maxnv];
-        double[] H = new double[nx * maxnv];
-        double[] R = new double[maxnv * maxnv];
+        wb.ensureObs(nx, maxnv);
+        double[] xp = wb.xp;
+        double[] Pp = wb.Pp;
+        double[] v = wb.v;
+        double[] H = wb.H;
+        double[] R = wb.R;
 
         int stat = Constants.SOLQ_SINGLE;
 
@@ -252,7 +260,7 @@ public class PppCore {
                 break;
             }
 
-            double[] xpPrev = new double[nx];
+            double[] xpPrev = wb.xpPrev;
             System.arraycopy(xp, 0, xpPrev, 0, nx);
 
             int info = KalmanFilter.update(xp, Pp, H, v, R, nx, nv);
@@ -317,7 +325,8 @@ public class PppCore {
         udpos_ppp(rtk, nx);
         udclk_ppp(rtk, nx);
         if (rtk.opt.tropopt == Constants.TROPOPT_EST || rtk.opt.tropopt == Constants.TROPOPT_ESTG
-            || rtk.opt.tropopt == Constants.TROPOPT_SSR) {
+            || (rtk.opt.tropopt == Constants.TROPOPT_SSR
+                && (rtk.rtkConfig == null || !rtk.rtkConfig.enableSsrTropDirect))) {
             udtrop_ppp(rtk, nx);
         }
         if (rtk.opt.ionoopt == Constants.IONOOPT_EST || rtk.opt.ionoopt == Constants.IONOOPT_SSR) {
@@ -1008,6 +1017,23 @@ public class PppCore {
         }
         if (opt.tropopt == Constants.TROPOPT_EST || opt.tropopt == Constants.TROPOPT_ESTG
             || opt.tropopt == Constants.TROPOPT_SSR) {
+            if (opt.tropopt == Constants.TROPOPT_SSR
+                    && rtk.rtkConfig != null && rtk.rtkConfig.enableSsrTropDirect
+                    && rtk.rtkConfig.cssrDecoder != null) {
+                double[] tropCssr = rtk.rtkConfig.cssrDecoder.getTrop(
+                        pos[0] * Constants.R2D, pos[1] * Constants.R2D);
+                double zhdCssr = tropCssr[0];
+                double zwdCssr = tropCssr[1];
+                double[] mapfw = new double[1];
+                double mH = TroposphereModel.tropmapf(time, pos, azel, mapfw);
+                double mW = mapfw[0];
+                dtrp[0] = mH * zhdCssr + mW * zwdCssr;
+                var[0] = SQR(0.01);
+                dtdx[0] = 0.0;
+                dtdx[1] = 0.0;
+                dtdx[2] = 0.0;
+                return true;
+            }
             double[] trp = new double[3];
             int nt = (opt.tropopt == Constants.TROPOPT_EST) ? 1 : 3;
             for (int i = 0; i < nt; i++) trp[i] = x[IT(opt) + i];
@@ -1535,5 +1561,55 @@ public class PppCore {
             return Constants.CLIGHT * nav.eph[i].tgd[0];
         }
         return 0.0;
+    }
+
+    public static final class PppWorkBuffer {
+        // Fixed-size arrays (MAXOBS/MAXSAT sized, allocated once)
+        double[] rs;       // MAXOBS * 6
+        double[] dts;      // MAXOBS * 2
+        double[] var;      // MAXOBS
+        int[] svh;         // MAXOBS
+        double[] azel;     // MAXOBS * 2
+        int[] exc;         // MAXOBS
+
+        // Variable-size arrays (lazy resize)
+        double[] xp, Pp;
+        double[] v, H, R;
+        double[] xpPrev;
+
+        void ensureInit() {
+            if (rs == null) {
+                rs = new double[Constants.MAXOBS * 6];
+                dts = new double[Constants.MAXOBS * 2];
+                var = new double[Constants.MAXOBS];
+                svh = new int[Constants.MAXOBS];
+                azel = new double[Constants.MAXOBS * 2];
+                exc = new int[Constants.MAXOBS];
+            }
+        }
+
+        void ensureState(int nx) {
+            ensureInit();
+            if (xp == null || xp.length < nx) {
+                xp = new double[nx];
+                xpPrev = new double[nx];
+            }
+            if (Pp == null || Pp.length < nx * nx) {
+                Pp = new double[nx * nx];
+            }
+        }
+
+        void ensureObs(int nx, int maxnv) {
+            ensureState(nx);
+            if (v == null || v.length < maxnv) {
+                v = new double[maxnv];
+            }
+            if (H == null || H.length < nx * maxnv) {
+                H = new double[nx * maxnv];
+            }
+            if (R == null || R.length < maxnv * maxnv) {
+                R = new double[maxnv * maxnv];
+            }
+        }
     }
 }

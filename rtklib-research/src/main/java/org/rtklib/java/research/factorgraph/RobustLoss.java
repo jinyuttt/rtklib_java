@@ -63,7 +63,8 @@ public class RobustLoss {
             }
             case TUKEY: {
                 double ratio = s / threshold;
-                return (ratio <= 1.0) ? Math.pow(1.0 - ratio * ratio, 2) : 0.0;
+                double x = 1.0 - ratio * ratio;
+                return (ratio <= 1.0) ? x * x : 0.0;
             }
             case DCS: {
                 double t2 = threshold * threshold;
@@ -127,7 +128,8 @@ public class RobustLoss {
 
     public static double tukeyWeight(double r, double threshold) {
         double ratio = r / threshold;
-        return (Math.abs(ratio) <= 1.0) ? Math.pow(1.0 - ratio * ratio, 2) : 0.0;
+        double x = 1.0 - ratio * ratio;
+        return (Math.abs(ratio) <= 1.0) ? x * x : 0.0;
     }
 
     public static double dcs(double r, double threshold) {

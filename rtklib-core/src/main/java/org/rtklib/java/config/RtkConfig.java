@@ -2,6 +2,8 @@ package org.rtklib.java.config;
 
 import java.io.Serializable;
 
+import org.rtklib.java.cssr.CompactSsrDecoder;
+
 public class RtkConfig implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -162,6 +164,8 @@ public class RtkConfig implements Serializable {
     public int ssrIonoMode = 1;
     public boolean enableCompactSsr = false;
     public String compactSsrGridFile = "";
+    public boolean enableSsrTropDirect = false;
+    public transient CompactSsrDecoder cssrDecoder = null;
 
     public RtkConfig() {
     }
@@ -314,5 +318,7 @@ public class RtkConfig implements Serializable {
         this.ssrIonoMode = other.ssrIonoMode;
         this.enableCompactSsr = other.enableCompactSsr;
         this.compactSsrGridFile = other.compactSsrGridFile;
+        this.enableSsrTropDirect = other.enableSsrTropDirect;
+        this.cssrDecoder = other.cssrDecoder;
     }
 }
