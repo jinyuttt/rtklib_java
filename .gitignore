@@ -78,8 +78,8 @@ rtklib-product/product/
 **/credentials.properties
 credentials.properties
 
-# Test data: keep README.md, .meta, .conf, .txt, small sample files
-# Only ignore large binary data files (>2MB) in specific subdirs
+# Test data: small files (<=2MB) are committed to git
+# Large binary data files (>2MB) are ignored, downloaded via download-test-data.ps1
 test-data/rinex/*.obs
 test-data/rinex/*.nav
 test-data/product/*.sp3
@@ -95,6 +95,9 @@ test-data/reference/*.pos
 # Large test data directories (not for git, use download-test-data.ps1)
 test-data/ppc/
 test-data/urbannav/
+
+# Download script temp directory
+test-data/_data_download/
 
 # Debug log config (local only)
 logback-debug.xml
