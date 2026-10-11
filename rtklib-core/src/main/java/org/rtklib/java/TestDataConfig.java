@@ -3,6 +3,7 @@ package org.rtklib.java;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public final class TestDataConfig {
 
@@ -75,19 +76,6 @@ public final class TestDataConfig {
         return get("result.dir", System.getProperty("user.home") + File.separator + "rtklib_java_results");
     }
 
-    public static String[] getBaseRoverPairs(String group) {
-        load();
-        String val = props.getProperty("baserover." + group);
-        if (val != null) return val.split("[,\\s]+");
-        switch (group) {
-            case "group1": return new String[]{"YOUR_BASE_ID"};
-            case "rover1": return new String[]{"YOUR_ROVER_ID"};
-            case "group2": return new String[]{"YOUR_BASE_ID_2"};
-            case "rover2": return new String[]{"YOUR_ROVER_ID_2"};
-            default: return new String[0];
-        }
-    }
-
     public static String getStation() {
         return get("station.id", "");
     }
@@ -131,25 +119,55 @@ public final class TestDataConfig {
         return get("base.file", "");
     }
 
-    public static Map<String, String[]> getBaseRoverMap() {
-        Map<String, String[]> map = new LinkedHashMap<>();
-        String[] bases1 = getBaseRoverPairs("group1");
-        String[] rovers1 = getBaseRoverPairs("rover1");
-        if (bases1.length > 0 && rovers1.length > 0) map.put(bases1[0], rovers1);
-
-        String[] bases2 = getBaseRoverPairs("group2");
-        String[] rovers2 = getBaseRoverPairs("rover2");
-        if (bases2.length > 0 && rovers2.length > 0) map.put(bases2[0], rovers2);
-
-        String customBases = get("custom.bases", "");
-        if (!customBases.isEmpty()) {
-            for (String base : customBases.split(";")) {
-                String[] parts = base.split("=");
-                if (parts.length == 2) {
-                    map.put(parts[0].trim(), parts[1].split("[,\\s]+"));
-                }
-            }
+    public static List<String> resolveRtcmFiles(String path) {
+        if (path == null || path.isEmpty()) return Collections.emptyList();
+        Path p = Paths.get(path);
+        if (!Files.exists(p)) return Collections.emptyList();
+        if (Files.isRegularFile(p)) return Collections.singletonList(path);
+        try {
+            return Files.walk(p)
+                    .filter(f -> Files.isRegularFile(f) && f.toString().endsWith(".rtcm3"))
+                    .sorted()
+                    .map(Path::toString)
+                    .collect(Collectors.toList());
+        } catch (IOException e) {
+            return Collections.emptyList();
         }
-        return map;
     }
+
+    public static List<String[]> resolveBaseRoverPairs() {
+        String roverPath = getRoverFile();
+        String basePath = getBaseFile();
+        if (roverPath.isEmpty() || basePath.isEmpty()) return Collections.emptyList();
+
+        Path roverDir = Paths.get(roverPath);
+        Path baseDir = Paths.get(basePath);
+
+        if (Files.isRegularFile(baseDir) && Files.isRegularFile(roverDir)) {
+            return Collections.singletonList(new String[]{basePath, roverPath});
+        }
+
+        if (Files.isDirectory(baseDir) && Files.isDirectory(roverDir)) {
+            List<String[]> pairs = new ArrayList<>();
+            try {
+                List<Path> baseFiles = Files.walk(baseDir)
+                        .filter(f -> Files.isRegularFile(f) && f.toString().endsWith(".rtcm3"))
+                        .sorted()
+                        .collect(Collectors.toList());
+                for (Path bf : baseFiles) {
+                    Path relative = baseDir.relativize(bf);
+                    Path rf = roverDir.resolve(relative);
+                    if (Files.exists(rf)) {
+                        pairs.add(new String[]{bf.toString(), rf.toString()});
+                    }
+                }
+            } catch (IOException e) {
+                // ignore
+            }
+            return pairs;
+        }
+
+        return Collections.emptyList();
+    }
+
 }

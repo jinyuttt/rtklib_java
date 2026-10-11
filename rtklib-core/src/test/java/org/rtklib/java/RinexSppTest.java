@@ -444,6 +444,8 @@ public class RinexSppTest {
 
         // rtklib C rnx2rtkp SPP
         String rnx2rtkp = TestDataConfig.get("rtklib.rnx2rtkp", "rnx2rtkp.exe");
+        org.junit.jupiter.api.Assumptions.assumeTrue(java.nio.file.Files.exists(java.nio.file.Paths.get(rnx2rtkp)),
+                "rnx2rtkp.exe 不可用 - 跳过C版对比测试");
         Path posFile = tempDir.resolve("rover_spp.pos");
 
         String[] cmdArray = {

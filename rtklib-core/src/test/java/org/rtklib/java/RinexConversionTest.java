@@ -213,7 +213,10 @@ public class RinexConversionTest {
         assertTrue(Files.exists(javaObsFile), "Java obs file should exist");
 
         RinexObsData javaData = parseRinex3ObsWithTypes(javaObsFile.toString());
-        RinexObsData cData = parseRinex3ObsWithTypes(TestDataConfig.get("rinex.c.obs", ""));
+        String cObsPath = TestDataConfig.get("rinex.c.obs", "");
+        org.junit.jupiter.api.Assumptions.assumeTrue(!cObsPath.isEmpty() && Files.exists(Path.of(cObsPath)),
+                "C版RINEX obs文件不可用 - 跳过");
+        RinexObsData cData = parseRinex3ObsWithTypes(cObsPath);
 
         log.info("Java obs types: {}", javaData.obsTypesBySys);
         log.info("C obs types: {}", cData.obsTypesBySys);
@@ -379,7 +382,10 @@ public class RinexConversionTest {
         assertTrue(Files.exists(javaNavFile), "Java nav file should exist");
 
         Map<String, double[]> javaNav = parseRinexNav(javaNavFile.toString());
-        Map<String, double[]> cNav = parseRinexNav(TestDataConfig.get("rinex.c.nav", ""));
+        String cNavPath = TestDataConfig.get("rinex.c.nav", "");
+        org.junit.jupiter.api.Assumptions.assumeTrue(!cNavPath.isEmpty() && Files.exists(Path.of(cNavPath)),
+                "C版RINEX nav文件不可用 - 跳过");
+        Map<String, double[]> cNav = parseRinexNav(cNavPath);
 
         log.info("Java nav entries: {}, C nav entries: {}", javaNav.size(), cNav.size());
 

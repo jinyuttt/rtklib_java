@@ -49,6 +49,10 @@ public class VerifyPositioningTest {
 
     @BeforeAll
     static void parseRinex() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                new File(ROVER_OBS).exists() && new File(ROVER_NAV).exists(),
+                "RINEX test data not available");
+
         roverParser = new RinexParser();
         baseParser = new RinexParser();
 

@@ -35,6 +35,9 @@ public class BaseMonitorConfig implements Serializable {
     /** 最低SNR（dB-Hz）：低于此值的观测不参与SPP */
     public double minSnrDbHz = 20.0;
 
+    /** 放宽RTCM3 MSM sync标志检查（兼容非标准NTRIP源），默认false */
+    public boolean relaxSyncFlag = false;
+
     public BaseMonitorConfig() {
     }
 
@@ -49,5 +52,6 @@ public class BaseMonitorConfig implements Serializable {
         this.minValidInWindow = other.minValidInWindow;
         this.minElMaskDeg = other.minElMaskDeg;
         this.minSnrDbHz = other.minSnrDbHz;
+        this.relaxSyncFlag = other.relaxSyncFlag;
     }
 }

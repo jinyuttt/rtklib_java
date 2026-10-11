@@ -125,6 +125,7 @@ public class PppProcessor {
 
     public PppProcessor(PrcOpt opt, SolOpt solOpt, PosHandler handler, OutputStream outputStream) {
         this.opt = new PrcOpt(opt);
+        this.rtcm.relaxSyncFlag = this.opt.relaxSyncFlag;
         this.solstatic = solOpt != null && solOpt.solstatic != 0 &&
                 (opt.mode == Constants.PMODE_PPP_STATIC);
         this.solStaticWindow = solOpt != null ? solOpt.solStaticWindow : 0;
@@ -204,6 +205,11 @@ public class PppProcessor {
     public void setTraceControl(TraceControl traceControl) { rtk.traceControl = traceControl; }
     public void setTraceConfig(TraceConfig traceConfig) { rtk.traceConfig = traceConfig; }
     public void setTraceCallback(TraceCallback traceCallback) { rtk.traceCallback = traceCallback; }
+
+    public void setRelaxSyncFlag(boolean relaxSyncFlag) {
+        opt.relaxSyncFlag = relaxSyncFlag;
+        this.rtcm.relaxSyncFlag = relaxSyncFlag;
+    }
 
     public PrcOpt getOpt() { return opt; }
 
@@ -452,6 +458,7 @@ public class PppProcessor {
         }
 
         Rtcm batchRtcm = new Rtcm();
+        batchRtcm.relaxSyncFlag = this.rtcm.relaxSyncFlag;
         List<Obsd[]> batchObsList = new ArrayList<>();
         List<Integer> batchObsCountList = new ArrayList<>();
         List<GTime> batchObsTimeList = new ArrayList<>();

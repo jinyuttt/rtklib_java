@@ -206,6 +206,117 @@ String pppDir = TestDataConfig.get("greatpvt.ppp.dir", "");
 Assumptions.assumeTrue(!pppDir.isEmpty(), "GREAT-PVT PPP dir not configured");
 ```
 
+### 3.4.1 各模块配置说明
+
+`test-data.properties` 按模块分为两套独立配置：
+
+| 模块 | 配置类 | 配置文件位置 | 模板文件 | 说明 |
+|------|--------|-------------|---------|------|
+| **rtklib-core** | `org.rtklib.java.TestDataConfig` | 项目根目录或 `rtklib-core/src/test/resources/` | `test-data.properties.template` ✅ | 核心模块配置，含 `rover.file`/`base.file` 目录模式 |
+| **rtklib-test** | 同上（引用 core 的 TestDataConfig） | 同上 | 无（共用 core 配置） | PPP/RTK 集成测试，依赖 core 的全局配置 |
+| **rtklib-adjust** | `org.rtklib.java.adjust.TestDataConfig`（独立） | `rtklib-adjust/src/test/resources/` | `test-data.properties.template` ✅ | 独立配置，字段不同（`data.root`, `base.a`, `rover`, `date`） |
+| **rtklib-product** | 无 | 无 | 无 | 不依赖私有数据 |
+| **rtklib-research** | 无 | 无 | 无 | 不依赖私有数据 |
+
+> **core 和 adjust 的配置互不干扰**：core 的 `TestDataConfig` 搜索项目根目录和 core 的 resources；adjust 有自己独立的 `TestDataConfig` 和配置文件。rtklib-test 模块直接引用 core 的 `TestDataConfig`，无需额外配置。
+
+### 3.5 RTK/PPP 私有 RTCM3 数据配置（目录模式）
+
+RTK 和 PPP 测试依赖本地私有 RTCM3 数据（含设备ID，不可公开）。通过 `rover.file` 和 `base.file` 配置，**同时支持文件路径和目录路径**，无需额外配置项。
+
+#### 数据目录结构
+
+RTCM3 数据按 `设备ID/日期/小时.rtcm3` 层级存储：
+
+```
+D:\rtcm3\
+├── BASE_ID\
+│   └── 2026-05-20\
+│       ├── 08.rtcm3
+│       ├── 09.rtcm3
+│       └── 10.rtcm3
+└── ROVER_ID\
+    └── 2026-05-20\
+        ├── 08.rtcm3
+        ├── 09.rtcm3
+        └── 10.rtcm3
+```
+
+#### 配置方式
+
+在 `test-data.properties` 中设置 `rover.file` 和 `base.file`：
+
+```properties
+# 单文件模式（处理1小时数据）
+rover.file=D:\rtcm3\ROVER_ID\2026-05-20\08.rtcm3
+base.file=D:\rtcm3\BASE_ID\2026-05-20\08.rtcm3
+
+# 目录模式（处理整天数据）
+rover.file=D:\rtcm3\ROVER_ID\2026-05-20
+base.file=D:\rtcm3\BASE_ID\2026-05-20
+
+# 目录模式（处理某设备所有数据，慎用）
+rover.file=D:\rtcm3\ROVER_ID
+base.file=D:\rtcm3\BASE_ID
+```
+
+**通过目录深度控制数据范围**，无需过滤参数：
+
+| 配置路径深度 | 数据范围 | 适用场景 |
+|-------------|---------|---------|
+| `设备/日期/小时.rtcm3` | 单小时文件 | 快速验证 |
+| `设备/日期/` | 该日所有小时 | 整天RTK/PPP解算 |
+| `设备/` | 该设备所有日期和小时 | 长期统计（慎用） |
+
+#### 目录模式配对规则
+
+当 `rover.file` 和 `base.file` 均为目录时，自动配对：
+
+1. 以基站目录为基准，递归扫描所有 `.rtcm3` 文件
+2. 计算每个基站文件相对于基站目录的**相对路径**（如 `2026-05-20/8.rtcm3`）
+3. 在流动站目录下查找**同名相对路径**的文件
+4. 找到则配对，未找到则跳过该基站文件
+5. 文件按路径字符串字典序排列
+
+**要求**：
+- 基站和流动站目录下的文件**相对路径必须一致**（即文件名和子目录结构相同）
+- 小时文件名**补零**（`08.rtcm3` 而非 `8.rtcm3`），否则 `10.rtcm3` 会排在 `8.rtcm3` 前面（字典序 `10 < 8 < 9`）
+
+> ⚠️ 程序按路径字符串排序，不按时间排序。若数据文件名不满足补零约定，请自行编写测试样例处理。
+
+#### 代码使用
+
+```java
+// 方式1：获取所有 base-rover 文件对（目录模式推荐）
+List<String[]> pairs = TestDataConfig.resolveBaseRoverPairs();
+Assumptions.assumeTrue(!pairs.isEmpty(), "No base-rover data configured");
+for (String[] pair : pairs) {
+    String baseFile = pair[0];  // 基站文件绝对路径
+    String roverFile = pair[1]; // 流动站文件绝对路径
+    // 逐对处理...
+}
+
+// 方式2：单独解析 rover 或 base 路径（SPP等单站场景）
+List<String> roverFiles = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile());
+for (String file : roverFiles) {
+    // 逐文件处理...
+}
+```
+
+#### 配置步骤
+
+```powershell
+# 1. 复制模板
+cp rtklib-core/src/test/resources/test-data.properties.template `
+   test-data.properties
+
+# 2. 编辑填入本地路径
+# rover.file=D:\rtcm3\ROVER_ID\2026-05-20
+# base.file=D:\rtcm3\BASE_ID\2026-05-20
+
+# 3. test-data.properties 已被 .gitignore 排除，不会提交到仓库
+```
+
 ---
 
 ## 4. 验证测试通过

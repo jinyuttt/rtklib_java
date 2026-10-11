@@ -11,11 +11,30 @@ Bug 修复的调试过程不在本文档中，请参见 `SPP_Debug_Record.md` �
 
 ### C版行为
 `adjweek()`、`adjustGpsWeek()`、`adjustBdtWeek()`、`adjdayGlot()` 在时间
-未初始化时使用CPU时间（`timeget()`）作为参考。这在实时转换场景下是合理的，
-因为CPU时间与数据时间基本一致。
+未初始化时使用`timeget()`作为参考周数。`timeget()`的返回值取决于启动模式
+和参数，**不同参数会产生不同的时间解析结果**：
+
+| 启动模式 | `timeget()` 返回 | 代码位置 | 说明 |
+|---------|------------------|---------|------|
+| 文件回放+timetag | 文件timetag中的时间 | `stream.c:658` | `timeset(gpst2utc(file->time))` |
+| 文件回放无timetag | 系统当前时间 | — | `timeget()`直接返回系统时间 |
+| 实时流 | 系统时间→首解后修正 | `rtksvr.c:656` | `timeset(gpst2utc(timeadd(svr->rtk.sol.time,tt)))` |
+| 后处理(postpos) | 系统当前时间 | — | 不调用`timeset()` |
+
+### C版离线处理的已知问题
+C版`adjweek()`的致命缺陷：**只调整TOW的±半周（302400秒），但week直接
+取自`timeget()`初始化的值，不随TOW调整**。当`timeget()`返回的时间与数据
+时间不在同一GPS周时，所有观测时间被整体偏移整数周。
+
+验证实例（本地BDS双频RTCM3数据）：
+- 数据真实时间：GPS_week=2419, TOW=39630s → 2026/05/17 11:00:30 UTC
+- C版`timeget()`=2026-09-16 → GPS_week=2436（文件timetag时间）
+- C版`adjweek()`：TOW=39630s不变（在±半周内），week=2436被锚定
+- C版输出：**2026/09/13 11:00:30 UTC**（偏移17周=119天）❌
+- Java版输出：**2026/05/17 11:00:30 UTC** ✅
 
 ### Java版行为
-时间未初始化时不使用CPU时间，而是：
+时间未初始化时不使用CPU时间或文件时间，而是：
 - `adjweek()`：用week=0创建临时时间，不设`timeInitialized`，让星历消息
   建立正确的时间基准
 - `adjustGpsWeek()`/`adjustBdtWeek()`：返回原始周数，不做1024周调整
@@ -23,15 +42,24 @@ Bug 修复的调试过程不在本文档中，请参见 `SPP_Debug_Record.md` �
 
 ### 原因
 Java版用于离线处理RTCM数据直接定位，没有convbin转RINEX的中间步骤。
-CPU时间可能与数据时间相差数年，使用CPU时间会导致周数调整完全错误。
+`timeget()`返回的时间（无论是系统时间还是文件时间）可能与数据真实观测
+时间相差数月甚至数年，使用它做周数调整会导致时间完全错误。
 
 ### 影响范围
 仅影响MSM消息在星历消息之前到达的场景（即前几个历元）。
 星历消息到达后`timeInitialized`被设为true，后续处理与C版完全一致。
 
 ### 补偿措施
-调用方（如SppTest）需要在所有数据解码完成后，用星历toe的周数修正
-早期观测时间。这是离线处理的必要步骤。
+调用方（如`RtkProcessor`、`RtcmCallbackDecoder`）在所有数据解码完成后，
+用星历toe的周数修正早期观测时间（`correctObsWeek()`/`flushPendingEpochs()`）。
+这是离线处理的必要步骤。
+
+### 验证（2026-10-11）
+`testGpsWeekRolloverAnalysis()` 单元测试完整复现了C版的错误行为：
+- C版`adjweek()`用文件timetag时间(2026-09-16)初始化→GPS_week=2436
+- 数据TOW=39630s在±半周内不调整→week=2436被锚定
+- 输出2026/09/13 11:00:30 UTC（偏移119天）❌
+- Java版输出2026/05/17 11:00:30 UTC ✅
 
 ---
 
@@ -76,7 +104,69 @@ Java版动态计算 `NX`，仅估计启用系统的钟差（更高效）。
 与C版和PPP `udclk_ppp` 一致。未启用系统的 `dtr[i]=0`。
 ---
 
-## 4. RTK状态向量定义：绝对位置 vs 基线向量
+## 4. RTCM3 MSM obsflag放宽检查（relaxSyncFlag）——兼容习惯性错误
+
+### C版行为
+RTCM3 MSM消息中 Multiple Message Indicator (MMI/sync) 标志：
+- sync=0：本消息是当前历元最后一条（或唯一一条），obsflag=1，输出历元
+- sync=1：当前历元还有后续消息，obsflag=0，累积观测不输出
+
+C版严格按标准实现：`rtcm->obsflag=!sync; return sync?0:1;`
+上层仅当 obsflag==1 时提取观测数据，sync=1 的观测被丢弃。
+
+### 标准定义
+RTCM 10403.x 标准明确定义：
+- MMI=0：本消息为当前历元的最后一条消息
+- MMI=1：当前历元还有后续消息待接收
+
+### 现实兼容性问题
+多种接收机/NTRIP源对MMI处理不一致，属于**习惯性错误**：
+- BNC（德国联邦制图和测地局NTRIP客户端）源码注释明确指出：
+  > "Since the Multiple Message Indicator is inconsistently handled by various receivers"
+- RTKLIB Issue #104：NTRIP源发送的RTCM 1004以sync=1结尾，导致GPS数据被丢弃
+- RTKLIB Issue #265：2016/2017闰秒导致GLONASS历元时间误判，连锁触发sync标志异常
+- 实测数据 `rtcm3_gmsd_20121014.rtcm3` 中GPS 1077和GLONASS 1087消息均为
+  sync=1且无后续消息，属于非标准行为
+
+### Java版行为
+在 `Rtcm` 类增加 `relaxSyncFlag` 配置项（默认 `false`，保持与C版一致的标准行为）。
+
+**修复在解码层完成**，而非上层绕过检查。解码函数中：
+```java
+// 原来（与C版一致）：
+this.obsflag = sync != 0 ? 0 : 1;
+
+// 改为：
+this.obsflag = (sync != 0 && !this.relaxSyncFlag) ? 0 : 1;
+```
+当 `relaxSyncFlag=true` 时，即使sync=1，obsflag也会被置为1，
+上层代码（RtkProcessor、PppProcessor、BaseStationMonitor等）继续检查
+`obsflag==1`，但该条件在relax模式下因解码层的修改而自然满足。
+
+涉及修改的解码函数：decodeType1001-1004（legacy）、decodeType1012、
+decodeMsm0/4/5/6/7（MSM），共12处obsflag设置。
+
+### 设计原因
+1. obsflag的语义是"历元观测是否就绪可用"（业务信号），不是sync原始值记录，
+   因此修复应在解码层完成，让obsflag始终是可靠的就绪信号
+2. 上层代码无需感知relaxSyncFlag的存在，自动生效，不会遗漏
+3. 标准行为在遇到非标准数据源时会完全丢弃观测，导致无法定位
+4. C版无此配置选项，属于Java版增强
+
+### 注意事项
+- `relaxSyncFlag=true` 仅适用于单消息历元（I=1）sync=1的非标准场景
+- 如果数据源真的是多消息历元（I>1），开启此选项会导致第一条消息就被当作
+  完整历元输出，后续消息丢失。这是用户配置责任，代码无法自动判断
+- RINEX文件处理不受影响（RINEX观测已按历元组织，无sync标志）
+
+### 使用建议
+- 标准NTRIP源（如IGS站点）：保持默认 `relaxSyncFlag=false`
+- 非标准或未知NTRIP源：设置 `relaxSyncFlag=true`
+- 测试旧数据：设置 `relaxSyncFlag=true`
+
+---
+
+## 5. RTK状态向量定义：绝对位置 vs 基线向量
 
 ### C版行为
 `rtk->x[0..2]` 存储**流动站绝对ECEF坐标**。
@@ -164,7 +254,7 @@ Java版：`x = b = p_r - p_b`，zdres 传入 `rb + x = p_b + (p_r - p_b) = p_r`
 
 ---
 
-## 5. 基准站位置处理
+## 6. 基准站位置处理
 
 ### C版行为（后处理 `postpos.c`）
 
@@ -218,7 +308,7 @@ Java版 `antpos()` 的实现状态：
 
 ---
 
-## 6. Kalman 滤波矩阵运算
+## 7. Kalman 滤波矩阵运算
 
 ### C版行为
 使用列优先矩阵，手动实现 Kalman 增益：
@@ -287,7 +377,7 @@ C 版同样使用 `nb*nx` 分配 H 矩阵、实际使用 `nv*nx`（`nv ≤ nb`�
 
 ---
 
-## 7. 矩阵存储约定：行优先 vs 列优先
+## 8. 矩阵存储约定：行优先 vs 列优先
 
 ### C版：列优先（Column-Major）
 
@@ -341,7 +431,7 @@ C 版列优先矩阵 `A_c[m][n]` 与 Java 版行优先矩阵 `A_j[m][n]` 在数�
 - 最终结果写回 `x[]` 和 `P[]` 时按行优先顺序
 ---
 
-## 8. RTK额外优化项（Java版独有）
+## 9. RTK额外优化项（Java版独有）
 
 Java版包含7项C版RTKLIB没有的额外优化，通过`RtkConfig`独立开关控制，默认全部关闭。
 
@@ -368,15 +458,15 @@ Java版包含7项C版RTKLIB没有的额外优化，通过`RtkConfig`独立开关
 
 ---
 
-## 9. Bug修复记录
+## 10. Bug修复记录
 
 已移至 [RTK_Debug_Record.md](RTK_Debug_Record.md) "阶段7：索引体系Bug修复 (2026-07-18/19)" 及 "阶段10：观测值质量控制修复 (2026-07-19)" 章节。
 
-## 10. 额外优化详细说明
+## 11. 额外优化详细说明
 
 已移至 [RTK_Extra_Optimizations.md](RTK_Extra_Optimizations.md)，包含每项优化的完整算法、配置参数和实现位置。
 
-## 11. 观测值质量控制差异（2026-07-19 修复）
+## 12. 观测值质量控制差异（2026-07-19 修复）
 
 C版RTKLIB的质量控制分两层，Java版原始移植时遗漏了前端剔除：
 
@@ -393,7 +483,7 @@ C版RTKLIB的质量控制分两层，Java版原始移植时遗漏了前端剔除
 
 ---
 
-## 12. RTCM MSM多信号管理机制差异（2026-07-24 分析）
+## 13. RTCM MSM多信号管理机制差异（2026-07-24 分析）
 
 ### 12.1 核心配置差异：NFREQ与NEXOBS
 
@@ -1057,7 +1147,7 @@ python rtk_compare/compare_results.py \
 
 ---
 
-## 13. PPP关键改正项（已与C版对齐，已移至技术参考）
+## 14. PPP关键改正项（已与C版对齐，已移至技术参考）
 
 所有PPP改正项（天线PCV、DCB、海潮OTL、固体潮、极潮、章动模型）均已完整实现，对齐度100%。
 
@@ -1065,7 +1155,7 @@ python rtk_compare/compare_results.py \
 
 ---
 
-## 14. 功能边界：Java版未实现功能清单（2026-09-29 更新）
+## 15. 功能边界：Java版未实现功能清单（2026-09-29 更新）
 
 ### 14.1 数据流与网络协议
 

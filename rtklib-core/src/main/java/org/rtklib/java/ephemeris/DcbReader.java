@@ -141,7 +141,7 @@ public final class DcbReader {
                         for (int i = 0; i < MAX_CODE_BIASES; i++) {
                             nav.cbias[sat - 1][freq][i] += cbias * 1E-9 * Constants.CLIGHT;
                         }
-                    } else if (biasIx1 - 1 < MAX_CODE_BIASES) {
+                    } else if (biasIx1 > 0 && biasIx1 - 1 < MAX_CODE_BIASES) {
                         nav.cbias[sat - 1][freq][biasIx1 - 1] -= cbias * 1E-9 * Constants.CLIGHT;
                     }
                     ok = true;
@@ -152,9 +152,9 @@ public final class DcbReader {
                     int code2 = obs2code(obs2.substring(1));
                     int biasIx1 = SppCore.code2biasIx(sys, code1);
                     int biasIx2 = SppCore.code2biasIx(sys, code2);
-                    if (biasIx1 == 0 && biasIx2 - 1 < MAX_CODE_BIASES) {
+                    if (biasIx1 == 0 && biasIx2 > 0 && biasIx2 - 1 < MAX_CODE_BIASES) {
                         nav.cbias[sat - 1][freq][biasIx2 - 1] = cbias * 1E-9 * Constants.CLIGHT;
-                    } else if (biasIx2 == 0 && biasIx1 - 1 < MAX_CODE_BIASES) {
+                    } else if (biasIx2 == 0 && biasIx1 > 0 && biasIx1 - 1 < MAX_CODE_BIASES) {
                         nav.cbias[sat - 1][freq][biasIx1 - 1] = -cbias * 1E-9 * Constants.CLIGHT;
                     }
                     ok = true;

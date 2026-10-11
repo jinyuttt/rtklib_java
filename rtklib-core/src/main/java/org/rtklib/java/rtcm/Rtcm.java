@@ -53,6 +53,13 @@ public class Rtcm implements Serializable {
 
     /** Observation data flag (1: first epoch) */
     public int obsflag;
+    /**
+     * If true, relax the obsflag==1 check when extracting observations from RTCM stream.
+     * When a single-message epoch has non-standard sync=1 (MMI=1), setting this to true
+     * treats the observations as valid instead of discarding them.
+     * Default is false (strict standard behavior, same as C version).
+     */
+    public boolean relaxSyncFlag;
     /** Epoch time continuity */
     public GTime[] timeobs;
     /** New observation data time set */
@@ -95,6 +102,7 @@ public class Rtcm implements Serializable {
         this.staidcnt = 0;
         this.staidok = 0;
         this.obsflag = 0;
+        this.relaxSyncFlag = false;
         this.timeobs = new GTime[Constants.MAXRCV];
         this.obsb = new int[Constants.MAXRCV];
         this.opt = "";
@@ -361,8 +369,8 @@ public class Rtcm implements Serializable {
         adjweek(tow);
 
         if (!extended) {
-            this.obsflag = (sync == 0) ? 1 : 0;
-            return sync == 0;
+            this.obsflag = (sync != 0 && !this.relaxSyncFlag) ? 0 : 1;
+            return sync == 0 || this.relaxSyncFlag;
         }
 
         if (this.obsflag != 0) {
@@ -427,8 +435,8 @@ public class Rtcm implements Serializable {
             }
         }
 
-        this.obsflag = (sync == 0) ? 1 : 0;
-        return sync == 0;
+        this.obsflag = (sync != 0 && !this.relaxSyncFlag) ? 0 : 1;
+        return sync == 0 || this.relaxSyncFlag;
     }
 
     // ---- Station messages ----------------------------------------------------
@@ -578,7 +586,7 @@ public class Rtcm implements Serializable {
             }
         }
 
-        this.obsflag = sync != 0 ? 0 : 1;
+        this.obsflag = (sync != 0 && !this.relaxSyncFlag) ? 0 : 1;
         return true;
     }
     private boolean decodeType1013() {
@@ -1601,7 +1609,7 @@ public class Rtcm implements Serializable {
         int[] iod = new int[1];
         int[] hsize = new int[1];
         if (decodeMsmHead(sys, sync, iod, h, hsize) < 0) return false;
-        this.obsflag = sync[0] != 0 ? 0 : 1;
+        this.obsflag = (sync[0] != 0 && !this.relaxSyncFlag) ? 0 : 1;
         return true;
     }
 
@@ -1632,7 +1640,7 @@ public class Rtcm implements Serializable {
 
         if (i + h.nsat * 18 + ncell * 48 > this.len * 8) {
             log.warn("MSM4 length error: nsat={} ncell={} len={}", h.nsat, ncell, this.len);
-            this.obsflag = sync != 0 ? 0 : 1;
+            this.obsflag = (sync != 0 && !this.relaxSyncFlag) ? 0 : 1;
             return true;
         }
 
@@ -1668,7 +1676,7 @@ public class Rtcm implements Serializable {
 
         saveMsmObs(sys, h, r, pr, cp, null, null, cnr, lock, null, half);
 
-        this.obsflag = sync != 0 ? 0 : 1;
+        this.obsflag = (sync != 0 && !this.relaxSyncFlag) ? 0 : 1;
         return true;
     }
 
@@ -1702,7 +1710,7 @@ public class Rtcm implements Serializable {
 
         if (i + h.nsat * 36 + ncell * 63 > this.len * 8) {
             log.warn("MSM5 length error: nsat={} ncell={} len={}", h.nsat, ncell, this.len);
-            this.obsflag = sync != 0 ? 0 : 1;
+            this.obsflag = (sync != 0 && !this.relaxSyncFlag) ? 0 : 1;
             return true;
         }
 
@@ -1751,9 +1759,10 @@ public class Rtcm implements Serializable {
 
         saveMsmObs(sys, h, r, pr, cp, rr, rrf, cnr, lock, ex, half);
 
-        this.obsflag = sync != 0 ? 0 : 1;
+        this.obsflag = (sync != 0 && !this.relaxSyncFlag) ? 0 : 1;
         return true;
     }
+
 
     /**
      * Decode MSM 6: full pseudorange and phaserange plus CNR (high-res).
@@ -1782,7 +1791,7 @@ public class Rtcm implements Serializable {
 
         if (i + h.nsat * 18 + ncell * 65 > this.len * 8) {
             log.warn("MSM6 length error: nsat={} ncell={} len={}", h.nsat, ncell, this.len);
-            this.obsflag = sync != 0 ? 0 : 1;
+            this.obsflag = (sync != 0 && !this.relaxSyncFlag) ? 0 : 1;
             return true;
         }
 
@@ -1818,9 +1827,10 @@ public class Rtcm implements Serializable {
 
         saveMsmObs(sys, h, r, pr, cp, null, null, cnr, lock, null, half);
 
-        this.obsflag = sync != 0 ? 0 : 1;
+        this.obsflag = (sync != 0 && !this.relaxSyncFlag) ? 0 : 1;
         return true;
     }
+
 
     /**
      * Decode MSM 7: full pseudorange, phaserange, phaserangerate and CNR (high-res).
@@ -1852,7 +1862,7 @@ public class Rtcm implements Serializable {
 
         if (i + h.nsat * 36 + ncell * 80 > this.len * 8) {
             log.warn("MSM7 length error: nsat={} ncell={} len={}", h.nsat, ncell, this.len);
-            this.obsflag = sync != 0 ? 0 : 1;
+            this.obsflag = (sync != 0 && !this.relaxSyncFlag) ? 0 : 1;
             return true;
         }
 
@@ -1901,7 +1911,7 @@ public class Rtcm implements Serializable {
 
         saveMsmObs(sys, h, r, pr, cp, rr, rrf, cnr, lock, ex, half);
 
-        this.obsflag = sync != 0 ? 0 : 1;
+        this.obsflag = (sync != 0 && !this.relaxSyncFlag) ? 0 : 1;
         return true;
     }
 

@@ -84,6 +84,8 @@ public class SppProcessor {
     private boolean hasBasePos = false;
     private boolean ephReady = false;
     private boolean finished = false;
+    private List<Obsd> streamEpochObs = null;
+    private GTime streamEpochTime = null;
 
     private final List<Obsd[]> pendingObsList = new ArrayList<>();
     private final List<Integer> pendingObsCountList = new ArrayList<>();
@@ -184,6 +186,7 @@ public class SppProcessor {
         if (opt != null) {
             this.sleepInterval = opt.outputThrottleInterval;
             this.sleepMs = opt.outputThrottleSleepMs;
+            this.rtcm.relaxSyncFlag = opt.relaxSyncFlag;
         }
     }
 
@@ -213,6 +216,11 @@ public class SppProcessor {
         } else {
             this.ekfState = null;
         }
+    }
+
+    public void setRelaxSyncFlag(boolean relaxSyncFlag) {
+        opt.relaxSyncFlag = relaxSyncFlag;
+        this.rtcm.relaxSyncFlag = relaxSyncFlag;
     }
 
     public RtkConfig getRtkConfig() {
@@ -420,12 +428,15 @@ public class SppProcessor {
         }
 
         Rtcm batchRtcm = new Rtcm();
+        batchRtcm.relaxSyncFlag = this.rtcm.relaxSyncFlag;
         List<Obsd[]> batchObsList = new ArrayList<>();
         List<Integer> batchObsCountList = new ArrayList<>();
         List<GTime> batchObsTimeList = new ArrayList<>();
         double[] batchBasePos = new double[3];
         boolean batchHasBasePos = false;
         Map<Integer, Integer> batchEphTypeCount = new TreeMap<>();
+        List<Obsd> currentEpochObs = null;
+        GTime currentEpochTime = null;
 
         int offset = 0;
         while (offset < data.length) {
@@ -447,15 +458,29 @@ public class SppProcessor {
                 batchEphTypeCount.merge(type, 1, Integer::sum);
             }
             if (isObsType(type) && batchRtcm.obs.n > 0 && batchRtcm.obsflag == 1) {
-                int n = batchRtcm.obs.n;
-                Obsd[] obsCopy = new Obsd[n];
-                for (int i = 0; i < n; i++) {
-                    obsCopy[i] = new Obsd(batchRtcm.obs.data[i]);
+                GTime epochTime = batchRtcm.obs.data[0].time;
+                if (currentEpochObs != null &&
+                        Math.abs(TimeSystem.timediff(currentEpochTime, epochTime)) > 1e-9) {
+                    batchObsList.add(currentEpochObs.toArray(new Obsd[0]));
+                    batchObsCountList.add(currentEpochObs.size());
+                    batchObsTimeList.add(currentEpochTime);
+                    currentEpochObs = null;
                 }
-                batchObsList.add(obsCopy);
-                batchObsCountList.add(n);
-                batchObsTimeList.add(batchRtcm.obs.data[0].time);
+                if (currentEpochObs == null) {
+                    currentEpochObs = new ArrayList<>();
+                    currentEpochTime = epochTime;
+                }
+                for (int i = 0; i < batchRtcm.obs.n; i++) {
+                    if (batchRtcm.obs.data[i].sat != 0) {
+                        currentEpochObs.add(new Obsd(batchRtcm.obs.data[i]));
+                    }
+                }
             }
+        }
+        if (currentEpochObs != null && !currentEpochObs.isEmpty()) {
+            batchObsList.add(currentEpochObs.toArray(new Obsd[0]));
+            batchObsCountList.add(currentEpochObs.size());
+            batchObsTimeList.add(currentEpochTime);
         }
 
         int ephWeek = -1;
@@ -579,23 +604,31 @@ public class SppProcessor {
         }
 
         if (isObsType(type) && rtcm.obs.n > 0 && rtcm.obsflag == 1) {
-            int n = rtcm.obs.n;
-            Obsd[] obsCopy = new Obsd[n];
-            for (int i = 0; i < n; i++) {
-                obsCopy[i] = new Obsd(rtcm.obs.data[i]);
-            }
             GTime epochTime = rtcm.obs.data[0].time;
-
-            if (epochCache != null && lastSourceId != null) {
-                epochCache.put(lastSourceId, obsCopy, n, epochTime);
+            if (streamEpochObs != null &&
+                    Math.abs(TimeSystem.timediff(streamEpochTime, epochTime)) > 1e-9) {
+                Obsd[] epochArr = streamEpochObs.toArray(new Obsd[0]);
+                int n = epochArr.length;
+                if (epochCache != null && lastSourceId != null) {
+                    epochCache.put(lastSourceId, epochArr, n, streamEpochTime);
+                }
+                if (ephReady) {
+                    processEpoch(epochArr, n, streamEpochTime, rtcm.nav);
+                } else {
+                    pendingObsList.add(epochArr);
+                    pendingObsCountList.add(n);
+                    pendingObsTimeList.add(streamEpochTime);
+                }
+                streamEpochObs = null;
             }
-
-            if (ephReady) {
-                processEpoch(obsCopy, n, epochTime, rtcm.nav);
-            } else {
-                pendingObsList.add(obsCopy);
-                pendingObsCountList.add(n);
-                pendingObsTimeList.add(epochTime);
+            if (streamEpochObs == null) {
+                streamEpochObs = new ArrayList<>();
+                streamEpochTime = epochTime;
+            }
+            for (int i = 0; i < rtcm.obs.n; i++) {
+                if (rtcm.obs.data[i].sat != 0) {
+                    streamEpochObs.add(new Obsd(rtcm.obs.data[i]));
+                }
             }
         }
     }

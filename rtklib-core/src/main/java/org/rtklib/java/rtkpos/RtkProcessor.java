@@ -208,6 +208,8 @@ public class RtkProcessor implements Serializable {
         if (opt != null) {
             this.sleepInterval = opt.outputThrottleInterval;
             this.sleepMs = opt.outputThrottleSleepMs;
+            this.rtcmRover.relaxSyncFlag = opt.relaxSyncFlag;
+            this.rtcmBase.relaxSyncFlag = opt.relaxSyncFlag;
             if ((opt.refpos == Constants.POSOPT_POS_XYZ || opt.refpos == Constants.POSOPT_POS_LLH)
                     && opt.rb != null
                     && (opt.rb[0] != 0.0 || opt.rb[1] != 0.0 || opt.rb[2] != 0.0)) {
@@ -221,12 +223,12 @@ public class RtkProcessor implements Serializable {
     public static PrcOpt createDefaultOpt() {
         PrcOpt opt = new PrcOpt();
         opt.mode = Constants.PMODE_KINEMA;
-        opt.nf = 3;
-        opt.navsys = Constants.SYS_GPS | Constants.SYS_GLO | Constants.SYS_GAL | Constants.SYS_CMP;
+        opt.nf = 2;
+        opt.navsys = Constants.SYS_ALL;
         opt.elmin = 15.0 * Constants.D2R;
         opt.ionoopt = Constants.IONOOPT_BRDC;
-        opt.tropopt = Constants.TROPOPT_EST;
-        opt.modear = Constants.ARMODE_OFF;
+        opt.tropopt = Constants.TROPOPT_SAAS;
+        opt.modear = Constants.ARMODE_FIXHOLD;
         opt.refpos = Constants.POSOPT_RTCM;
         opt.intpref = 1;
         opt.maxtdiff = 30.0;
@@ -328,6 +330,12 @@ public class RtkProcessor implements Serializable {
     public void setExcludedSats(int[] exsats) {
         opt.exsats = exsats.clone();
         rtk.opt.exsats = opt.exsats.clone();
+    }
+
+    public void setRelaxSyncFlag(boolean relaxSyncFlag) {
+        opt.relaxSyncFlag = relaxSyncFlag;
+        this.rtcmRover.relaxSyncFlag = relaxSyncFlag;
+        this.rtcmBase.relaxSyncFlag = relaxSyncFlag;
     }
 
     public PrcOpt getOpt() { return opt; }
@@ -823,7 +831,9 @@ public class RtkProcessor implements Serializable {
         }
 
         Rtcm batchRtcmRover = new Rtcm();
+        batchRtcmRover.relaxSyncFlag = this.rtcmRover.relaxSyncFlag;
         Rtcm batchRtcmBase = new Rtcm();
+        batchRtcmBase.relaxSyncFlag = this.rtcmBase.relaxSyncFlag;
         List<Obsd[]> batchRoverObsList = new ArrayList<>();
         List<Integer> batchRoverObsCountList = new ArrayList<>();
         List<GTime> batchRoverObsTimeList = new ArrayList<>();
@@ -1381,6 +1391,7 @@ public class RtkProcessor implements Serializable {
 
     static String formatSolDataLine(SolData solData) {Position llh = solData.getPosition(CoordType.LLH);
         Accuracy acc = solData.getAccuracy(CoordType.ENU);
+        if (acc == null) acc = solData.getAccuracy(CoordType.LLH);
         if (llh == null || acc == null) return "";
 
         String qStr = String.valueOf(solData.status.code);

@@ -162,6 +162,7 @@ public class BaseStationMonitor {
 
         if (rtcmDecoder == null) {
             rtcmDecoder = new Rtcm();
+            rtcmDecoder.relaxSyncFlag = this.config.relaxSyncFlag;
         }
 
         int pos = offset;

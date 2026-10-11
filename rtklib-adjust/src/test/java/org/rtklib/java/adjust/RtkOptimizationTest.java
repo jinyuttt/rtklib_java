@@ -22,22 +22,24 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class RtkOptimizationTest {
 
-    private static final TestDataConfig CFG = new TestDataConfig();
-    private static final String DATA_ROOT = CFG.getDataRoot();
-    private static final boolean DATA_AVAILABLE = CFG.isAvailable()
+    private static final String DATA_ROOT = TestDataConfig.getDataRoot();
+    private static final String[] BASES = TestDataConfig.getBaseGroup();
+    private static final String[] ROVERS = TestDataConfig.getRoverGroup();
+    private static final boolean DATA_AVAILABLE = TestDataConfig.isAvailable()
             && !DATA_ROOT.isEmpty()
-            && !CFG.getBadBase().isEmpty();
+            && BASES.length > 0
+            && ROVERS.length > 0;
 
-    private static final String BAD_BASE = CFG.getBadBase();
-    private static final String BAD_ROVER = CFG.getBadRover();
+    private static final String BAD_BASE = BASES.length > 1 ? BASES[1] : "";
+    private static final String BAD_ROVER = ROVERS.length > 1 ? ROVERS[1] : "";
 
-    private static final String GOOD_BASE = CFG.getGoodBase();
-    private static final String GOOD_ROVER = CFG.getGoodRover();
+    private static final String GOOD_BASE = BASES.length > 0 ? BASES[0] : "";
+    private static final String GOOD_ROVER = ROVERS.length > 0 ? ROVERS[0] : "";
 
     @BeforeAll
     static void checkData() {
         if (!DATA_AVAILABLE) {
-            System.out.println("测试数据不可用，跳过测试。" + CFG.getMissingMessage());
+            System.out.println("测试数据不可用，跳过测试。" + TestDataConfig.getMissingMessage());
         }
     }
 
