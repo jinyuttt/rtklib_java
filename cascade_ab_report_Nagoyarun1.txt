@@ -1,0 +1,7 @@
+| Nagoya run1  | EST-Ref        |     0.2% | fix=14      | float=7383    | F.H.RMSE=19.865    | Fix.H.RMSE=19.688    | Fix.V.RMSE=35.743    |
+|              | EST-CascadeAR  |     0.8% | fix=60      | float=7327    | F.H.RMSE=24.793    | Fix.H.RMSE=26.956    | Fix.V.RMSE=57.138    |
+
+Fix epoch error distribution (H, m):
+| dataset       | config         |  p50(m) |  p90(m) |  p99(m) |  max(m) | >2m %  |
+| Nagoya run1  | EST-Ref        |  13.739 |  35.969 |  36.428 |  36.428 | 100.00 |
+| Nagoya run1  | EST-CascadeAR  |  25.623 |  42.350 |  49.987 |  49.987 | 100.00 |

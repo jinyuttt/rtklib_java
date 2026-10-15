@@ -1,0 +1,12 @@
+scenario=urban
+role=base
+systems=G+E+J+C
+date=2017-07-19
+source=Net_Diff
+receiver=u-blox
+interval=1s
+description=城市RTK基站数据(RINEX 3.02)，含G+E+J+C四系统
+location=Unknown urban
+license=public
+test_ids=RtkUrbanTest
+sample_rate=1s

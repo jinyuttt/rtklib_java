@@ -42,7 +42,7 @@
 | R5 | SNR中值参考星选择 | `enableSnrMedian` | false | — | — | ✅ | ✅ | ✅ | ✅ | **通用**：各频点SNR中值替代固定参考值→弱信号降权；参考星评分=高度角+SNR接近度 |
 | R6 | PAR参考星重选 | `enableParRefReselect` | false | — | — | ✅ | ✅ | ✅ | ✅ | **通用（AR增强）**：Ratio不足时排除贡献差卫星+重选参考星 `【⚠️ 仅LAMBDA失败后触发】` |
 | R7 | 电离层/对流层梯度 | `enableIonoTropGradient` | false | — | — | — | ✅ | — | ✅ | **长基线专用**：每星VTEC+Gn+Ge三参数，建模电离层空间不均匀性 `【C版2.5.0已有，Java统一RtkConfig管理】` |
-| R8 | 逐级模糊度固定 | `enableCascadeAR` | false | — | — | ✅ | ✅ | ✅ | ✅ | **多频（≥2频）通用**：EWL(λ≈0.86m)→WL(λ≈0.48m)→NL(λ≈0.11m)逐级约束，EWL/WL成功率>95% |
+| R8 | 逐级模糊度固定 | `enableCascadeAR` | false | — | — | ✅ | ✅ | ✅ | ✅ | **多频（≥2频）非IFLC通用**：真逐级EWL→WL→NL（周域组合 C·y/C·Q·Cᵀ + 独立LAMBDA + 级间条件更新 + 整数反推），任一级失败回落标准LAMBDA；IFLC守卫短路（FIX-ALG-006/007）。§17.3旧伪实现实测数据作废，重写后待重测 |
 | R9 | 精细化残差编辑 | `enableResidualEdit` | false | — | — | ✅ | ✅ | ✅ | ✅ | **通用（AR基础）**：残差跳变检测+伪距-载波一致性+弧段完整性三重周跳检测 |
 | R10 | 部分模糊度固定 | `enablePartialAR` | false | — | — | ✅ | ✅ | ✅ | ✅ | **通用（AR增强）**：全局Ratio失败→逐步剔除方差大模糊度→子集固定 |
 | R11 | Bootstrapping联合判据 | `enableBootstrapping` | false | — | — | ✅ | ✅ | ✅ | ✅ | **通用（AR增强）**：Ratio通过后补验模糊度联合取整成功率≥0.99，防Ratio假阳性 |

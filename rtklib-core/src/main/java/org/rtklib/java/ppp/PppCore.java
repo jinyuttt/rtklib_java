@@ -2,7 +2,6 @@ package org.rtklib.java.ppp;
 
 import org.rtklib.java.common.RtklibCommon;
 import java.util.Locale;
-import org.rtklib.java.common.ObsCode;
 import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
@@ -167,6 +166,10 @@ public class PppCore {
         int[] svh = wb.svh;
         double[] azel = wb.azel;
         int[] exc = wb.exc;
+        /* C ppp.c pppos(): exc[MAXOBS]={0} is re-initialized at each pppos entry,
+         * so exclusions accumulate only across iterations within an epoch and
+         * never leak into the next epoch (work buffer is reused across epochs) */
+        java.util.Arrays.fill(exc, 0);
 
         for (int i = 0; i < Constants.MAXSAT; i++) {
             for (int j = 0; j < opt.nf; j++) {
@@ -243,9 +246,6 @@ public class PppCore {
 
             int nv = pppRes(0, obs, n, rs, dts, var, svh, exc, nav, xp, rtk, v, H, R, azel, nx);
 
-            if ((rtk.epoch <= 5 || (rtk.epoch % 50 == 0)) && iter == 0) {
-                LOG.info("PppCore epoch={} iter=0 nv={} nx={}", rtk.epoch, nv, nx);
-            }
             LOG.debug("pppos iter={} nv={} nx={}", iter, nv, nx);
 
             if (iter == 0) {
@@ -531,7 +531,6 @@ public class PppCore {
                 if (++rtk.ssat[i].outc[f] > opt.maxout && rtk.ssat[i].vsat[f] != 0) {
                     int idx = IB(i + 1, f, opt);
                     if (idx < nx && x[idx] != 0.0) {
-                        double pBefore = P[idx * nx + idx];
                         initx(x, P, nx, 0.0, VAR_BIAS, idx);
                         rtk.ssat[i].mw[0] = 0.0;
                         rtk.ssat[i].gf[0] = 0.0;
@@ -539,8 +538,6 @@ public class PppCore {
                         rtk.ssat[i].rw = 0.0;
                         rtk.ssat[i].xswl = 0.0;
                         rtk.ssat[i].niwl = 0;
-                        LOG.info(String.format(Locale.US, "AMB-RESET epoch=%d sat=%d f=%d reason=maxout outc=%d maxout=%d P_before=%.4e P_after=%.4e",
-                                rtk.epoch, i + 1, f, rtk.ssat[i].outc[f], opt.maxout, pBefore, VAR_BIAS));
                     }
                     rtk.ssat[i].outc[f] = 0;
                     rtk.ssat[i].vsat[f] = 0;
@@ -609,8 +606,6 @@ public class PppCore {
 
                 if (bias[i] == 0.0 || (x[j] != 0.0 && slip[i] == 0)) continue;
 
-                double pBefore = P[j * nx + j];
-                String reason = (x[j] == 0.0) ? "new" : "slip";
                 initx(x, P, nx, bias[i], VAR_BIAS, IB(sat, f, opt));
                 rtk.ssat[sat - 1].mw[0] = 0.0;
                 rtk.ssat[sat - 1].gf[0] = 0.0;
@@ -618,8 +613,6 @@ public class PppCore {
                 rtk.ssat[sat - 1].rw = 0.0;
                 rtk.ssat[sat - 1].xswl = 0.0;
                 rtk.ssat[sat - 1].niwl = 0;
-                LOG.info(String.format(Locale.US, "AMB-RESET epoch=%d sat=%d f=%d reason=%s bias=%.4f P_before=%.4e P_after=%.4e",
-                        rtk.epoch, sat, f, reason, bias[i], pBefore, VAR_BIAS));
             }
         }
     }
@@ -629,8 +622,6 @@ public class PppCore {
             for (int j = 0; j < rtk.opt.nf; j++) {
                 if (obs[i].L[j] == 0.0) continue;
                 if ((obs[i].LLI[j] & 1) != 0 || (obs[i].LLI[j] & 2) != 0) {
-                    LOG.info(String.format(Locale.US, "SLIP-LLI epoch=%d sat=%d f=%d LLI=%d triggered=true",
-                            rtk.epoch, obs[i].sat, j, obs[i].LLI[j]));
                     rtk.ssat[obs[i].sat - 1].slip[j] = 1;
                 }
             }
@@ -1364,7 +1355,7 @@ public class PppCore {
     public static void detslpMw(Rtk rtk, Obsd[] obs, int n, Nav nav) {
         double mwThres = Math.max(rtk.opt.thresslip, 10.0);
         for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
-            double mw = mwmeas(obs[i], nav, rtk.epoch);
+            double mw = mwmeas(obs[i], nav);
             if (mw == 0.0) continue;
 
             int sat = obs[i].sat;
@@ -1374,17 +1365,6 @@ public class PppCore {
             boolean slip = false;
             if (mw0 != 0.0 && Math.abs(mw - mw0) > mwThres) {
                 slip = true;
-                if (rtk.epoch <= 5) {
-                    double freq1 = SatUtils.sat2freq(sat, obs[i].code[0], nav);
-                    double freq2 = SatUtils.sat2freq(sat, obs[i].code[1], nav);
-                    LOG.info(String.format(Locale.US,
-                        "SLIP-MW epoch=%d sat=%d mw=%.4f mw0=%.4f diff=%.4f thres=%.4f f1=%.4e f2=%.4e L1=%.4f L2=%.4f P1=%.4f P2=%.4f",
-                        rtk.epoch, sat, mw, mw0, mw - mw0, mwThres,
-                        freq1, freq2, obs[i].L[0], obs[i].L[1], obs[i].P[0], obs[i].P[1]));
-                } else {
-                    LOG.info(String.format(Locale.US, "SLIP-MW epoch=%d sat=%d mw_diff=%.6f thres=%.6f triggered=true",
-                            rtk.epoch, sat, mw - mw0, mwThres));
-                }
                 for (int j = 0; j < rtk.opt.nf; j++) {
                     rtk.ssat[sat - 1].slip[j] |= 1;
                 }
@@ -1453,10 +1433,6 @@ public class PppCore {
         }
     }
 
-    public static double mwmeas(Obsd obs, Nav nav) {
-        return mwmeas(obs, nav, -1);
-    }
-
     public static double ewlmeas(Obsd obs, Nav nav) {
         double freq2 = SatUtils.sat2freq(obs.sat, obs.code[1], nav);
         double freq3 = SatUtils.sat2freq(obs.sat, obs.code[2], nav);
@@ -1488,7 +1464,7 @@ public class PppCore {
                (freq2 * P2 + freq3 * P3) / f2pf3;
     }
 
-    public static double mwmeas(Obsd obs, Nav nav, int epoch) {
+    public static double mwmeas(Obsd obs, Nav nav) {
         double freq1 = SatUtils.sat2freq(obs.sat, obs.code[0], nav);
         double freq2 = SatUtils.sat2freq(obs.sat, obs.code[1], nav);
         if (freq1 == 0.0 || freq2 == 0.0 || obs.L[0] == 0.0 || obs.L[1] == 0.0 ||
@@ -1517,15 +1493,6 @@ public class PppCore {
 
         double mw = (obs.L[0] - obs.L[1]) * Constants.CLIGHT / f1mf2 -
                (freq1 * P1 + freq2 * P2) / f1pf2;
-
-        if (epoch >= 1 && epoch <= 3) {
-            String c0 = ObsCode.code2obs(obs.code[0]);
-            String c1 = ObsCode.code2obs(obs.code[1]);
-            double lamWl = Constants.CLIGHT / f1mf2;
-            LOG.info(String.format(Locale.US,
-                "MW-DIAG ep=%d sat=%d code0=%s code1=%s f1=%.6e f2=%.6e lam1=%.4f lam2=%.4f lamWl=%.4f MW=%.4f MW_wl=%.2f",
-                epoch, obs.sat, c0, c1, freq1, freq2, lam1, lam2, lamWl, mw, mw / lamWl));
-        }
 
         return mw;
     }

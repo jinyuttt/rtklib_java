@@ -1,0 +1,9 @@
+scenario=open-sky
+role=reference
+systems=G+R
+date=2018-06-06
+source=Net_Diff
+mode=ppp
+description=PPP²Î¿¼½â
+license=public
+test_ids=PppKinematicTest

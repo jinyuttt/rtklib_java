@@ -1,0 +1,9 @@
+scenario=open-sky
+role=rover
+systems=G+R
+date=2018-06-06
+source=Net_Diff
+description=PPP¶¯Ì¬Õ¾Êý¾Ý
+license=public
+test_ids=PppKinematicTest
+sample_rate=30s

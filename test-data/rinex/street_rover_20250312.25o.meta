@@ -1,0 +1,14 @@
+scenario=street
+role=rover
+systems=G+E+J+C
+date=2025-03-12
+source=MobileGNSS-SPP
+receiver=UNISOC uis7865_6h10_go_a32b
+antenna=unknown
+interval=1s
+description=街道场景手机GNSS数据，部分遮挡
+location=Unknown street
+license=MIT
+test_ids=SppOptimizationTest
+sample_rate=1s
+duration=20min

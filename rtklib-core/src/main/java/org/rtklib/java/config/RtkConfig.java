@@ -83,6 +83,10 @@ public class RtkConfig implements Serializable {
     public double bootstrappingMinSuccess = 0.99;
     public boolean bootstrappingWithRatio = true;
 
+    public boolean enableSegmentSigmaFilter = false;
+    public double segmentSigmaThreshold = 5.0;
+    public int segmentSigmaMinLen = 5;
+
     public boolean enableBdsCodeBias = false;
     public double bdsCodeBiasElThresh = 30.0;
     public boolean bdsCodeBiasForceOn = false;
@@ -90,7 +94,17 @@ public class RtkConfig implements Serializable {
     public boolean enableParamTypeNoise = false;
     public double noiseZtdRw = 1e-4;
     public double noiseClkWhite = 1e2;
-    public double noiseIonoRw = 1e-3;
+    public double noiseIonoRw = 1e-4;
+
+    /**
+     * [JAVA-ONLY v2.3.0] IFLC频率对逐卫星协商。
+     * IONOOPT_IFLC模式下，RTKLIB C固定用槽位0+seliflc()槽位做无电离层组合；
+     * 当流动站与基准站接收机频段不一致（如流动站BDS-3只有B1I+B2a、基准站有
+     * B1I+B2b+B2a）时，固定槽位对会导致整星被剔除。开启后每历元按两站公共
+     * 频段协商槽位对（sticky策略，配对切换按周跳处理）。
+     * 默认false，与RTKLIB C行为逐位一致。
+     */
+    public boolean enableIflcPairNegotiation = false;
 
     public boolean enableGpt3Vmf3 = false;
     public String gpt3GridFile = "";
@@ -133,6 +147,9 @@ public class RtkConfig implements Serializable {
     public boolean enableSppRobust = false;
     public boolean enableSppZeroVel = false;
     public boolean enableSppDopplerSnr = false;
+    public boolean enableSppInnovChisq = true;
+    public int sppEkfMinSat = 0;
+    public int sppEkfLowSatThresh = 7;
 
     public double sppEkfVarPos = 50.0 * 50.0;
     public double sppEkfVarVel = 10.0 * 10.0;
@@ -143,6 +160,17 @@ public class RtkConfig implements Serializable {
     public double sppEkfVelResidScale = 1.0;
     public double sppEkfVarResetThresh = 50.0 * 50.0;
     public double sppEkfDtGap = 10.0;
+    public double sppEkfVarCap = 50.0 * 50.0 / 4.0;
+    public int sppEkfDivergedRecoverEpochs = 5;
+    public double sppEkfDivergedRscaleBase = 100.0;
+    public double sppEkfDivergedRscaleMax = 1000.0;
+    public double sppEkfDivergedMaxEpochs = 20;
+    public double sppEkfDivergedQscale = 1.0;
+    public double sppInnovOutlierThresh = 5.0;
+    public double sppInnovDownweightThresh = 3.0;
+    public double sppInnovOutlierThreshLowSat = 7.0;
+    public double sppInnovDownweightThreshLowSat = 5.0;
+    public double sppInnovDownweightRscale = 10.0;
 
     public double sppRobustKPos = 1.345;
     public double sppRobustKVel = 5.0;
@@ -240,6 +268,10 @@ public class RtkConfig implements Serializable {
         this.bootstrappingMinSuccess = other.bootstrappingMinSuccess;
         this.bootstrappingWithRatio = other.bootstrappingWithRatio;
 
+        this.enableSegmentSigmaFilter = other.enableSegmentSigmaFilter;
+        this.segmentSigmaThreshold = other.segmentSigmaThreshold;
+        this.segmentSigmaMinLen = other.segmentSigmaMinLen;
+
         this.enableBdsCodeBias = other.enableBdsCodeBias;
         this.bdsCodeBiasElThresh = other.bdsCodeBiasElThresh;
         this.bdsCodeBiasForceOn = other.bdsCodeBiasForceOn;
@@ -248,6 +280,8 @@ public class RtkConfig implements Serializable {
         this.noiseZtdRw = other.noiseZtdRw;
         this.noiseClkWhite = other.noiseClkWhite;
         this.noiseIonoRw = other.noiseIonoRw;
+
+        this.enableIflcPairNegotiation = other.enableIflcPairNegotiation;
 
         this.enableGpt3Vmf3 = other.enableGpt3Vmf3;
         this.gpt3GridFile = other.gpt3GridFile;
@@ -290,6 +324,9 @@ public class RtkConfig implements Serializable {
         this.enableSppRobust = other.enableSppRobust;
         this.enableSppZeroVel = other.enableSppZeroVel;
         this.enableSppDopplerSnr = other.enableSppDopplerSnr;
+        this.enableSppInnovChisq = other.enableSppInnovChisq;
+        this.sppEkfMinSat = other.sppEkfMinSat;
+        this.sppEkfLowSatThresh = other.sppEkfLowSatThresh;
         this.sppEkfVarPos = other.sppEkfVarPos;
         this.sppEkfVarVel = other.sppEkfVarVel;
         this.sppEkfVarAcc = other.sppEkfVarAcc;
@@ -299,6 +336,17 @@ public class RtkConfig implements Serializable {
         this.sppEkfVelResidScale = other.sppEkfVelResidScale;
         this.sppEkfVarResetThresh = other.sppEkfVarResetThresh;
         this.sppEkfDtGap = other.sppEkfDtGap;
+        this.sppEkfVarCap = other.sppEkfVarCap;
+        this.sppEkfDivergedRecoverEpochs = other.sppEkfDivergedRecoverEpochs;
+        this.sppEkfDivergedRscaleBase = other.sppEkfDivergedRscaleBase;
+        this.sppEkfDivergedRscaleMax = other.sppEkfDivergedRscaleMax;
+        this.sppEkfDivergedMaxEpochs = other.sppEkfDivergedMaxEpochs;
+        this.sppEkfDivergedQscale = other.sppEkfDivergedQscale;
+        this.sppInnovOutlierThresh = other.sppInnovOutlierThresh;
+        this.sppInnovDownweightThresh = other.sppInnovDownweightThresh;
+        this.sppInnovOutlierThreshLowSat = other.sppInnovOutlierThreshLowSat;
+        this.sppInnovDownweightThreshLowSat = other.sppInnovDownweightThreshLowSat;
+        this.sppInnovDownweightRscale = other.sppInnovDownweightRscale;
         this.sppRobustKPos = other.sppRobustKPos;
         this.sppRobustKVel = other.sppRobustKVel;
         this.sppRobustMaxIter = other.sppRobustMaxIter;

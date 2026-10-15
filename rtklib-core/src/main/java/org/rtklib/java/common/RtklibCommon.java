@@ -315,19 +315,21 @@ public final class RtklibCommon {
     }
 
     /**
-     * Compact observation frequency arrays so that valid observations
-     * are stored contiguously at positions 0..nf-1, sorted by frequency index.
+     * [JAVA-ONLY EXTENSION - NOT C-ALIGNED] Compact observation frequency arrays
+     * so that valid observations are stored contiguously at positions 0..nf-1,
+     * sorted by frequency index.
      *
-     * <p>RINEX 3.x parsing stores observations at their native frequency index
-     * (e.g., BDS B1I at idx=4, B7I at idx=1). However, zdres() iterates
-     * f=0..nf-1 and accesses obs.code[f], obs.P[f], obs.L[f] sequentially.
-     * If the native indices have gaps (e.g., data at idx=1,3,4 but not 0),
-     * zdres will miss valid observations.</p>
+     * <p><b>WARNING: must NOT be applied in rtkpos()/RTK processing.</b>
+     * This behavior does not exist in RTKLIB C (rinex.c set_index()/decode_obsdata
+     * never reorder slots; obsd slot f always holds frequency index f). Compacting
+     * per-satellite gaps moves e.g. BDS B2a (C5P, slot 2) into slot 1 when B2b
+     * (C7I) is missing, while the other receiver may keep B2b (C7D/C7I) at slot 1
+     * &mdash; the IFLC/DD then mixes two different carrier frequencies and produces
+     * garbage phase biases (~1e6 m). C skips such sat-epochs instead
+     * (cp==0 / freq==0 checks in udbias()/ddres()).</p>
      *
-     * <p>This method reorders each Obsd's per-frequency arrays so that
-     * the first nf positions contain the valid observations sorted by
-     * their native frequency index (ascending). This aligns with how
-     * RTKLIB C handles multi-frequency observations internally.</p>
+     * <p>Kept only for explicit diagnostic/PPP-test use where the caller owns
+     * the consequence.</p>
      *
      * @param obs observation array
      * @param n   number of observations

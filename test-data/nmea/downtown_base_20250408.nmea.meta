@@ -1,0 +1,8 @@
+scenario=downtown
+role=base
+systems=G+E+J+C
+date=2025-04-08
+source=MobileGNSS-SPP
+description=城市峡谷基站NMEA轨迹参考
+license=MIT
+test_ids=NmeaParseTest

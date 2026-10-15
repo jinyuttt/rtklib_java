@@ -117,6 +117,22 @@ public class Ssat implements Serializable {
     public int niewl;
 
     /**
+     * [JAVA-ONLY] IFLC频率对协商结果：两站共同可用的频率槽位对 {slot1, slot2}。
+     * 槽位为RTKLIB code2idx固定频段槽位（两站同一槽位对应同一频段频率）。
+     * {0,0}=未协商（PPP模式/开关关闭/无公共频率对），回退固定槽位 {0, seliflc()}，
+     * 行为与RTKLIB C版逐位一致。仅RTK双站模式 + IONOOPT_IFLC + 开关开启时由
+     * RtkCore.negotiateIflcPairs() 每历元维护（sticky策略）。
+     */
+    public int[] iflcSlot;
+
+    /**
+     * [JAVA-ONLY] IFLC配对切换/消失标志（单历元一次性）。
+     * 由RtkCore.selectIflcPair设置，RtkCore.udbias消费（强制重置该星模糊度）后清除。
+     * 独立于slip[]位域（LLI_SLIP=0x01会被udbias开头的&0xFC清除，无法跨阶段传递）。
+     */
+    public transient boolean iflcPairSwitch;
+
+    /**
      * 默认构造函数，初始化所有数组。
      */
     public Ssat() {
@@ -144,6 +160,7 @@ public class Ssat implements Serializable {
         this.ph = new double[2][Constants.NFREQ];
         this.amb = new double[Constants.NFREQ];
         this.stdA = new float[Constants.NFREQ];
+        this.iflcSlot = new int[2];
         for (int i = 0; i < 2; i++) {
             for (int j = 0; j < Constants.NFREQ; j++) {
                 this.pt[i][j] = new GTime();

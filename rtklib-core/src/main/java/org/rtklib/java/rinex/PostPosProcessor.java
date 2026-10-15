@@ -13,9 +13,11 @@ import org.rtklib.java.ionosphere.SbasCorrection;
 import org.rtklib.java.ionosphere.SbsMsgReader;
 import org.rtklib.java.pntpos.PosHandler;
 import org.rtklib.java.ppp.PppCore;
+import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.rtkpos.CombinedFilter;
 import org.rtklib.java.rtkpos.RtkCore;
 import org.rtklib.java.rtkpos.RtkProcessor;
+import org.rtklib.java.rtkpos.SegmentSigmaFilter;
 import org.rtklib.java.time.TimeSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,15 +39,17 @@ public class PostPosProcessor {
 
     private final PrcOpt opt;
     private final SolOpt sopt;
+    private final RtkConfig rtkConfig;
     private final PosHandler handler;
     private final Writer writer;
 
     private List<SbsMsg> sbsMsgs = Collections.emptyList();
     private int sbsMsgIdx;
 
-    public PostPosProcessor(PrcOpt opt, SolOpt sopt, PosHandler handler, OutputStream outputStream) {
+    public PostPosProcessor(PrcOpt opt, SolOpt sopt, RtkConfig rtkConfig, PosHandler handler, OutputStream outputStream) {
         this.opt = new PrcOpt(opt);
         this.sopt = sopt != null ? new SolOpt(sopt) : new SolOpt();
+        this.rtkConfig = rtkConfig != null ? new RtkConfig(rtkConfig) : new RtkConfig();
         this.handler = handler;
 
         if (outputStream != null) {
@@ -61,16 +65,24 @@ public class PostPosProcessor {
         }
     }
 
+    public PostPosProcessor(PrcOpt opt, SolOpt sopt, PosHandler handler, OutputStream outputStream) {
+        this(opt, sopt, null, handler, outputStream);
+    }
+
+    public PostPosProcessor(PrcOpt opt, SolOpt sopt, RtkConfig rtkConfig) {
+        this(opt, sopt, rtkConfig, null, null);
+    }
+
     public PostPosProcessor(PrcOpt opt, SolOpt sopt, PosHandler handler) {
-        this(opt, sopt, handler, null);
+        this(opt, sopt, null, handler, null);
     }
 
     public PostPosProcessor(PrcOpt opt, SolOpt sopt) {
-        this(opt, sopt, null, null);
+        this(opt, sopt, null, null, null);
     }
 
     public PostPosProcessor(PrcOpt opt) {
-        this(opt, null, null, null);
+        this(opt, null, null, null, null);
     }
 
     public PostPosResult process(String roverObsPath, String baseObsPath,
@@ -185,17 +197,34 @@ public class PostPosProcessor {
         Sol bestSol = null;
         GTime bestTime = null;
         int[] pri = {6, 1, 2, 3, 4, 5, 1, 6};
+        SegmentSigmaFilter segmentSigmaFilter = (rtkConfig != null && rtkConfig.enableSegmentSigmaFilter)
+                ? new SegmentSigmaFilter(rtkConfig) : null;
 
-        List<List<Obsd>> baseEpochsCopy = copyBaseEpochs(baseEpochs);
+        int[] iobsrF = {0}; /* persistent base epoch cursor, aligned with C inputobs() iobsr */
 
         for (List<Obsd> roverEpoch : roverEpochs) {
-            Obsd[] obs = buildEpochObs(roverEpoch, baseEpochsCopy);
+            Obsd[] obs = buildEpochObs(roverEpoch, baseEpochs, iobsrF);
             if (obs.length == 0) continue;
             totalEpochs++;
             applySbsUpTo(obs[0].time, nav);
             RtklibCommon.corrPhaseBiasSsr(obs, obs.length, nav, opt.pppopt);
             int result = RtkCore.rtkpos(rtk, obs, obs.length, nav);
             if (result == 1 && rtk.sol.stat != Constants.SOLQ_NONE) {
+                if (segmentSigmaFilter != null && rtk.sol.stat == Constants.SOLQ_FIX) {
+                    int solIdx = solutions.size();
+                    SegmentSigmaFilter.CheckResult cr = segmentSigmaFilter.checkAndAdd(
+                            rtk.sol.rr, rtk.sol.type, rtk.sol.stat, solIdx);
+                    if (!cr.accepted) {
+                        rtk.sol.stat = Constants.SOLQ_FLOAT;
+                    }
+                    if (cr.invalidateFrom >= 0) {
+                        for (int i = cr.invalidateFrom; i <= cr.invalidateTo; i++) {
+                            solutions.get(i).stat = Constants.SOLQ_FLOAT;
+                        }
+                    }
+                } else if (segmentSigmaFilter != null && rtk.sol.stat != Constants.SOLQ_FIX) {
+                    segmentSigmaFilter.reset();
+                }
                 successCount++;
                 Sol solCopy = new Sol(rtk.sol);
                 Ssat[] ssatCopy = copySsatArray(rtk.ssat);
@@ -225,7 +254,9 @@ public class PostPosProcessor {
         }
 
         finishOutput(totalEpochs, successCount, failCount);
-        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions, ssatList), solutions);
+        PostPosResult pr = new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions, ssatList), solutions);
+        pr.finalRtk = rtk;
+        return pr;
     }
 
     private PostPosResult processBackward(List<List<Obsd>> roverEpochs, List<List<Obsd>> baseEpochs,
@@ -243,22 +274,39 @@ public class PostPosProcessor {
         Sol bestSol = null;
         GTime bestTime = null;
         int[] pri = {6, 1, 2, 3, 4, 5, 1, 6};
+        SegmentSigmaFilter backwardSigmaFilter = (rtkConfig != null && rtkConfig.enableSegmentSigmaFilter)
+                ? new SegmentSigmaFilter(rtkConfig) : null;
 
-        List<List<Obsd>> baseEpochsCopy = copyBaseEpochs(baseEpochs);
         List<List<Obsd>> reversedRover = new ArrayList<>(roverEpochs);
         Collections.reverse(reversedRover);
-        List<List<Obsd>> reversedBase = baseEpochsCopy != null ? new ArrayList<>(baseEpochsCopy) : null;
+        List<List<Obsd>> reversedBase = baseEpochs != null ? new ArrayList<>(baseEpochs) : null;
         if (reversedBase != null) {
             Collections.reverse(reversedBase);
         }
+        int[] iobsrB = {0}; /* reversed list: cursor moves forward, same as C nextobsb() */
 
         for (List<Obsd> roverEpoch : reversedRover) {
-            Obsd[] obs = buildEpochObs(roverEpoch, reversedBase);
+            Obsd[] obs = buildEpochObs(roverEpoch, reversedBase, iobsrB);
             if (obs.length == 0) continue;
             totalEpochs++;
             RtklibCommon.corrPhaseBiasSsr(obs, obs.length, nav, opt.pppopt);
             int result = RtkCore.rtkpos(rtk, obs, obs.length, nav);
             if (result == 1 && rtk.sol.stat != Constants.SOLQ_NONE) {
+                if (backwardSigmaFilter != null && rtk.sol.stat == Constants.SOLQ_FIX) {
+                    int solIdx = solutions.size();
+                    SegmentSigmaFilter.CheckResult cr = backwardSigmaFilter.checkAndAdd(
+                            rtk.sol.rr, rtk.sol.type, rtk.sol.stat, solIdx);
+                    if (!cr.accepted) {
+                        rtk.sol.stat = Constants.SOLQ_FLOAT;
+                    }
+                    if (cr.invalidateFrom >= 0) {
+                        for (int i = cr.invalidateFrom; i <= cr.invalidateTo; i++) {
+                            solutions.get(i).stat = Constants.SOLQ_FLOAT;
+                        }
+                    }
+                } else if (backwardSigmaFilter != null && rtk.sol.stat != Constants.SOLQ_FIX) {
+                    backwardSigmaFilter.reset();
+                }
                 successCount++;
                 Sol solCopy = new Sol(rtk.sol);
                 Ssat[] ssatCopy = copySsatArray(rtk.ssat);
@@ -292,7 +340,9 @@ public class PostPosProcessor {
             outputSolution(solutions.get(i), ssat);
         }
         finishOutput(totalEpochs, successCount, failCount);
-        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions, ssatList), solutions);
+        PostPosResult pr = new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions, ssatList), solutions);
+        pr.finalRtk = rtk;
+        return pr;
     }
 
     private PostPosResult processCombined(List<List<Obsd>> roverEpochs,
@@ -303,10 +353,10 @@ public class PostPosProcessor {
         List<double[]> rbfList = new ArrayList<>();
         sbsMsgIdx = 0;
 
-        List<List<Obsd>> baseEpochsFwd = copyBaseEpochs(baseEpochs);
+        int[] iobsrF = {0}; /* persistent base epoch cursor, aligned with C inputobs() iobsr */
 
         for (List<Obsd> roverEpoch : roverEpochs) {
-            Obsd[] obs = buildEpochObs(roverEpoch, baseEpochsFwd);
+            Obsd[] obs = buildEpochObs(roverEpoch, baseEpochs, iobsrF);
             if (obs.length == 0) {
                 solfList.add(null);
                 rbfList.add(null);
@@ -335,16 +385,16 @@ public class PostPosProcessor {
         List<Sol> solbList = new ArrayList<>();
         List<double[]> rbbList = new ArrayList<>();
 
-        List<List<Obsd>> baseEpochsBwd = copyBaseEpochs(baseEpochs);
         List<List<Obsd>> reversedRover = new ArrayList<>(roverEpochs);
         Collections.reverse(reversedRover);
-        List<List<Obsd>> reversedBase = baseEpochsBwd != null ? new ArrayList<>(baseEpochsBwd) : null;
+        List<List<Obsd>> reversedBase = baseEpochs != null ? new ArrayList<>(baseEpochs) : null;
         if (reversedBase != null) {
             Collections.reverse(reversedBase);
         }
+        int[] iobsrB = {0}; /* reversed list: cursor moves forward, same as C nextobsb() */
 
         for (List<Obsd> roverEpoch : reversedRover) {
-            Obsd[] obs = buildEpochObs(roverEpoch, reversedBase);
+            Obsd[] obs = buildEpochObs(roverEpoch, reversedBase, iobsrB);
             if (obs.length == 0) {
                 solbList.add(null);
                 rbbList.add(null);
@@ -381,12 +431,15 @@ public class PostPosProcessor {
         }
 
         finishOutput(totalEpochs, successCount, failCount);
-        return new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(combined, null), combined);
+        PostPosResult pr = new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(combined, null), combined);
+        pr.finalRtk = rtkF;
+        return pr;
     }
 
     private Rtk createRtk(double[] approxPos, double[] basePos) {
         Rtk rtk = new Rtk();
         rtk.opt = new PrcOpt(opt);
+        rtk.rtkConfig = new RtkConfig(rtkConfig);
 
         if (approxPos != null) {
             System.arraycopy(approxPos, 0, rtk.sol.rr, 0, 3);
@@ -398,26 +451,31 @@ public class PostPosProcessor {
         return rtk;
     }
 
-    private Obsd[] buildEpochObs(List<Obsd> roverEpoch, List<List<Obsd>> baseEpochs) {
+    private Obsd[] buildEpochObs(List<Obsd> roverEpoch, List<List<Obsd>> baseEpochs, int[] iobsr) {
         List<Obsd> epochObs = new ArrayList<>();
         GTime epochTime = roverEpoch.get(0).time;
 
+        /* deep-copy obs (C inputobs() copies obsd_t by value into obs[]),
+         * so corrPhaseBiasSsr() never mutates the shared parsed data */
         for (Obsd o : roverEpoch) {
-            o.rcv = 1;
             if ((SatUtils.satsys(o.sat, null) & opt.navsys) != 0
                     && (opt.exsats == null || o.sat <= 0 || o.sat > Constants.MAXSAT || opt.exsats[o.sat - 1] != 1)) {
-                epochObs.add(o);
+                Obsd copy = new Obsd(o);
+                copy.rcv = 1;
+                epochObs.add(copy);
             }
         }
 
         if (baseEpochs != null && isRelativeMode(opt.mode)) {
-            List<Obsd> baseMatch = findMatchingBaseEpoch(baseEpochs, epochTime);
-            if (baseMatch != null) {
-                for (Obsd o : baseMatch) {
-                    o.rcv = 2;
+            int idx = findNearestBaseEpoch(baseEpochs, epochTime, iobsr[0]);
+            if (idx >= 0) {
+                iobsr[0] = idx; /* cursor persists: one base epoch serves consecutive rover epochs */
+                for (Obsd o : baseEpochs.get(idx)) {
                     if ((SatUtils.satsys(o.sat, null) & opt.navsys) != 0
                             && (opt.exsats == null || o.sat <= 0 || o.sat > Constants.MAXSAT || opt.exsats[o.sat - 1] != 1)) {
-                        epochObs.add(o);
+                        Obsd copy = new Obsd(o);
+                        copy.rcv = 2;
+                        epochObs.add(copy);
                     }
                 }
             }
@@ -430,31 +488,38 @@ public class PostPosProcessor {
         return epochObs.toArray(new Obsd[0]);
     }
 
-    private List<List<Obsd>> copyBaseEpochs(List<List<Obsd>> baseEpochs) {
-        if (baseEpochs == null) return null;
-        List<List<Obsd>> copy = new ArrayList<>();
-        for (List<Obsd> epoch : baseEpochs) {
-            copy.add(new ArrayList<>(epoch));
-        }
-        return copy;
-    }
+    /**
+     * 对齐 C postpos.c inputobs() 非插值路径（intpref=0）的 base 历元匹配：
+     * 从持久游标 iobsr 起沿 base 历元序列推进，选择距 rover 历元时间最近的 base 历元
+     * （C: 只要下一个 base 历元的 |dt| 不大于当前值就前移游标）。
+     * 游标保留供后续 rover 历元复用——同一 base 历元可服务多个连续 rover 历元
+     * （如 1Hz base + 5Hz rover 时一个 base 历元服务约 5 个 rover 历元）。
+     * 不删除 base 数据（C 版 obss 缓冲只读，仅游标推进）。
+     *
+     * @return 选中的 base 历元下标，无可用 base 历元时返回 -1
+     */
+    private int findNearestBaseEpoch(List<List<Obsd>> baseEpochs, GTime roverTime, int iobsr) {
+        if (baseEpochs == null || baseEpochs.isEmpty()) return -1;
+        if (iobsr < 0 || iobsr >= baseEpochs.size()) return -1;
+        List<Obsd> cur = baseEpochs.get(iobsr);
+        if (cur.isEmpty()) return -1;
 
-    private List<Obsd> findMatchingBaseEpoch(List<List<Obsd>> baseEpochs, GTime roverTime) {
-        double bestDt = Double.MAX_VALUE;
-        int bestIdx = -1;
-        double maxTdiff = opt.maxtdiff > 0 ? opt.maxtdiff : 30.0;
-
-        for (int i = 0; i < baseEpochs.size(); i++) {
-            if (baseEpochs.get(i).isEmpty()) continue;
-            double dt = Math.abs(TimeSystem.timediff(roverTime, baseEpochs.get(i).get(0).time));
-            if (dt < bestDt && dt <= maxTdiff) {
-                bestDt = dt;
-                bestIdx = i;
+        double dt = Math.abs(TimeSystem.timediff(roverTime, cur.get(0).time));
+        int best = iobsr;
+        int i = iobsr + 1;
+        while (i < baseEpochs.size()) {
+            List<Obsd> next = baseEpochs.get(i);
+            if (next.isEmpty()) {
+                i++;
+                continue;
             }
+            double dtNext = Math.abs(TimeSystem.timediff(roverTime, next.get(0).time));
+            if (dtNext > dt) break;
+            dt = dtNext;
+            best = i;
+            i++;
         }
-
-        if (bestIdx < 0) return null;
-        return baseEpochs.remove(bestIdx);
+        return best;
     }
 
     private List<List<Obsd>> groupObsByEpoch(Obsd[] data, int n) {
@@ -707,6 +772,7 @@ public class PostPosProcessor {
         public final int failCount;
         public final List<SolData> solutions;
         final List<Sol> solList;
+        Rtk finalRtk;
 
         public PostPosResult(int totalEpochs, int successCount, int failCount,
                              List<SolData> solutions, List<Sol> solList) {

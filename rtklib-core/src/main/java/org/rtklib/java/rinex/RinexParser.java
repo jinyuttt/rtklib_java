@@ -52,11 +52,24 @@ public class RinexParser {
     private static final int RNX_SYS_IRN = 6;
     private static final String SYSCODES = "GREJSCIE";
 
+    private static final int TSYS_GPS = 0;
+    private static final int TSYS_UTC = 1;
+    private static final int TSYS_GAL = 2;
+    private static final int TSYS_QZS = 3;
+    private static final int TSYS_CMP = 4;
+    private static final int TSYS_IRN = 5;
+
+    private int tsys = TSYS_GPS;
+
     private String[][] tobs = new String[7][MAXOBSTYPE];
     private int[] nobs = new int[7];
 
     /** cycle slip persistence across epochs [MAXSAT][NFREQ+NEXOBS] */
     private int[][] slips = new int[Constants.MAXSAT][Constants.NFREQ + Constants.NEXOBS];
+
+    /** obs field slot index per system [7][MAXOBSTYPE] (C rinex.c sigind_t.pos):
+     *  -1=unused, 0..NFREQ-1=main freq slot, NFREQ..NFREQ+NEXOBS-1=extended slot */
+    private final int[][] sigPos = new int[7][MAXOBSTYPE];
 
     /**
      * Default constructor.
@@ -219,6 +232,17 @@ public class RinexParser {
                         tobs[p][nobs[p]++] = line.substring(k, k + 3).trim();
                     }
                 }
+            } else if (label.equals("TIME OF FIRST OBS")) {
+                if (line.length() >= 51) {
+                    String tsysStr = line.substring(48, 51).trim();
+                    if (tsysStr.equals("GPS")) this.tsys = TSYS_GPS;
+                    else if (tsysStr.equals("GLO")) this.tsys = TSYS_UTC;
+                    else if (tsysStr.equals("GAL")) this.tsys = TSYS_GAL;
+                    else if (tsysStr.equals("QZS")) this.tsys = TSYS_QZS;
+                    else if (tsysStr.equals("BDT")) this.tsys = TSYS_CMP;
+                    else if (tsysStr.equals("IRN")) this.tsys = TSYS_IRN;
+                    log.trace("RINEX time system: {} (tsys={})", tsysStr, this.tsys);
+                }
             } else if (label.equals("END OF HEADER")) {
                 endOfHeader = true;
                 break;
@@ -234,6 +258,11 @@ public class RinexParser {
         }
         if (this.version > 3.06) {
             log.warn("Unsupported RINEX version: {}", this.version);
+        }
+
+        /* set obs field index for each system (C rinex.c set_index) */
+        for (int i = 0; i < 7; i++) {
+            if (nobs[i] > 0) setIndex(i);
         }
 
         return true;
@@ -274,6 +303,69 @@ public class RinexParser {
     }
 
     /**
+     * Map SYSCODES position to SYS_* constant.
+     * @param si Position in SYSCODES ("GREJSCIE")
+     * @return SYS_* constant (0 on error)
+     */
+    private static int sysIdx2sys(int si) {
+        if (si < 0 || si >= SYSCODES.length()) return 0;
+        switch (SYSCODES.charAt(si)) {
+            case 'G': return Constants.SYS_GPS;
+            case 'R': return Constants.SYS_GLO;
+            case 'E': return Constants.SYS_GAL;
+            case 'J': return Constants.SYS_QZS;
+            case 'S': return Constants.SYS_SBS;
+            case 'C': return Constants.SYS_CMP;
+            case 'I': return Constants.SYS_IRN;
+        }
+        return 0;
+    }
+
+    /**
+     * Set signal index: assign obs field slots by code priority per frequency,
+     * then extended (NEXOBS) slots for remaining codes.
+     * Aligned with RTKLIB rinex.c set_index().
+     * @param si Position in SYSCODES
+     */
+    private void setIndex(int si) {
+        int sys = sysIdx2sys(si);
+        int n = nobs[si];
+        int[] code = new int[n];
+        int[] idx = new int[n];
+        int[] pri = new int[n];
+
+        for (int i = 0; i < n; i++) {
+            String tobj = tobs[si][i];
+            code[i] = (tobj != null && tobj.length() >= 2) ? ObsCode.obs2code(tobj.substring(1)) : 0;
+            idx[i] = code[i] > 0 ? ObsCode.code2idx(sys, code[i]) : -1;
+            pri[i] = code[i] > 0 ? ObsCode.getcodepri(sys, code[i]) : 0;
+            sigPos[si][i] = -1;
+        }
+        /* assign index for highest priority code */
+        for (int f = 0; f < Constants.NFREQ; f++) {
+            int k = -1;
+            for (int j = 0; j < n; j++) {
+                if (idx[j] == f && pri[j] > 0 && (k < 0 || pri[j] > pri[k])) k = j;
+            }
+            if (k < 0) continue;
+            for (int j = 0; j < n; j++) {
+                if (code[j] == code[k]) sigPos[si][j] = f;
+            }
+        }
+        /* assign index of extended observation data */
+        for (int e = 0; e < Constants.NEXOBS; e++) {
+            int j;
+            for (j = 0; j < n; j++) {
+                if (code[j] > 0 && pri[j] > 0 && sigPos[si][j] < 0) break;
+            }
+            if (j >= n) break;
+            for (int k = 0; k < n; k++) {
+                if (code[k] == code[j]) sigPos[si][k] = Constants.NFREQ + e;
+            }
+        }
+    }
+
+    /**
      * Read observation epoch data.
      * @param reader BufferedReader
      * @param firstLine First line of epoch
@@ -288,19 +380,23 @@ public class RinexParser {
             return null;
         }
 
-        year = Integer.parseInt(firstLine.substring(2, 6).trim());
-        month = Integer.parseInt(firstLine.substring(7, 9).trim());
-        day = Integer.parseInt(firstLine.substring(10, 12).trim());
-        hour = Integer.parseInt(firstLine.substring(13, 15).trim());
-        min = Integer.parseInt(firstLine.substring(16, 18).trim());
-        sec = Double.parseDouble(firstLine.substring(19, 28).trim());
-        flag = Integer.parseInt(firstLine.substring(31, 32).trim());
-        nSat = Integer.parseInt(firstLine.substring(32, 35).trim());
+        year = parseInteger(firstLine, 2, 4);
+        month = parseInteger(firstLine, 7, 2);
+        day = parseInteger(firstLine, 10, 2);
+        hour = parseInteger(firstLine, 13, 2);
+        min = parseInteger(firstLine, 16, 2);
+        sec = parseDouble(firstLine, 19, 9);
+        flag = parseInteger(firstLine, 31, 1);
+        nSat = parseInteger(firstLine, 32, 3);
 
         int[] weekArr = new int[1];
         double tow = TimeSystem.time2gpst(
                 TimeSystem.epoch2time(new double[]{year, month, day, hour, min, sec}), weekArr);
         GTime time = TimeSystem.gpst2time(weekArr[0], tow);
+
+        if (tsys == TSYS_UTC) {
+            time = TimeSystem.utc2gpst(time);
+        }
 
         List<Obsd> obsList = new ArrayList<>();
 
@@ -318,7 +414,6 @@ public class RinexParser {
             obsd.sat = SatUtils.satid2no(satId);
             if (obsd.sat == 0) continue;
 
-            int sys = SatUtils.satsys(obsd.sat, null);
             si = SYSCODES.indexOf(satId.charAt(0));
             nt = (si >= 0) ? nobs[si] : 0;
 
@@ -328,40 +423,37 @@ public class RinexParser {
 
                 double value = parseDouble(line, pos, 14);
                 int lli = ((pos + 14 < line.length()) ? parseInteger(line, pos + 14, 1) : 0) & 3;
-                int snr = (pos + 15 < line.length()) ? parseInteger(line, pos + 15, 1) : 0;
+                int std = (pos + 15 < line.length()) ? parseInteger(line, pos + 15, 1) : 0;
                 pos += 16;
 
                 if (si < 0 || (value == 0.0 && lli == 0)) continue;
 
+                int slot = sigPos[si][j];
+                if (slot < 0 || slot >= Constants.NFREQ + Constants.NEXOBS) continue;
+
                 String tobj = tobs[si][j];
                 if (tobj == null || tobj.length() < 2) continue;
 
-                String obsCode = tobj.substring(1);
-                int codeVal = ObsCode.obs2code(obsCode);
-                int freqIdx = ObsCode.code2idx(sys, codeVal);
-                if (freqIdx < 0 || freqIdx >= Constants.NFREQ + Constants.NEXOBS) continue;
-
-                char typeChar = tobj.charAt(0);
-                switch (typeChar) {
-                    case 'C':
-                    case 'P':
-                        obsd.P[freqIdx] = value;
-                        obsd.code[freqIdx] = codeVal;
-                        obsd.Pstd[freqIdx] = snr > 0 ? (float)(0.01 * Math.pow(2, snr + 5)) : 0.0f;
+                int codeVal = ObsCode.obs2code(tobj.substring(1));
+                /* type index: C rinex.c obscodes[]="CLDS" (unknown char -> 0) */
+                int type = "CLDS".indexOf(tobj.charAt(0));
+                if (type < 0) type = 0;
+                switch (type) {
+                    case 0:
+                        obsd.P[slot] = value;
+                        obsd.code[slot] = codeVal;
+                        obsd.Pstd[slot] = std > 0 ? (float)(0.01 * Math.pow(2, std + 5)) : 0.0f;
                         break;
-                    case 'L':
-                        obsd.L[freqIdx] = value;
-                        obsd.LLI[freqIdx] = lli;
-                        obsd.Lstd[freqIdx] = snr > 0 ? (float)(snr * 0.004) : 0.0f;
-                        if (obsd.code[freqIdx] == 0) {
-                            obsd.code[freqIdx] = codeVal;
-                        }
+                    case 1:
+                        obsd.L[slot] = value;
+                        obsd.LLI[slot] = lli;
+                        obsd.Lstd[slot] = std > 0 ? (float)(std * 0.004) : 0.0f;
                         break;
-                    case 'D':
-                        obsd.D[freqIdx] = (float) value;
+                    case 2:
+                        obsd.D[slot] = (float) value;
                         break;
-                    case 'S':
-                        obsd.SNR[freqIdx] = (float) value;
+                    case 3:
+                        obsd.SNR[slot] = (float) value;
                         break;
                 }
             }

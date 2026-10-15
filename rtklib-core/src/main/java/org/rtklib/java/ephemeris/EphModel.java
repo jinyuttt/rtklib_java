@@ -10,12 +10,15 @@ import org.rtklib.java.data.Obsd;
 import org.rtklib.java.data.Seph;
 import org.rtklib.java.ionosphere.SbasCorrection;
 import org.rtklib.java.time.TimeSystem;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Satellite position/clock computation from broadcast ephemeris.
  * Aligned with RTKLIB ephemeris.c eph2pos/geph2pos/seph2pos.
  */
 public final class EphModel {
+    private static final Logger LOG = LoggerFactory.getLogger(EphModel.class);
     private EphModel() {
         // Utility class
     }
@@ -249,6 +252,12 @@ public final class EphModel {
             x[i] = geph.pos[i];
             x[i + 3] = geph.vel[i];
         }
+        if (Math.abs(t) > 300.0 || geph.sat == 37 || geph.sat == 39) {
+            LOG.info("geph2pos: sat={} t={:.1f}s toe.time={}.toe.sec={:.6f} time.time={}.time.sec={:.6f} pos=({:.0f},{:.0f},{:.0f})".replace("{:.1f}", "{}").replace("{:.6f}", "{}").replace("{:.0f}", "{}"),
+                geph.sat, String.format("%.1f", t), geph.toe.time, String.format("%.6f", geph.toe.sec),
+                time.time, String.format("%.6f", time.sec),
+                String.format("%.0f", geph.pos[0]), String.format("%.0f", geph.pos[1]), String.format("%.0f", geph.pos[2]));
+        }
         for (double tt = t < 0.0 ? -TSTEP : TSTEP; Math.abs(t) > 1E-9; t -= tt) {
             if (Math.abs(t) < TSTEP) tt = t;
             glorbit(tt, x, geph.acc);
@@ -352,13 +361,21 @@ public final class EphModel {
      * Search GLONASS ephemeris.
      */
     private static Geph searchGloEphemeris(Nav nav, int prn, GTime time) {
-        if (nav.geph == null || prn < 1 || prn > Constants.MAXSAT) return null;
-        Geph geph = nav.geph[prn - 1];
-        if (geph != null && geph.sat > 0) {
-            double dt = Math.abs(TimeSystem.timediff(time, geph.toe));
-            if (dt < 7200.0) return geph;
+        if (nav.geph == null || prn < 1) return null;
+        int sat = SatUtils.satno(Constants.SYS_GLO, prn);
+        double tmax = 7200.0;
+        double tmin = tmax + 1.0;
+        Geph best = null;
+        for (int i = 0; i < nav.ng; i++) {
+            if (nav.geph[i] == null || nav.geph[i].sat != sat) continue;
+            double dt = Math.abs(TimeSystem.timediff(nav.geph[i].toe, time));
+            if (dt > tmax) continue;
+            if (dt <= tmin) {
+                best = nav.geph[i];
+                tmin = dt;
+            }
         }
-        return null;
+        return best;
     }
 
     /**
@@ -553,6 +570,10 @@ public final class EphModel {
      */
     private static double geph2clk(GTime time, Geph geph) {
         double t = TimeSystem.timediff(time, geph.toe);
+        double ts = t;
+        for (int i = 0; i < 2; i++) {
+            t = ts - (-geph.taun + geph.gamn * t);
+        }
         return -geph.taun + geph.gamn * t;
     }
 

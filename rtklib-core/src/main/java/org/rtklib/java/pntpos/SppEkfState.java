@@ -17,6 +17,9 @@ public class SppEkfState implements Serializable {
     public double[] prevPos;
     public int consecutiveZeroVelEpochs;
     public boolean initialized;
+    public boolean diverged;
+    public int divergedEpochs;
+    public int consecutiveLsSuccess;
 
     public SppEkfState(int nxF) {
         this.nxF = nxF;
@@ -26,6 +29,9 @@ public class SppEkfState implements Serializable {
         this.prevPos = new double[3];
         this.consecutiveZeroVelEpochs = 0;
         this.initialized = false;
+        this.diverged = false;
+        this.divergedEpochs = 0;
+        this.consecutiveLsSuccess = 0;
     }
 
     public void init(double[] pos, double[] vel, RtkConfig cfg) {
@@ -52,6 +58,9 @@ public class SppEkfState implements Serializable {
             P[i * nxF + i] = 1000.0 * 1000.0;
         }
         initialized = true;
+        diverged = false;
+        divergedEpochs = 0;
+        consecutiveLsSuccess = 0;
     }
 
     public void reset() {
@@ -65,6 +74,9 @@ public class SppEkfState implements Serializable {
         prevPos = new double[3];
         consecutiveZeroVelEpochs = 0;
         initialized = false;
+        diverged = false;
+        divergedEpochs = 0;
+        consecutiveLsSuccess = 0;
     }
 
     public static int computeNxF(PrcOpt opt) {

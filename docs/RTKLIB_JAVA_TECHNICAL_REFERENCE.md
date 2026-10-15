@@ -125,6 +125,11 @@ NX_RTK = NP_max + NI_max + NT_max + NL_max + NB_max
 
 ⚠️ NX_RTK 定义必须在 MAXSAT 之后（Java static final 前向引用限制）
 实际使用的 nx = NR(rtk) + NB(rtk)，通常远小于 NX_RTK
+
+⚠️ 频点上限约束（2026-10-13 补注）：NB_max = MAXSAT*3 按 3 频点计算（对应 C NFREQ=3）。
+Java NFREQ=6 只是观测槽位扩展；RTK 状态分配仍按 3 频点模糊度预留。
+若 opt.nf > 3 运行 RTK，IB(sat,f,opt) 索引将超出 NX_RTK=1301（当前测试 nf=2，无影响；
+RTK 路径勿用 nf>3，如需支持须重算 NX_RTK）
 ```
 
 ---
@@ -172,7 +177,7 @@ for (int i = 0; i < k; i++) {
 // 步骤3: EJML运算
 // K = Pc * Hc^T * (Hc * Pc * Hc^T + R)^-1
 // xc_new = xc + K * v
-// Pc_new = (I - K * Hc) * Pc
+// Pc_new = (I-KHc)*Pc*(I-KHc)^T + K*R*K^T  ← Joseph形式（见 RTKLIB_Differences.md §7）
 
 // 步骤4: 写回原数组
 for (int i = 0; i < k; i++) {
@@ -302,8 +307,8 @@ private static int resamb_LAMBDA(Rtk rtk, double[] v, double[] H, double[] R,
     // 3. LAMBDA整数最小二乘搜索
     Lambda.lambda(nb, 2, Qb, b, s);
 
-    // 4. ratio检验: s[0]/s[1] > thresar[2](默认3.0)?
-    if (s[1] <= 0.0 || s[0]/s[1] < thresar[2]) return 0;  // 失败
+    // 4. ratio检验: s[0]/s[1] > thresar[0](默认3.0)?
+    if (s[1] <= 0.0 || s[0]/s[1] < thresar[0]) return 0;  // 失败
 
     // 5. 更新固定解状态向量 xa (仅前na个非模糊度状态)
     for (int i = 0; i < na; i++) rtk.xa[i] = rtk.x[i];
@@ -394,20 +399,20 @@ private static void holdamb(Rtk rtk, double[] xa) {
 
 ### 6.1 核心源码文件
 
-| 文件 | 关键内容 | 行号范围 |
+| 文件 | 关键内容 | 定位方式 |
 |------|----------|----------|
-| `RtkCore.java` | RTK核心算法 | 全文（2142行） |
-| ├─ | 状态索引宏(NP/NI/NT/NL/NR/IB/II/IL) | 74~110 |
-| ├─ | rtkpos(外层入口) | 125~230 |
-| ├─ | relpos(相对定位主函数) | 232~505 |
-| ├─ | zdres(零差残差) | 660~810 |
-| ├─ | ddres(双差残差/H矩阵) | 812~1125 |
-| ├─ | udstate/udpos/udion/udtrop/udrcvbias/udbias | 1128~1460 |
-| ├─ | detslpLl/detslpGf/detslpCode/detslpDop(周跳检测) | 1460~1560 |
-| ├─ | ddidx(双差索引选择) | 1664~1780 |
-| ├─ | resamb_LAMBDA(LAMBDA固定) | 1781~1913 |
-| ├─ | manage_amb_LAMBDA(AR管理) | 1930~2040 |
-| └─ | holdamb(Fix-and-Hold) | 2049~2140 |
+| `RtkCore.java` | RTK核心算法 | 全文（约2300行，行号随版本漂移，请按函数名搜索） |
+| ├─ | 状态索引宏(NP/NI/NT/NL/NR/IB/II/IL) | 类开头 |
+| ├─ | rtkpos(外层入口) | rtkpos() |
+| ├─ | relpos(相对定位主函数) | relpos() |
+| ├─ | zdres(零差残差) | zdres() |
+| ├─ | ddres(双差残差/H矩阵) | ddres() |
+| ├─ | udstate/udpos/udion/udtrop/udrcvbias/udbias | udstate() |
+| ├─ | detslpLl/detslpGf/detslpCode/detslpDop(周跳检测) | detslp*() |
+| ├─ | ddidx(双差索引选择) | ddidx() |
+| ├─ | resamb_LAMBDA(LAMBDA固定) | resamb_LAMBDA() |
+| ├─ | manage_amb_LAMBDA(AR管理) | manage_amb_LAMBDA() |
+| └─ | holdamb(Fix-and-Hold) | holdamb() |
 | `KalmanFilter.java` | EKF测量更新(Joseph形式) | 全文（227行） |
 | `Constants.java` | 常量定义 | 63~240 |
 | `PrcOpt.java` | 处理选项 | 全文 |
@@ -445,11 +450,13 @@ rtk.opt.glomodear = GLO_ARMODE_AUTOCAL;         // GLO自动校准
 rtk.opt.gpsmodear = 1;                          // GPS AR开启
 rtk.opt.bdsmodear = 1;                          // BDS AR开启
 rtk.opt.elmin = 15.0*D2R;                       // 截止高度角15°
-rtk.opt.thresar[0] = 30.0;                      // 最大卫星几何精度因子
-rtk.opt.thresar[1] = 0.25;                      // 最大位置方差阈值(m²)
-rtk.opt.thresar[2] = 3.0;                       // AR ratio阈值
+rtk.opt.thresar[0] = 3.0;                       // AR ratio阈值（RtkCore resamb_LAMBDA/holdamb使用）
+rtk.opt.thresar[1] = 0.25;                      // 最大位置方差阈值(m²)（manage_amb AR前置检查）
+rtk.opt.thresar[2] = 1e-6;                      // GLO IC bias初值（GLO_ARMODE_AUTOCAL时与thresar[3]配合）
 rtk.opt.varholdamb = 0.001;                     // Hold约束方差
 ```
+
+> 注（2026-10-13 修正）：thresar 语义与 C 版（demo5 EX 2.5.0）一致——`thresar[0]`=AR ratio 阈值、`thresar[1]`=最大位置方差阈值、`thresar[2]/[3]`=GLO IC bias 初值/初始方差（`RtkCore.udbias` 的 GLO 初始化使用）。旧文档"thresar[0]=30.0 最大卫星几何精度因子""thresar[2]=ratio 阈值"的说法有误，实际代码以 `RtkCore.java` 为准。
 
 ### 7.2 数据文件路径
 
@@ -670,8 +677,8 @@ Obsd（单个卫星的观测数据）:
 │ ...           │ ...              │ 扩展槽位                 │
 └───────────────┴──────────────────┴──────────────────────────┘
 
-Java版: NFREQ=6, NEXOBS=26 → 总共32个信号槽位/卫星
-C版:   NFREQ=3, NEXOBS=...  → 通常8-16个信号槽位/卫星
+Java版: NFREQ=6, NEXOBS=2 → 总共8个信号槽位/卫星
+C版(demo5 EX 2.5.0): NFREQ=3, NEXOBS=0 → 3个信号槽位/卫星
 ```
 
 **关键限制**：
@@ -693,12 +700,12 @@ C版:   NFREQ=3, NEXOBS=...  → 通常8-16个信号槽位/卫星
 **问题场景示例**（BDS卫星125）：
 ```
 MSM消息包含6个信号:
-[0] B1I (code=40) → freq_idx=0
-[1] B3I (code=42) → freq_idx=1  
-[2] B2I (code=27) → freq_idx=?
-[3] B2P (code=58) → freq_idx=?
-[4] B2a/D (code=61) → freq_idx=2
-[5] B1P (code=2)  → freq_idx=0
+[0] B1I (code=40 '2I') → freq_idx=0 (B1I 1561.098)
+[1] B3I (code=42 '6I') → freq_idx=3 (B3I 1268.52)
+[2] B2I (code=27 '7I') → freq_idx=1 (B2 1207.14)
+[3] B2a (code=58 '5P') → freq_idx=2 (B2a 1176.45)
+[4] B2b (code=61 '7D') → freq_idx=1 (B2 1207.14)
+[5] B1C (code=2  '1C') → freq_idx=4 (B1C 1575.42)
 
 但RTK只需要: L1(任意), L2(任意), L3(可选)
 ```
@@ -764,9 +771,9 @@ private static int getcodepri(int sys, int code) {
 2. **兼容性**: 传统信号 > 新增信号
 3. **稳定性**: 开放服务 > 授权服务
 
-### 13.3 核心方法：promoteExtSig - 扩展信号提升
+### 11.3 核心方法：promoteExtSig - 扩展信号提升
 
-#### 13.3.1 方法签名与位置
+#### 11.3.1 方法签名与位置
 
 ```java
 // Rtcm.java:1747-1773
@@ -782,7 +789,7 @@ if (sat != 0 && index >= 0) {
 }
 ```
 
-#### 13.3.2 算法详解
+#### 11.3.2 算法详解
 
 ```java
 private static void promoteExtSig(Obsd obs, int sys) {
@@ -835,7 +842,7 @@ private static void promoteExtSig(Obsd obs, int sys) {
 }
 ```
 
-#### 13.3.3 提升条件矩阵
+#### 11.3.3 提升条件矩阵
 
 | 条件 | 代码 | 含义 | 示例 |
 |------|------|------|------|
@@ -846,9 +853,9 @@ private static void promoteExtSig(Obsd obs, int sys) {
 
 **只有4个条件全部满足时才执行提升**
 
-### 13.4 完整工作流程示例
+### 11.4 完整工作流程示例
 
-#### 13.4.1 场景：BDS卫星125接收MSM消息
+#### 11.4.1 场景：BDS卫星125接收MSM消息
 
 **Step 1: 解析MSM Header获取信号列表**
 ```
@@ -934,9 +941,9 @@ promoteExtSig执行:
   [PROMOTE-SIG] sat=125 freq=2: promoted code=27 from ext idx=3 to idx=2
 ```
 
-### 13.5 与其他方法的协作关系
+### 11.5 与其他方法的协作关系
 
-#### 13.5.1 三阶段信号管理流水线
+#### 11.5.1 三阶段信号管理流水线
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -959,7 +966,7 @@ promoteExtSig执行:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-#### 13.5.2 各方法的职责边界
+#### 11.5.2 各方法的职责边界
 
 | 方法 | 输入 | 输出 | 决策依据 | 作用域 |
 |------|------|------|----------|--------|
@@ -967,26 +974,26 @@ promoteExtSig执行:
 | **sigindex** | (sys, code[], n) | idx[] (修改后) | 信号优先级 | 所有信号全局 |
 | **promoteExtSig** | (obs, sys) | obs (修改后) | 频率匹配+数据有效性 | 单个卫星 |
 
-### 13.6 关键常量配置
+### 11.6 关键常量配置
 
-#### 13.6.1 Java版 vs C版的差异
+#### 11.6.1 Java版 vs C版的差异
 
 | 参数 | Java版 | C版 (rtklib 2.5.0) | 影响 |
 |------|--------|-------------------|------|
 | `NFREQ` | **6** | **3** | Java可追踪更多主频率 |
-| `NEXOBS` | **26** | **NEXOBS=12** (典型) | Java有更大扩展空间 |
-| **总槽位数** | **32** | **15** (典型) | Java支持更多信号 |
+| `NEXOBS` | **2** | **0** (rtklib.h:158-160) | Java有有限扩展空间 |
+| **总槽位数** | **8** | **3** | Java支持更多信号 |
 
-#### 13.6.2 Obsd数组大小影响
+#### 11.6.2 Obsd数组大小影响
 
 ```java
 // Java版定义 (Constants.java)
 public static final int NFREQ  = 6;   // 主频率数
-public static final int NEXOBS = 26;  // 扩展观测数
+public static final int NEXOBS = 2;   // 扩展观测数
 
 // Obsd类字段声明
 public class Obsd {
-    public double L[]   = new double[NFREQ + NEXOBS];  // 32个元素
+    public double L[]   = new double[NFREQ + NEXOBS];  // 8个元素
     public double P[]   = new double[NFREQ + NEXOBS];
     public float  D[]   = new float[NFREQ + NEXOBS];
     public short  LLI[] = new short[NFREQ + NEXOBS];
@@ -996,34 +1003,36 @@ public class Obsd {
 ```
 
 **内存开销**:
-- 每个Obsd对象: ~32 * (8+8+4+2+4+1) = **864 bytes**
-- MAXSAT=214个卫星: **185 KB** (单历元)
+- 每个Obsd对象: ~8 * (8+8+4+2+4+1) = **216 bytes**
+- MAXSAT=214个卫星: **46 KB** (单历元)
 - 可接受的开销换取灵活性
 
-### 13.7 典型应用场景
+### 11.7 典型应用场景
 
-#### 13.7.1 场景1：BDS三频信号完整接收
+#### 11.7.1 场景1：BDS三频信号完整接收
 
 **输入信号**: B1I, B1C, B2I, B2a, B2b, B3I, B3Q (7个)
 
-**期望输出** (opt.nf=3时):
+**期望输出** (opt.nf≥4时):
 ```
-主槽位0 (L1): B1I (优先级最高)
-主槽位1 (L2): B2a (B2频段最佳)
-主槽位2 (L3): B3I (优先级最高)
+主槽位0 (B1I 1561.098): B1I (优先级最高)
+主槽位1 (B2 1207.14):   B2b/B2I (优先级最高)
+主槽位2 (B2a 1176.45):  B2a
+主槽位3 (B3I 1268.52):  B3I (优先级最高)
 
-扩展区: B1C, B2I, B2b, B3Q (备用)
+扩展区: B1C, B3Q (备用)
 ```
 
 **执行过程**:
-1. `code2idx`: B1I→0, B1C→0, B2I→?, B2a→2, B2b→?, B3I→1, B3Q→1
+1. `code2idx`（BDS实际映射，见 ObsCode.code2idx，同C版code2idx_BDS）: B1I('2I')→0, B2I('7I')→1, B2a('5P')→2, B3I('6I')→3, B1C('1P')→4, B2b('7D')→1
 2. `sigindex`: 
-   - L1: B1I胜出(pri=7), B1C被挤到扩展
-   - L2: B2a胜出(pri=6), B2I/B2b被挤到扩展
-   - L3: B3I胜出(pri=7), B3Q被挤到扩展
+   - slot0(B1I): B1I胜出(pri=7), B1C被挤到扩展
+   - slot1(B2 1207.14): B2b/B2I胜出(pri=6)
+   - slot2(B2a): B2a胜出(pri=6)
+   - slot3(B3I): B3I胜出(pri=7), B3Q被挤到扩展
 3. `promoteExtSig`: 主槽位已满，无需提升
 
-#### 13.7.2 场景2：GPS双频部分缺失
+#### 11.7.2 场景2：GPS双频部分缺失
 
 **输入信号**: L1C, L1W, L2P (3个)
 
@@ -1046,7 +1055,7 @@ public class Obsd {
 **如果sigindex将L2P错误地放到扩展区**（理论上不会，但如果发生）:
 - `promoteExtSig`会将其救回主槽位1 ✅
 
-#### 13.7.3 场景3：GLONASS多信号冲突
+#### 11.7.3 场景3：GLONASS多信号冲突
 
 **输入信号**: L1C/A, L1P, L2C/A, L2P (4个, 含FDMA特性)
 
@@ -1059,23 +1068,23 @@ public class Obsd {
 扩展区: L1P, L2P (精密码，优先级略低但可用)
 ```
 
-### 13.8 性能分析
+### 11.8 性能分析
 
-#### 13.8.1 时间复杂度
+#### 11.8.1 时间复杂度
 
 ```java
 // promoteExtSig 时间复杂度
 for (int f = 0; f < NFREQ; f++) {           // 外层循环: NFREQ次 (≤6)
-    for (int ex = NFREQ; ex < NFREQ+NEXOBS; ex++) {  // 内层循环: NEXOBS次 (≤26)
+    for (int ex = NFREQ; ex < NFREQ+NEXOBS; ex++) {  // 内层循环: NEXOBS次 (≤2)
         // O(1) 操作
     }
 }
-// 总计: O(NFREQ × NEXOBS) = O(6 × 26) = O(156) ≈ 常数时间
+// 总计: O(NFREQ × NEXOBS) = O(6 × 2) = O(12) ≈ 常数时间
 ```
 
 **每次调用耗时**: < 1微秒（现代CPU）
 
-#### 13.8.2 调用频率
+#### 11.8.2 调用频率
 
 ```
 每秒调用次数 ≈ 观测历元率 × 平均可见卫星数
@@ -1085,7 +1094,7 @@ for (int f = 0; f < NFREQ; f++) {           // 外层循环: NFREQ次 (≤6)
 CPU占用: 1500 × 1μs = 1.5ms/s = 0.15% (可忽略)
 ```
 
-#### 13.8.3 内存访问模式
+#### 11.8.3 内存访问模式
 
 ```
 优化点:
@@ -1098,9 +1107,9 @@ CPU占用: 1500 × 1μs = 1.5ms/s = 0.15% (可忽略)
 ⚠️ System.err.printf (I/O操作，仅调试时启用)
 ```
 
-### 13.9 已知限制与改进方向
+### 11.9 已知限制与改进方向
 
-#### 13.9.1 当前限制
+#### 11.9.1 当前限制
 
 | 限制 | 描述 | 影响程度 |
 |------|------|----------|
@@ -1109,7 +1118,7 @@ CPU占用: 1500 × 1μs = 1.5ms/s = 0.15% (可忽略)
 | **静态优先级** | sigindex使用固定优先级表 | 中 (无法适应环境变化) |
 | **无回退机制** | 提升后不可撤销 | 低 (极少需要) |
 
-#### 13.9.2 可能的改进方向
+#### 11.9.2 可能的改进方向
 
 **方向1: 基于SNR的智能选择**
 ```java
@@ -1147,7 +1156,7 @@ float reliability = getSignalReliability(sys, code);
 pri = basePri * reliability;  // 可靠性加权
 ```
 
-### 13.10 实现位置索引
+### 11.10 实现位置索引
 
 | 文件 | 行号 | 方法名 | 类型 |
 |------|------|--------|------|
@@ -1157,9 +1166,9 @@ pri = basePri * reliability;  // 可靠性加权
 | `src/main/java/org/rtklib/java/rtcm/Rtcm.java` | 1631-1745 | `saveMsmObs()` | 调用方 |
 | `src/test/java/org/rtklib/java/RtcmParserTest.java` | 全文 | 测试用例 | 测试 |
 
-### 13.11 参考资源
+### 11.11 参考资源
 
-#### 13.11.1 RTKLIB C源码对照
+#### 11.11.1 RTKLIB C源码对照
 
 ```c
 /* rtkcmn.c - C版本的等效逻辑 */
@@ -1172,7 +1181,7 @@ static void sigindex(int sys, const int *code, int n, int *idx, const prcopt_t *
 /* C版通过在decodeMsM中直接检查并赋值实现相同效果 */
 ```
 
-#### 13.11.2 RTCM标准文档
+#### 11.11.2 RTCM标准文档
 
 - **RTCM 10403.3**: Multiple Signal Messages (MSM) 定义
 - **RTKLIB Manual**: Section 12.3 MSM Decoding
@@ -1181,9 +1190,9 @@ static void sigindex(int sys, const int *code, int n, int *idx, const prcopt_t *
 
 ---
 
-## 11. 附录
+## 17. 附录
 
-### 11.1 快速参考卡：promoteExtSig决策树
+### 17.1 快速参考卡：promoteExtSig决策树
 
 ```
 输入: obs (Obsd对象), sys (卫星系统)
@@ -1216,7 +1225,7 @@ static void sigindex(int sys, const int *code, int n, int *idx, const prcopt_t *
    └─ (如果循环结束未找到) → 槽位f保持空
 ```
 
-### 11.2 常见信号码速查表 (BDS)
+### 17.2 常见信号码速查表 (BDS)
 
 | 信号名称 | Code值 | Freq Index | 优先级 | 说明 |
 |----------|--------|------------|--------|------|
@@ -1427,9 +1436,9 @@ private RtkResult buildResult() {
 
 ---
 
-## 12. 与 C 版 RTKLIB 的对齐状态
+## 18. 与 C 版 RTKLIB 的对齐状态
 
-### 12.1 已对齐的核心流程
+### 18.1 已对齐的核心流程
 
 | 模块 | C版函数 | Java版方法 | 状态 |
 |------|---------|-----------|------|
@@ -1452,7 +1461,7 @@ private RtkResult buildResult() {
 | PPP RINEX处理 | - | `PppProcessor`/`RinexPppProcessor` | ✅ |
 | 追踪日志 | `trace*()` | `RtkTrace`/`PppTrace` | ✅ |
 
-### 12.2 已对齐的 rtkpos() 流程细节
+### 18.2 已对齐的 rtkpos() 流程细节
 
 | 逻辑 | 说明 | 状态 |
 |------|------|------|
@@ -1465,7 +1474,7 @@ private RtkResult buildResult() {
 | ssat后处理 | vs/azel/resp/resc更新 | ✅ |
 | eventime传递 | `sol.eventime=obs[0].eventime` | ✅ |
 
-### 12.3 未移植项
+### 18.3 未移植项
 
 详见第9章"待完善项"。
 

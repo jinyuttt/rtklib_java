@@ -445,6 +445,10 @@ public class UrbanCanyonRtkDiagTest {
          * 位置方差门限。c_ppc_*.pos 基线由该配置生成；对照实验（test_c_*_thres100/9999.pos，
          * navsys=15）确认 thresar[1] 越大 Fix 越多，Java 行为与 C 一致。 */
         opt.thresar[1] = 0.1;
+        /* 对齐 C 基线 conf（ppc_ppc_rtk.conf）：pos2-arthresmin=3 / pos2-arthresmax=10，
+         * minAR!=maxAR 时 C 2.5.0 按 nb 多项式自适应调整 AR 阈值（rtkpos.c resamb_LAMBDA） */
+        opt.thresar[5] = 3.0;
+        opt.thresar[6] = 10.0;
         opt.prn[3] = 3.0;
         opt.prn[4] = 1.0;
         opt.glomodear = Constants.GLO_ARMODE_OFF;

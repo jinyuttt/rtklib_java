@@ -100,7 +100,10 @@ public final class SatUtils {
         int sys;
         int prn;
         try {
-            prn = Integer.parseInt(id.substring(1));
+            // C sscanf("%c%d"): %d skips leading whitespace, so space-padded
+            // single-digit PRNs (e.g. "G 5", "E 4", "R 7" in RINEX 3 nav files
+            // written as G%2d) must parse identically.
+            prn = Integer.parseInt(id.substring(1).trim());
         } catch (NumberFormatException ex) {
             return 0;
         }

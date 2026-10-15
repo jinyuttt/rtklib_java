@@ -335,4 +335,86 @@ public class UrbanCanyonSppOptTest {
     void testUrbanNavTokyo() {
         runSppComparison(DATA_SETS[7]);
     }
+
+    private void runIndividualOptComparison(DataSet ds) {
+        Assumptions.assumeTrue(Files.exists(Paths.get(ds.roverObs)), ds.name + " rover数据不存在");
+        Assumptions.assumeTrue(Files.exists(Paths.get(ds.nav)), ds.name + " nav数据不存在");
+
+        log.info("========================================");
+        log.info("数据集: {} (逐项对照)", ds.name);
+        log.info("========================================");
+
+        List<ObsEpoch> epochs = loadObsEpochs(ds.roverObs);
+        Nav nav = loadNav(ds.nav);
+        PrcOpt opt = createOpt();
+
+        RtkConfig cfgBase = new RtkConfig();
+        cfgBase.enableSppEkf = true;
+        cfgBase.enableSppRobust = true;
+        List<SppResult> base = runSpp(epochs, nav, opt, cfgBase);
+
+        RtkConfig cfgNoInnov = new RtkConfig();
+        cfgNoInnov.enableSppEkf = true;
+        cfgNoInnov.enableSppRobust = true;
+        cfgNoInnov.enableSppInnovChisq = false;
+        List<SppResult> noInnov = runSpp(epochs, nav, opt, cfgNoInnov);
+
+        RtkConfig cfgZeroVel = new RtkConfig();
+        cfgZeroVel.enableSppEkf = true;
+        cfgZeroVel.enableSppRobust = true;
+        cfgZeroVel.enableSppZeroVel = true;
+        List<SppResult> withZeroVel = runSpp(epochs, nav, opt, cfgZeroVel);
+
+        RtkConfig cfgDopplerSnr = new RtkConfig();
+        cfgDopplerSnr.enableSppEkf = true;
+        cfgDopplerSnr.enableSppRobust = true;
+        cfgDopplerSnr.enableSppDopplerSnr = true;
+        List<SppResult> withDopplerSnr = runSpp(epochs, nav, opt, cfgDopplerSnr);
+
+        double[] sBase = computeRms(base, ds.refLat, ds.refLon);
+        double[] sNoInnov = computeRms(noInnov, ds.refLat, ds.refLon);
+        double[] sZeroVel = computeRms(withZeroVel, ds.refLat, ds.refLon);
+        double[] sDopplerSnr = computeRms(withDopplerSnr, ds.refLat, ds.refLon);
+
+        int cBase = countSuccess(base);
+        int cNoInnov = countSuccess(noInnov);
+        int cZeroVel = countSuccess(withZeroVel);
+        int cDopplerSnr = countSuccess(withDopplerSnr);
+
+        log.info("");
+        log.info("====== {} 逐项对照 ======", ds.name);
+        log.info(String.format("%-30s 成功率  2D(m)   3D(m)", "模式"));
+        log.info(String.format("%-30s %5.1f%%  %6.2f  %6.2f",
+                "EKF+抗差 (基准)", 100.0 * cBase / epochs.size(), sBase[3], sBase[4]));
+        log.info(String.format("%-30s %5.1f%%  %6.2f  %6.2f  Δ2D=%+.1f%%",
+                "- 新息检验", 100.0 * cNoInnov / epochs.size(), sNoInnov[3], sNoInnov[4],
+                sBase[3] > 0 ? (sNoInnov[3] - sBase[3]) / sBase[3] * 100 : 0));
+        log.info(String.format("%-30s %5.1f%%  %6.2f  %6.2f  Δ2D=%+.1f%%",
+                "+ 零速约束", 100.0 * cZeroVel / epochs.size(), sZeroVel[3], sZeroVel[4],
+                sBase[3] > 0 ? (sZeroVel[3] - sBase[3]) / sBase[3] * 100 : 0));
+        log.info(String.format("%-30s %5.1f%%  %6.2f  %6.2f  Δ2D=%+.1f%%",
+                "+ 多普勒SNR", 100.0 * cDopplerSnr / epochs.size(), sDopplerSnr[3], sDopplerSnr[4],
+                sBase[3] > 0 ? (sDopplerSnr[3] - sBase[3]) / sBase[3] * 100 : 0));
+        log.info("");
+
+        assertTrue(cBase > 0, ds.name + " 基准至少应有一个历元成功");
+    }
+
+    @Test
+    @DisplayName("9. SPP逐项对照 - PPC Tokyo run1")
+    void testIndividualOptPpcTokyoRun1() {
+        runIndividualOptComparison(DATA_SETS[1]);
+    }
+
+    @Test
+    @DisplayName("10. SPP逐项对照 - PPC Nagoya run1")
+    void testIndividualOptPpcNagoyaRun1() {
+        runIndividualOptComparison(DATA_SETS[4]);
+    }
+
+    @Test
+    @DisplayName("11. SPP逐项对照 - UrbanNav Tokyo")
+    void testIndividualOptUrbanNavTokyo() {
+        runIndividualOptComparison(DATA_SETS[7]);
+    }
 }

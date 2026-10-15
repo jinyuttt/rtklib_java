@@ -243,7 +243,7 @@ public class PrcOpt implements Serializable {
         this.prn[4] = 1E-2;
         this.prn[5] = 0.0;
         this.sclkstab = 5E-12;
-        this.thresar = new double[]{3.0, 0.25, 0.0, 1E-9, 1E-5, 3.0, 3.0, 0.0};
+        this.thresar = new double[]{3.0, 0.9999, 0.0, 1E-9, 1E-5, 3.0, 3.0, 0.0};
         this.elmaskar = 0.0;
         this.elmaskhold = 0.0;
         this.thresslip = 0.05;

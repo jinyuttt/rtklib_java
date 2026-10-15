@@ -233,8 +233,9 @@ public class RtkBenchmarkTest {
             Position llhPos = sol.getPosition(CoordType.LLH);
             if (llhPos == null) continue;
 
-            double solLatDeg = Math.toDegrees(llhPos.v1);
-            double solLonDeg = Math.toDegrees(llhPos.v2);
+            /* SolData LLH position is already in degrees (see SolData#buildPositions) */
+            double solLatDeg = llhPos.v1;
+            double solLonDeg = llhPos.v2;
             double solH = llhPos.v3;
 
             ReferencePoint nearest = findNearestRef(sol, refs);

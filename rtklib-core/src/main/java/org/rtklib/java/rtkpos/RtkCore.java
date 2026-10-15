@@ -1,6 +1,7 @@
 package org.rtklib.java.rtkpos;
 
 import org.rtklib.java.ambiguity.Lambda;
+import org.rtklib.java.common.ObsCode;
 import org.rtklib.java.common.RtklibCommon;
 import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.constants.Constants;
@@ -44,10 +45,11 @@ public final class RtkCore {
             for (i = 0; i < 3; i++) rtk.rb[i] = opt.rb[i];
         }
 
-        int nfOpt = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
-        if (opt.mode != Constants.PMODE_SINGLE) {
-            RtklibCommon.compactObsFreq(obs, n, nfOpt, nav);
-        }
+        /* aligned with C rtkpos(): obs is const, never re-ordered/compacted.
+         * Slot f of obsd must always hold the observation of frequency index f
+         * (assigned by RINEX decoder code2idx, C rinex.c set_index()).
+         * Compacting per-sat gaps would move e.g. B2a into slot-1 while the
+         * other receiver keeps B2b there, mixing frequencies in IFLC/DD. */
 
         for (nu = 0; nu < n && obs[nu].rcv == 1; nu++) ;
         for (nr = 0; nu + nr < n && obs[nu + nr].rcv == 2; nr++) ;
@@ -59,8 +61,14 @@ public final class RtkCore {
         if (rtk.P[0] == 0 || rtk.P[0] > STD_PREC_VAR_THRESH) {
             int sppResult = PntPos.pntpos(obs, nu, nav, opt, rtk.sol, null, rtk.ssat);
             if (sppResult == 0) {
-                LOG.info("rtkpos: SPP failed (P[0]={}, nu={}, nr={})", rtk.P[0], nu, nr);
-                return 0;
+                /* aligned with C rtkpos.c L2364-2371: SPP failure does not invalidate
+                 * the epoch. In dynamics mode the filter propagates its state (udpos)
+                 * and relpos proceeds with rtk.x as linearization point. */
+                LOG.info("rtkpos: point pos error (SPP failed, P[0]={}, nu={}, nr={})", rtk.P[0], nu, nr);
+                if (opt.dynamics == 0) {
+                    return 0;
+                }
+                /* dynamics=1: continue with propagated filter state */
             }
         } else {
             rtk.sol.time = obs[0].time;
@@ -107,9 +115,11 @@ public final class RtkCore {
             }
         }
 
-        int result = relpos(rtk, obs, nu, nr, nav);
+        /* aligned with C rtkpos.c L2442-2446: relpos return value is ignored,
+         * epoch always outputs (degraded sol.stat on failure) */
+        relpos(rtk, obs, nu, nr, nav);
         rtk.epoch++;
-        return result;
+        return 1;
     }
 
     private static int relpos(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav) {
@@ -117,6 +127,16 @@ public final class RtkCore {
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
         int i, j, f, ns, nv = 0;
         int n = nu + nr;
+
+        if (n > Constants.MAXOBS) {
+            if (nu > Constants.MAXOBS) {
+                nu = Constants.MAXOBS;
+                nr = 0;
+            } else {
+                nr = Constants.MAXOBS - nu;
+            }
+            n = nu + nr;
+        }
         TraceControl v1ctrl = rtk.traceControl;
         TraceCallback v1cb = rtk.traceCallback;
         TraceConfig v2cfg = rtk.traceConfig;
@@ -157,7 +177,10 @@ public final class RtkCore {
         double[] e = wb.e;
         double[] freq = wb.freq;
 
-        if (!zdres(1, obs, nu, nr, rs, dts, vare, svh, nav, rtk.rb, opt,
+        // [JAVA-ONLY] IFLC频率对逐卫星协商（需先于zdres(base)，协商结果供两站zdres/udbias共同使用）
+        negotiateIflcPairs(rtk, obs, nu, nr);
+
+        if (!zdres(rtk, 1, obs, nu, nr, rs, dts, vare, svh, nav, rtk.rb, opt,
                 y, e, azel, freq, rtk.epoch)) {
             LOG.info("relpos: zdres(base) failed, epoch={}", rtk.epoch);
             return 0;
@@ -188,9 +211,12 @@ public final class RtkCore {
             rtk.nx = nx_new;
             rtk.x = new double[nx_new];
             rtk.P = new double[nx_new * nx_new];
-            initx(rtk.x, rtk.P, nx_new, rtk.sol.rr[0] - rtk.rb[0], Constants.VAR_POS, 0);
-            initx(rtk.x, rtk.P, nx_new, rtk.sol.rr[1] - rtk.rb[1], Constants.VAR_POS, 1);
-            initx(rtk.x, rtk.P, nx_new, rtk.sol.rr[2] - rtk.rb[2], Constants.VAR_POS, 2);
+            double baseline0 = rtk.sol.rr[0] - rtk.rb[0];
+            double baseline1 = rtk.sol.rr[1] - rtk.rb[1];
+            double baseline2 = rtk.sol.rr[2] - rtk.rb[2];
+            initx(rtk.x, rtk.P, nx_new, baseline0, Constants.VAR_POS, 0);
+            initx(rtk.x, rtk.P, nx_new, baseline1, Constants.VAR_POS, 1);
+            initx(rtk.x, rtk.P, nx_new, baseline2, Constants.VAR_POS, 2);
             if (rtk.opt.dynamics != 0) {
                 for (i = 3; i < 6; i++) initx(rtk.x, rtk.P, nx_new, 0.0, Constants.VAR_VEL, i);
                 for (i = 6; i < 9; i++) initx(rtk.x, rtk.P, nx_new, 1E-6, Constants.VAR_ACC, i);
@@ -245,7 +271,7 @@ public final class RtkCore {
 
         for (i = 0; i < opt.niter; i++) {
             for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xp[j];
-            if (!zdres(0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
+            if (!zdres(rtk, 0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
                     y, e, azel, freq, rtk.epoch)) {
                 LOG.info("relpos: zdres(rover) failed, epoch={}, iter={}", rtk.epoch, i);
                 stat = Constants.SOLQ_NONE;
@@ -253,7 +279,6 @@ public final class RtkCore {
             }
             if ((nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
                     iu, ir, ns, nf, nav, v, H, R, vflg)) < 4) {
-                LOG.info("relpos: ddres nv={} < 4, epoch={}, iter={}", nv, rtk.epoch, i);
                 stat = Constants.SOLQ_NONE;
                 break;
             }
@@ -293,7 +318,7 @@ public final class RtkCore {
 
         if (stat != Constants.SOLQ_NONE) {
             for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xp[j];
-            if (zdres(0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
+            if (zdres(rtk, 0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
                     y, e, azel, freq, rtk.epoch)) {
                 nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
                         iu, ir, ns, nf, nav, v, null, R, vflg);
@@ -318,36 +343,12 @@ public final class RtkCore {
                 } else {
                     stat = Constants.SOLQ_NONE;
                 }
-            } else {
-                stat = Constants.SOLQ_NONE;
             }
+            /* aligned with C rtkpos.c L2105: zdres failure after filter update leaves
+             * stat unchanged (SOLQ_FLOAT) — the propagated float solution is still valid */
         }
 
         if (stat == Constants.SOLQ_FLOAT) {
-            if (rtk.epoch == 31 || rtk.epoch == 32) {
-                int na_d = rtk.na;
-                int nx_d = rtk.nx;
-                int cntAmb = 0;
-                double sumAmbVar = 0, minAmbVar = Double.MAX_VALUE, maxAmbVar = 0;
-                for (int ai = na_d; ai < nx_d; ai++) {
-                    double pv = rtk.P[ai * nx_d + ai];
-                    double xv = rtk.x[ai];
-                    if (xv != 0.0 && pv > 0.0) {
-                        cntAmb++;
-                        sumAmbVar += pv;
-                        if (pv < minAmbVar) minAmbVar = pv;
-                        if (pv > maxAmbVar) maxAmbVar = pv;
-                    }
-                }
-                int printCnt = 0;
-                for (int ai = na_d; ai < nx_d && printCnt < 20; ai++) {
-                    double pv = rtk.P[ai * nx_d + ai];
-                    double xv = rtk.x[ai];
-                    if (xv != 0.0 && pv > 0.0) {
-                        printCnt++;
-                    }
-                }
-            }
             double[] bias_arr = wb.bias_arr;
             double[] xa_arr = wb.xa_arr;
             int nb = manage_amb_LAMBDA(rtk, bias_arr, xa_arr, sat, nf, ns, nav);
@@ -357,7 +358,7 @@ public final class RtkCore {
 
             if (nb > 1) {
                 for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xa_arr[j];
-                boolean zdOk = zdres(0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
+                boolean zdOk = zdres(rtk, 0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
                         y, e, azel, freq, rtk.epoch);
 
                 if (zdOk) {
@@ -439,21 +440,12 @@ public final class RtkCore {
             rtk.nfix = 0;
         }
 
-        if (rtk.epoch <= 30) {
-            double posvar_diag = (rtk.P[0 * nx + 0] + rtk.P[1 * nx + 1] + rtk.P[2 * nx + 2]) / 3.0;
-            StringBuilder sbAmbVar = new StringBuilder(String.format("[AMB-CONV] epoch=%d amb_var=", rtk.epoch));
-            int ambCnt = 0;
-            for (int ai = rtk.na; ai < nx && ambCnt < 5; ai++) {
-                double pv = rtk.P[ai * nx + ai];
-                double xv = rtk.x[ai];
-                if (xv != 0.0 && pv > 0.0) {
-                    sbAmbVar.append(String.format("[%d]=%.2f ", ai, pv));
-                    ambCnt++;
-                }
-            }
+        /* aligned with C rtkpos.c relpos tail: only overwrite sol.stat when the
+         * epoch produced a solution; SOLQ_NONE keeps the stat set by rtkpos
+         * (SOLQ_SINGLE when outsingle, else SOLQ_NONE) */
+        if (stat != Constants.SOLQ_NONE) {
+            rtk.sol.stat = (byte) stat;
         }
-
-        rtk.sol.stat = (byte) stat;
 
         RtkTrace.traceStage6(v1ctrl, v1cb, rtk.epoch, obs[0].time, rtk.sol, opt.niter);
         Trace.emit("POSITION", "UPDATE", v2cfg, v2cb, rtk.epoch, obs[0].time,
@@ -794,12 +786,14 @@ public final class RtkCore {
                     initx(x, P, nx, 0.0, gradInitVar, j + 2);
                 }
             } else {
-                double el = rtk.ssat[sat[i] - 1].azel[1];
-                double fact = Math.cos(el);
-                P[j * nx + j] += SQR(opt.prn[1] * bl / 1E4 * fact) * Math.abs(rtk.tt);
-                if (ionoGrad) {
-                    P[(j + 1) * nx + (j + 1)] += SQR(gradPrn) * Math.abs(rtk.tt);
-                    P[(j + 2) * nx + (j + 2)] += SQR(gradPrn) * Math.abs(rtk.tt);
+                if (!rtk.rtkConfig.enableParamTypeNoise) {
+                    double el = rtk.ssat[sat[i] - 1].azel[1];
+                    double fact = Math.cos(el);
+                    P[j * nx + j] += SQR(opt.prn[1] * bl / 1E4 * fact) * Math.abs(rtk.tt);
+                    if (ionoGrad) {
+                        P[(j + 1) * nx + (j + 1)] += SQR(gradPrn) * Math.abs(rtk.tt);
+                        P[(j + 2) * nx + (j + 2)] += SQR(gradPrn) * Math.abs(rtk.tt);
+                    }
                 }
             }
         }
@@ -826,11 +820,13 @@ public final class RtkCore {
                     }
                 }
             } else {
-                P[j * nx + j] += SQR(opt.prn[2]) * Math.abs(rtk.tt);
-                if (opt.tropopt >= Constants.TROPOPT_ESTG) {
-                    for (int k = 0; k < 2; k++) {
-                        j++;
-                        P[j * nx + j] += SQR(opt.prn[2] * 0.3) * Math.abs(rtk.tt);
+                if (!rtk.rtkConfig.enableParamTypeNoise) {
+                    P[j * nx + j] += SQR(opt.prn[2]) * Math.abs(rtk.tt);
+                    if (opt.tropopt >= Constants.TROPOPT_ESTG) {
+                        for (int k = 0; k < 2; k++) {
+                            j++;
+                            P[j * nx + j] += SQR(opt.prn[2] * 0.3) * Math.abs(rtk.tt);
+                        }
                     }
                 }
             }
@@ -967,8 +963,15 @@ public final class RtkCore {
                 int slip = rtk.ssat[s].slip[f];
                 int rejc = (int) rtk.ssat[s].rejc[f];
                 if (opt.ionoopt == Constants.IONOOPT_IFLC) {
-                    int f2 = RtklibCommon.seliflc(opt.nf, rtk.ssat[s].sys);
-                    slip |= rtk.ssat[s].slip[f2];
+                    if (iflcNegotiationActive(rtk) && rtk.ssat[s].iflcSlot[0] > 0) {
+                        int[] pair = iflcSlots(rtk, sat[i]);
+                        slip |= rtk.ssat[s].slip[pair[0]] | rtk.ssat[s].slip[pair[1]];
+                    } else {
+                        int f2 = RtklibCommon.seliflc(opt.nf, rtk.ssat[s].sys);
+                        slip |= rtk.ssat[s].slip[f2];
+                    }
+                    // IFLC配对切换/消失 → 强制重置该星模糊度（等效周跳）
+                    if (rtk.ssat[s].iflcPairSwitch) slip |= Constants.LLI_SLIP;
                 }
                 if (opt.modear != Constants.ARMODE_INST &&
                     (slip & Constants.LLI_SLIP) == 0 && rejc < 2) continue;
@@ -979,6 +982,13 @@ public final class RtkCore {
                     if (rtk.ssat[s].sys != Constants.SYS_GLO) {
                         rtk.ssat[s].icbias[f] = 0;
                     }
+                }
+            }
+
+            // 消费IFLC配对切换标志（单历元一次性，防止重复重置）
+            if (opt.ionoopt == Constants.IONOOPT_IFLC) {
+                for (int i = 0; i < ns; i++) {
+                    rtk.ssat[sat[i] - 1].iflcPairSwitch = false;
                 }
             }
 
@@ -998,18 +1008,20 @@ public final class RtkCore {
                     double pr = obsR.P[f] - obsB.P[f];
                     bias[i] = cp - pr * freqi / Constants.CLIGHT;
                 } else {
-                    int f2 = RtklibCommon.seliflc(opt.nf, rtk.ssat[sat[i] - 1].sys);
-                    if (obsR.L[0] == 0.0 || obsR.L[f2] == 0.0 || obsB.L[0] == 0.0 || obsB.L[f2] == 0.0) continue;
-                    if (obsR.P[0] == 0.0 || obsR.P[f2] == 0.0 || obsB.P[0] == 0.0 || obsB.P[f2] == 0.0) continue;
-                    double freq1 = SatUtils.sat2freq(sat[i], obsR.code[0], nav);
-                    double freq2 = SatUtils.sat2freq(sat[i], obsR.code[f2], nav);
+                    // [JAVA-ONLY] IFLC槽位对：协商激活时用协商结果，否则回退固定槽位{0,seliflc()}（C版行为）
+                    int[] pairU = iflcSlots(rtk, sat[i]);
+                    int s1u = pairU[0], s2u = pairU[1];
+                    if (obsR.L[s1u] == 0.0 || obsR.L[s2u] == 0.0 || obsB.L[s1u] == 0.0 || obsB.L[s2u] == 0.0) continue;
+                    if (obsR.P[s1u] == 0.0 || obsR.P[s2u] == 0.0 || obsB.P[s1u] == 0.0 || obsB.P[s2u] == 0.0) continue;
+                    double freq1 = SatUtils.sat2freq(sat[i], obsR.code[s1u], nav);
+                    double freq2 = SatUtils.sat2freq(sat[i], obsR.code[s2u], nav);
                     if (freq1 <= 0.0 || freq2 <= 0.0) continue;
                     double C1 = SQR(freq1) / (SQR(freq1) - SQR(freq2));
                     double C2 = -SQR(freq2) / (SQR(freq1) - SQR(freq2));
-                    double cp1 = (obsR.L[0] - obsB.L[0]) * Constants.CLIGHT / freq1;
-                    double cp2 = (obsR.L[f2] - obsB.L[f2]) * Constants.CLIGHT / freq2;
-                    double pr1 = obsR.P[0] - obsB.P[0];
-                    double pr2 = obsR.P[f2] - obsB.P[f2];
+                    double cp1 = (obsR.L[s1u] - obsB.L[s1u]) * Constants.CLIGHT / freq1;
+                    double cp2 = (obsR.L[s2u] - obsB.L[s2u]) * Constants.CLIGHT / freq2;
+                    double pr1 = obsR.P[s1u] - obsB.P[s1u];
+                    double pr2 = obsR.P[s2u] - obsB.P[s2u];
                     bias[i] = (C1 * cp1 + C2 * cp2) - (C1 * pr1 + C2 * pr2);
                 }
                 int idx = IB(sat[i], f, opt);
@@ -1040,16 +1052,13 @@ public final class RtkCore {
                     rtk.ssat[sat[i] - 1].lock[f] = -opt.minlock;
                 }
             }
-            if (rtk.epoch <= 5) {
-                int firstIdx = IB(sat[0], f, opt);
-            }
         }
 
         // [OPT-RES-EDIT] 精细化残差编辑与周跳检测
         RtkOptimizationsResEdit.screenArcIntegrity(rtk);
     }
 
-    private static boolean zdres(int base, Obsd[] obs, int nu, int nr,
+    private static boolean zdres(Rtk rtk, int base, Obsd[] obs, int nu, int nr,
                                  double[] rs, double[] dts, double[] vare, int[] svh,
                                  Nav nav, double[] rr, PrcOpt opt,
                                  double[] y, double[] e, double[] azel, double[] freq,
@@ -1095,7 +1104,9 @@ public final class RtkCore {
                 continue;
             }
 
-            if (RtklibCommon.satexclude(obs[idx].sat, vare[idx], svh[idx], opt) != 0) continue;
+            if (RtklibCommon.satexclude(obs[idx].sat, vare[idx], svh[idx], opt) != 0) {
+                continue;
+            }
 
             r += -Constants.CLIGHT * dts[idx * 2];
 
@@ -1111,27 +1122,31 @@ public final class RtkCore {
             antmodel(opt.pcvr[base], opt.antdel[base], ae, opt.posopt[1], dant);
 
             if (opt.ionoopt == Constants.IONOOPT_IFLC) {
-                double freq1 = SatUtils.sat2freq(obs[idx].sat, obs[idx].code[0], nav);
-                int f2 = RtklibCommon.seliflc(opt.nf, SatUtils.satsys(obs[idx].sat, null));
-                double freq2 = SatUtils.sat2freq(obs[idx].sat, obs[idx].code[f2], nav);
-                if (freq1 == 0.0 || freq2 == 0.0) continue;
+                // [JAVA-ONLY] IFLC槽位对：协商激活时用协商结果，否则回退固定槽位{0,seliflc()}（C版行为）
+                int[] pair = iflcSlots(rtk, obs[idx].sat);
+                int s1 = pair[0], s2 = pair[1];
+                double freq1 = SatUtils.sat2freq(obs[idx].sat, obs[idx].code[s1], nav);
+                double freq2 = SatUtils.sat2freq(obs[idx].sat, obs[idx].code[s2], nav);
+                if (freq1 == 0.0 || freq2 == 0.0) {
+                    continue;
+                }
 
-                if (RtklibCommon.testsnr(base, 0, el, obs[idx].SNR[0], opt.snrmask) != 0 ||
-                    RtklibCommon.testsnr(base, f2, el, obs[idx].SNR[f2], opt.snrmask) != 0) continue;
+                if (RtklibCommon.testsnr(base, s1, el, obs[idx].SNR[s1], opt.snrmask) != 0 ||
+                    RtklibCommon.testsnr(base, s2, el, obs[idx].SNR[s2], opt.snrmask) != 0) continue;
 
                 double C1 = SQR(freq1) / (SQR(freq1) - SQR(freq2));
                 double C2 = -SQR(freq2) / (SQR(freq1) - SQR(freq2));
-                double dant_if = C1 * dant[0] + C2 * dant[f2];
+                double dant_if = C1 * dant[s1] + C2 * dant[s2];
 
                 freq[foff * nf + i * nf] = 1.0;
 
-                if (obs[idx].L[0] != 0.0 && obs[idx].L[f2] != 0.0) {
-                    y[off * nf * 2 + i * nf * 2] = C1 * obs[idx].L[0] * Constants.CLIGHT / freq1
-                            + C2 * obs[idx].L[f2] * Constants.CLIGHT / freq2 - r - dant_if;
+                if (obs[idx].L[s1] != 0.0 && obs[idx].L[s2] != 0.0) {
+                    y[off * nf * 2 + i * nf * 2] = C1 * obs[idx].L[s1] * Constants.CLIGHT / freq1
+                            + C2 * obs[idx].L[s2] * Constants.CLIGHT / freq2 - r - dant_if;
                 }
-                if (obs[idx].P[0] != 0.0 && obs[idx].P[f2] != 0.0) {
-                    y[off * nf * 2 + i * nf * 2 + nf] = C1 * obs[idx].P[0]
-                            + C2 * obs[idx].P[f2] - r - dant_if;
+                if (obs[idx].P[s1] != 0.0 && obs[idx].P[s2] != 0.0) {
+                    y[off * nf * 2 + i * nf * 2 + nf] = C1 * obs[idx].P[s1]
+                            + C2 * obs[idx].P[s2] - r - dant_if;
                 }
             } else {
                 for (int f = 0; f < nf; f++) {
@@ -1157,6 +1172,150 @@ public final class RtkCore {
             }
         }
         return true;
+    }
+
+    /* ===================== [JAVA-ONLY] IFLC频率对协商 ===================== */
+
+    /**
+     * 每系统IFLC频段槽位对优先级（槽位=code2idx固定频段映射，两站同一槽位即同一频段）。
+     * 首槽位恒为0：保证ddres现有 code[frq=0] 频率检查在协商模式下不变。
+     */
+    private static final int[][] IFLC_PAIRS_GPS = {{0, 1}, {0, 2}};
+    private static final int[][] IFLC_PAIRS_GLO = {{0, 1}};
+    /** GAL nf>=3 优先 E1+E5a，对齐seliflc(nf>=3,GAL)=2语义 */
+    private static final int[][] IFLC_PAIRS_GAL_NF3 = {{0, 2}, {0, 1}};
+    private static final int[][] IFLC_PAIRS_GAL_NF2 = {{0, 1}, {0, 2}};
+    /** BDS: B1I+B2(C2I+C7D) > B1I+B3I(C2I+C6I) > B1I+B2a(C2I+C5P) */
+    private static final int[][] IFLC_PAIRS_BDS = {{0, 1}, {0, 3}, {0, 2}};
+    private static final int[][] IFLC_PAIRS_QZS = {{0, 1}, {0, 2}};
+    private static final int[][] IFLC_PAIRS_IRN = {{0, 1}};
+
+    /** Poly coeffs used to adjust AR ratio by # of sats, derived by fitting to example from:
+     * https://www.tudelft.nl/citg/over-faculteit/afdelingen/geoscience-remote-sensing/research/lambda/lambda
+     * (C rtkpos.c ar_poly_coeffs) */
+    static final double[][] AR_POLY_COEFFS = {
+            {-1.94058448e-01, -7.79023476e+00, 1.24231120e+02, -4.03126050e+02, 3.50413202e+02},
+            {6.42237302e-01, -8.39813962e+00, 2.92107285e+01, -2.37577308e+01, -1.14307128e+00},
+            {-2.22600390e-02, 3.23169103e-01, -1.39837429e+00, 2.19282996e+00, -5.34583971e-02}};
+
+    /**
+     * IFLC协商是否激活（配置开启 + IONOOPT_IFLC）。
+     * ssat.iflcSlot={0,0}时各读取点自动回退固定槽位{0,seliflc()}，与C版行为逐位一致。
+     */
+    private static boolean iflcNegotiationActive(Rtk rtk) {
+        return rtk.rtkConfig != null && rtk.rtkConfig.enableIflcPairNegotiation
+                && rtk.opt.ionoopt == Constants.IONOOPT_IFLC;
+    }
+
+    /**
+     * 取卫星的有效IFLC槽位对。
+     * 协商激活且已有协商结果时返回协商槽位，否则回退固定槽位{0,seliflc()}（C版行为）。
+     * 协商结果按卫星全局维护（槽位语义与接收端无关），两站共用同一对。
+     */
+    static int[] iflcSlots(Rtk rtk, int sat) { // package-private：供单元测试验证回退语义
+        int f2 = RtklibCommon.seliflc(rtk.opt.nf, SatUtils.satsys(sat, null));
+        if (iflcNegotiationActive(rtk)) {
+            int s1 = rtk.ssat[sat - 1].iflcSlot[0];
+            if (s1 > 0) {
+                return new int[]{s1, rtk.ssat[sat - 1].iflcSlot[1]};
+            }
+        }
+        return new int[]{0, f2};
+    }
+
+    /**
+     * 两站在槽位对(s1,s2)上是否都有跟踪（code非0即视为该频段结构可用）。
+     * 槽位上界NFREQ-1：ssat.slip/vsat等数组按NFREQ分配；数据级空洞（L/P=0）不影响配对，
+     * 仅导致该历元该星IFLC观测无效被跳过，避免配对来回抖动。
+     */
+    private static boolean iflcPairUsable(Obsd obsR, Obsd obsB, int s1, int s2) {
+        if (s1 < 0 || s1 >= Constants.NFREQ || s2 < 0 || s2 >= Constants.NFREQ || s1 == s2) {
+            return false;
+        }
+        return obsR.code[s1] != 0 && obsR.code[s2] != 0
+                && obsB.code[s1] != 0 && obsB.code[s2] != 0;
+    }
+
+    private static int[][] iflcPriorityTable(int sys, int nf) {
+        switch (sys) {
+            case Constants.SYS_GPS: return IFLC_PAIRS_GPS;
+            case Constants.SYS_GLO: return IFLC_PAIRS_GLO;
+            case Constants.SYS_GAL: return nf >= 3 ? IFLC_PAIRS_GAL_NF3 : IFLC_PAIRS_GAL_NF2;
+            case Constants.SYS_CMP: return IFLC_PAIRS_BDS;
+            case Constants.SYS_QZS: return IFLC_PAIRS_QZS;
+            case Constants.SYS_IRN: return IFLC_PAIRS_IRN;
+            default: return new int[0][];
+        }
+    }
+
+    /**
+     * [JAVA-ONLY] 逐卫星IFLC频率对协商（sticky策略）。
+     *
+     * <p>在rtkpos()中zdres(base)之前调用，仅RTK双站模式（mode>PMODE_DGPS且nr>0）生效。
+     * obs须按(接收端,卫星号)排序：obs[0..nu)流动站、obs[nu..nu+nr)基准站。
+     * 对两站公共卫星：
+     * <ul>
+     *   <li>sticky：上一配对仍结构可用（两站该频段槽位code非0）则保持不变；</li>
+     *   <li>失效重选：按系统优先级表从两站公共频段中重选，切换时置iflcPairSwitch
+     *       （udbias消费后强制重置该星模糊度并清lock，等效周跳处理）；</li>
+     *   <li>无公共频率对：iflcSlot清零，该星回退固定槽位（通常因数据缺失被IFLC跳过）。</li>
+     * </ul>
+     * 未协商/开关关闭/PPP模式：ssat.iflcSlot保持{0,0}，各读取点回退固定槽位，零影响。
+     */
+    static void negotiateIflcPairs(Rtk rtk, Obsd[] obs, int nu, int nr) {
+        PrcOpt opt = rtk.opt;
+        if (!iflcNegotiationActive(rtk)) {
+            return;
+        }
+        LOG.debug("IFLC negotiate: active, nu={}, nr={}", nu, nr);
+        if (opt.mode <= Constants.PMODE_DGPS || nr <= 0) {
+            return;
+        }
+
+        int i = 0, j = nu;
+        while (i < nu && j < nu + nr) {
+            if (obs[i].sat < obs[j].sat) {
+                i++;
+            } else if (obs[i].sat > obs[j].sat) {
+                j++;
+            } else {
+                selectIflcPair(rtk, obs[i], obs[j], obs[i].sat);
+                i++;
+                j++;
+            }
+        }
+    }
+
+    /** 单卫星协商：sticky保持，失效重选，切换/消失按周跳处理 */
+    private static void selectIflcPair(Rtk rtk, Obsd obsR, Obsd obsB, int sat) {
+        int p0 = rtk.ssat[sat - 1].iflcSlot[0];
+        int p1 = rtk.ssat[sat - 1].iflcSlot[1];
+        boolean hadPair = p0 > 0 || p1 > 0;
+
+        if (hadPair && iflcPairUsable(obsR, obsB, p0, p1)) {
+            return; // sticky：上一配对仍可用
+        }
+        if (hadPair) {
+            // 上一配对失效：该星模糊度对旧配对有效、对新配对无效，置切换标志强制重置
+            rtk.ssat[sat - 1].iflcPairSwitch = true;
+        }
+
+        int[][] table = iflcPriorityTable(SatUtils.satsys(sat, null), rtk.opt.nf);
+        for (int[] pair : table) {
+            if (iflcPairUsable(obsR, obsB, pair[0], pair[1])) {
+                if (hadPair && (pair[0] != p0 || pair[1] != p1)) {
+                    // 配对切换 → 按周跳处理
+                    rtk.ssat[sat - 1].iflcPairSwitch = true;
+                }
+                rtk.ssat[sat - 1].iflcSlot[0] = pair[0];
+                rtk.ssat[sat - 1].iflcSlot[1] = pair[1];
+                LOG.debug("IFLC pair: sat={}, slot={},{}, sys={}", sat, pair[0], pair[1], SatUtils.satsys(sat, null));
+                return;
+            }
+        }
+        // 无公共频率对：清零回退固定槽位（该星IFLC观测将因数据缺失被跳过）
+        rtk.ssat[sat - 1].iflcSlot[0] = 0;
+        rtk.ssat[sat - 1].iflcSlot[1] = 0;
     }
 
     private static int nb(Rtk rtk, int[] sat, int ns, PrcOpt opt) {
@@ -1221,7 +1380,7 @@ public final class RtkCore {
         }
 
         if (opt.ionoopt == Constants.IONOOPT_IFLC) {
-            var *= 3.0;
+            var *= 9.0; /* SQR(3.0), aligned with C rtkpos.c varerr() */
         }
 
         return var;
@@ -1274,7 +1433,6 @@ public final class RtkCore {
         int nx = rtk.nx;int i, j, k, m, f, nv = 0;
         int[] nb = new int[Constants.NFREQ * 7 * 2 + 2];
         int b = 0;
-
         double[] rr_f = new double[3];
         for (i = 0; i < 3; i++) rr_f[i] = rtk.rb[i] + x[i];
         double[] pos = new double[3];
@@ -1332,7 +1490,7 @@ public final class RtkCore {
                     }
                 }
                 if (refIdx < 0) {
-                     continue;
+                    continue;
                 }
 
 
@@ -1445,7 +1603,7 @@ public final class RtkCore {
                     }
 
                     double threshadj = 1.0;
-                    if (opt.mode > Constants.PMODE_DGPS && !code) {
+                    if (opt.mode > Constants.PMODE_DGPS) {
                         int ii = IB(sat[refIdx], frq, opt);
                         int jj = IB(sat[j], frq, opt);
                         double Pii = P[ii * nx + ii];
@@ -1455,13 +1613,12 @@ public final class RtkCore {
                             threshadj = 10.0;
                         }
                     }
-                    if (Math.abs(v[nv]) > opt.maxinno[code ? 1 : 0] * threshadj) {
-                        if (code) {
-                            rtk.ssat[sat[j] - 1].rejc[frq]++;
-                        } else {
-                            rtk.ssat[sat[j] - 1].vsat[frq] = 0;
-                            rtk.ssat[sat[j] - 1].rejc[frq]++;
-                        }
+                    /* aligned with C rtkpos.c ddres(): maxinno[code]*threshadj, no epoch-based relaxation */
+                    double maxinno_val = opt.maxinno[code ? 1 : 0] * threshadj;
+                    if (Math.abs(v[nv]) > maxinno_val) {
+                        /* aligned with C rtkpos.c ddres(): vsat=0 and rejc++ for both code and phase */
+                        rtk.ssat[sat[j] - 1].vsat[frq] = 0;
+                        rtk.ssat[sat[j] - 1].rejc[frq]++;
                         continue;
                     }
 
@@ -1523,9 +1680,13 @@ public final class RtkCore {
 
     private static int resamb_LAMBDA(Rtk rtk, double[] bias, double[] xa,
                                      int gps, int glo, int sbs, Nav nav) {
-        // [OPT-CASCADE-AR] 逐级模糊度固定
-        if (rtk.rtkConfig.enableCascadeAR) {
-            return RtkOptimizationsCascadeAR.cascadeAmbFix(rtk, bias, xa, gps, glo, sbs, nav);
+        // [OPT-CASCADE-AR] 真逐级模糊度固定（EWL→WL→NL，JAVA-ONLY 扩展）。
+        // IFLC 模式状态空间压缩为每星单 IF 组合偏差，逐级固定不适用（FIX-ALG-006 守卫保留）；
+        // 级联任一级失败（返回<=0）时回落标准 LAMBDA 路径，保证可用性不低于基线。
+        int nfAr = (rtk.opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : rtk.opt.nf;
+        if (rtk.rtkConfig.enableCascadeAR && nfAr >= 2) {
+            int nbCas = RtkOptimizationsCascadeAR.cascadeAmbFix(rtk, bias, xa, gps, glo, sbs, nav);
+            if (nbCas > 0) return nbCas;
         }
 
         PrcOpt opt = rtk.opt;
@@ -1685,35 +1846,29 @@ public final class RtkCore {
 
         double[] s = new double[2];
 
-        if (rtk.epoch <= 3 || rtk.epoch % 200 == 0) {
-            StringBuilder ySb = new StringBuilder();
-            StringBuilder qbSb = new StringBuilder();
-            for (int ii = 0; ii < Math.min(nbLambda, 10); ii++) {
-                if (ii > 0) { ySb.append(" "); qbSb.append(" "); }
-                ySb.append(String.format("%.4f", y[ii]));
-                qbSb.append(String.format("%.6f", Qb[ii * nbLambda + ii]));
-            }
-            LOG.info(String.format("LAMBDA input: epoch=%d nb=%d y=[%s] Qb_diag=[%s]",
-                    rtk.epoch, nbLambda, ySb, qbSb));
-        }
-
         int info = Lambda.lambda(nbLambda, 2, y, Qb, b, s);
 
         if (info == 0) {
             rtk.sol.ratio = s[0] > 0 ? (float) (s[1] / s[0]) : 0.0f;
             if (rtk.sol.ratio > 999.9f) rtk.sol.ratio = 999.9f;
-            if (rtk.epoch <= 5 || rtk.epoch % 100 == 0) {
-                StringBuilder bSb = new StringBuilder();
-                for (int ii = 0; ii < Math.min(nbLambda, 10); ii++) {
-                    if (ii > 0) bSb.append(" ");
-                    bSb.append(String.format("%.4f", b[ii]));
-                }
-                LOG.info(String.format("LAMBDA: epoch=%d nb=%d nbLambda=%d ratio=%.3f thres=%.3f s=[%.4f,%.4f] b=[%s]",
-                        rtk.epoch, nb, nbLambda, rtk.sol.ratio, rtk.sol.thres, s[0], s[1], bSb));
-            }
 
+            /* adjust AR ratio based on # of sats, unless minAR==maxAR (C rtkpos.c resamb_LAMBDA) */
             if (opt.thresar[5] != opt.thresar[6]) {
-                rtk.sol.thres = (float) opt.thresar[0];
+                int nb1 = nbLambda < 50 ? nbLambda : 50; /* poly only fitted for upto 50 sat pairs */
+                double[] coeff = new double[3];
+                /* generate poly coeffs based on nominal AR ratio */
+                for (int i = 0; i < 3; i++) {
+                    coeff[i] = AR_POLY_COEFFS[i][0];
+                    for (int j = 1; j < 5; j++) {
+                        coeff[i] = coeff[i] * opt.thresar[0] + AR_POLY_COEFFS[i][j];
+                    }
+                }
+                /* generate adjusted AR ratio based on # of sat pairs */
+                rtk.sol.thres = (float) coeff[0];
+                for (int i = 1; i < 3; i++) {
+                    rtk.sol.thres = (float) (rtk.sol.thres * 1.0 / (nb1 + 1.0) + coeff[i]);
+                }
+                rtk.sol.thres = (float) Math.min(Math.max(rtk.sol.thres, opt.thresar[5]), opt.thresar[6]);
             } else {
                 rtk.sol.thres = (float) opt.thresar[0];
             }
@@ -1794,7 +1949,7 @@ public final class RtkCore {
         return nb;
     }
 
-    private static void restamb(Rtk rtk, double[] bias, int nb, double[] xa) {
+    static void restamb(Rtk rtk, double[] bias, int nb, double[] xa) {
         PrcOpt opt = rtk.opt;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
 
@@ -2162,7 +2317,14 @@ public final class RtkCore {
 
     private static void detslpLl(Rtk rtk, Obsd[] obs, int i, int rcv) {
         int sat = obs[i].sat;
-        for (int f = 0; f < rtk.opt.nf; f++) {
+        int maxF = rtk.opt.nf;
+        // [JAVA-ONLY] IFLC协商时扩展覆盖协商槽位（可能超出opt.nf）
+        if (rtk.opt.ionoopt == Constants.IONOOPT_IFLC && iflcNegotiationActive(rtk)
+                && rtk.ssat[sat - 1].iflcSlot[0] > 0) {
+            if (rtk.ssat[sat - 1].iflcSlot[0] + 1 > maxF) maxF = rtk.ssat[sat - 1].iflcSlot[0] + 1;
+            if (rtk.ssat[sat - 1].iflcSlot[1] + 1 > maxF) maxF = rtk.ssat[sat - 1].iflcSlot[1] + 1;
+        }
+        for (int f = 0; f < maxF; f++) {
             if ((obs[i].L[f] == 0.0 && obs[i].LLI[f] == 0) ||
                     Math.abs(TimeSystem.timediff(obs[i].time, rtk.ssat[sat - 1].pt[rcv - 1][f])) < Constants.DTTOL) {
                 continue;
@@ -2190,6 +2352,24 @@ public final class RtkCore {
         for (int k = 0; k < rtk.opt.nf; k++) {
             if ((rtk.ssat[sat - 1].slip[k] & Constants.LLI_SLIP) != 0) return;
         }
+        // [JAVA-ONLY] IFLC协商时GF检测改用协商槽位对，存于gf[0]
+        if (rtk.opt.ionoopt == Constants.IONOOPT_IFLC && iflcNegotiationActive(rtk)
+                && rtk.ssat[sat - 1].iflcSlot[0] > 0) {
+            int s1 = rtk.ssat[sat - 1].iflcSlot[0];
+            int s2 = rtk.ssat[sat - 1].iflcSlot[1];
+            if ((rtk.ssat[sat - 1].slip[s1] & Constants.LLI_SLIP) != 0
+                    || (rtk.ssat[sat - 1].slip[s2] & Constants.LLI_SLIP) != 0) return;
+            double gf1 = gfobsPair(obs, i, j, s1, s2, nav);
+            if (gf1 == 0.0) return;
+            double gf0 = rtk.ssat[sat - 1].gf[0];
+            rtk.ssat[sat - 1].gf[0] = gf1;
+            if (gf0 != 0.0 && Math.abs(gf1 - gf0) > rtk.opt.thresslip) {
+                rtk.ssat[sat - 1].slip[0] |= Constants.LLI_SLIP;
+                rtk.ssat[sat - 1].slip[s1] |= Constants.LLI_SLIP;
+                rtk.ssat[sat - 1].slip[s2] |= Constants.LLI_SLIP;
+            }
+            return;
+        }
         for (int k = 1; k < rtk.opt.nf; k++) {
             double gf1 = gfobs(obs, i, j, k, nav);
             if (gf1 == 0.0) continue;
@@ -2202,9 +2382,26 @@ public final class RtkCore {
         }
     }
 
+    /** [JAVA-ONLY] 两频率槽位对的geometry-free单差组合（米） */
+    private static double gfobsPair(Obsd[] obs, int i, int j, int s1, int s2, Nav nav) {
+        double freq1 = SatUtils.sat2freq(obs[i].sat, obs[i].code[s1], nav);
+        double freq2 = SatUtils.sat2freq(obs[i].sat, obs[i].code[s2], nav);
+        double L1 = obs[i].L[s1] - obs[j].L[s1];
+        double L2 = obs[i].L[s2] - obs[j].L[s2];
+        if (freq1 == 0.0 || freq2 == 0.0 || L1 == 0.0 || L2 == 0.0) return 0.0;
+        return L1 * Constants.CLIGHT / freq1 - L2 * Constants.CLIGHT / freq2;
+    }
+
     private static void detslpCode(Rtk rtk, Obsd[] obs, int i, int rcv) {
         int sat = obs[i].sat;
-        for (int f = 0; f < rtk.opt.nf; f++) {
+        int maxF = rtk.opt.nf;
+        // [JAVA-ONLY] IFLC协商时扩展覆盖协商槽位（可能超出opt.nf）
+        if (rtk.opt.ionoopt == Constants.IONOOPT_IFLC && iflcNegotiationActive(rtk)
+                && rtk.ssat[sat - 1].iflcSlot[0] > 0) {
+            if (rtk.ssat[sat - 1].iflcSlot[0] + 1 > maxF) maxF = rtk.ssat[sat - 1].iflcSlot[0] + 1;
+            if (rtk.ssat[sat - 1].iflcSlot[1] + 1 > maxF) maxF = rtk.ssat[sat - 1].iflcSlot[1] + 1;
+        }
+        for (int f = 0; f < maxF; f++) {
             int code = obs[i].code[f];
             if (code == Constants.CODE_NONE) continue;
             int ccode = rtk.ssat[sat - 1].code[f][rcv - 1];

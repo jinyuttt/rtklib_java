@@ -1,0 +1,7 @@
+| Tokyo run1   | EST-Ref        |     3.2% | fix=386     | float=11176   | F.H.RMSE=29.779    | Fix.H.RMSE=9.518     | Fix.V.RMSE=29.804    |
+|              | EST-CascadeAR  |     3.0% | fix=357     | float=11205   | F.H.RMSE=25.419    | Fix.H.RMSE=20.435    | Fix.V.RMSE=17.083    |
+
+Fix epoch error distribution (H, m):
+| dataset       | config         |  p50(m) |  p90(m) |  p99(m) |  max(m) | >2m %  |
+| Tokyo run1   | EST-Ref        |   0.078 |   0.155 |  51.157 | 110.303 |   2.07 |
+| Tokyo run1   | EST-CascadeAR  |   0.053 |   7.419 | 154.500 | 164.366 |  15.97 |

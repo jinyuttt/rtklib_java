@@ -1,0 +1,8 @@
+scenario=open-sky
+role=nav
+systems=G+R+E+C+J+S
+date=2018-06-06
+source=Net_Diff
+description=PPP多系统混合导航星历
+license=public
+test_ids=PppTest,PppKinematicTest

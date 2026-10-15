@@ -1,0 +1,8 @@
+scenario=downtown
+role=rover
+systems=G+E+J+C
+date=2025-04-08
+source=MobileGNSS-SPP
+description=城市峡谷导航星历，配合downtown_rover_20250408.25o使用
+license=MIT
+test_ids=SppOptimizationTest

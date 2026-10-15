@@ -124,6 +124,7 @@ public class RtkProcessor implements Serializable {
     private int successCount = 0;
     private int failCount = 0;
     private int outputCount = 0;
+    private SegmentSigmaFilter segmentSigmaFilter = null;
     private final List<Ssat[]> solutionSsatList = new ArrayList<>();
     private int sleepInterval = 100;
     private int sleepMs = 10;
@@ -710,6 +711,22 @@ public class RtkProcessor implements Serializable {
         int result = RtkCore.rtkpos(rtk, obs, n, nav);
 
         if (result == 1 && rtk.sol.stat != Constants.SOLQ_NONE) {
+            if (segmentSigmaFilter != null && rtk.sol.stat == Constants.SOLQ_FIX) {
+                int solIdx = solutions.size();
+                SegmentSigmaFilter.CheckResult cr = segmentSigmaFilter.checkAndAdd(
+                        rtk.sol.rr, rtk.sol.type, rtk.sol.stat, solIdx);
+                if (!cr.accepted) {
+                    rtk.sol.stat = Constants.SOLQ_FLOAT;
+                }
+                if (cr.invalidateFrom >= 0) {
+                    for (int i = cr.invalidateFrom; i <= cr.invalidateTo; i++) {
+                        solutions.get(i).stat = Constants.SOLQ_FLOAT;
+                    }
+                }
+            } else if (segmentSigmaFilter != null && rtk.sol.stat != Constants.SOLQ_FIX) {
+                segmentSigmaFilter.reset();
+            }
+
             successCount++;
             Sol solCopy = new Sol(rtk.sol);
             solutions.add(solCopy);
@@ -1186,6 +1203,11 @@ public class RtkProcessor implements Serializable {
         totalEpochs = 0;
         successCount = 0;
         failCount = 0;
+        if (rtk.rtkConfig != null && rtk.rtkConfig.enableSegmentSigmaFilter) {
+            segmentSigmaFilter = new SegmentSigmaFilter(rtk.rtkConfig);
+        } else {
+            segmentSigmaFilter = null;
+        }
         solutions.clear();
         solutionSsatList.clear();
         bestSol = null;
@@ -1210,6 +1232,11 @@ public class RtkProcessor implements Serializable {
         successCount = 0;
         failCount = 0;
         outputCount = 0;
+        if (rtk.rtkConfig != null && rtk.rtkConfig.enableSegmentSigmaFilter) {
+            segmentSigmaFilter = new SegmentSigmaFilter(rtk.rtkConfig);
+        } else {
+            segmentSigmaFilter = null;
+        }
         solutions.clear();
         solutionSsatList.clear();
         bestSol = null;
@@ -1479,6 +1506,9 @@ public class RtkProcessor implements Serializable {
         public final int successCount;
         public final int failCount;
         public final List<SolData> solutions;
+        public int[] diagIggDownWeightPerSat;
+        public int diagIggDownWeightCount;
+        public int diagIggCallCount;
 
         public RtkResult(int totalEpochs, int successCount, int failCount, List<SolData> solutions) {
             this.totalEpochs = totalEpochs;

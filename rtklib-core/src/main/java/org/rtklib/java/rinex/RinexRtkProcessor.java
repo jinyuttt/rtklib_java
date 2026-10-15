@@ -1,5 +1,6 @@
 package org.rtklib.java.rinex;
 
+import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
 import org.rtklib.java.pntpos.PosHandler;
@@ -42,6 +43,7 @@ public class RinexRtkProcessor {
 
     private final PrcOpt opt;
     private final SolOpt solOpt;
+    private final RtkConfig rtkConfig;
     private final PosHandler handler;
     private final Writer writer;
 
@@ -51,12 +53,14 @@ public class RinexRtkProcessor {
     private int failCount = 0;
     private final List<Sol> solutions = new ArrayList<>();
 
-    public RinexRtkProcessor(PrcOpt opt, SolOpt solOpt, PosHandler handler, OutputStream outputStream) {
+    public RinexRtkProcessor(PrcOpt opt, SolOpt solOpt, RtkConfig rtkConfig, PosHandler handler, OutputStream outputStream) {
         this.opt = new PrcOpt(opt);
         this.solOpt = solOpt != null ? new SolOpt(solOpt) : null;
+        this.rtkConfig = rtkConfig != null ? new RtkConfig(rtkConfig) : new RtkConfig();
         this.handler = handler;
         this.rtk = new Rtk();
         this.rtk.opt = this.opt;
+        this.rtk.rtkConfig = this.rtkConfig;
 
         if (outputStream != null) {
             this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
@@ -71,16 +75,20 @@ public class RinexRtkProcessor {
         }
     }
 
+    public RinexRtkProcessor(PrcOpt opt, SolOpt solOpt, PosHandler handler, OutputStream outputStream) {
+        this(opt, solOpt, null, handler, outputStream);
+    }
+
     public RinexRtkProcessor(PrcOpt opt, PosHandler handler, OutputStream outputStream) {
-        this(opt, null, handler, outputStream);
+        this(opt, null, null, handler, outputStream);
     }
 
     public RinexRtkProcessor(PrcOpt opt, PosHandler handler) {
-        this(opt, null, handler, null);
+        this(opt, null, null, handler, null);
     }
 
     public RinexRtkProcessor(PrcOpt opt) {
-        this(opt, null, null, null);
+        this(opt, null, null, null, null);
     }
 
     public RinexRtkProcessor() {
@@ -136,7 +144,7 @@ public class RinexRtkProcessor {
         if (isStaticMode(procOpt.mode) && effectiveSolOpt.solstatic == 0) {
             effectiveSolOpt.solstatic = 1;
         }
-        PostPosProcessor proc = new PostPosProcessor(procOpt, effectiveSolOpt);
+        PostPosProcessor proc = new PostPosProcessor(procOpt, effectiveSolOpt, rtkConfig);
         PostPosProcessor.PostPosResult result = proc.process(roverObsPath, baseObsPath, navPath);
 
         totalEpochs = result.totalEpochs;
@@ -159,7 +167,14 @@ public class RinexRtkProcessor {
         if (handler != null) {
             handler.onFinish(totalEpochs, successCount, failCount);
         }
-        return new RtkProcessor.RtkResult(totalEpochs, successCount, failCount, result.solutions);
+        RtkProcessor.RtkResult rr = new RtkProcessor.RtkResult(totalEpochs, successCount, failCount, result.solutions);
+        Rtk finalRtk = result.finalRtk;
+        if (finalRtk != null) {
+            rr.diagIggDownWeightPerSat = finalRtk.diagIggDownWeightPerSat;
+            rr.diagIggDownWeightCount = finalRtk.diagIggDownWeightCount;
+            rr.diagIggCallCount = finalRtk.diagIggCallCount;
+        }
+        return rr;
     }
 
     public RtkProcessor.RtkResult process(String roverObsPath, String baseObsPath) {
@@ -169,6 +184,12 @@ public class RinexRtkProcessor {
     public static RtkProcessor.RtkResult processRinex(String roverObsPath, String baseObsPath,
                                                        String navPath, PrcOpt opt) {
         RinexRtkProcessor processor = new RinexRtkProcessor(opt);
+        return processor.process(roverObsPath, baseObsPath, navPath);
+    }
+
+    public static RtkProcessor.RtkResult processRinex(String roverObsPath, String baseObsPath,
+                                                       String navPath, PrcOpt opt, RtkConfig rtkConfig) {
+        RinexRtkProcessor processor = new RinexRtkProcessor(opt, null, rtkConfig, null, null);
         return processor.process(roverObsPath, baseObsPath, navPath);
     }
 
