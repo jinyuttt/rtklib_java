@@ -143,8 +143,22 @@ public final class SppOptimizations {
             for (int i = 0; i < 3; i++) initx(state, solLsq.rr[i], cfg.sppEkfVarPos, i);
             for (int i = 3; i < 6; i++) initx(state, solLsq.rr[i < 6 ? i : 0], cfg.sppEkfVarVel, i);
             for (int i = 6; i < 9; i++) initx(state, 1e-6, cfg.sppEkfVarAcc, i);
+            state.diverged = false;
+            state.divergedEpochs = 0;
             LOG.trace("UdposSPP: reset position due to large variance: var={}", var);
             return;
+        }
+
+        if (var > cfg.sppEkfVarResetThresh && solLsq.stat <= Constants.SOLQ_NONE) {
+            for (int i = 0; i < 3; i++) {
+                P[i * nxF + i] = Math.min(P[i * nxF + i], cfg.sppEkfVarCap);
+            }
+            for (int i = 3; i < 6; i++) {
+                P[i * nxF + i] = Math.min(P[i * nxF + i], cfg.sppEkfVarVel);
+            }
+            state.diverged = true;
+            state.divergedEpochs++;
+            LOG.trace("UdposSPP: P inflation detected but LS failed, capping P: var={}, divergedEpochs={}", var, state.divergedEpochs);
         }
 
         int nx = 9;
@@ -202,6 +216,12 @@ public final class SppOptimizations {
         Q[0] = RtklibCommon.sqr(cfg.sppEkfAccPrn1) * Math.abs(tt);
         Q[4] = RtklibCommon.sqr(cfg.sppEkfAccPrn1) * Math.abs(tt);
         Q[8] = RtklibCommon.sqr(cfg.sppEkfAccPrn2) * Math.abs(tt);
+        if (state.diverged) {
+            double qscale = cfg.sppEkfDivergedQscale;
+            Q[0] *= qscale;
+            Q[4] *= qscale;
+            Q[8] *= qscale;
+        }
         double[] pos = new double[3];
         CoordTransform.ecef2pos(x, pos);
         double[] Qv = covecef(pos, Q);
@@ -372,6 +392,23 @@ public final class SppOptimizations {
                         state.P[(i + 3) * nxF + (j + 3)] += scale * y[i + 3] * y[j + 3];
                     }
                 }
+                state.consecutiveLsSuccess++;
+                if (state.diverged && state.consecutiveLsSuccess >= cfg.sppEkfDivergedRecoverEpochs) {
+                    for (int i = 0; i < 3; i++) {
+                        initx(state, solLsq.rr[i], cfg.sppEkfVarPos, i);
+                    }
+                    for (int i = 3; i < 6; i++) {
+                        initx(state, solLsq.rr[i], cfg.sppEkfVarVel, i);
+                    }
+                    for (int i = 6; i < 9; i++) {
+                        initx(state, 0.0, cfg.sppEkfVarAcc, i);
+                    }
+                    state.diverged = false;
+                    state.divergedEpochs = 0;
+                    LOG.info("EKF recovered from diverged state after {} consecutive LS successes, re-initialized from LS solution", state.consecutiveLsSuccess);
+                }
+            } else {
+                state.consecutiveLsSuccess = 0;
             }
 
             for (int i = 9; i < nxF; i++) {
@@ -402,6 +439,26 @@ public final class SppOptimizations {
         double[] Htmp = new double[NX * maxObs];
         int nc = SppCore.rescode(0, obs, n, rs, dts, vare, svh, nav, x_, opt, ssat,
                 v, Htmp, var, azel, vsat, resp, nsArr);
+
+        int nSat = nsArr[0];
+        if (nSat < cfg.sppEkfMinSat) {
+            LOG.debug("EKF degraded to LS-SPP: only {} satellites < minSat {}", nSat, cfg.sppEkfMinSat);
+            if (statLsq > Constants.SOLQ_NONE) {
+                for (int j = 0; j < 3; j++) {
+                    initx(state, solLsq.rr[j], cfg.sppEkfVarPos, j);
+                }
+                for (int j = 3; j < 6; j++) {
+                    initx(state, solLsq.rr[j], cfg.sppEkfVarVel, j);
+                }
+                for (int j = 0; j < 6; j++) sol.rr[j] = solLsq.rr[j];
+                sol.ns = (byte) nsArr[0];
+                sol.stat = Constants.SOLQ_SINGLE;
+                sol.time = solLsq.time;
+                state.prevTime = new GTime(obs[0].time);
+                return 1;
+            }
+            return -1;
+        }
 
         expandHMatrix(nc, Htmp, NX, H, nxF);
 
@@ -436,9 +493,106 @@ public final class SppOptimizations {
             robustFilter(HEff, v, nxEff, nc, nd, var, cfg);
         }
 
+        boolean[] downweight = new boolean[nv];
+        if (cfg.enableSppInnovChisq && nv > 0) {
+            int nvKeep = 0;
+            int ncKeep = 0;
+            int ndKeep = 0;
+            int nDownweight = 0;
+            boolean[] extremeOutlier = new boolean[nv];
+            for (int j = 0; j < nv; j++) {
+                double Sjj = 0.0;
+                for (int k = 0; k < nxF; k++) {
+                    double HPk = 0.0;
+                    for (int l = 0; l < nxF; l++) {
+                        HPk += H[j * nxF + l] * P[l * nxF + k];
+                    }
+                    Sjj += HPk * H[j * nxF + k];
+                }
+                Sjj += var[j];
+                if (Sjj > 0.0) {
+                    double nis = Math.abs(v[j]) / Math.sqrt(Sjj);
+                    double outlierThresh = cfg.sppInnovOutlierThresh;
+                    double downweightThresh = cfg.sppInnovDownweightThresh;
+                    if (nSat < cfg.sppEkfLowSatThresh) {
+                        outlierThresh = cfg.sppInnovOutlierThreshLowSat;
+                        downweightThresh = cfg.sppInnovDownweightThreshLowSat;
+                    }
+                    if (nis > outlierThresh) {
+                        extremeOutlier[j] = true;
+                        LOG.trace("Innovation extreme outlier: obs={}, nis={}sigma, thresh={}sigma", j, String.format("%.2f", nis), String.format("%.1f", outlierThresh));
+                    } else if (nis > downweightThresh) {
+                        downweight[j] = true;
+                        nDownweight++;
+                        LOG.trace("Innovation moderate outlier: obs={}, nis={}sigma, thresh={}sigma", j, String.format("%.2f", nis), String.format("%.1f", downweightThresh));
+                    }
+                }
+            }
+            for (int j = 0; j < nv; j++) {
+                if (!extremeOutlier[j]) {
+                    nvKeep++;
+                    if (j < nc) ncKeep++; else ndKeep++;
+                }
+            }
+            if (nvKeep < nv && nvKeep > 0) {
+                boolean[] dwFilt = new boolean[nvKeep];
+                double[] vFilt = new double[nvKeep];
+                double[] HFilt = new double[nvKeep * nxF];
+                double[] varFilt = new double[nvKeep];
+                int idx = 0;
+                for (int j = 0; j < nv; j++) {
+                    if (!extremeOutlier[j]) {
+                        vFilt[idx] = v[j];
+                        varFilt[idx] = var[j];
+                        dwFilt[idx] = downweight[j];
+                        for (int k = 0; k < nxF; k++) {
+                            HFilt[idx * nxF + k] = H[j * nxF + k];
+                        }
+                        idx++;
+                    }
+                }
+                v = vFilt;
+                H = HFilt;
+                var = varFilt;
+                downweight = dwFilt;
+                nv = nvKeep;
+                nc = ncKeep;
+                nd = ndKeep;
+                LOG.debug("Innovation test: removed {} extreme outliers, {} moderate outliers downweighted, {} remaining (nc={}, nd={})",
+                        extremeOutlier.length - nvKeep, nDownweight, nvKeep, ncKeep, ndKeep);
+            } else if (nvKeep == 0) {
+                LOG.warn("Innovation test: all {} observations rejected as extreme outliers, skipping KF update", nv);
+                System.arraycopy(x, 0, state.x, 0, nxF);
+                System.arraycopy(P, 0, state.P, 0, nxF * nxF);
+                state.prevTime = new GTime(obs[0].time);
+                sol.stat = Constants.SOLQ_NONE;
+                return 0;
+            }
+        }
+
         double[] R = new double[nv * nv];
         for (int j = 0; j < nv; j++) {
             R[j * nv + j] = var[j];
+            if (downweight[j]) {
+                R[j * nv + j] *= cfg.sppInnovDownweightRscale;
+            }
+        }
+
+        if (state.diverged) {
+            double rscale;
+            if (nSat < cfg.sppEkfLowSatThresh) {
+                rscale = cfg.sppEkfDivergedRscaleBase;
+            } else if (state.divergedEpochs > cfg.sppEkfDivergedMaxEpochs) {
+                rscale = 1.0;
+                LOG.info("Diverged state persisted {} epochs > max {}, forcing R scale to 1.0 to unlock KF update", state.divergedEpochs, (int) cfg.sppEkfDivergedMaxEpochs);
+            } else {
+                rscale = Math.min(cfg.sppEkfDivergedRscaleMax,
+                        cfg.sppEkfDivergedRscaleBase * Math.pow(2.0, state.divergedEpochs));
+            }
+            for (int j = 0; j < nv; j++) {
+                R[j * nv + j] *= rscale;
+            }
+            LOG.debug("Diverged state: inflating R by factor {} (divergedEpochs={}, nSat={}) for KF update", String.format("%.1f", rscale), state.divergedEpochs, nSat);
         }
 
         double[] vOrig = new double[nv];

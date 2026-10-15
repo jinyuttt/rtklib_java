@@ -6,6 +6,40 @@
 
 ---
 
+## [2.3.0] - 2026-10-15
+
+### Fixed
+
+- **pppos 排除标志跨历元泄漏修复**：`PppCore.pppos()` 入口新增 `Arrays.fill(exc, 0)`——C 版 `ppp.c` L1185 `exc[MAXOBS]={0}` 每历元重建置零，Java 工作缓冲复用 `wb.exc` 从未清零，ep1 残差剔除标志泄漏至后续历元致健康卫星误剔、nv 死亡螺旋；GreatPvt PPP static solved 1/30→14/30（详见 `ALGORITHM_FIX_LOG.md` FIX-ALG-001）
+- **RTK IFLC 频槽混合根因修复**：移除 `RtkCore.rtkpos()` 中的 `compactObsFreq` 调用——槽位压缩导致双站 slot1 指向不同频率（流动站 B2a vs 基准站 B2b），IFLC 双差 bias≈1e6 m 毒化全部模糊度，Float 发散、Fix 率 0%（PPC-Dataset Tokyo run1 实证；详见 `RTKLIB_Differences.md` §16）
+- **satid2no 空格填充 PRN 解析修复**：RINEX 3 导航文件按 `G%2d` 写出的单位数 PRN（"G 5"/"E 4"/"R 7"）被 `Integer.parseInt` 抛 NumberFormatException 而静默丢弃全部单位数 PRN 广播星历 → satposs rs=0 → 双站 azel=0 → DD 卫星数坍缩（Tokyo run1 selsat ns 21→9）→ posvar 超过 thresar[1]=0.1 → AR 永不触发（Fix=0）；修复对齐 C `sscanf("%c%d")` 空白跳过语义（rtkcmn.c satid2no L475-501），Tokyo run1 Fix 0→570、Float 8986→10927、成功率 85.8%→97.9%（详见 `RTKLIB_Differences.md` §16.7）
+- **RINEX 3 观测槽位分配修复**：`RinexParser` 原对每个观测类型直接 `code2idx` 写入、后写覆盖先写，违反 C `rinex.c set_index` 的 CODEPRIS 优先级仲裁语义（同槽多码型选最高 pri、同 code 共享主槽、落选进 NEXOBS）——rover GPS slot1 被 C2L 覆盖 C2W、base slot0 被 C1X 覆盖 C1C，码型通道偏差污染 IFLC udbias，导致 tokyo run2 过度固定（1188 vs C 15）与 nagoya run1 固定不足（527 vs C 1594）；修复后 6 组 PPC 数据集 Fix 合计 5025→4250（C 3784），首历元 init 值与 C trace 逐位一致（详见 `RTKLIB_Differences.md` §16.8）
+- **ddres/udbias C 对齐**：maxinno 拒绝阈值 `opt.maxinno[code]*threshadj`、统一拒绝处理（`vsat=0, rejc++, continue`）；`varerr()` IFLC 模式 `var *= 9.0`（对齐 demo5 `SQR(3.0)`）
+- 诊断插桩清理：relpos/udbias/zdres/ddres 的 [DIAG-TEMP] 日志全部移除
+
+### Added
+
+- **逐卫星 IFLC 频率对协商 [JAVA-ONLY]**：`RtkConfig.enableIflcPairNegotiation`（默认 `false`，关闭时与 RTKLIB C 逐位一致）——两站公共频段协商 + sticky 保持 + 切换按周跳重置模糊度，使流动站缺 B2b 的 BDS-3 卫星以 B1I+B2a 参与 IFLC RTK（PPC-Dataset Tokyo run1 场景；详见 `RTKLIB_Differences.md` §16.6）
+- **SPP 优化扩展**：SppOptimizations 系列（详见 `docs/SPP_Extra_Optimizations.md`、`URBAN_CANYON_SPP_TEST_RESULTS.md`）
+- **CascadeAR 真逐级重写 [JAVA-ONLY]**：v2.2.x 伪逐级实现（三次LAMBDA共用y/Qb，EWL/WL验证冗余）→ v2.3.0 真逐级固定（每级独立组合变换 z=C·y/Qz=C·Q·Cᵀ + 级间条件更新 + 整数反推 + restamb + 动态ratio阈值），参考 GREAT-PVT gambfix 逐级思想（详见 `ALGORITHM_FIX_LOG.md` FIX-ALG-007）
+- **城市峡谷数据诊断测试**：`UrbanCanyonDataCheckTest`、`UrbanCanyonRtkDiagTest`（Net_Diff Urban 单频用例 @Disabled）、`IflcPairNegotiationTest`（协商语义 8 项单元测试）
+
+### Docs
+
+- `RTKLIB_Differences.md`：声明 C 基准为 demo5 EX 2.5.0；新增 §16 compactObsFreq 差异记录与 §16.6 逐卫星 IFLC 频率对协商实施记录；§13/§15 小节编号修正；代码围栏修复
+- `RTKLIB_JAVA_TECHNICAL_REFERENCE.md`：修正 NEXOBS（26→2）、thresar 语义（thresar[0]=ratio 阈值）、Joseph 形式伪代码；章节重编号（双 §11/§12 消除）；文件索引改为函数名定位
+
+## [2.2.8] - 2026-10-10
+
+### Fixed
+
+- **Release 工作流**：移除不必要的测试数据下载步骤（Release 仅源码/JAR 打包），v2.2.7 workflow 因此在 Ubuntu 环境失败未产出 Release
+- **CI 工作流**：Ubuntu 环境直接使用 bash 命令，移除 pwsh 调用分支
+
+### Changed
+
+- pom 版本 2.2.7 → 2.2.8；推送 v2.2.8 tag 成功触发 Release，4 个 JAR（rtklib-core/adjust/product/stream）正常上传
+
 ## [2.2.7] - 2026-10-10
 
 ### Added

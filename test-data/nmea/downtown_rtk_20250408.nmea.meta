@@ -1,0 +1,10 @@
+scenario=downtown
+role=reference
+systems=G+E+J+C
+date=2025-04-08
+source=MobileGNSS-SPP
+mode=rtk
+software=RTKLIB demo5 b34k
+description=城市峡谷RTK定位结果NMEA
+license=MIT
+test_ids=NmeaParseTest

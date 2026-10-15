@@ -96,6 +96,8 @@ public class Rtk implements Serializable {
 
     public int diagQScaleNotOneCount;
     public int diagIggDownWeightCount;
+    public int diagIggCallCount;
+    public int[] diagIggDownWeightPerSat;
     public int diagSnrMedianValidCount;
     public int diagSnrMedianFallbackCount;
     public int diagRefReselectCount;
@@ -110,6 +112,9 @@ public class Rtk implements Serializable {
     public int diagCascadeArEwlFixCount;
     public int diagCascadeArWlFixCount;
     public int diagCascadeArNlFixCount;
+    public double diagCascadeArMaxZ;
+    public double diagCascadeArRmsZ;
+    public double diagCascadeArMaxD;
     public int diagPartialArAttemptCount;
     public int diagPartialArFixCount;
     public int diagBootstrapRejectCount;

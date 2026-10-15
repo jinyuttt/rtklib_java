@@ -343,8 +343,14 @@ public final class SppCore {
                 continue;
             }
             v[nv] = P - (r + dtr - Constants.CLIGHT * dts[i * 2] + dion + dtrp);
-            if (iter <= 1) {
-                LOG.trace(String.format("SPP sat=%2d sys=%d P=%.3f r=%.3f dtr=%.6f dts=%.6f dion=%.3f dtrp=%.3f v=%.3f", sat, sys, P, r, dtr, dts[i * 2], dion, dtrp, v[nv]));
+            if (iter == 0 && nv < 30) {
+                String gloInfo = (sys == Constants.SYS_GLO) ?
+                    String.format(" P[0]=%.3f P[1]=%.3f", obs[i].P[0], obs[i].P[1]) : "";
+                LOG.info("SPP i={} sat={} sys={} P={:.3f} r={:.3f} rs=({:.3f},{:.3f},{:.3f}) dts={:.12f} dtr={:.6f} v={:.3f} el={:.1f}{}".replace("{:.3f}", "{}").replace("{:.12f}", "{}").replace("{:.6f}", "{}").replace("{:.1f}", "{}"),
+                    i, sat, sys, String.format("%.3f",P), String.format("%.3f",r),
+                    String.format("%.3f",rs[i*6]), String.format("%.3f",rs[i*6+1]), String.format("%.3f",rs[i*6+2]),
+                    String.format("%.12f",dts[i*2]), String.format("%.6f",dtr), String.format("%.3f",v[nv]),
+                    String.format("%.1f",Math.toDegrees(ae[1])), gloInfo);
             }
             for (int j = 0; j < NX; j++) {
                 H[nv * NX + j] = (j < 3) ? -e[j] : (j == 3 ? 1.0 : 0.0);
@@ -411,6 +417,7 @@ public final class SppCore {
         double[] H = new double[NX * m];
         double[] var = new double[m];
         for (int i = 0; i < 3; i++) x[i] = sol.rr[i];
+        LOG.info("estpos init: sol.rr=({},{},{}), x=({},{},{})", String.format("%.3f",sol.rr[0]), String.format("%.3f",sol.rr[1]), String.format("%.3f",sol.rr[2]), String.format("%.3f",x[0]), String.format("%.3f",x[1]), String.format("%.3f",x[2]));
         for (int it = 0; it < MAXITR; it++) {
             int[] ns = new int[1];
             int nv = rescode(it, obs, n, rs, dts, vare, svh, nav, x, opt, ssat,
@@ -432,8 +439,11 @@ public final class SppCore {
             }
             for (int j = 0; j < NX; j++) x[j] += dx[j];
             double normDx = RtklibCommon.norm(dx, NX);
-            LOG.trace(String.format("SPP iter=%d dx_norm=%.6f x=(%.3f,%.3f,%.3f) clk=%.6f",
-                it, normDx, x[0], x[1], x[2], x[3]));
+            if (it <= 2) {
+                StringBuilder dxSb = new StringBuilder();
+                for (int j = 0; j < NX; j++) dxSb.append(String.format(" dx[%d]=%.3f", j, dx[j]));
+                LOG.info("SPP iter={} dx_norm={} nv={} ns={}{} x=({},{},{}) clk={}", it, String.format("%.6f", normDx), nv, ns[0], dxSb, String.format("%.3f", x[0]), String.format("%.3f", x[1]), String.format("%.3f", x[2]), String.format("%.6f", x[3]));
+            }
             if (normDx < 1E-4) {
                 sol.type = 0;
                 sol.time = TimeSystem.timeadd(obs[0].time, -x[3] / Constants.CLIGHT);

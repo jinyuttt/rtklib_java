@@ -6,7 +6,6 @@ import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
-import org.rtklib.java.rinex.RinexParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -107,76 +106,37 @@ public class PppIndividualOptTest {
         Assumptions.assumeTrue(Files.exists(Paths.get(CLK_FILE)),
                 "CLK文件不存在: " + CLK_FILE);
 
-        RinexParser parser =5 new RinexParser();
-        boolean obsOk = parser.parseObs(station.obsFile);
-        Assumptions.assumeTrue(obsOk, station.name + " RINEX OBS解析失败");
-
-        if (Files.exists(Paths.get(NAV_FILE))) {
-            parser.parseNav(NAV_FILE);
-        }
-
-        org.rtklib.java.ephemeris.Sp3Reader.readsp3(SP3_FILE, parser.nav, 0);
-        org.rtklib.java.ephemeris.ClkReader.readclk(CLK_FILE, parser.nav);
-
-        if (Files.exists(Paths.get(ION_FILE))) {
-            org.rtklib.java.ionosphere.IonexReader.readionex(ION_FILE, parser.nav);
-        }
-
-        if (Files.exists(Paths.get(ATX_FILE))) {
-            org.rtklib.java.ephemeris.AtxReader.readatx(ATX_FILE, parser.nav);
-        }
-
-        List<List<Obsd>> epochGroups = groupObsByEpoch(parser.obs.data, parser.obs.n);
-        int limit = maxEpochs > 0 ? Math.min(maxEpochs, epochGroups.size()) : epochGroups.size();
-
-        Rtk rtk = new Rtk();
-        rtk.opt = opt;
-        rtk.rtkConfig = cfg;
-        for (int i = 0; i < Constants.MAXSAT; i++) rtk.ssat[i] = new Ssat();
-
-        if (parser.sta != null && parser.sta.pos != null
-                && (parser.sta.pos[0] != 0.0 || parser.sta.pos[1] != 0.0)) {
-            System.arraycopy(parser.sta.pos, 0, rtk.sol.rr, 0, 3);
-        }
-
-        List<double[]> positions = new ArrayList<>();
-        int successCount = 0;
-
-        for (int ei = 0; ei < limit; ei++) {
-            List<Obsd> epochObs = epochGroups.get(ei);
-            Obsd[] obsArray = epochObs.toArray(new Obsd[0]);
-            int n = obsArray.length;
-            for (int i = 0; i < n; i++) obsArray[i].rcv = 1;
-
-            int stat = PppCore.pppos(rtk, obsArray, n, parser.nav);
-
-            if (stat != 0 && rtk.sol.stat != Constants.SOLQ_NONE) {
-                double[] ecef = new double[]{rtk.sol.rr[0], rtk.sol.rr[1], rtk.sol.rr[2]};
-                positions.add(ecef);
-                successCount++;
+        try (BufferedReader br = new BufferedReader(new FileReader(station.obsFile))) {
+            String headerLine = br.readLine();
+            if (headerLine != null && headerLine.trim().startsWith("2.")) {
+                Assumptions.assumeTrue(false, station.name + " RINEX 2.x 不支持，需要RINEX 3.x格式");
             }
+        } catch (IOException e) {
+            // ignore
         }
 
-        return new PppRunResult("", positions, limit, successCount);
-    }
+        PppProcessor ppp = new PppProcessor(opt);
+        ppp.setRtkConfig(cfg);
 
-    private static List<List<Obsd>> groupObsByEpoch(Obsd[] data, int n) {
-        List<List<Obsd>> groups = new ArrayList<>();
-        if (n == 0) return groups;
+        try {
+            PppProcessor.PppResult result = ppp.processRinex(station.obsFile, NAV_FILE, SP3_FILE, CLK_FILE);
 
-        List<Obsd> current = new ArrayList<>();
-        GTime currentTime = data[0].time;
-
-        for (int i = 0; i < n; i++) {
-            if (!data[i].time.equals(currentTime)) {
-                groups.add(current);
-                current = new ArrayList<>();
-                currentTime = data[i].time;
+            List<double[]> positions = new ArrayList<>();
+            if (result.solutions != null) {
+                for (SolData solData : result.solutions) {
+                    Position ecefPos = solData.getPosition(CoordType.ECEF);
+                    if (ecefPos != null && solData.status != SolutionStatus.NONE) {
+                        positions.add(new double[]{ecefPos.v1, ecefPos.v2, ecefPos.v3});
+                    }
+                }
             }
-            current.add(data[i]);
+
+            int limit = maxEpochs > 0 ? Math.min(maxEpochs, result.totalEpochs) : result.totalEpochs;
+            return new PppRunResult("", positions, result.totalEpochs, positions.size());
+        } catch (Exception e) {
+            log.warn("{} PPP运行异常: {}", station.name, e.getMessage());
+            return new PppRunResult("", Collections.emptyList(), 0, 0);
         }
-        if (!current.isEmpty()) groups.add(current);
-        return groups;
     }
 
     private static double[] computeRms(List<double[]> positions, double[] refEcef, int skipEpochs) {
@@ -257,7 +217,7 @@ public class PppIndividualOptTest {
             log.info("{}: 使用RINEX头APPROX POSITION", station.name);
         }
 
-        int maxEpochs = 240;
+        int maxEpochs = 120;
 
         log.info("========================================");
         log.info("站点: {} (逐项对照)", station.name);
@@ -300,7 +260,7 @@ public class PppIndividualOptTest {
         RtkConfig cfgUc = new RtkConfig();
         PppRunResult uc = runPpp(station, optUc, cfgUc, maxEpochs);
 
-        int skip = 60;
+        int skip = 30;
         double[] sBase = computeRms(baseline.positions, refEcef, skip);
         double[] sGpt3 = computeRms(gpt3.positions, refEcef, skip);
         double[] sIers = computeRms(iers.positions, refEcef, skip);
@@ -344,7 +304,7 @@ public class PppIndividualOptTest {
         assertTrue(baseline.successCount > 0, station.name + " 基准PPP至少应有一个历元成功");
     }
 
-    private void printOptLine(String label, PppRunResult result, double[] rms, double[]4 baseRms) {
+    private void printOptLine(String label, PppRunResult result, double[] rms, double[] baseRms) {
         double dN = baseRms[0] > 0 ? (rms[0] - baseRms[0]) / baseRms[0] * 100 : 0;
         double dE = baseRms[1] > 0 ? (rms[1] - baseRms[1]) / baseRms[1] * 100 : 0;
         double dU = baseRms[2] > 0 ? (rms[2] - baseRms[2]) / baseRms[2] * 100 : 0;

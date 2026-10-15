@@ -391,6 +391,167 @@ List<String> files = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile
 
 ---
 
+### 2.8 城市峡谷RTK数据详细说明
+
+> 本节汇总所有城市峡谷RTK测试数据的实测诊断结果，避免复现时疑惑。
+
+#### 2.8.1 数据集总览
+
+| # | 数据集 | 来源 | 地点 | 日期 | 运动模式 | 基线 | Rover接收机 | Base接收机 |
+|---|--------|------|------|------|----------|------|------------|-----------|
+| 0 | Net_Diff Urban | Net_Diff | Tokyo | 2017-07-19 | 准静态(~3m微动) | **199m** | u-blox (单频) | Trimble NetR9 (多频) |
+| 1 | PPC Tokyo run1 | PPC-Dataset | Tokyo | 2024-06-xx | 动态(车载) | **7.8km** | SEPT Mosaic-X5 (5Hz) | Trimble Alloy (1Hz) |
+| 2 | PPC Tokyo run2 | PPC-Dataset | Tokyo | 2024-06-xx | 动态(车载) | **7.8km** | SEPT Mosaic-X5 (5Hz) | Trimble Alloy (1Hz) |
+| 3 | PPC Tokyo run3 | PPC-Dataset | Tokyo | 2024-06-xx | 动态(车载) | **7.8km** | SEPT Mosaic-X5 (5Hz) | Trimble Alloy (1Hz) |
+| 4 | PPC Nagoya run1 | PPC-Dataset | Nagoya | 2024-06-xx | 动态(车载) | **15km** | SEPT Mosaic-X5 (5Hz) | Trimble NetR9 (1Hz) |
+| 5 | PPC Nagoya run2 | PPC-Dataset | Nagoya | 2024-06-xx | 动态(车载) | **15km** | SEPT Mosaic-X5 (5Hz) | Trimble NetR9 (1Hz) |
+| 6 | PPC Nagoya run3 | PPC-Dataset | Nagoya | 2024-06-xx | 动态(车载) | **15km** | SEPT Mosaic-X5 (5Hz) | Trimble NetR9 (1Hz) |
+| 7 | UrbanNav Tokyo | UrbanNav | Tokyo | 2018-12-19 | 动态(车载) | **186m** | Trimble NetR9 (10Hz) | Trimble NetR9 (1Hz) |
+
+#### 2.8.2 RINEX头信息与观测类型兼容性
+
+##### Net_Diff Urban
+
+| 项目 | Rover | Base |
+|------|-------|------|
+| RINEX版本 | 3.02 | 3.02 |
+| 接收机 | u-blox (RTKCONV 2.4.2转换) | Trimble NetR9 5.20 |
+| 近似位置 | 35.668°N, 139.791°E, 35m | 35.666°N, 139.792°E, 62m |
+| 采样率 | ~0.2s (非均匀) | 1s |
+| 观测类型 | G(4): C1C L1C D1C S1' | G(16): C1C C2W C2A C5X L1C L2W L2A L5X ... |
+|  | E(4): C1C L1C D1C S1C | R(12): C1C C1P C2C L1C L1P L2C ... |
+|  | J(4): C1C L1C D1C S1C | J(24): C1C C1X C1Z C2X C5X C6X L1C L1X L1Z L2X L5X L6X ... |
+|  | C(4): C1I L1I D1I S1I | C(12): C1I C6I C7I L1I L6I L7I ... |
+|  | **无R系统** | E(16): C1X C5X C7X C8X L1X L5X L7X L8X ... |
+
+**观测类型兼容性（关键问题）**：
+
+| 系统 | Rover伪距 | Base伪距 | 兼容结果 |
+|------|----------|---------|---------|
+| G | C1C | C1C, C2W | ⚠ 仅单频兼容 (C1C+L1C) |
+| E | C1C | C1X, C5X, C7X, C8X | ❌ **无兼容！** C1C≠C1X (RINEX3属性码不同) |
+| J | C1C | C1C, C1X, C1Z, C2X | ⚠ 仅单频兼容 (C1C+L1C) |
+| C | C1I | C1I, C6I, C7I | ⚠ 仅单频兼容 (C1I+L1I) |
+| R | 无 | C1C, C1P, C2C | ❌ Rover无GLONASS |
+
+> ⚠️ **Net_Diff Urban 的 Galileo 完全不兼容**：Rover用C1C（C=跟踪通道），Base用C1X（X=无码跟踪），RINEX 3.02中属性码不同导致无法匹配。这是该数据集RTK性能极差的主要原因之一。
+
+##### PPC-Dataset (Tokyo run1-3, Nagoya run1-3)
+
+| 项目 | Rover | Base |
+|------|-------|------|
+| RINEX版本 | 3.04 | 3.04 |
+| 接收机 | Septentrio Mosaic-X5 | Trimble Alloy / NetR9 |
+| 采样率 | 5Hz (0.2s) | 1Hz |
+| 观测类型 | G+R+E+J+C 双频 | G+R+E+J+C 双频 |
+| 兼容性 | ✅ 所有系统双频兼容 | |
+
+> PPC-Dataset 的 Rover 和 Base 观测类型完全兼容，双频可用。但基线较长（Tokyo ~7.8km, Nagoya ~15km），超出典型短基线RTK的10km阈值。
+
+##### UrbanNav Tokyo
+
+| 项目 | Rover | Base |
+|------|-------|------|
+| RINEX版本 | 3.02 | 3.02 |
+| 接收机 | Trimble NetR9 | Trimble NetR9 |
+| 采样率 | 10Hz (0.1s) | 1Hz |
+| 观测类型 | G+R+E+J+C 双频 | G+R+E+J+C 双频 |
+| 兼容性 | ✅ 所有系统双频兼容 | |
+
+> UrbanNav 基线仅186m，最适合短基线RTK。但城市峡谷遮挡严重（SPP成功率仅67.6%）。
+
+#### 2.8.3 SPP单点定位诊断
+
+| # | 数据集 | 总历元 | SPP成功率 | 平均卫星数 | 平均坐标 | 判定 |
+|---|--------|--------|----------|-----------|---------|------|
+| 0 | Net_Diff Urban | 9907 | **40.0%** | **4.6** | 35.662°N, 139.789°E | ⚠ SPP成功率极低，信号遮挡严重 |
+| 1 | PPC Tokyo run1 | 11928 | 99.9% | 16.8 | 35.645°N, 139.784°E | ✅ 数据OK |
+| 2 | PPC Tokyo run2 | 9000 | 99.9% | 16.8 | 35.645°N, 139.784°E | ✅ 数据OK |
+| 3 | PPC Tokyo run3 | 15301 | 99.9% | 16.8 | 35.645°N, 139.784°E | ✅ 数据OK |
+| 4 | PPC Nagoya run1 | 7602 | 99.0% | 12.7 | 35.169°N, 136.882°E | ✅ 数据OK |
+| 5 | PPC Nagoya run2 | 9451 | 99.7% | 12.7 | 35.168°N, 136.890°E | ✅ 数据OK |
+| 6 | PPC Nagoya run3 | 5201 | 100% | 12.8 | 35.165°N, 136.903°E | ✅ 数据OK |
+| 7 | UrbanNav Tokyo | 12395 | **67.6%** | **5.7** | 35.626°N, 139.781°E | ⚠ SPP成功率低，遮挡较严重 |
+
+> **解读**：SPP成功率反映Rover端可见卫星的充足程度。Net_Diff Urban仅40%（u-blox低成本接收机+城市峡谷），UrbanNav Tokyo 67.6%（Trimble高端接收机但遮挡严重），PPC数据集均>99%（Septentrio高端接收机，遮挡相对较轻）。
+
+#### 2.8.4 RTK定位诊断
+
+**thresar[1]=0.1（旧结果，AR前置检查几乎不通过）**：
+
+| # | 数据集 | 总历元 | Fix | Float | None | Float 2Dσ | Float坐标 |
+|---|--------|--------|------|-------|------|----------|----------|
+| 0 | Net_Diff Urban | 9907 | 0 (0%) | 172 (1.7%) | 1774 (17.9%) | 2.035m | 35.661°N, 139.787°E ✅ |
+| 1 | PPC Tokyo run1 | 11928 | 0 (0%) | 618 (5.2%) | 281 (2.4%) | 1.776m | 35.680°N, 139.770°E ✅ |
+| 2 | PPC Tokyo run2 | 9151 | 0 (0%) | ~1.5% | - | - | ✅ |
+| 3 | PPC Tokyo run3 | 15301 | ~0.1% | - | - | - | ⚠ Fix为错误Fix(false fix) |
+| 4 | PPC Nagoya run1 | 7602 | 9 (0.1%) | 1324 (17.4%) | 179 (2.4%) | 1.326m | 35.169°N, 136.882°E ✅ |
+| 5 | PPC Nagoya run2 | 9451 | - | - | - | - | - |
+| 6 | PPC Nagoya run3 | 5201 | - | - | - | - | - |
+| 7 | UrbanNav Tokyo | 12395 | 0 (0%) | 827 (6.7%) | 161 (1.3%) | 1.473m | 35.626°N, 139.781°E ✅ |
+
+**thresar[1]=0.9999（对齐 RTKLIB-EX 默认值，C-EX-Ref 全量结果）**：
+
+| # | 数据集 | 历元 | Fix% | Float% | H.RMSE(m) |
+|---|--------|------|------|--------|-----------|
+| 0 | Net_Diff Urban (准静态) | 9907 | 1.4% | 24.9% | 9.795 |
+| 1 | PPC Tokyo run1 | 11928 | 6.8% | 69.8% | 11.846 |
+| 2 | PPC Tokyo run2 | 9151 | 12.3% | 69.1% | 1.531 |
+| 3 | PPC Tokyo run3 | 15301 | 3.9% | 73.8% | 9.701 |
+| 4 | PPC Nagoya run1 | 7602 | 19.8% | 59.3% | 5.733 |
+| 5 | PPC Nagoya run2 | 9451 | 6.3% | 75.8% | 13.202 |
+| 6 | PPC Nagoya run3 | 5201 | 7.5% | 79.8% | 12.800 |
+| 7 | UrbanNav Tokyo 2018 | 12395 | 5.5% | 43.7% | — |
+
+> **关键发现**：
+> - **thresar[1] 是 Fix 率的决定性参数**：`thresar[1]` 从 0.1 改为 0.9999（对齐 RTKLIB-EX 默认值）后，Fix 率从 0% 跃升。`manage_amb()` 中 AR 前置检查 `posvar < thresar[1]`，旧值 0.1 几乎永不满足。
+> - **所有Float解坐标都在日本范围内**，2D sigma约1.3~2.0m，差分定位本身在工作
+> - **旧结果中大量历元连Float都没出来**（90%+历元为None/SPP失败），原因是双差观测不足（`ddres nv=0 < 4`）
+> - **Nagoya run1的9个Fix和Tokyo run3的少量Fix是错误Fix(false fix)**：水平RMSE达7亿米但垂直正常，说明AR固定到了错误整周模糊度
+
+#### 2.8.5 各数据集RTK性能差的原因分析
+
+| 数据集 | 主要限制因素 | 次要因素 |
+|--------|------------|---------|
+| **Net_Diff Urban** | ①Rover仅单频(u-blox)，无法消除电离层延迟 ②Galileo完全不兼容(C1C≠C1X) ③SPP成功率仅40%，平均4.6颗卫星 | 基线199m理论上最理想 |
+| **PPC Tokyo** | ①基线7.8km，超出短基线RTK阈值 ②城市峡谷多路径，AR ratio低 | 数据质量本身OK，双频兼容 |
+| **PPC Nagoya** | ①基线15km，远超短基线RTK阈值，电离层残差大 ②城市峡谷多路径 | Nagoya run1 Float率17.4%相对较高 |
+| **UrbanNav Tokyo** | ①城市峡谷遮挡最严重(SPP 67.6%，5.7颗卫星) ②10Hz高采样率但1Hz base需内插 | 基线186m最理想，双频兼容 |
+
+#### 2.8.6 已知Bug与注意事项
+
+##### Tokyo run2 的 ArrayIndexOutOfBoundsException (已修复)
+
+- **现象**：PPC Tokyo run2 处理时 `RtkCore.zdres()` 第1083行抛出 `ArrayIndexOutOfBoundsException: Index 576 out of bounds for length 576`
+- **根因**：`RtkWorkBuffer` 中 `rs[]` 等数组按 `MAXOBS=96` 固定分配，但某些历元 rover+base 总观测数 `nu+nr=97 > 96`，导致 `rs[idx*6]` 越界（`idx=96, 96*6=576`）
+- **触发条件**：多系统(5系统) + rover高频(5Hz) + base高频(1Hz) → 某些历元卫星总数超过96
+- **修复**：在 `RtkCore.relpos()` 入口添加 `n > MAXOBS` 截断保护，丢弃base端最后1颗卫星观测
+- **影响**：截断1颗base卫星对定位精度影响极小，但避免了崩溃
+
+##### Net_Diff Urban 数据需下载
+
+- Net_Diff 的RINEX/NAV文件(>2MB)存放在独立数据仓库 `rtklib-java-data`，需运行下载脚本：
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File test-data/download-test-data.ps1
+  ```
+- 涉及文件：`rinex/urban_rover_20000719.17o`(15.2MB), `rinex/urban_base_20000719.17o`(26.1MB), `nav/urban_20000719.17p`(6.0MB)
+
+##### PPC-Dataset 数据需下载
+
+- PPC-Dataset 的run目录通过 `.gitignore` 排除，需按 `test-data/ppc/PPC-Dataset/README.md` 下载
+
+#### 2.8.7 测试类参考
+
+| 测试类 | 用途 |
+|--------|------|
+| `UrbanCanyonDataCheckTest` | 数据深度诊断：RINEX头检查、SPP分析、RTK Float解详细统计 |
+| `UrbanCanyonRtkDiagTest` | RTK完整诊断：Fix/Float/Single/None统计、坐标RMSE、ratio分布 |
+| `urbancanyon.UrbanCanyonSppOptTest` | SPP优化对比：LS/EKF/抗差/零速各策略在城市峡谷下的效果 |
+
+> 📊 SPP优化详细测试结果见 [URBAN_CANYON_SPP_TEST_RESULTS.md](URBAN_CANYON_SPP_TEST_RESULTS.md)
+
+---
+
 ## 3. 测试用例详情
 
 ### 3.1 SPP 单点定位测试

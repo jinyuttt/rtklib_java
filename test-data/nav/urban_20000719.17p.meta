@@ -1,0 +1,8 @@
+scenario=urban
+role=nav
+systems=G+E+J+C
+date=2017-07-19
+source=Net_Diff
+description=城市RTK多系统混合导航星历
+license=public
+test_ids=RtkUrbanTest

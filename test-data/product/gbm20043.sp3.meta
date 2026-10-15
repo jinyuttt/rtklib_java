@@ -1,0 +1,7 @@
+type=sp3
+systems=G+R+E+C
+date=2018-06-06
+source=GFZ
+description=GFZ GBM精密轨道5min采样
+license=IGS-data-policy
+test_ids=PppTest,PppKinematicTest

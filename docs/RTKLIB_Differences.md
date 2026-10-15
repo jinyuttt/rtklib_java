@@ -1,7 +1,13 @@
 # Java版与RTKLIB C版实现差异说明
 
-本文档记录Java版RTKLIB与C版RTKLIB（2.5.0）在实现上的有意差异。
+本文档记录Java版RTKLIB与C版RTKLIB在实现上的有意差异。
 这些差异是经过验证的必要修改或设计选择，不应随意回退。
+
+**C 参考源码基准（2026-10-13 声明）**：本仓库 `RTKLIB-2.5.0/` 目录 = **rtklibexplorer demo5 分支**
+（`rtklib.h`: `VER_RTKLIB "EX"` + `PATCH_LEVEL "2.5.0"`，基于官方 2.4.3 分支增强）。
+IFLC（`IONOOPT_IFLC`）、ddres 的 `threshadj` 等为 demo5 特有特性（官方 2.4.3 无）；
+`rinex.c set_index()`/`rtkcmn.c code2idx()` 的槽位机制与官方 2.4.3 一致。
+本文档所称"C版"均指该基准，勿与官方 T.Takasu 2.4.3 混淆对照。
 
 Bug 修复的调试过程不在本文档中，请参见 `SPP_Debug_Record.md` 和 `RTK_Debug_Record.md`。
 
@@ -172,48 +178,48 @@ decodeMsm0/4/5/6/7（MSM），共12处obsflag设置。
 `rtk->x[0..2]` 存储**流动站绝对ECEF坐标**。
 
 初始化（`udpos()`）：
-`c
+```c
 for (i=0;i<3;i++) initx(rtk,rtk->sol.rr[i],VAR_POS,i);
-`
+```
 `sol.rr[i]` 是SPP得到的绝对位置，直接作为状态向量初始值。
 
 输出（`relpos()` 末尾）：
-`c
+```c
 // float解
 rtk->sol.rr[i] = rtk->x[i];       // 绝对位置直接输出
 // fix解
 rtk->sol.rr[i] = rtk->xa[i];      // 绝对位置直接输出
-`
+```
 
 调用 `zdres()` 时：
-`c
+```c
 zdres(0, obs, nu, ..., xp, opt, y, e, azel, freq);
 // xp = rtk->x，直接是绝对位置，作为接收机位置传入
-`
+```
 
 ### Java版行为
 `rtk.x[0..2]` 存储**基线向量**（流动站坐标 - 基准站坐标）。
 
 初始化（`udpos()`）：
-`java
+```java
 initx(rtk, rtk.sol.rr[i] - rtk.rb[i], VAR_POS, i);
-`
+```
 `sol.rr[i]` 是绝对位置，减去 `rb[i]`（基准站位置）得到基线向量。
 
 输出（`relpos()` 末尾）：
-`java
+```java
 // float解
 rtk.sol.rr[i] = rtk.x[i] + rtk.rb[i];   // 基线向量 + 基准站位置 = 绝对位置
 // fix解
 rtk.sol.rr[i] = xa[i] + rtk.rb[i];       // 同上
-`
+```
 
 调用 `zdres()` 时：
-`java
+```java
 for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xp[j];
 zdres(0, obs, nu, nr, ..., rr_rover, opt, y, e, azel, freq);
 // xp 是基线向量，需要加上 rb 得到绝对位置再传入
-`
+```
 
 ### 原因
 Java版选择基线向量表示，使得状态向量的数值量级更小（基线通常几十米到几公里，
@@ -263,11 +269,11 @@ Java版：`x = b = p_r - p_b`，zdres 传入 `rb + x = p_b + (p_r - p_b) = p_r`
 1. `execses()` 调用 `antpos(&popt_, 2, &obss, &navs, stas, fopt->stapos)`
 2. `antpos()` 根据 `opt->refpos` 选项计算基准站位置，写入 `opt->rb[0..2]`
 3. 每个 `rtkpos()` 调用中：
-   `c
+   ```c
    if (opt->refpos <= POSOPT_RINEX && opt->mode != PMODE_SINGLE && opt->mode != PMODE_MOVEB) {
        for (i=0;i<6;i++) rtk->rb[i] = i<3 ? opt->rb[i] : 0.0;
    }
-   `
+   ```
    即每历元从 `opt->rb` 重设 `rtk->rb`，保证基准站位置不变。
 
 `antpos()` 支持的基准站位置选项（`refpos`）：
@@ -476,6 +482,7 @@ C版RTKLIB的质量控制分两层，Java版原始移植时遗漏了前端剔除
 | **前端剔除** | `ddres()` | 模糊度刚初始化时 `threshadj=10` | 无 | ✅ 已添加 |
 | **模糊度管理** | `udbias()` | `rejc>=2` 或周跳时重置模糊度 | **无** | ✅ 已添加 |
 | **模糊度管理** | `udbias()` | 重置时 `lock=-minlock, icbias=0` | 无 | ✅ 已添加 |
+| **观测噪声** | `varerr()` | IFLC模式（`ionoopt==IONOOPT_IFLC`）`var *= SQR(3.0)`（×9） | 无 | ✅ 已添加（2026-10-13 确认，Java `var *= 9.0`） |
 | **后端诊断** | `valpos()` | 大残差输出 `errmsg`，**始终返回1** | 无日志，始终返回true | 与C版一致（始终返回true） |
 
 **关键认知**：`valpos()` 是后端诊断工具，不是质量控制。C版也始终返回1，不会因后验残差丢弃历元。
@@ -485,7 +492,7 @@ C版RTKLIB的质量控制分两层，Java版原始移植时遗漏了前端剔除
 
 ## 13. RTCM MSM多信号管理机制差异（2026-07-24 分析）
 
-### 12.1 核心配置差异：NFREQ与NEXOBS
+### 13.1 核心配置差异：NFREQ与NEXOBS
 
 #### C版本 (rtklib.h:154-160)
 
@@ -526,7 +533,7 @@ public static final int NEXOBS = 2;   // 扩展观测数
 
 ---
 
-### 12.2 sigindex() 函数差异
+### 13.2 sigindex() 函数差异
 
 #### C版本 (rtcm3.c:1957-1993)
 
@@ -644,7 +651,7 @@ public static void sigindex(int sys, int[] code, int n, int[] idx) {
 
 ---
 
-### 12.3 promoteExtSig() 方法：Java版独有
+### 13.3 promoteExtSig() 方法：Java版独有
 
 #### 方法签名与位置
 
@@ -761,7 +768,7 @@ C版本工作流程:
 
 ---
 
-### 12.4 save_msm_obs() 存储逻辑差异
+### 13.4 save_msm_obs() 存储逻辑差异
 
 #### C版本 (rtcm3.c:2077-2109)
 
@@ -833,7 +840,7 @@ if (sat != 0 && index >= 0) {
 
 ---
 
-### 12.5 为什么两个版本定位效果一致？
+### 13.5 为什么两个版本定位效果一致？
 
 #### 原因1：RTK解算只使用前nf个频率
 
@@ -871,7 +878,7 @@ public int nf = 3;  // 默认使用3个频率 (L1, L2, L5)
 
 ---
 
-### 12.6 性能影响量化
+### 13.6 性能影响量化
 
 #### 时间复杂度
 
@@ -908,7 +915,7 @@ for (int f = 0; f < NFREQ; f++) {           // 外层循环: ≤6次
 
 ---
 
-### 12.7 设计权衡与选择建议
+### 13.7 设计权衡与选择建议
 
 #### 当前Java版设计优势
 
@@ -1014,7 +1021,7 @@ public class AdaptiveObsManager {
 
 ---
 
-### 12.8 测试验证方案
+### 13.8 测试验证方案
 
 #### Test 1：信号分布对比测试
 
@@ -1083,7 +1090,7 @@ python rtk_compare/compare_results.py \
 
 ---
 
-### 12.9 参考文件索引
+### 13.9 参考文件索引
 
 | 文件 | 行号 | 说明 |
 |------|------|------|
@@ -1100,12 +1107,12 @@ python rtk_compare/compare_results.py \
 | [ObsCode.java](file:///D:/code/rtklib_java/src/main/java/org/rtklib/java/common/ObsCode.java#L354-L399) | 354-399 | **sigindex() 实现** |
 | [ObsCode.java](file:///D:/code/rtklib_java/src/main/java/org/rtklib/java/common/ObsCode.java#L228-L240) | 228-240 | **code2freqBds() 映射** |
 | **技术文档** | | |
-| [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](file:///D:/code/rtklib_java/docs/RTKLIB_JAVA_TECHNICAL_REFERENCE.md) | 第13章 | **promoteExtSig详细技术说明** |
+| [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](file:///D:/code/rtklib_java/docs/RTKLIB_JAVA_TECHNICAL_REFERENCE.md) | 第11章 | **promoteExtSig详细技术说明** |
 | [RTK_Extra_Optimizations.md](file:///D:/code/rtklib_java/docs/RTK_Extra_Optimizations.md) | 全文 | **其他Java版独有优化项** |
 
 ---
 
-### 12.10 总结
+### 13.10 总结
 
 #### 核心发现
 
@@ -1151,13 +1158,13 @@ python rtk_compare/compare_results.py \
 
 所有PPP改正项（天线PCV、DCB、海潮OTL、固体潮、极潮、章动模型）均已完整实现，对齐度100%。
 
-详见 [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第15章。
+详见 [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第17章。
 
 ---
 
 ## 15. 功能边界：Java版未实现功能清单（2026-09-29 更新）
 
-### 14.1 数据流与网络协议
+### 15.1 数据流与网络协议
 
 | C版功能 | C版源码 | Java版状态 | 说明 |
 |---------|---------|------------|------|
@@ -1176,7 +1183,7 @@ python rtk_compare/compare_results.py \
 
 **Java版数据输入方式**：rtklib-stream模块提供NTRIP客户端和串口通讯，通过`StreamListener`回调获取数据后调用`feed()`注入核心算法；也支持本地文件（RTCM/RINEX）和byte[]直接输入。
 
-### 14.2 接收机原始协议
+### 15.2 接收机原始协议
 
 | C版接收机 | C版源码 | Java版状态 | 说明 |
 |-----------|---------|------------|------|
@@ -1196,7 +1203,7 @@ python rtk_compare/compare_results.py \
 
 **Java版数据格式**：仅支持 **RTCM3**（完整解码）和 **RINEX 3.x**（读写）。
 接收机原始协议需先用convbin转为RTCM3/RINEX后使用。
-### 14.3 解算输出格式（未实现项）
+### 15.3 解算输出格式（未实现项）
 
 | C版格式 | C版函数 | Java版状态 | 说明 |
 |---------|---------|------------|------|
@@ -1206,7 +1213,7 @@ python rtk_compare/compare_results.py \
 
 LLH/XYZ/ENU格式已实现（通过posMask配置）。
 
-### 14.4 坐标转换与格式
+### 15.4 坐标转换与格式
 
 | C版功能 | C版源码 | Java版状态 | 说明 |
 |---------|---------|------------|------|
@@ -1219,22 +1226,22 @@ LLH/XYZ/ENU格式已实现（通过posMask配置）。
 | IONEX电离层 | ionex.c | ✅ 已实现 | `IonexReader`，IGS IONEX v1.0/v2.0读取+双线性插值 |
 | 下载功能 | download.c | ✅ 已实现 | `ProductDownloader`（rtklib-product模块），FTP/FTPS/HTTPS多协议多镜像 |
 
-### 14.5 定位模式（未完整对齐项）
+### 15.5 定位模式（未完整对齐项）
 
 | C版模式 | 常量 | Java版状态 | 说明 |
 |---------|------|------------|------|
 | DGPS差分 | PMODE_DGPS | ⚠️ 部分 | RTK框架内，modear=OFF时等效 |
 | Moving-Base | PMODE_MOVEB | ⚠️ 部分 | 常量已定义，核心逻辑未完整验证 |
 
-其余定位模式（SPP/Kinematic/Static/Static-Start/Fixed/PPP-Kinematic/PPP-Static/PPP-Fixed）均已完整实现，详见 [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第12章。
+其余定位模式（SPP/Kinematic/Static/Static-Start/Fixed/PPP-Kinematic/PPP-Static/PPP-Fixed）均已完整实现，详见 [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第18章。
 
-### 14.6 SBAS（已与C版对齐，已移至技术参考）
+### 15.6 SBAS（已与C版对齐，已移至技术参考）
 
 SBAS改正算法、集成、消息输入均已完整实现，与C版一致。
 
-详见 [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第16章。
+详见 [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第18章。
 
-### 14.7 算法细节未对齐项
+### 15.7 算法细节未对齐项
 
 | C版功能 | C版源码 | Java版状态 | 说明 |
 |---------|---------|------------|------|
@@ -1242,9 +1249,9 @@ SBAS改正算法、集成、消息输入均已完整实现，与C版一致。
 | POSOPT_FILE | `antpos()` | — 不实现 | Java版不实现，用户自行读取位置文件后通过`opt.rb`赋值即可 |
 | Static Start长延迟恢复 | `udpos()` 中tt>300重置 | ❌ 未实现 | 边界场景 |
 
-已对齐项（SPP实时均值平滑、SSR相位偏差改正、合并速度smoother、udtrop()冻结）详见 [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第12章。
+已对齐项（SPP实时均值平滑、SSR相位偏差改正、合并速度smoother、udtrop()冻结）详见 [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第18章。
 
-### 14.8 功能边界总结
+### 15.8 功能边界总结
 
 **Java版定位目标**：作为GNSS定位算法引擎，提供SPP/RTK/PPP核心解算能力，
 不包含C版的网络通信、GUI、实时流服务等功能。
@@ -1262,7 +1269,7 @@ SBAS改正算法、集成、消息输入均已完整实现，与C版一致。
 - TCP/UDP服务端、NTRIP Caster → 不在rtklib-stream范围内
 - NMEA输出 → 通过SolData自行编码
 - 实时流管理 → 自行组合Processor实例
-### 14.9 实时流双向缓存系统（Java版新增，C版无对应）
+### 15.9 实时流双向缓存系统（Java版新增，C版无对应）
 
 C版RTKLIB的反向滤波仅支持事后批处理（读完文件→正向→反向→合并→输出），
 Java版新增实时流场景下的双向缓存能力。
@@ -1295,7 +1302,7 @@ SPP为绝对定位，每历元独立求解，双向无意义。RTK/PPP批处理�
 | 缓存方式 | 无（全量内存） | 内存环形缓冲/外部接口 |
 | 触发方式 | 自动（文件读完） | 缓存满自动/手动reprocess() |
 
-### 14.10 solstatic 静态单解输出（Java版扩展至实时流）
+### 15.10 solstatic 静态单解输出（Java版扩展至实时流）
 
 C版RTKLIB的 `solstatic` 仅在 `PostPosProcessor`（事后批处理）中实现：
 `sopt.solstatic=1` + `mode=PMODE_STATIC/PMODE_PPP_STATIC` 时，所有历元参与滤波但只输出1个最优解。
@@ -1322,3 +1329,175 @@ Java版将此能力扩展到实时流处理器，并新增窗口模式：
 - `PppProcessor(PrcOpt, SolOpt, PosHandler, OutputStream)`
 
 **向后兼容**：原有构造函数委托到新构造函数（`SolOpt=null`），`solstatic=false`，行为不变。
+
+---
+
+## 16. 观测槽位压缩 compactObsFreq——已移除的 JAVA-ONLY 扩展（2026-10-13 修复）
+
+### 16.1 背景
+
+Java 版曾提供 `RtklibCommon.compactObsFreq(obs, n)`：按每颗卫星每历元"有数据的槽位"
+压缩到 `0..cnt-1`（空洞前移），曾应用于 `RtkCore.rtkpos()` 入口。动机是"C 版语义下
+缺第二频率的卫星被整星剔除太浪费"，想多救回几颗参与 IFLC。
+
+### 16.2 C 对照：槽位从不压缩
+
+C 版 `rinex.c set_index()`（L966-1038，RINEX 路径）与 `rtcm.c sigindex()`（MSM 路径）的语义：
+slot 0..NFREQ-1 只放每个频率索引的**最高优先级**观测码（`code2idx`+`getcodepri` 裁决），
+其余进扩展槽 NFREQ+i；**从不按数据空缺重排槽位**。某站缺失某频率时，下游靠
+`cp==0.0||pr==0.0||freq<=0.0` 检查**整星跳过**。slot f 的含义恒为"频率索引 f"，
+这是双站 IFLC/DD 配对的共同约定。
+
+BDS 频率映射（`code2idx`/`code2freq_BDS`，Java 与 C 一致）：
+
+| 频率字符 | 频段 | slot |
+|---------|------|------|
+| '2' | B1I 1561.098 | 0 |
+| '7' | B2 1207.14（BDS-2 B2I 与 BDS-3 B2b 同频段） | 1 |
+| '5' | B2a 1176.45 | 2 |
+| '6' | B3I 1268.52 | 3 |
+| '1' | B1C 1575.42 | 4 |
+| '8' | B2ab | 5 |
+
+### 16.3 两层问题分解（PPC-Dataset Tokyo run1 实证）
+
+流动站（Septentrio）BDS-3 卫星只有 C2I(slot0)+C5P(slot2)；基准站（Trimble）有
+C2I+C7D(slot1)+C5P：
+
+| 方案 | 行为 | 结果 |
+|------|------|------|
+| **不压缩（C 对齐）** | 流动站 slot1 空 → freq2=0 → 该星整星退出 RTK | 正确行为，代价是损失无 B2b 的 BDS-3 卫星 |
+| **压缩（曾实现）** | 流动站 C5P 从 slot2 挪进 slot1，基准站 slot1 仍为 C7D → 同槽不同频 | IFLC SD `cp2` 混合 B2a/B2b 两频率 → bias≈1e6 m → udbias `offset/cnt` 毒化全部模糊度 → Float 发散、Fix 率 0% |
+
+### 16.4 为什么 C 不"动态找该站实际有的第二频率"
+
+1. **跨站一致性**：DD 要求两站对 slot f 的含义有共同约定。固定映射在构造上保证一致；
+   任何"按本站数据重排/改选"的逻辑（compaction 或动态选对）让约定退化为"按各自数据决定"，
+   两站独立执行时必然分叉——compaction 的 1e6 m bias 即实证。
+2. **模糊度记账**：udbias 的 IFLC bias 公式（λ、γ 频率比）按"每系统一个固定频率对"设计；
+   `IB(sat,f,opt)` 的 slot 寻址体系无法表达"同一 slot 承载不同频率对的模糊度"。
+   要支持需重设计状态索引，这是连 demo5 都没有的扩展。
+
+### 16.5 决定与验证
+
+- **修复（2026-10-13）**：移除 `rtkpos()` 中的 `compactObsFreq` 调用；方法本体保留
+  （文档标注 `[JAVA-ONLY EXTENSION - NOT C-ALIGNED]`），仅供测试引用。
+- **验证**：IFLC bias 从 1e6 m 垃圾值 → 仅真实周跳 130-170 m；120 m 位置尖峰消失；
+  H.RMSE 5.974 m（含尖峰、垃圾约束）→ 11.629 m（C 对齐语义）；ddres 零虚假拒绝。
+- **未来方向**：若要让 B1I+B2a 卫星参与 IFLC，正确路径是显式按频率选对的 IFLC 扩展，
+  已作为 **§16.6 逐卫星 IFLC 频率对协商** 实施（v2.3.0，RtkConfig 开关默认关闭）。
+
+### 16.6 逐卫星 IFLC 频率对协商（v2.3.0 JAVA-ONLY 扩展，默认关闭）
+
+§16.4 指出 C 版"每系统一个固定频率对"的两个约束（跨站一致性、模糊度记账）。
+本扩展在**保留槽位语义**（槽位 = `code2idx` 固定频段映射，不压缩不重排）的前提下，
+把"每系统一对"放宽为"每卫星一对"，由**两站公共频段协商 + sticky 保持**同时满足两个约束：
+两站共用同一协商结果（跨站一致），配对切换按周跳重置模糊度（记账正确）。
+
+**开关**：`RtkConfig.enableIflcPairNegotiation`（默认 `false`）。关闭时全部路径 no-op，
+与 RTKLIB C（demo5 EX 2.5.0）逐位一致；仅 `IONOOPT_IFLC` + RTK 双站模式（`mode > PMODE_DGPS` 且 `nr > 0`）生效。
+
+**协商算法**（`RtkCore.negotiateIflcPairs`，每历元 `rtkpos()` 中 `zdres(base)` 之前调用）：
+
+- 对两站公共卫星（obs 按 (接收端， 卫星号) 排序，两指针归并遍历）执行单星协商；
+- **优先级表**（槽位对，首槽位恒为 0 以保持 ddres `code[frq=0]` 频率检查语义）：
+  GPS `{0,1}>{0,2}`；GLO `{0,1}`；GAL nf≥3 `{0,2}>{0,1}`（对齐 `seliflc` 语义）、nf=2 `{0,1}>{0,2}`；
+  BDS `B1I+B2{0,1} > B1I+B3I{0,3} > B1I+B2a{0,2}`；QZS `{0,1}>{0,2}`；IRN `{0,1}`；
+- **sticky**：上一配对仍"结构可用"（两站该槽位 code 非 0，即频段被跟踪）则保持不变，
+  不因更高优先级对出现而切换，避免数据级空洞（L/P=0 单历元缺失）导致配对来回抖动；
+- **失效重选**：按优先级表从两站公共频段中重选；**无公共对**则 `iflcSlot` 清零，
+  回退固定槽位 `{0, seliflc()}`（该星因数据缺失自然被 IFLC 跳过）；
+- **切换/消失按周跳处理**：置 `Ssat.iflcPairSwitch`，`udbias()` 消费后强制重置该星
+  模糊度并清 lock，随后清除标志。注意不能复用 `slip` 位域传递——`udbias()` 开头
+  `slip &= 0xFC` 会清掉 bit0（本端口 `LLI_SLIP=0x01`），故用独立布尔标志。
+
+**存储**：`Ssat.iflcSlot[2]`（协商槽位对，`{0,0}`=未协商）+ `Ssat.iflcPairSwitch`（切换标志）。
+按槽位对而非 code 枚举存储：槽位=频段（`code2idx` 固定映射保证），同频段不同码变体
+（如 C7D/C7I）等价可用，与 C 版按槽位配对行为一致。
+
+**读取点改造**（4 处，未协商/回退时全部走原固定槽位路径）：
+
+| 读取点 | 固定槽位（C 对齐） | 协商模式 |
+|--------|-------------------|----------|
+| `zdres()` IFLC 分支 | `{0, seliflc(nf,sys)}` | `iflcSlots()` 协商槽位对 |
+| `udbias()` IFLC bias | `slip[f2]`、cp/pr 按固定对 | 协商对 + `iflcPairSwitch` 置 `LLI_SLIP` |
+| `detslpGf()` | `gfobs(obs,i,j,f)` | `gfobsPair(obs,i,j,s1,s2)`，slip 写 `slip[0]|slip[s1]|slip[s2]` |
+| `detslpLl()`/`detslpCode()` | 遍历 `f < nf` | maxF 扩展到协商槽位上界 |
+
+`varerr()` 无需改动：C 版 IFLC 处理为固定 `var *= SQR(3.0)`（rtkpos.c L444），无波长项，
+对任意频率对通用。B1I+B2a 噪声因子 ≈2.66、B1I+B2 ≈2.90，×9 假设偏保守（方差略大），可接受。
+
+**验证**：
+
+- 单元测试 `IflcPairNegotiationTest`（8 项）：公共对协商、sticky 保持、失效重选+切换标志、
+  无公共对清零回退、开关关 no-op、DGPS/nr=0 no-op、归并遍历仅公共卫星、GAL nf 优先级；
+- no-op 回归（开关关闭）：`RinexRtkProcessorTest` 8 run/0 fail/4 skip 与基线一致；
+  `testPpcTokyoRun1` H.RMSE=11.629 m / V.RMSE=15.949 m / Float=1825 历元逐位一致；
+- 端到端（开关开启，PPC-Dataset Tokyo run1）：BDS-3 卫星以 B1I+B2a 协商对参与 RTK，
+  平均可用卫星数增加，无 bias 爆炸（详见 `UrbanCanyonRtkDiagTest#testPpcTokyoRun1IflcNegotiation`）。
+
+### 16.7 satid2no 空格填充 PRN 解析修复（2026-10-13，对齐 C sscanf 语义）
+
+§16 的 Tokyo run1 调查中发现的第二个独立根因：广播星历读取阶段即丢失卫星。
+
+**问题**：RINEX 3 导航文件的卫星 ID 字段按 `G%2d` 宽度写出，单位数 PRN 为空格填充
+（"G 5"/"E 4"/"R 7"）。Java `Integer.parseInt(id.substring(1))` 对 " 5" 抛
+NumberFormatException，`satid2no()` 返回 0（无效）——全部单位数 PRN 的广播星历被静默丢弃。
+
+**影响链**（PPC-Dataset Tokyo run1 实证）：星历缺失 → `satposs()` `rs=0` →
+双站 azel=0 → DD 有效卫星数坍缩（selsat ns 21→9）→ posvar 膨胀超过
+`thresar[1]=0.1` → AR 永不触发（Fix=0，Float 8986）。
+
+**修复**：`SatUtils.satid2no()` 解析前 `trim()`，对齐 C `sscanf("%c%d")` 中
+`%d` 跳过前导空白的语义（RTKLIB-2.5.0 `rtkcmn.c satid2no`，L475-501）。
+
+**验证**：tokyo run1 Fix 0→570（4.8%）、Float 8986→10927（91.6%）、成功率
+85.8%→97.9%；selsat 卫星列表与 C trace 逐字节一致。
+
+### 16.8 RINEX 3 观测槽位分配修复（2026-10-13，对齐 C set_index 优先级仲裁）
+
+§16.7 修复后仍残留两组 AR 差距：tokyo run2 过度固定（Java Fix 1188 vs C 15）、
+nagoya run1 固定不足（Java Fix 527 vs C 1594）。取证发现二者同源于第三个独立
+根因：RINEX 3 观测读取的槽位分配策略错误。
+
+**问题**：Java `RinexParser.readObsEpoch` 对每个观测类型直接
+`code2idx(sys, code)` 计算频率槽位后写入——同一槽位出现多个候选码型时
+**后写覆盖先写**，无优先级仲裁、无 NEXOBS 次选。而 C 版在 `rinex.c set_index`
+（L965-1037）中按 `CODEPRIS[sys][freq]` 表为每个频率槽选择最高优先级码型
+（`getcodepri` = 14 − 码字母在表列中的位置，查无则 pri=0 拒收），同 code 的
+C/L/D/S 类型共享主槽，落选码型依次进入 NEXOBS 扩展槽（NFREQ+n）。Java 的
+`ObsCode.CODEPRIS` 表与 `getcodepri()` 实现与 C 逐字符串一致，但此前
+**全项目零调用**。
+
+**影响链**（PPC-Dataset Tokyo run2 实证，5Hz Septentrio rover + 1Hz Trimble base）：
+rover GPS 头声明 C2W/C2L 冲突 → slot1 落入低优先级 C2L/L2L（C 为 C2W/L2W）；
+base GPS 声明 C1C/C1X、C2W/C2X 冲突 → slot0 被 C1X 覆盖 C1C、slot1 被 C2X
+覆盖 C2W。不同码型的伪距/相位通道偏差进入 IFLC udbias → 首历元 init 值发散
+（G03 Δ-4.3m、G04 Δ-78.2m、J02 Δ+36.0m 等）→ 城市峡谷环境下 AR 比值检验
+系统性偏移 → 过度固定/固定不足并存。
+
+**修复**（`RinexParser.java`，对齐 RTKLIB-2.5.0 `rinex.c` L965-1037/L888-905）：
+1. 新增 `setIndex(si)`：每 slot 选 CODEPRIS 最高 pri 码型、同 code 共享主槽、
+   落选码型依次分配 NEXOBS 槽，结果存入 `sigPos[7][MAXOBSTYPE]`；
+2. `readObsHeader` 末尾对全部系统调用 `setIndex`；
+3. `readObsEpoch` 写入槽位改用 `sigPos`，写入口径对齐 C：类型映射
+   `obscodes="CLDS"`（未知字符回退 C 型）、`code[]` 仅由 C 型写入、
+   `val==0 && lli==0` 跳过、Pstd/Lstd 公式不变。
+
+**验证**：tokyo run2 首历元（01:10:00.000）22 颗卫星 udbias init 值与 C
+trace 逐位一致（G03=4.866、G04=2.208、J02=52.244 等）；obs 码型逐星与 C
+trace level 4 一致（rover slot1=2W、base slot0=1C/slot1=2W，落选码型进
+NEXOBS）。全量 6 组 PPC 数据集 Fix 对比：
+
+| 数据集 | C Fix | 修复前 Java | 修复后 Java |
+|---|---|---|---|
+| tokyo run1 | 375 | 570 | 467 |
+| tokyo run2 | 15 | 1188 | 42 |
+| tokyo run3 | 1071 | — | 1048 |
+| nagoya run1 | 1594 | 527 | 1607 |
+| nagoya run2 | 717 | — | 1024 |
+| nagoya run3 | 12 | — | 62 |
+| 合计 | 3784 | 5025 | 4250 |
+
+tokyo run2 过度固定与 nagoya run1 固定不足同时消除。剩余偏差（合计 +466，
++12%）属 AR 决策层已知差异（见 §15.7 ar_poly_coeffs 阈值调整未实现项）。

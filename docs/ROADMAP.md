@@ -14,7 +14,7 @@
 | rtklib-adjust | 多基线间接平差 | **85%** | 核心流程+基站诊断+P0~P3优化；可按需扩展多时段累积平差 |
 | rtklib-otl | 海潮负荷BLQ | **95%** | Fortran对比验证通过；属成熟稳定辅助模块 |
 | rtklib-research | 前沿研究（FGO/IACE/预积分） | **70%** | FGO框架+IMU预积分+场景自适应已齐；缺：完好性保护级、PPP-FGO |
-| rtklib-test | 测试/演示 | **—** | 真实数据测试脚本+NtripClient实时演示 |
+| rtklib-test | 测试/演示 | **80%** | SPP/RTK城市峡谷优化对比测试(DynamicRtkOptTest 12变体+UrbanCanyonSppOptTest)+NtripClient实时演示 |
 
 > 95% / 90% / 85% / 70% 为相对项目自身定位的估计值，**不含 RTKLIB C 版中明确不实现的功能**（TCP服务端、NTRIP Caster、接收机原始协议等）。
 
@@ -412,6 +412,114 @@ if (rtk.rtkConfig.enableIers2010) { ... }
 
 ---
 
+## 7. 梯队2.5 — 城市峡谷 SPP/RTK 优化 🟡
+
+> **前置条件**: EKF 发散 Bug 已修复（`udposSpp` 方差重置条件拆分 + `estposFilter` diverged 状态跳过 KF update）  
+> **测试基准**: `URBAN_CANYON_SPP_TEST_RESULTS.md`  
+> **测试类**: `org.rtklib.java.urbancanyon.UrbanCanyonSppOptTest`  
+> **测试数据**: Net_Diff Urban / PPC Tokyo / PPC Nagoya / UrbanNav Tokyo
+
+### 7.0.1 当前 SPP 基准（Bug修复后预期）
+
+| 数据集 | 平均卫星 | LS-SPP成功率 | EKF+抗差 2D RMS | 核心限制 |
+|--------|---------|-------------|----------------|---------|
+| Net_Diff Urban | 4.6 | 55.2% | ~840m（≈LS，不再发散） | 单频+Galileo不兼容+极严重遮挡 |
+| PPC Tokyo run1 | 15.1 | 87.5% | 7.8km | 初始化偏差→EKF收敛慢 |
+| PPC Nagoya run1 | 13.1 | 99.0% | 553m | 基本正常 |
+| UrbanNav Tokyo | 6.6 | 82.4% | 699m | 成功率提升显著 |
+
+### 7.0.2 SPP 算法改进
+
+| # | 优化项 | 修改文件 | 说明 | 工作量 | 优先级 |
+|---|--------|---------|------|--------|--------|
+| UC-1 | 新息卡方检验 | `SppOptimizations`, `RtkConfig` | KF update前计算 `vᵀS⁻¹v`，超 `sppEkfInnovGate²×nv` 门限时跳过本历元update；防止多路径大残差污染状态 | 1天 | 高 |
+| UC-2 | 自适应过程噪声 | `SppOptimizations`, `RtkConfig` | `accPrn = accPrnMin + (accPrn1-accPrnMin)×min(ns/8,1)`；卫星少时Q小→P膨胀慢，卫星多时Q大→更信任观测 | 0.5天 | 中 |
+| UC-3 | EKF 初始化 warm-up | `SppOptimizations`, `RtkConfig` | 前 N 个历元用 LS 解输出不更新 EKF；warmup 结束后用 LS 均值重新初始化 EKF | 1天 | 低 |
+
+### 7.0.3 SPP 参数调优
+
+| # | 调优项 | 当前值 | 建议值 | 说明 | 工作量 |
+|---|--------|--------|--------|------|--------|
+| UC-4 | `sppZeroVelSpeedThresh` | 0.5 m/s | 2.0 m/s | 车载动态等红灯时 EKF 速度噪声>0.5m/s→误判零速→PPC Tokyo 2D RMS 7.8→15km | 0.5天 |
+| UC-5 | `sppZeroVelMinEpochs` | 1 | 5 | 连续5个历元(1s@5Hz)才触发零速约束 | 含在UC-4 |
+
+### 7.0.4 RTK 城市峡谷优化（长期）
+
+| # | 方向 | 说明 | 前置 |
+|---|------|------|------|
+| UC-6 | 部分模糊度固定（PAR） | 城市峡谷全固定困难，先固定高置信度子集 | UC-1~2 |
+| UC-7 | 降低 AR ratio 门限 | 当前 ratio>3.0 太保守，城市峡谷可尝试 2.0+验证 | UC-6 |
+| UC-8 | 多历元 AR | 累积多历元浮点解再尝试固定，提高 ratio | UC-6 |
+| UC-9 | 短基线电离层强约束 | 基线<1km 时强约束双频电离层残差 | UC-1 |
+
+### 7.0.5 执行顺序与验证
+
+```
+UC-1 (新息检验) → UC-2 (自适应Q) → UC-4+5 (零速调优) → UC-3 (warm-up) → UC-6~9 (RTK)
+```
+
+每项完成后运行：
+```bash
+mvn test -pl rtklib-core -Dtest="UrbanCanyonSppOptTest"
+```
+对比 `URBAN_CANYON_SPP_TEST_RESULTS.md` 基准，确认改善方向正确、无回归。
+
+### 7.0.6 RTK 城市峡谷优化测试（DynamicRtkOptTest）
+
+> **测试类**: `org.rtklib.java.urbancanyon.DynamicRtkOptTest`  
+> **测试数据**: Net_Diff Urban / PPC Tokyo (run1~3) / PPC Nagoya (run1~3) / UrbanNav Tokyo 2018  
+> **日期**: 2026-10-13
+
+#### 关键发现：thresar[1] 是 Fix 率的决定性参数
+
+RTKLIB C 版（demo5 EX 2.5.0）默认 `thresar[1] = 0.9999`（最大位置方差阈值 m²），而 RTKLIB 2.5.0 标准版默认 `0.25`。Java 版此前沿用 `0.1`，导致 `manage_amb()` 中 AR 前置检查 `posvar < thresar[1]` 几乎永不满足 → **Fix 率 0%**。
+
+将 `thresar[1]` 从 0.1 改为 0.9999 后，Fix 率从 0% 跃升至当前水平（PPC Nagoya run1 达 19.8%）。**这是 Fix 率提升的真正原因**，而非 Joseph 形式协方差更新。
+
+#### Joseph 形式等价性验证
+
+全量测试（8 个数据集）确认：**Joseph 形式与标准形式在本场景下数学等价**，两者结果完全一致。这与理论一致——当 K 为最优增益时，Joseph 形式是标准形式的数值稳定超集，差异仅在病态条件下显现。
+
+#### C-EX-Ref 全量测试结果（thresar[1]=0.9999）
+
+| 数据集 | 历元 | Fix% | Float% | H.RMSE(m) |
+|--------|------|------|--------|-----------|
+| Net_Diff Urban (准静态) | 9907 | 1.4% | 24.9% | 9.795 |
+| PPC Tokyo run1 | 11928 | 6.8% | 69.8% | 11.846 |
+| PPC Tokyo run2 | 9151 | 12.3% | 69.1% | 1.531 |
+| PPC Tokyo run3 | 15301 | 3.9% | 73.8% | 9.701 |
+| PPC Nagoya run1 | 7602 | 19.8% | 59.3% | 5.733 |
+| PPC Nagoya run2 | 9451 | 6.3% | 75.8% | 13.202 |
+| PPC Nagoya run3 | 5201 | 7.5% | 79.8% | 12.800 |
+| UrbanNav Tokyo 2018 | 12395 | 5.5% | 43.7% | — |
+
+#### 优化变体定义（12 个配置）
+
+| 变体 | 配置要点 | thresar[1] | RtkConfig 开关 |
+|------|---------|------------|----------------|
+| A-Default | Java默认(dynamics=0) | 0.25 | — |
+| B-Dyn1 | dynamics=1, 默认prn | 0.25 | — |
+| C-EX-Ref | 对齐RTKLIB-EX配置 | **0.9999** | enableIflcPairNegotiation |
+| D-LooseAR | 宽松AR | 1.0 | enableIflcPairNegotiation |
+| E-NoDyn | dynamics=0, EX参数 | 0.9999 | enableIflcPairNegotiation |
+| F-AdapQ | EX-Ref + 自适应Q | 0.9999 | +enableAdaptiveQ |
+| G-IGGIII | EX-Ref + 抗差IGGIII | 0.9999 | +enableIggiii |
+| H-ResEdit | EX-Ref + 残差编辑 | 0.9999 | +enableResidualEdit |
+| I-PartAR | EX-Ref + 部分模糊度固定 | 0.9999 | +enablePartialAR |
+| J-CascadeAR | EX-Ref + 级联AR | 0.9999 | +enableCascadeAR |
+| K-SnrMed | EX-Ref + SNR中值定权 | 0.9999 | +enableSnrMedian |
+| L-AllOpt | EX-Ref + 全部RTK优化 | 0.9999 | 全部开关开启 |
+
+> **注**: E~L 变体的 `thresar[1]` 须从 0.1 更新为 0.9999（与 C 版默认值一致），否则 AR 前置检查不通过，Fix 率退化为 0%。
+
+#### 执行命令
+
+```bash
+mvn test -pl rtklib-core -Dtest="DynamicRtkOptTest#testPpcTokyoRun1"
+```
+
+---
+
 ## 7. 梯队3 — 依赖外部条件 🟠
 
 > 核心原则：**代码基础好但缺数据/场景**。当前可做技术准备（数据结构/接口设计），等条件满足后快速推进。
@@ -561,3 +669,5 @@ rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码�
 | v1.3 | 新增 Phase 3（运行时性能优化）和 Phase 3.5（工程质量加固）；原 Phase 3 场景验证移入 Phase 3.5 |
 | v1.4 | **重大重组**: 改为四梯队制（0→1→2→3）；梯队0新增性能基准；3.5E提前到梯队0；3.5D提到梯队1（只差接线）；3A降级到梯队2（需profiling前置）；3.5B降级到梯队2（需语义审查）；3.5F提到梯队1末尾（回归覆盖）；Phase 4A~D 标记暂不建议投入；原Phase 4E~G保留在梯队3；变更日志→§10 |
 | v1.5 | **梯队1全部完成**: 3C (Math.pow优化)、3.5A (SLF4J)、3B-1 (工作数组复用)、3.5C (异常日志)、3.5D (SSR对流层)、3.5F (34单元测试)；3A+3B-2 经 JMH 基准实测确认放弃（SimpleMatrix 计算不慢，EJML 优化块乘法 k≥150 快 10x）；标记 §5 完成、§6.2 放弃 |
+| v1.6 | **新增梯队2.5 城市峡谷优化**: UC-1~9（新息检验/自适应Q/warm-up/零速调优/RTK PAR等）；前置条件为 EKF 发散 Bug 修复；测试基准 `URBAN_CANYON_SPP_TEST_RESULTS.md` |
+| v1.7 | **梯队2.5 RTK 优化测试**: 新增 §7.0.6 DynamicRtkOptTest 12变体对比测试；记录 thresar[1] 关键发现（0.1→0.9999 是 Fix 率从 0% 提升的真正原因）；Joseph 形式等价性全量验证（8 数据集完全一致）；C-EX-Ref 全量结果表；rtklib-test 状态更新为 80% |

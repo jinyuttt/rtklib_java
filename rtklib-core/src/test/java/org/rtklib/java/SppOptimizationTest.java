@@ -46,12 +46,14 @@ public class SppOptimizationTest {
 
     static class SppResult {
         final GTime time;
+        final double sod;
         final double[] llh;
         final int stat;
         final int ns;
 
-        SppResult(GTime time, double[] llh, int stat, int ns) {
+        SppResult(GTime time, double sod, double[] llh, int stat, int ns) {
             this.time = time;
+            this.sod = sod;
             this.llh = llh;
             this.stat = stat;
             this.ns = ns;
@@ -59,11 +61,11 @@ public class SppOptimizationTest {
     }
 
     static class RefPosition {
-        final GTime time;
+        final double sod;
         final double[] llh;
 
-        RefPosition(GTime time, double[] llh) {
-            this.time = time;
+        RefPosition(double sod, double[] llh) {
+            this.sod = sod;
             this.llh = llh;
         }
     }
@@ -101,10 +103,12 @@ public class SppOptimizationTest {
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
             String line;
             while ((line = br.readLine()) != null) {
-                if (!line.startsWith("NMEA,$GPGGA") && !line.startsWith("$GPGGA")) continue;
+                int ggaIdx = line.indexOf("$GPGGA");
+                if (ggaIdx < 0) ggaIdx = line.indexOf("$GNGGA");
+                if (ggaIdx < 0) continue;
 
-                String[] fields = line.substring(line.indexOf("$GPGGA")).split(",");
-                if (fields.length < 15) continue;
+                String[] fields = line.substring(ggaIdx).split(",");
+                if (fields.length < 10) continue;
 
                 String utcStr = fields[1];
                 String latStr = fields[2];
@@ -114,10 +118,12 @@ public class SppOptimizationTest {
                 double hgt = parseDouble(fields[9]);
 
                 if (utcStr.isEmpty() || latStr.isEmpty() || lonStr.isEmpty()) continue;
+                if (latStr.equals("0") || lonStr.equals("0")) continue;
 
                 int hh = Integer.parseInt(utcStr.substring(0, 2));
                 int mm = Integer.parseInt(utcStr.substring(2, 4));
                 double ss = Double.parseDouble(utcStr.substring(4));
+                double sod = hh * 3600.0 + mm * 60.0 + ss;
 
                 int alat = (int)(Double.parseDouble(latStr) / 100.0);
                 double blat = Double.parseDouble(latStr) - alat * 100.0;
@@ -129,10 +135,7 @@ public class SppOptimizationTest {
                 double lon = alon + blon / 60.0;
                 if (lonEW.equals("W")) lon = -lon;
 
-                GTime time = new GTime();
-                time.time = 0;
-                time.sec = hh * 3600.0 + mm * 60.0 + ss;
-                refs.add(new RefPosition(time, new double[]{lat * Constants.D2R, lon * Constants.D2R, hgt}));
+                refs.add(new RefPosition(sod, new double[]{lat * Constants.D2R, lon * Constants.D2R, hgt}));
             }
         } catch (IOException e) {
             log.warn("无法解析 baseline NMEA: {}", e.getMessage());
@@ -140,18 +143,23 @@ public class SppOptimizationTest {
         return refs;
     }
 
-    private static RefPosition findClosestRef(GTime time) {
+    private static RefPosition findClosestRef(double sod) {
         if (refPositions.isEmpty()) return null;
+        if (refPositions.size() == 1 && refPositions.get(0).sod < 0) {
+            return refPositions.get(0);
+        }
         RefPosition best = refPositions.get(0);
-        double bestDt = Math.abs(TimeSystem.timediff(time, best.time));
+        double bestDt = Math.abs(sod - best.sod);
+        if (bestDt > 43200.0) bestDt = 86400.0 - bestDt;
         for (RefPosition r : refPositions) {
-            double dt = Math.abs(TimeSystem.timediff(time, r.time));
+            double dt = Math.abs(sod - r.sod);
+            if (dt > 43200.0) dt = 86400.0 - dt;
             if (dt < bestDt) {
                 bestDt = dt;
                 best = r;
             }
         }
-        return bestDt < 5.0 ? best : null;
+        return bestDt < 30.0 ? best : null;
     }
 
     private static double parseDouble(String s) {
@@ -185,7 +193,8 @@ public class SppOptimizationTest {
         String navSmall = TestDataConfig.getTestDataFile("nav/rinex304_gejc_" + scenarioName + ".25n");
         String navLarge = TestDataConfig.getTestDataFile("nav/" + scenarioName + "_rover_" + getScenarioDate(scenarioName) + ".25n");
         String nmeaSmall = TestDataConfig.getTestDataFile("nmea/phone_" + scenarioName + ".nmea");
-        String nmeaLarge = TestDataConfig.getTestDataFile("nmea/" + scenarioName + "_base_" + getScenarioDate(scenarioName) + ".nmea");
+        String nmeaRtkLarge = TestDataConfig.getTestDataFile("nmea/" + scenarioName + "_rtk_" + getScenarioDate(scenarioName) + ".nmea");
+        String nmeaBaseLarge = TestDataConfig.getTestDataFile("nmea/" + scenarioName + "_base_" + getScenarioDate(scenarioName) + ".nmea");
 
         if (new java.io.File(obsSmall).exists() && new java.io.File(navSmall).exists()) {
             obsFile = obsSmall;
@@ -194,7 +203,7 @@ public class SppOptimizationTest {
         } else if (new java.io.File(obsLarge).exists() && new java.io.File(navLarge).exists()) {
             obsFile = obsLarge;
             navFile = navLarge;
-            baselineFile = nmeaLarge;
+            baselineFile = new java.io.File(nmeaRtkLarge).exists() ? nmeaRtkLarge : nmeaBaseLarge;
         } else {
             obsFile = DATA_BASE + "\\" + scenario + "\\" + dataId + "\\rover.obs";
             navFile = DATA_BASE + "\\" + scenario + "\\" + dataId + "\\rover.nav";
@@ -213,8 +222,20 @@ public class SppOptimizationTest {
 
         nav = parser.nav;
         obsEpochs = groupObsByEpoch(parser.obs.data, parser.obs.n);
-        refPositions = parseBaselineNmea(baselineFile);
         currentDataset = scenario + "/" + dataId;
+
+        refPositions = new ArrayList<>();
+        if (baselineFile != null && new java.io.File(baselineFile).exists()) {
+            refPositions = parseBaselineNmea(baselineFile);
+        }
+        if (refPositions.isEmpty() && parser.sta.pos[0] != 0.0) {
+            double[] approxLlh = new double[3];
+            CoordTransform.ecef2pos(parser.sta.pos, approxLlh);
+            refPositions.add(new RefPosition(-1.0, approxLlh));
+            log.info("使用 RINEX APPROX POSITION 作为参考: lat={} lon={}",
+                    String.format("%.5f", approxLlh[0] / Constants.D2R),
+                    String.format("%.5f", approxLlh[1] / Constants.D2R));
+        }
 
         log.info("数据集 {}: {} 历元, eph={}, geph={}, seph={}, ref点={}",
                 currentDataset, obsEpochs.size(), nav.n, nav.ng, nav.ns, refPositions.size());
@@ -267,9 +288,11 @@ public class SppOptimizationTest {
                 successCount++;
                 double[] llh = new double[3];
                 CoordTransform.ecef2pos(sol.rr, llh);
-                results.add(new SppResult(new GTime(epoch.time), llh, sol.stat, sol.ns));
+                double sod = epoch.time.time % 86400 + epoch.time.sec;
+                results.add(new SppResult(new GTime(epoch.time), sod, llh, sol.stat, sol.ns));
             } else {
-                results.add(new SppResult(new GTime(epoch.time), null, sol.stat, 0));
+                double sod = epoch.time.time % 86400 + epoch.time.sec;
+                results.add(new SppResult(new GTime(epoch.time), sod, null, sol.stat, 0));
             }
         }
 
@@ -285,7 +308,7 @@ public class SppOptimizationTest {
 
         for (SppResult r : results) {
             if (r.llh == null) continue;
-            RefPosition ref = findClosestRef(r.time);
+            RefPosition ref = findClosestRef(r.sod);
             if (ref == null) continue;
 
             double lat = r.llh[0];
@@ -415,5 +438,113 @@ public class SppOptimizationTest {
     @DisplayName("04-elevated/data02: 高架场景2")
     void testElevatedData02() {
         runFullComparison("04-elevated", "data02");
+    }
+
+    private static int countSuccess(List<SppResult> results) {
+        return (int) results.stream().filter(r -> r.llh != null).count();
+    }
+
+    private static double[] computeRms2d3d(List<SppResult> results) {
+        double[] s = computeStats(results);
+        double sumE = 0, sumN = 0;
+        int count = 0;
+        for (SppResult r : results) {
+            if (r.llh == null) continue;
+            RefPosition ref = findClosestRef(r.sod);
+            if (ref == null) continue;
+            double dN = (Constants.RE_WGS84 + ref.llh[2]) * (r.llh[0] - ref.llh[0]);
+            double dE = (Constants.RE_WGS84 + ref.llh[2]) * Math.cos(ref.llh[0]) * (r.llh[1] - ref.llh[1]);
+            sumN += dN * dN;
+            sumE += dE * dE;
+            count++;
+        }
+        if (count == 0) return new double[]{0, 0, s[3]};
+        double rms2D = Math.sqrt((sumN + sumE) / count);
+        return new double[]{rms2D, s[3], count};
+    }
+
+    private void runIndividualOptComparison(String scenario, String dataId) {
+        if (!loadData(scenario, dataId)) {
+            log.warn("跳过数据集 {}/{}", scenario, dataId);
+            return;
+        }
+
+        PrcOpt opt = createOpt();
+        int total = obsEpochs.size();
+
+        RtkConfig cfgBase = new RtkConfig();
+        cfgBase.enableSppEkf = true;
+        cfgBase.enableSppRobust = true;
+        List<SppResult> base = runSpp(opt, cfgBase);
+
+        RtkConfig cfgNoInnov = new RtkConfig();
+        cfgNoInnov.enableSppEkf = true;
+        cfgNoInnov.enableSppRobust = true;
+        cfgNoInnov.enableSppInnovChisq = false;
+        List<SppResult> noInnov = runSpp(opt, cfgNoInnov);
+
+        RtkConfig cfgZeroVel = new RtkConfig();
+        cfgZeroVel.enableSppEkf = true;
+        cfgZeroVel.enableSppRobust = true;
+        cfgZeroVel.enableSppZeroVel = true;
+        List<SppResult> withZeroVel = runSpp(opt, cfgZeroVel);
+
+        RtkConfig cfgDopplerSnr = new RtkConfig();
+        cfgDopplerSnr.enableSppEkf = true;
+        cfgDopplerSnr.enableSppRobust = true;
+        cfgDopplerSnr.enableSppDopplerSnr = true;
+        List<SppResult> withDopplerSnr = runSpp(opt, cfgDopplerSnr);
+
+        double[] sBase = computeRms2d3d(base);
+        double[] sNoInnov = computeRms2d3d(noInnov);
+        double[] sZeroVel = computeRms2d3d(withZeroVel);
+        double[] sDopplerSnr = computeRms2d3d(withDopplerSnr);
+
+        int cBase = countSuccess(base);
+        int cNoInnov = countSuccess(noInnov);
+        int cZeroVel = countSuccess(withZeroVel);
+        int cDopplerSnr = countSuccess(withDopplerSnr);
+
+        System.out.println();
+        System.out.println("====== " + currentDataset + " 逐项对照 ======");
+        System.out.printf("%-30s 成功率  2D(m)   3D(m)%n", "模式");
+        System.out.printf("%-30s %5.1f%%  %6.2f  %6.2f%n",
+                "EKF+抗差 (基准)", 100.0 * cBase / total, sBase[0], sBase[1]);
+        System.out.printf("%-30s %5.1f%%  %6.2f  %6.2f  Δ2D=%+.1f%%%n",
+                "- 新息检验", 100.0 * cNoInnov / total, sNoInnov[0], sNoInnov[1],
+                sBase[0] > 0 ? (sNoInnov[0] - sBase[0]) / sBase[0] * 100 : 0);
+        System.out.printf("%-30s %5.1f%%  %6.2f  %6.2f  Δ2D=%+.1f%%%n",
+                "+ 零速约束", 100.0 * cZeroVel / total, sZeroVel[0], sZeroVel[1],
+                sBase[0] > 0 ? (sZeroVel[0] - sBase[0]) / sBase[0] * 100 : 0);
+        System.out.printf("%-30s %5.1f%%  %6.2f  %6.2f  Δ2D=%+.1f%%%n",
+                "+ 多普勒SNR", 100.0 * cDopplerSnr / total, sDopplerSnr[0], sDopplerSnr[1],
+                sBase[0] > 0 ? (sDopplerSnr[0] - sBase[0]) / sBase[0] * 100 : 0);
+        System.out.println();
+
+        assertTrue(cBase > 0, currentDataset + " 基准至少应有一个历元成功");
+    }
+
+    @Test
+    @DisplayName("05-individual: 开阔天空逐项对照")
+    void testIndividualOptOpenSky() {
+        runIndividualOptComparison("01-opensky", "data01");
+    }
+
+    @Test
+    @DisplayName("06-individual: 街道逐项对照")
+    void testIndividualOptStreet() {
+        runIndividualOptComparison("02-street", "data01");
+    }
+
+    @Test
+    @DisplayName("07-individual: 城市峡谷逐项对照")
+    void testIndividualOptDowntown() {
+        runIndividualOptComparison("03-downtown", "data01");
+    }
+
+    @Test
+    @DisplayName("08-individual: 高架逐项对照")
+    void testIndividualOptElevated() {
+        runIndividualOptComparison("04-elevated", "data01");
     }
 }

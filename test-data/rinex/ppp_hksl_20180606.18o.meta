@@ -1,0 +1,11 @@
+scenario=open-sky
+role=rover
+systems=G+R+E+C+J+S
+date=2018-06-06
+source=Net_Diff
+receiver=Leica GR50
+interval=30s
+description=香港站PPP多系统数据(G+R+E+C+J+S六系统)
+license=public
+test_ids=PppTest
+sample_rate=30s

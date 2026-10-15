@@ -192,6 +192,8 @@ public final class RtkOptimizations {
         RtkConfig cfg = rtk.rtkConfig;
         if (!cfg.enableIggiii) return;
 
+        rtk.diagIggCallCount++;
+
         double[] diag = computeHPHtDiagNative(H, Pp, nv, nx);
 
         double[] w = new double[nv];
@@ -270,6 +272,13 @@ public final class RtkOptimizations {
             if (w[i] < 1.0) {
                 R[i * nv + i] /= w[i];
                 rtk.diagIggDownWeightCount++;
+                int sat2 = (vflg[i] >> 16) & 0xFF;
+                if (sat2 > 0 && sat2 <= Constants.MAXSAT) {
+                    if (rtk.diagIggDownWeightPerSat == null) {
+                        rtk.diagIggDownWeightPerSat = new int[Constants.MAXSAT + 1];
+                    }
+                    rtk.diagIggDownWeightPerSat[sat2]++;
+                }
             }
         }
     }
@@ -495,8 +504,11 @@ public final class RtkOptimizations {
 
         int ztdStart = np + ni;
         int ztdCount = nt;
+        double[] x = rtk.x;
         for (int i = ztdStart; i < ztdStart + ztdCount && i < na; i++) {
-            P[i * nx + i] += cfg.noiseZtdRw * cfg.noiseZtdRw * Math.abs(tt);
+            if (x[i] != 0.0) {
+                P[i * nx + i] += cfg.noiseZtdRw * cfg.noiseZtdRw * Math.abs(tt);
+            }
         }
 
         int clkStart = np;
@@ -509,7 +521,9 @@ public final class RtkOptimizations {
         if (opt.ionoopt == Constants.IONOOPT_EST) {
             int ionoCount = opt.ionoGradient ? Constants.MAXSAT * 3 : Constants.MAXSAT;
             for (int i = ionoStart; i < ionoStart + ionoCount && i < na; i++) {
-                P[i * nx + i] += cfg.noiseIonoRw * cfg.noiseIonoRw * Math.abs(tt);
+                if (x[i] != 0.0) {
+                    P[i * nx + i] += cfg.noiseIonoRw * cfg.noiseIonoRw * Math.abs(tt);
+                }
             }
         }
     }
