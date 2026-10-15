@@ -6,6 +6,13 @@
 
 ---
 
+## [2.3.1] - 2026-10-15
+
+### Docs
+
+- `RTK_OPTIMIZATION_TEST_RESULTS.md`：§4 表格 10 处 CascadeAR 行补齐版本标注（v2.2.x伪逐级/v2.3.0真逐级待重测）；§6.3 推荐矩阵 5 处 `❌ Bug` → `⚠️ v2.3.0待重测`
+- `CHANGELOG.md`：v2.3.0 `Unreleased` → 正式日期 `2026-10-15`
+
 ## [2.3.0] - 2026-10-15
 
 ### Fixed
