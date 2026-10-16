@@ -1711,7 +1711,7 @@ if (segmentSigmaFilter != null && rtk.sol.stat == Constants.SOLQ_FIX) {
 | **PAR参考星重选** | `enableParRefReselect` | ⚠️ 理论有效 | ⚠️ 理论有效 | ⚠️ 理论有效 | ⚠️ 理论有效 | ⚠️ 未专项测试 |
 | **电离层梯度** | `enableIonoTropGradient` | ❌ 短基线无需 | ✅ 长基线必要 | ❌ 短基线无需 | ❌ 短基线无需 | ⚠️ 未专项测试 |
 | **基站稳定性监测** | `BaseStationMonitor` | ✅ 滑坡监测 | ✅ 长基线基站 | ✅ 通用 | ✅ 通用 | ✅ RTCM+RINEX |
-| **逐级模糊度固定** | `enableCascadeAR` | ⚠️ v2.3.0重写待实测 | ⚠️ v2.3.0重写待实测 | ⚠️ 待验证 | ❌ IFLC不兼容(守卫) | ✅ 单元测试+EST A/B回归（§10.7旧伪实现数据作废） |
+| **逐级模糊度固定** | `enableCascadeAR` | ⚠️ 动态场景已验证(§10.7)，静态短基线未重测 | ⚠️ 静态长基线未重测 | ⚠️ 开阔天空无实测 | ✅ EST动态可用性提升（Nagoya 4~15×/run2 2×） | ✅ 单元测试+EST A/B回归 0 violations |
 | **残差编辑周跳** | `enableResidualEdit` | ⚠️ 微弱(实测) | ✅ 弧段筛查 | ✅ 跳变检测 | ❌ IFLC下有害 | ✅ 单元测试+场景实测 |
 | **部分模糊度固定** | `enablePartialAR` | ✅ **假固定-67%** | ✅ 提升Fix率 | ✅ 提升Fix率 | ⚠️ false fix风险 | ✅ 单元测试+场景实测 |
 | **Bootstrapping判据** | `enableBootstrapping` | ✅ **假固定-81%** | ✅ 防假阳性 | ✅ 防假阳性 | ❌ 动态遮挡无效 | ✅ 单元测试+UrbanNav+场景实测 |
