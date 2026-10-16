@@ -167,15 +167,22 @@ public final class RtkCore {
         double[] vare = wb.vare;
         int[] svh = wb.svh;
         double[] azel = wb.azel;
+        double[] y = wb.y;
+        double[] e = wb.e;
+        double[] freq = wb.freq;
+
+        /* C rtkpos.c relpos(): azel=zeros(2,n), freq=zeros(nf,n) — both
+         * zero-initialized each call. Work buffer reuse leaves stale values
+         * from the previous epoch; if a satellite is skipped by zdres (r<=0,
+         * el<elmin, satexclude), its azel/freq slot retains the old value,
+         * which can fool selsat (azel[1+j*2]>=elmin) or ddres. */
+        Arrays.fill(azel, 0, n * 2, 0.0);
+        Arrays.fill(freq, 0, n * nf, 0.0);
 
         EphModel.satposs(obs[0].time, obs, n, nav, rs, dts, vare, svh, opt.sateph);
 
         RtkTrace.traceStage1(v1ctrl, v1cb, rtk.epoch, obs[0].time, null, 0, nf,
                 rs, dts, nav, rtk.rb, null);
-
-        double[] y = wb.y;
-        double[] e = wb.e;
-        double[] freq = wb.freq;
 
         // [JAVA-ONLY] IFLC频率对逐卫星协商（需先于zdres(base)，协商结果供两站zdres/udbias共同使用）
         negotiateIflcPairs(rtk, obs, nu, nr);

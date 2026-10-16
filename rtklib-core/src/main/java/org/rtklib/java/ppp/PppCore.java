@@ -166,10 +166,13 @@ public class PppCore {
         int[] svh = wb.svh;
         double[] azel = wb.azel;
         int[] exc = wb.exc;
-        /* C ppp.c pppos(): exc[MAXOBS]={0} is re-initialized at each pppos entry,
-         * so exclusions accumulate only across iterations within an epoch and
-         * never leak into the next epoch (work buffer is reused across epochs) */
+        /* C ppp.c pppos(): exc[MAXOBS]={0} and azel=zeros(2,n) are
+         * re-initialized at each pppos entry. Work buffer reuse leaves stale
+         * values from the previous epoch; if a satellite is skipped by pppRes
+         * (r<=0, el<elmin, satexclude), its azel slot retains the old value,
+         * which can corrupt downstream elevation-dependent logic. */
         java.util.Arrays.fill(exc, 0);
+        java.util.Arrays.fill(azel, 0, n * 2, 0.0);
 
         for (int i = 0; i < Constants.MAXSAT; i++) {
             for (int j = 0; j < opt.nf; j++) {

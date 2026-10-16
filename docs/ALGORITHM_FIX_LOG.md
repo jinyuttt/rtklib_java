@@ -106,6 +106,59 @@
 - **验证**：PPC-Dataset Tokyo run1 Fix 0→570、Float 8986→10927、成功率 85.8%→97.9%。
 - **对齐结论**：与 C 版 `rtkcmn.c satid2no()` 语义完全一致。
 
+### FIX-ALG-008：RtkCore relpos azel/freq 跨历元泄漏修复
+
+- **日期**：2026-10-16
+- **模块/位置**：`rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java`，`relpos()` 入口（ensureInit 之后、satposs 之前）
+- **类别**：C 对齐修复（状态生命周期）
+- **C 版依据**：`RTKLIB-2.5.0/src/rtkpos.c` L1986 `relpos()` 局部变量分配：
+  ```c
+  azel=zeros(2,n);        /* [az, el] */
+  freq=zeros(nf,n);
+  ```
+  `azel` 和 `freq` 为 `zeros()`（即 `calloc`）分配，每历元调用 `relpos` 时自动零初始化。若某卫星在 `zdres` 中因 `r<=0`/`el<elmin`/`satexclude` 被 `continue` 跳过，其 azel/freq 槽位保持为 0，不会影响后续逻辑。
+- **问题现象**：当某卫星在上一历元有效（azel 有值）但在当前历元因 `geodist` 失败（`r<=0`，通常无有效星历）被 `zdres` 跳过时，`wb.azel` 对应槽位残留上历元值。`selsat()` 中 `azel[1+j*2]>=opt.elmin` 检查可能将该卫星误选，导致 `ns` 膨胀。注意：`zdres` 中 `r>0` 时 azel 已被写入当前历元值（即使后续因 `el<elmin`/`satexclude` 被 continue），故残留仅发生在 `r<=0` 场景。`ddres` 中 `validobs` 会过滤 y=0 的卫星（不参与双差），但 `udbias` 无 `validobs` 防护——误选卫星会进入 `detslpDop/detslpCode/detslpLl/detslpGf` 周跳检测循环（各子函数有 `L[f]==0||D[f]==0`/`gf1==0.0` 防护，不会产生错误周跳标记，但增加无效计算开销）。
+- **根因**：Java 侧 `RtkWorkBuffer` 跨历元复用（`wb.azel/wb.freq` 仅在首次 `ensureInit()` 分配为 Java 默认 0.0），但历元间不清零。C 版每次 `relpos` 调用 `azel=zeros(2,n)` 重新零初始化，而 Java 版复用工作缓冲区无重置机制。
+  此 bug 属条件触发：仅当卫星在历元间有效性变化（上一历元有效→当前历元 `geodist` 失败）时才暴露，典型场景为星历过期/切换。影响为 `ns` 膨胀及无效计算开销，不直接导致数值结果错误（下游有 validobs/L==0/gf==0 防护），但与 C 版行为不一致。
+- **修改内容**：`relpos()` 入口、工作缓冲取出之后、`satposs` 之前新增：
+  ```java
+  /* C rtkpos.c relpos(): azel=zeros(2,n), freq=zeros(nf,n) — both
+   * zero-initialized each call. Work buffer reuse leaves stale values
+   * from the previous epoch; if a satellite is skipped by zdres (r<=0,
+   * el<elmin, satexclude), its azel/freq slot retains the old value,
+   * which can fool selsat (azel[1+j*2]>=elmin) or ddres. */
+  Arrays.fill(azel, 0, n * 2, 0.0);
+  Arrays.fill(freq, 0, n * nf, 0.0);
+  ```
+- **验证**：`mvn test -pl rtklib-core "-Dtest=RtkOptimizationsConfigTest,RtkOptimizationsBootstrapTest"` — Tests run: 19, Failures: 0
+- **对齐结论**：与 C 版 `rtkpos.c relpos()` 的 azel/freq 生命周期语义完全一致（每历元零初始化）。
+- **同类风险提示**：`RtkWorkBuffer` 中其他数组（`rs/dts/vare/svh`）由 `satposs` 每历元全量写入无泄漏风险；`y` 由 `zdres` 入口循环清零；`e` 仅在 `zdres` 中对 `selsat` 选中卫星写入，未被选中的残留值不会被 `ddres` 访问；`vflg` 按 `nv` 索引读写，残留值不在有效范围内。当前仅需 azel/freq 清零。
+
+### FIX-ALG-009：PppCore pppos azel 跨历元泄漏修复
+
+- **日期**：2026-10-16
+- **模块/位置**：`rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java`，`pppos()` 入口（ensureInit 之后）
+- **类别**：C 对齐修复（状态生命周期）
+- **C 版依据**：`RTKLIB-2.5.0/src/ppp.c` L1199 `pppos()` 局部变量分配：
+  ```c
+  azel=zeros(2,n);
+  ```
+  `azel` 为 `zeros()`（即 `calloc`）分配，每历元调用 `pppos` 时自动零初始化。
+- **问题现象**：当某卫星在上一历元有效（azel 有值）但在当前历元因 `geodist` 失败（`r<=0`）被 `pppRes` 跳过时，`wb.azel` 对应槽位残留上历元值，可能污染下游高度角依赖逻辑（如对流层映射函数、电离层映射等）。注意：`pppRes` 中 `r>0` 时 azel 已被写入当前历元值，故残留仅发生在 `r<=0` 场景。
+- **根因**：与 FIX-ALG-008 同源——Java 侧 `PppWorkBuffer` 跨历元复用，`wb.azel` 无重置机制。C 版每次 `pppos` 调用 `azel=zeros(2,n)` 零初始化。
+- **修改内容**：`pppos()` 入口、工作缓冲取出之后新增：
+  ```java
+  /* C ppp.c pppos(): exc[MAXOBS]={0} and azel=zeros(2,n) are
+   * re-initialized at each pppos entry. Work buffer reuse leaves stale
+   * values from the previous epoch; if a satellite is skipped by pppRes
+   * (r<=0, el<elmin, satexclude), its azel slot retains the old value,
+   * which can corrupt downstream elevation-dependent logic. */
+  java.util.Arrays.fill(exc, 0);
+  java.util.Arrays.fill(azel, 0, n * 2, 0.0);
+  ```
+- **验证**：`mvn test -pl rtklib-core "-Dtest=RtkOptimizationsConfigTest,RtkOptimizationsBootstrapTest"` — Tests run: 19, Failures: 0
+- **对齐结论**：与 C 版 `ppp.c ppos()` 的 azel 生命周期语义完全一致（每历元零初始化）。
+
 ### FIX-ALG-004：RINEX 3 观测槽位分配修复（对齐 C set_index 优先级仲裁）
 
 - **日期**：2026-10-13
@@ -213,3 +266,5 @@
 | FIX-ALG-005 | 2026-10-13 | rtk/RtkCore.java | ddres/udbias/varerr 对齐 C（maxinno 阈值 + IFLC var*=9.0） |
 | FIX-ALG-006 | 2026-10-15 | rtkpos/RtkCore.java | CascadeAR 与 IFLC 互斥守卫，Fix 0%→恢复标准 LAMBDA 基线（5 数据集与关闭开关逐值一致） |
 | FIX-ALG-007 | 2026-10-15 | rtkpos/RtkOptimizationsCascadeAR.java | CascadeAR 伪逐级→真逐级重写：每级独立组合变换+级间条件更新+整数反推+restamb+动态ratio阈值+bias 消费序构建（修复 holdamb 假 Fix 簇） |
+| FIX-ALG-008 | 2026-10-16 | rtkpos/RtkCore.java | relpos 入口 azel/freq 清零，修复跨历元方位角/频率残留泄漏（selsat 误选低高度角卫星） |
+| FIX-ALG-009 | 2026-10-16 | ppp/PppCore.java | ppos 入口 azel 清零，修复跨历元方位角残留泄漏（高度角依赖逻辑污染） |

@@ -1,4 +1,4 @@
-# RTKLIB Java 变更记录
+Y# RTKLIB Java 变更记录
 
 本文件记录版本间的重要变更、Bug修复及与GitHub Issue的对应关系。
 
@@ -6,7 +6,12 @@
 
 ---
 
-## [2.3.1] - 2026-10-15
+## [2.3.2] - 2026-10-16
+
+### Fixed
+
+- **RtkCore relpos azel/freq 跨历元泄漏修复**：`RtkCore.relpos()` 入口新增 `Arrays.fill(azel, 0, n*2, 0.0)` 与 `Arrays.fill(freq, 0, n*nf, 0.0)`——C 版 `rtkpos.c` L1986 `azel=zeros(2,n), freq=zeros(nf,n)` 每历元零初始化，Java 工作缓冲复用 `wb.azel/wb.freq` 从未清零；若某卫星因 `geodist` 失败（`r<=0`）被 `zdres` 跳过，其 azel 残留上历元值导致 `selsat` 误选（`ns` 膨胀），虽 `ddres` 的 `validobs` 会过滤但 `udbias` 无此防护（详见 `ALGORITHM_FIX_LOG.md` FIX-ALG-008）
+- **PppCore pppos azel 跨历元泄漏修复**：`PppCore.pppos()` 入口新增 `Arrays.fill(azel, 0, n*2, 0.0)`——C 版 `ppp.c` L1199 `azel=zeros(2,n)` 每历元零初始化，Java 工作缓冲复用 `wb.azel` 从未清零；若某卫星因 `geodist` 失败被 `pppRes` 跳过，其 azel 残留值可污染下游高度角依赖逻辑（详见 `ALGORITHM_FIX_LOG.md` FIX-ALG-009）
 
 ### Docs
 

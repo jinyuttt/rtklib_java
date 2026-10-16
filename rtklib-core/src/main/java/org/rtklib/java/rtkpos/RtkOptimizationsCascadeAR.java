@@ -449,7 +449,8 @@ public final class RtkOptimizationsCascadeAR {
         rtk.diagCascadeArMaxZ = maxZ;
         rtk.diagCascadeArRmsZ = nFx > 0 ? Math.sqrt(sumZ2 / nFx) : 0.0;
         rtk.diagCascadeArMaxD = maxD;
-        LOG.info("CascadeAR fixed: epoch={} nb={} nFx={} nNl={} nWl={} maxD={} sigMaxD={} maxZ={} rmsZ={} ratio={}",
+        // 定版日志策略：热路径逐历元输出降为 DEBUG（诊断字段 rtk.diagCascadeAr* 仍保留）
+        LOG.debug("CascadeAR fixed: epoch={} nb={} nFx={} nNl={} nWl={} maxD={} sigMaxD={} maxZ={} rmsZ={} ratio={}",
                 rtk.epoch, nb, nFx, nNl, nWl, String.format("%.3f", maxD),
                 String.format("%.4f", sigAtMax), String.format("%.2f", maxZ),
                 String.format("%.2f", rtk.diagCascadeArRmsZ), String.format("%.2f", nlRatio));
@@ -547,6 +548,8 @@ public final class RtkOptimizationsCascadeAR {
         MatrixUtil.copyMatrix(yNew, y);
 
         SimpleMatrix QNew = MatrixUtil.subtract(Q, MatrixUtil.multiply(K, MatrixUtil.multiply(C, Q)));
+        // 强制对称：与文件内其他级间协方差变换一致，防止数值误差累积导致 Q 失对称
+        QNew = symmetrize(QNew);
         for (int i = 0; i < nbF; i++) {
             for (int j = 0; j < nbF; j++) {
                 Q.set(i, j, QNew.get(i, j));
