@@ -615,7 +615,7 @@ rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码�
 
 | 子阶段 | 内容 | 暂缓原因 |
 |--------|------|----------|
-| 4A RAIM 保护级 | HPL/VPL 计算 + HAL/VAL 告警 | RAIM FDE 已实现，保护级需风险预算公式，无车规/航空场景驱动 |
+| 4A RAIM 保护级 | HPL/VPL 计算 + HAL/VAL 告警 | 技术可行（RAIM FDE 已就绪），但保护级需风险预算公式 + HAL/VAL 告警阈值，当前无车规/航空/监测场景驱动，暂缓 |
 | 4B GNSS 完好性通道 | 多星座完好性通道 (SIS-A/SIS-M) | 依赖 4A，需 Galileo HAS ICD 完好性信息解析 |
 | 4C ARAIM 解分离 | 故障假设子集枚举 + 多假设保护级 | 依赖 4B |
 | 4D 固定解完好性增强 | 固定解偏差后验估计 + Ratio/Bootstrapping PL | 依赖 4C |
