@@ -8,7 +8,7 @@
 
 | 模块 | 定位 | 完成度 | 状态说明 |
 |------|------|--------|----------|
-| rtklib-core | 核心定位算法（SPP/RTK/PPP/PPP-RTK） | **95%** | 四大定位模式全实现，高级优化已接齐（CascadeAR/PartialAR/GPT3+VMF3/IERS2010等），主要缺口：运行时性能、完好性监测、PPP-RTK区域大气约束 |
+| rtklib-core | 核心定位算法（SPP/RTK/PPP/PPP-RTK） | **95%** | 四大定位模式全实现，高级优化已接齐（CascadeAR/PartialAR/GPT3+VMF3/IERS2010等）。RAIM FDE 已移植（`PntPos.raimFde()`）。剩余缺口（完好性监测/保护级/ARAIM、PPP-RTK区域大气约束）均为 WONTFIX——无上游场景驱动，不再投入 |
 | rtklib-product | 精密产品下载 | **90%** | IGS/MGEX 11类产品全支持，多镜像源回退，可按需扩展其他中心 |
 | rtklib-stream | NTRIP/串口 | **85%** | NTRIP客户端+SSL/TLS+串口+统一监听器；缺：TCP客户端（无生产驱动） |
 | rtklib-adjust | 多基线间接平差 | **85%** | 核心流程+基站诊断+P0~P3优化；可按需扩展多时段累积平差 |
@@ -28,11 +28,11 @@
 
 | 梯队 | 状态 | 核心原则 | 交付物 |
 |------|------|----------|--------|
-| **0** 性能基准 | 🟢 最前置 | 无基准不优化 | JMH微基准 + 端到端计时 + GC监控基线 |
+| **0** 性能基准 | 🟢✅ 已完成 | 无基准不优化 | JMH微基准 + 端到端计时 + GC监控基线 |
 | **1** 立刻做 | 🟢✅ 已完成 | 收益确定、难度低、不改变算法语义 | 3B数组复用 + 3C算术优化 + 3.5A日志 + 3.5C异常 + 3.5D对流层接入 + 3.5F测试 |
-| **2** 需前置验证 | 🟡 待验证 | 收益大但需数据/语义支撑 | 3A Kalman优化 + 3.5B null消除 + 各项前后对比 |
-| **3** 依赖外部条件 | 🟠 暂缓 | 代码基础好但缺数据/场景 | CI回归 + 场景验证 + CLAS多项式 + 约束引擎 |
-| **—** 暂不建议投入 | 🔴 暂缓 | 无上游场景驱动 | 完好性(4A~D) + 长期研究 |
+| **2** 需前置验证 | 🔴 已关闭 | 收益大但需数据/语义支撑 → JMH基准实测放弃 | 3A Kalman优化 (放弃) + 3.5B null消除 (放弃) |
+| **3** 依赖外部条件 | 🔴 WONTFIX | 代码基础好但缺数据/场景 | CI回归 + 场景验证 + CLAS多项式 + 约束引擎 |
+| **—** 暂不建议投入 | 🔴 WONTFIX | 无上游场景驱动，定版不投入 | 完好性(4A~D) + 长期研究 |
 
 ### 1.2 梯队依赖与执行顺序
 
@@ -62,7 +62,11 @@
 暂缓项 (无上游场景驱动，等恢复条件触发):
   4A/B 完好性基础 → 4C/D ARAIM+固定解完好性 → Phase 5 长期研究
 
-注: rtklib-research 独立演进，不参与上述依赖链
+注: rtklib-research 独立演进，不参与上述依赖链。
+
+> **v2.3.x 定版策略**: 项目于 2026-10 进入稳定维护期。2.3.x 系列仅接受 bugfix，不再新增功能。
+> 梯队2 (3A/3.5B) 已确认放弃，梯队3 及暂缓项全部标记 WONTFIX。
+> 恢复条件详见 §9。
 ```
 
 ---
@@ -146,13 +150,13 @@
 | Galileo HAS SSR 解码 | — | ✅ |
 | SPP EKF + 抗差 + 零速约束 | `enableSppEkf/SppRobust/SppZeroVel` | ✅ |
 
-### 3.4 RTKLIB C 差异消除（🟡 可做但非阻塞）
+### 3.4 RTKLIB C 差异消除（已关闭，定版不再投入）
 
-| 差异 | 说明 | 依赖 |
+| 差异 | 说明 | 状态 |
 |------|------|------|
-| **pos1-posopt5 RAIM FDE** | `pntpos.c raim_fde()` 未移植，SPP/PPP 层无故障检测排除 | C 版 fde.c + pntpos.c 参考 |
-| **ssat_t / 完好性辅助** | `ssat.ura` 已部分迁入 `Ssr.ura`，但 `ssat.h` 其他字段未移植 | 无 |
-| **SPP RAIM 保护级** | C 版 RAIM 只做 FDE 不输出 PL，Java 版也没有 | 梯队3 完好性管线 |
+| **pos1-posopt5 RAIM FDE** | C 版 `pntpos.c raim_fde()` → Java `PntPos.raimFde()`，逐卫星剔除故障检测排除 | ✅ 已移植 |
+| **ssat_t / 完好性辅助** | `ssat.ura` 已部分迁入 `Ssr.ura`，但 `ssat.h` 其他字段未移植 | 🔴 WONTFIX |
+| **SPP RAIM 保护级** | C 版 RAIM 只做 FDE 不输出 PL，Java 版也没有 | 🔴 WONTFIX |
 
 ---
 
@@ -607,10 +611,12 @@ rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码�
 
 ### 8.1 完好性监测（原 Phase 4A~D）
 
+> RAIM FDE（`PntPos.raimFde()`）已移植。以下均为 **WONTFIX**。
+
 | 子阶段 | 内容 | 暂缓原因 |
 |--------|------|----------|
-| 4A 基础 RAIM FDE 移植 | C版 `fde.c` / `pntpos.c raim_fde()` → Java | 无车规/航空场景驱动，算法验证成本高 |
-| 4B 保护级 PL | HPL/VPL 计算 + HAL/VAL 告警 | 依赖 4A，需风险预算公式补充 |
+| 4A RAIM 保护级 | HPL/VPL 计算 + HAL/VAL 告警 | RAIM FDE 已实现，保护级需风险预算公式，无车规/航空场景驱动 |
+| 4B GNSS 完好性通道 | 多星座完好性通道 (SIS-A/SIS-M) | 依赖 4A，需 Galileo HAS ICD 完好性信息解析 |
 | 4C ARAIM 解分离 | 故障假设子集枚举 + 多假设保护级 | 依赖 4B |
 | 4D 固定解完好性增强 | 固定解偏差后验估计 + Ratio/Bootstrapping PL | 依赖 4C |
 
@@ -671,3 +677,4 @@ rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码�
 | v1.5 | **梯队1全部完成**: 3C (Math.pow优化)、3.5A (SLF4J)、3B-1 (工作数组复用)、3.5C (异常日志)、3.5D (SSR对流层)、3.5F (34单元测试)；3A+3B-2 经 JMH 基准实测确认放弃（SimpleMatrix 计算不慢，EJML 优化块乘法 k≥150 快 10x）；标记 §5 完成、§6.2 放弃 |
 | v1.6 | **新增梯队2.5 城市峡谷优化**: UC-1~9（新息检验/自适应Q/warm-up/零速调优/RTK PAR等）；前置条件为 EKF 发散 Bug 修复；测试基准 `URBAN_CANYON_SPP_TEST_RESULTS.md` |
 | v1.7 | **梯队2.5 RTK 优化测试**: 新增 §7.0.6 DynamicRtkOptTest 12变体对比测试；记录 thresar[1] 关键发现（0.1→0.9999 是 Fix 率从 0% 提升的真正原因）；Joseph 形式等价性全量验证（8 数据集完全一致）；C-EX-Ref 全量结果表；rtklib-test 状态更新为 80% |
+| v1.8 | **定版**: 项目进入 2.3.x 稳定维护期，仅接受 bugfix。梯队2/3 全部关闭（3A+3B-2 JMH验证已放弃，3.5B 无语义异常）。RAIM FDE 标注修正：`PntPos.raimFde()` 已实现（§3.4/§8.1）。完好性/ARAIM/区域大气约束全部 WONTFIX。README 同步更新。 |
