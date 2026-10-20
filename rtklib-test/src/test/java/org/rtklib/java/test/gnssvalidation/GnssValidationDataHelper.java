@@ -30,6 +30,7 @@ public class GnssValidationDataHelper {
     public static final String SATREF_HOST = "rinex.geodetic.gov.hk";
     public static final int SATREF_FTPS_PORT = 990;
     public static final String WHU_FTP_HOST = "igs.gnsswhu.cn";
+    public static final String BKG_HTTPS_BASE = "https://igs.bkg.bund.de/root_ftp/IGS";
 
     private final String testDataDir;
     private final boolean offline;
@@ -47,11 +48,16 @@ public class GnssValidationDataHelper {
         return testDataDir + File.separator + "gnss-validation";
     }
 
-    // ========== BJFS RINEX (IGS / 武大IGS) ==========
+    // ========== IGS Station RINEX (BKG HTTPS首选 → WHU FTP回退) ==========
 
     public boolean ensureBjfsRinex(String subDir, int year, int doy) {
         String targetDir = getGnssValidationDir() + File.separator + subDir + File.separator + "bjfs";
         return ensureIgsRinex(targetDir, "bjfs", year, doy);
+    }
+
+    public boolean ensureIgsStationRinex(String subDir, String station, int year, int doy) {
+        String targetDir = getGnssValidationDir() + File.separator + subDir + File.separator + station.toLowerCase();
+        return ensureIgsRinex(targetDir, station, year, doy);
     }
 
     public boolean ensureIgsRinex(String targetDir, String station, int year, int doy) {
@@ -73,54 +79,82 @@ public class GnssValidationDataHelper {
             return false;
         }
 
-        String yy = String.format("%02d", year % 100);
         String ddd = String.format("%03d", doy);
         String st = station.toLowerCase();
-
-        String[][] candidates = {
-                {String.format("/pub/gps/data/daily/%d/%s/%sO/%s%s0.%sd.gz", year, ddd, yy, st, ddd, yy), "obs"},
-                {String.format("/pub/gps/data/daily/%d/%s/%sD/%s%s0.%sd.gz", year, ddd, yy, st, ddd, yy), "obs_hat"},
-                {String.format("/pub/gps/data/daily/%d/%s/%sN/%s%s0.%sn.gz", year, ddd, yy, st, ddd, yy), "nav"},
-        };
+        String stUpper = st.toUpperCase();
 
         boolean obsOk = false, navOk = false;
 
-        for (String[] c : candidates) {
-            String remotePath = c[0];
-            String type = c[1];
+        // ===== Phase 1: BKG HTTPS (RINEX 3 长文件名) =====
+        log.info("Trying BKG HTTPS for {} RINEX 3...", stUpper);
+
+        // OBS: 列出 BKG obs 目录，匹配站名开头的 .crx.gz
+        if (!obsOk) {
             try {
-                Path downloaded = downloadFtp(WHU_FTP_HOST, 21, remotePath, dir);
-                if (downloaded != null) {
-                    Path decompressed = decompressGz(downloaded);
-                    if ("obs_hat".equals(type)) {
-                        decompressed = hatanakaDecompress(decompressed);
-                    }
-                    if (decompressed != null) {
-                        if ("obs".equals(type) || "obs_hat".equals(type)) obsOk = true;
-                        if ("nav".equals(type)) navOk = true;
-                    }
+                String obsDirUrl = String.format("%s/obs/%d/%s/", BKG_HTTPS_BASE, year, ddd);
+                List<String> obsMatches = listHttpDir(obsDirUrl, stUpper + "00*_R_" + year + ddd + "0000_01D_30S_MO.crx.gz");
+                for (String match : obsMatches) {
+                    try {
+                        Path downloaded = downloadHttp(obsDirUrl + match, dir);
+                        if (downloaded != null) {
+                            Path decompressed = decompressGz(downloaded);
+                            decompressed = hatanakaDecompress(decompressed);
+                            if (decompressed != null) { obsOk = true; break; }
+                        }
+                    } catch (Exception e) { log.warn("BKG obs download failed: {}", e.getMessage()); }
                 }
-            } catch (Exception e) {
-                log.warn("Failed to download {} from WHU: {}", type, e.getMessage());
-            }
+            } catch (Exception e) { log.warn("BKG obs listing failed: {}", e.getMessage()); }
         }
 
+        // NAV: 直接拼 BRDC 合并广播星历 URL
+        if (!navOk) {
+            String brdcUrl = String.format("%s/BRDC/%d/%s/BRDC00IGS_R_%d%s0000_01D_MN.rnx.gz",
+                    BKG_HTTPS_BASE, year, ddd, year, ddd);
+            try {
+                Path downloaded = downloadHttp(brdcUrl, dir);
+                if (downloaded != null) {
+                    Path decompressed = decompressGz(downloaded);
+                    if (decompressed != null) navOk = true;
+                }
+            } catch (Exception e) { log.warn("BKG BRDC download failed: {}", e.getMessage()); }
+        }
+
+        // ===== Phase 2: WHU FTP (RINEX 2 回退) =====
         if (!obsOk || !navOk) {
-            log.info("WHU download incomplete for {}, trying IGN fallback", station.toUpperCase());
-            String gpsWeek = String.format("%04d", ProductDownloader.dateToGpsWeek(LocalDate.ofYearDay(year, doy)));
-            String[][] ignCandidates = {
-                    {String.format("/pub/igs/data/daily/%d/%s/%sO/%s%s0.%sd.Z", year, ddd, yy, st, ddd, yy), "obs"},
-                    {String.format("/pub/igs/data/daily/%d/%s/%sN/%s%s0.%sn.Z", year, ddd, yy, st, ddd, yy), "nav"},
+            log.info("BKG incomplete, trying WHU FTP fallback for {}", stUpper);
+            String yy = String.format("%02d", year % 100);
+
+            String[][] whuCandidates = {
+                    {String.format("/pub/gps/data/daily/%d/%s/%so/%s%s0.%so.gz", year, ddd, yy, st, ddd, yy), "obs_rnx2"},
+                    {String.format("/pub/gps/data/daily/%d/%s/%sd/%s%s0.%sd.gz", year, ddd, yy, st, ddd, yy), "obs_hat_rnx2"},
+                    {String.format("/pub/gps/data/daily/%d/%s/%sn/%s%s0.%sn.gz", year, ddd, yy, st, ddd, yy), "nav"},
+                    {String.format("/pub/gps/data/daily/%d/%s/%sn/%s%s0.%sn.Z", year, ddd, yy, st, ddd, yy), "nav_z"},
+                    {String.format("/pub/gps/data/daily/%d/%sn/brdc%s0.%sn.gz", year, yy, ddd, yy), "brdc_nav"},
             };
-            for (String[] c : ignCandidates) {
+
+            for (String[] c : whuCandidates) {
+                String remotePath = c[0];
+                String type = c[1];
+                boolean isObs = type.startsWith("obs");
+                boolean isNav = type.startsWith("nav") || type.startsWith("brdc");
+                if ((isObs && obsOk) || (isNav && navOk)) continue;
                 try {
-                    Path downloaded = downloadFtp("igs.ign.fr", 21, c[0], dir);
+                    Path downloaded = downloadFtp(WHU_FTP_HOST, 21, remotePath, dir);
                     if (downloaded != null) {
-                        if ("obs".equals(c[1])) obsOk = true;
-                        if ("nav".equals(c[1])) navOk = true;
+                        Path decompressed = decompressGz(downloaded);
+                        if ("obs_hat_rnx2".equals(type)) {
+                            decompressed = hatanakaDecompress(decompressed);
+                        }
+                        if ("nav_z".equals(type) && decompressed != null) {
+                            decompressed = decompressUnixZ(decompressed);
+                        }
+                        if (decompressed != null) {
+                            if (isObs) obsOk = true;
+                            if (isNav) navOk = true;
+                        }
                     }
                 } catch (Exception e) {
-                    log.warn("IGN fallback failed for {}: {}", c[1], e.getMessage());
+                    log.warn("WHU fallback failed for {}: {}", type, e.getMessage());
                 }
             }
         }
@@ -241,16 +275,71 @@ public class GnssValidationDataHelper {
     public static Path hatanakaDecompress(Path compactRinex) {
         if (compactRinex == null || !Files.exists(compactRinex)) return compactRinex;
 
-        String name = compactRinex.getFileName().toString().toLowerCase();
+        String name = compactRinex.getFileName().toString();
+        String nameLower = name.toLowerCase();
 
-        boolean isCompactObs = name.matches(".*\\.\\d+d") || name.endsWith(".crx") || name.endsWith(".cobs");
-        boolean isCompactNav = name.matches(".*\\.\\d+g") || name.endsWith(".cnav");
+        boolean isCompactObs = nameLower.matches(".*\\.\\d+d") || nameLower.endsWith(".crx") || nameLower.endsWith(".cobs")
+                || (nameLower.contains("_mo.crx") || nameLower.contains("_so.crx") || nameLower.contains("_mo.rnx"));
+        boolean isCompactNav = nameLower.matches(".*\\.\\d+g") || nameLower.endsWith(".cnav")
+                || (nameLower.contains("_mn.crx") || nameLower.contains("_gn.crx"));
 
         if (!isCompactObs && !isCompactNav) {
             return compactRinex;
         }
 
         log.info("Hatanaka decompress: {}", compactRinex.getFileName());
+
+        String outName = compactRinex.getFileName().toString();
+        if (isCompactObs) {
+            if (outName.toLowerCase().endsWith(".crx")) {
+                outName = outName.substring(0, outName.length() - 4) + ".rnx";
+            } else {
+                outName = outName.replaceAll("\\.\\d+d$", ".0" + outName.substring(outName.length() - 2, outName.length() - 1) + "o");
+                if (outName.equals(compactRinex.getFileName().toString())) {
+                    outName = outName.replace(".cobs", ".obs");
+                }
+            }
+        } else {
+            if (outName.toLowerCase().endsWith(".crx")) {
+                outName = outName.substring(0, outName.length() - 4) + ".rnx";
+            } else {
+                outName = outName.replaceAll("\\.\\d+g$", ".0" + outName.substring(outName.length() - 2, outName.length() - 1) + "n");
+                if (outName.equals(compactRinex.getFileName().toString())) {
+                    outName = outName.replace(".cnav", ".nav");
+                }
+            }
+        }
+        Path outFile = compactRinex.getParent().resolve(outName);
+
+        try {
+            if (Files.exists(outFile) && Files.size(outFile) > 0) {
+                Files.deleteIfExists(compactRinex);
+                return outFile;
+            }
+        } catch (IOException ignored) {}
+
+        // Try external crx2rnx tool first
+        Path crx2rnx = findCrx2rnx();
+        if (crx2rnx != null) {
+            try {
+                ProcessBuilder pb = new ProcessBuilder(crx2rnx.toString(), "-f", compactRinex.toString());
+                pb.directory(compactRinex.getParent().toFile());
+                Process proc = pb.start();
+                int exitCode = proc.waitFor();
+                if (exitCode == 0 && Files.exists(outFile) && Files.size(outFile) > 0) {
+                    Files.deleteIfExists(compactRinex);
+                    log.info("Hatanaka decompressed (crx2rnx): {} -> {}", compactRinex.getFileName(), outName);
+                    return outFile;
+                } else {
+                    log.warn("crx2rnx exited with code {}, output exists={}", exitCode, Files.exists(outFile));
+                }
+            } catch (Exception e) {
+                log.warn("crx2rnx execution failed: {}", e.getMessage());
+            }
+        }
+
+        // Fallback: pure Java Hatanaka decompression (limited - may not work for RINEX 3)
+        log.warn("No crx2rnx tool available, trying pure Java Hatanaka decompression (may be incorrect for RINEX 3)");
 
         try {
             List<String> lines = Files.readAllLines(compactRinex);
@@ -313,22 +402,8 @@ public class GnssValidationDataHelper {
                 }
             }
 
-            String outName = compactRinex.getFileName().toString();
-            if (isCompactObs) {
-                outName = outName.replaceAll("\\.\\d+d$", ".0" + outName.substring(outName.length() - 2, outName.length() - 1) + "o");
-                if (outName.equals(compactRinex.getFileName().toString())) {
-                    outName = outName.replace(".crx", ".rnx").replace(".cobs", ".obs");
-                }
-            } else {
-                outName = outName.replaceAll("\\.\\d+g$", ".0" + outName.substring(outName.length() - 2, outName.length() - 1) + "n");
-                if (outName.equals(compactRinex.getFileName().toString())) {
-                    outName = outName.replace(".cnav", ".nav");
-                }
-            }
-
-            Path outFile = compactRinex.getParent().resolve(outName);
             Files.write(outFile, expanded);
-            log.info("Hatanaka decompressed: {} -> {}", compactRinex.getFileName(), outName);
+            log.info("Hatanaka decompressed (Java): {} -> {}", compactRinex.getFileName(), outName);
             Files.deleteIfExists(compactRinex);
             return outFile;
 
@@ -336,6 +411,42 @@ public class GnssValidationDataHelper {
             log.warn("Hatanaka decompression failed, keeping compact file: {}", e.getMessage());
             return compactRinex;
         }
+    }
+
+    private static Path findCrx2rnx() {
+        String projectRoot = System.getProperty("user.dir");
+        while (projectRoot != null && !new File(projectRoot, "pom.xml").exists()) {
+            File parent = new File(projectRoot).getParentFile();
+            projectRoot = parent != null ? parent.getAbsolutePath() : null;
+        }
+        if (projectRoot != null) {
+            Path p = Paths.get(projectRoot, "tools", "CRX2RNX.exe");
+            if (Files.exists(p)) return p;
+            p = Paths.get(projectRoot, "tools", "crx2rnx");
+            if (Files.exists(p)) return p;
+        }
+        String[] candidates = {
+                "D:\\pro\\RTKLIB_EX_2.5.0\\crx2rnx.exe",
+                "C:\\pro\\RTKLIB_EX_2.5.0\\crx2rnx.exe",
+                "/usr/bin/crx2rnx",
+                "/usr/local/bin/crx2rnx",
+        };
+        for (String c : candidates) {
+            Path p = Paths.get(c);
+            if (Files.exists(p)) return p;
+        }
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv != null) {
+            for (String dir : pathEnv.split(File.pathSeparator)) {
+                Path p = Paths.get(dir, "CRX2RNX.exe");
+                if (Files.exists(p)) return p;
+                p = Paths.get(dir, "crx2rnx.exe");
+                if (Files.exists(p)) return p;
+                p = Paths.get(dir, "crx2rnx");
+                if (Files.exists(p)) return p;
+            }
+        }
+        return null;
     }
 
     static String decodeDifferentialLine(String line) {
@@ -459,8 +570,13 @@ public class GnssValidationDataHelper {
             public void checkServerTrusted(X509Certificate[] c, String a) {}
         }};
 
-        SSLContext sc = SSLContext.getInstance("TLS");
-        sc.init(null, trustAllCerts, null);
+        SSLContext sc;
+        try {
+            sc = SSLContext.getInstance("TLS");
+            sc.init(null, trustAllCerts, null);
+        } catch (Exception e) {
+            throw new IOException("Failed to init SSL context: " + e.getMessage(), e);
+        }
 
         FTPSClient ftps = new FTPSClient(true, sc);
         try {
@@ -499,6 +615,36 @@ public class GnssValidationDataHelper {
         } finally {
             try { ftps.disconnect(); } catch (Exception ignored) {}
         }
+    }
+
+    private List<String> listHttpDir(String dirUrl, String globPattern) throws IOException {
+        List<String> result = new ArrayList<>();
+        String regex = globPattern.replace(".", "\\.").replace("*", ".*");
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(dirUrl);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(CONNECT_TIMEOUT);
+            conn.setReadTimeout(READ_TIMEOUT);
+            conn.setRequestProperty("User-Agent", "rtklib-java/2.3");
+            int code = conn.getResponseCode();
+            if (code != HttpURLConnection.HTTP_OK) {
+                throw new IOException("HTTP " + code + " listing " + dirUrl);
+            }
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    for (String token : line.split("[\"<>\\s]+")) {
+                        if (token.matches(regex)) {
+                            result.add(token);
+                        }
+                    }
+                }
+            }
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+        return result;
     }
 
     private Path downloadHttp(String urlStr, Path targetDir) throws IOException {
@@ -562,8 +708,8 @@ public class GnssValidationDataHelper {
 
     public static Path decompressGz(Path gzFile) throws IOException {
         if (gzFile == null || !Files.exists(gzFile)) return gzFile;
-        String name = gzFile.getFileName().toString().toLowerCase();
-        if (!name.endsWith(".gz")) return gzFile;
+        String name = gzFile.getFileName().toString();
+        if (!name.toLowerCase().endsWith(".gz")) return gzFile;
 
         String outName = name.substring(0, name.length() - 3);
         Path outFile = gzFile.getParent().resolve(outName);
@@ -582,6 +728,52 @@ public class GnssValidationDataHelper {
         Files.deleteIfExists(gzFile);
         log.info("Decompressed {} -> {}", gzFile.getFileName(), outName);
         return outFile;
+    }
+
+    public static Path decompressUnixZ(Path zFile) throws IOException {
+        if (zFile == null || !Files.exists(zFile)) return zFile;
+        String name = zFile.getFileName().toString();
+        if (!name.toLowerCase().endsWith(".z")) return zFile;
+
+        String outName = name.substring(0, name.length() - 2);
+        Path outFile = zFile.getParent().resolve(outName);
+
+        if (Files.exists(outFile) && Files.size(outFile) > 0) {
+            Files.deleteIfExists(zFile);
+            return outFile;
+        }
+
+        log.info("Unix compress .Z detected: {}, attempting decompression via ProcessBuilder", zFile.getFileName());
+        try {
+            ProcessBuilder pb = new ProcessBuilder("gzip", "-dc", zFile.toString());
+            pb.redirectOutput(outFile.toFile());
+            Process proc = pb.start();
+            int exitCode = proc.waitFor();
+            if (exitCode == 0 && Files.exists(outFile) && Files.size(outFile) > 0) {
+                Files.deleteIfExists(zFile);
+                log.info("Decompressed .Z -> {}", outName);
+                return outFile;
+            }
+        } catch (Exception e) {
+            log.debug("gzip -dc failed: {}", e.getMessage());
+        }
+
+        try {
+            ProcessBuilder pb = new ProcessBuilder("cmd", "/c", "gzip", "-dc", zFile.toString());
+            pb.redirectOutput(outFile.toFile());
+            Process proc = pb.start();
+            int exitCode = proc.waitFor();
+            if (exitCode == 0 && Files.exists(outFile) && Files.size(outFile) > 0) {
+                Files.deleteIfExists(zFile);
+                log.info("Decompressed .Z -> {}", outName);
+                return outFile;
+            }
+        } catch (Exception e) {
+            log.debug("cmd gzip -dc failed: {}", e.getMessage());
+        }
+
+        log.warn("Cannot decompress .Z file (no gzip command available), keeping as-is: {}", zFile.getFileName());
+        return zFile;
     }
 
     // ========== 辅助方法 ==========

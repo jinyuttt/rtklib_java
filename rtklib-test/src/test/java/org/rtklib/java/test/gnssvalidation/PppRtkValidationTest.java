@@ -8,6 +8,7 @@ import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
+import org.rtklib.java.product.ProductDownloader;
 import org.rtklib.java.rinex.RinexPppProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +24,7 @@ public class PppRtkValidationTest {
     private static final Logger log = LoggerFactory.getLogger(PppRtkValidationTest.class);
 
     private static final String DATA_DIR = TestDataConfig.getTestDataDir()
-            + File.separator + "gnss-validation" + File.separator + "ppp-rtk" + File.separator + "bjfs";
+            + File.separator + "gnss-validation" + File.separator + "ppp-rtk" + File.separator + "algo";
 
     private static final String PRODUCT_DIR = TestDataConfig.getTestDataDir()
             + File.separator + "gnss-validation" + File.separator + "product";
@@ -38,16 +39,38 @@ public class PppRtkValidationTest {
 
     static boolean dataAvailable() { return dataAvailable; }
 
+    private static final int TEST_YEAR = 2024;
+    private static final int TEST_DOY = 60;
+
     @BeforeAll
     static void checkData() {
+        GnssValidationDataHelper helper = new GnssValidationDataHelper(TestDataConfig.getTestDataDir());
+
+        if (!GnssValidationDataHelper.isDataAvailable(DATA_DIR)) {
+            log.info("PPP-RTK观测数据不在本地，尝试自动下载ALGO RINEX 3...");
+            helper.ensureIgsStationRinex("ppp-rtk", "algo", TEST_YEAR, TEST_DOY);
+        }
+
+        File sp3DirCheck = new File(PRODUCT_DIR + File.separator + "sp3");
+        File clkDirCheck = new File(PRODUCT_DIR + File.separator + "clk");
+        if (!sp3DirCheck.exists() || !clkDirCheck.exists()
+                || sp3DirCheck.list() == null || sp3DirCheck.list().length == 0
+                || clkDirCheck.list() == null || clkDirCheck.list().length == 0) {
+            log.info("MGEX精密产品不在本地，尝试自动下载SP3+CLK+BIA...");
+            helper.ensureMgexProducts(TEST_YEAR, TEST_DOY,
+                    ProductDownloader.ProductType.SP3,
+                    ProductDownloader.ProductType.CLK,
+                    ProductDownloader.ProductType.BIA);
+        }
+
         File obsDir = new File(DATA_DIR);
         File sp3Dir = new File(PRODUCT_DIR + File.separator + "sp3");
         File clkDir = new File(PRODUCT_DIR + File.separator + "clk");
         File biaDir = new File(PRODUCT_DIR + File.separator + "bia");
         File atxDir = new File(PRODUCT_DIR + File.separator + "atx");
 
-        obsFile = findFile(obsDir, ".obs", ".25o", ".24o", ".23o", ".21o", ".18o");
-        navFile = findFile(obsDir, ".nav", ".25n", ".24n", ".23n", ".21n", ".18n");
+        obsFile = findFile(obsDir, "_MO.rnx", ".obs", ".25o", ".24o", ".23o", ".21o", ".18o");
+        navFile = findFile(obsDir, "_MN.rnx", ".nav", ".25n", ".24n", ".23n", ".21n", ".18n");
         sp3File = findFile(sp3Dir, ".sp3", ".SP3");
         clkFile = findFile(clkDir, ".clk", ".CLK");
         biaFile = findFile(biaDir, ".bia", ".BIA", ".bsx", ".BSX");
@@ -82,7 +105,7 @@ public class PppRtkValidationTest {
         opt.nf = 2;
         opt.navsys = Constants.SYS_GPS | Constants.SYS_GLO | Constants.SYS_GAL;
         opt.elmin = 15.0 * Constants.D2R;
-        opt.ionoopt = Constants.IONOOPT_IF5;
+        opt.ionoopt = Constants.IONOOPT_IFLC;
         opt.tropopt = Constants.TROPOPT_EST;
         opt.sateph = Constants.EPHOPT_PREC;
         opt.dynamics = 0;
@@ -115,7 +138,7 @@ public class PppRtkValidationTest {
 
     @Test
     @DisplayName("4.2 PPP-RTK解算链路通")
-    void testPppR?tkPipeline() {
+    void testPppRtkPipeline() {
         if (!dataAvailable) {
             log.info("跳过: PPP-RTK数据不可用");
             return;

@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.constants.Constants;
-import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
 import org.rtklib.java.rinex.RinexSppProcessor;
 import org.slf4j.Logger;
@@ -22,10 +21,7 @@ public class SppValidationTest {
     private static final Logger log = LoggerFactory.getLogger(SppValidationTest.class);
 
     private static final String DATA_DIR = TestDataConfig.getTestDataDir()
-            + File.separator + "gnss-validation" + File.separator + "spp" + File.separator + "bjfs";
-
-    private static final String REFERENCE_DIR = TestDataConfig.getTestDataDir()
-            + File.separator + "gnss-validation" + File.separator + "reference";
+            + File.separator + "gnss-validation" + File.separator + "spp" + File.separator + "algo";
 
     private static String obsFile;
     private static String navFile;
@@ -35,8 +31,17 @@ public class SppValidationTest {
         return dataAvailable;
     }
 
+    private static final int TEST_YEAR = 2024;
+    private static final int TEST_DOY = 60;
+
     @BeforeAll
     static void checkData() {
+        if (!GnssValidationDataHelper.isDataAvailable(DATA_DIR)) {
+            log.info("SPP数据不在本地，尝试自动下载ALGO RINEX 3...");
+            GnssValidationDataHelper helper = new GnssValidationDataHelper(TestDataConfig.getTestDataDir());
+            helper.ensureIgsStationRinex("spp", "algo", TEST_YEAR, TEST_DOY);
+        }
+
         File dir = new File(DATA_DIR);
         if (!dir.exists() || !dir.isDirectory()) {
             dataAvailable = false;
@@ -44,8 +49,12 @@ public class SppValidationTest {
             return;
         }
 
-        File[] obsFiles = dir.listFiles((d, n) -> n.endsWith(".25o") || n.endsWith(".24o") || n.endsWith(".23o") || n.endsWith(".22o") || n.endsWith(".21o") || n.endsWith(".18o") || n.endsWith(".obs"));
-        File[] navFiles = dir.listFiles((d, n) -> n.endsWith(".25n") || n.endsWith(".24n") || n.endsWith(".23n") || n.endsWith(".22n") || n.endsWith(".21n") || n.endsWith(".18n") || n.endsWith(".nav"));
+        File[] obsFiles = dir.listFiles((d, n) ->
+                n.contains("_MO.rnx") || n.endsWith(".obs")
+                        || n.endsWith(".25o") || n.endsWith(".24o") || n.endsWith(".23o"));
+        File[] navFiles = dir.listFiles((d, n) ->
+                n.contains("_MN.rnx") || n.contains("_GN.rnx") || n.endsWith(".nav")
+                        || n.endsWith(".25n") || n.endsWith(".24n") || n.endsWith(".23n"));
 
         if (obsFiles != null && obsFiles.length > 0 && navFiles != null && navFiles.length > 0) {
             obsFile = obsFiles[0].getAbsolutePath();
@@ -62,7 +71,7 @@ public class SppValidationTest {
     @DisplayName("1.1 RINEX解析与SPP解算链路通")
     void testSppPipeline() {
         if (!dataAvailable) {
-            log.info("跳过: 数据不可用，请将BJFS RINEX观测+导航文件放入 {}", DATA_DIR);
+            log.info("跳过: 数据不可用，请将ALGO RINEX 3观测+导航文件放入 {}", DATA_DIR);
             return;
         }
 
@@ -98,9 +107,9 @@ public class SppValidationTest {
             Position llh = sol.getPosition(CoordType.LLH);
             if (llh == null) continue;
 
-            double lat = llh.val1 * Constants.R2D;
-            double lon = llh.val2 * Constants.R2D;
-            double h = llh.val3;
+            double lat = llh.v1;
+            double lon = llh.v2;
+            double h = llh.v3;
 
             assertTrue(Math.abs(lat) > 1 && Math.abs(lat) < 89, "纬度应在合理范围: " + lat);
             assertTrue(Math.abs(lon) > 1 && Math.abs(lon) < 180, "经度应在合理范围: " + lon);
@@ -116,8 +125,8 @@ public class SppValidationTest {
         double avgLat = sumLat / validCount;
         double avgLon = sumLon / validCount;
         double avgH = sumH / validCount;
-        log.info("SPP坐标时序: 有效历元={}, 平均纬度={:.4f}°, 平均经度={:.4f}°, 平均高度={:.1f}m",
-                validCount, avgLat, avgLon, avgH);
+        log.info(String.format("SPP坐标时序: 有效历元=%d, 平均纬度=%.4f°, 平均经度=%.4f°, 平均高度=%.1fm",
+                validCount, avgLat, avgLon, avgH));
     }
 
     @Test
@@ -133,7 +142,7 @@ public class SppValidationTest {
         RinexSppProcessor.SppResult result = spp.process(obsFile, navFile);
 
         double successRate = (double) result.successCount / result.totalEpochs * 100;
-        log.info("SPP成功率: {}/{} = {:.1f}%", result.successCount, result.totalEpochs, successRate);
+        log.info(String.format("SPP成功率: %d/%d = %.1f%%", result.successCount, result.totalEpochs, successRate));
         assertTrue(successRate > 50, "SPP成功率应>50%（单站广播星历）");
     }
 }
