@@ -5,6 +5,7 @@ import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
 import org.rtklib.java.ephemeris.ClkReader;
+import org.rtklib.java.ephemeris.PcvReader;
 import org.rtklib.java.ephemeris.Sp3Reader;
 import org.rtklib.java.pntpos.PntPos;
 import org.rtklib.java.common.RtklibCommon;
@@ -87,7 +88,7 @@ public class PostPosProcessor {
 
     public PostPosResult process(String roverObsPath, String baseObsPath,
                                  String navPath, String sp3Path, String clkPath,
-                                 String sbsPath) {
+                                 String sbsPath, String atxPath) {
         RinexParser roverParser = new RinexParser();
         boolean roverOk = roverParser.parseObs(roverObsPath);
         if (!roverOk) {
@@ -152,6 +153,23 @@ public class PostPosProcessor {
             }
         }
 
+        if (atxPath != null) {
+            List<Pcv> pcvList = PcvReader.readpcv(atxPath);
+            List<Pcv> pcvSatList = new ArrayList<>();
+            List<Pcv> pcvRecList = new ArrayList<>();
+            for (Pcv pcv : pcvList) {
+                if (pcv.sat != 0) pcvSatList.add(pcv);
+                else pcvRecList.add(pcv);
+            }
+            Sta[] stas = new Sta[]{roverParser.sta, baseSta};
+            GTime time = roverEpochs.isEmpty() ? new GTime() : roverEpochs.get(0).get(0).time;
+            PcvReader.setpcv(time, opt, nav, pcvSatList, pcvRecList, stas);
+            log.info("Loaded ANTEX: {} entries, rover antenna={}, base antenna={}",
+                    pcvList.size(), opt.anttype[0], opt.anttype[1]);
+        } else if (opt.anttype[0].equals("*") || opt.anttype[1].equals("*")) {
+            log.info("ANTEX not provided but anttype='*' requested — antenna PCV will not be applied");
+        }
+
         if (isRelativeMode(opt.mode)) {
             basePos = resolveBasePos(opt.refpos, opt.rb, baseSta, baseEpochs, nav);
         }
@@ -171,15 +189,21 @@ public class PostPosProcessor {
 
     public PostPosResult process(String roverObsPath, String baseObsPath,
                                  String navPath, String sp3Path, String clkPath) {
-        return process(roverObsPath, baseObsPath, navPath, sp3Path, clkPath, null);
+        return process(roverObsPath, baseObsPath, navPath, sp3Path, clkPath, null, null);
+    }
+
+    public PostPosResult process(String roverObsPath, String baseObsPath,
+                                 String navPath, String sp3Path, String clkPath,
+                                 String atxPath) {
+        return process(roverObsPath, baseObsPath, navPath, sp3Path, clkPath, null, atxPath);
     }
 
     public PostPosResult process(String roverObsPath, String baseObsPath, String navPath) {
-        return process(roverObsPath, baseObsPath, navPath, null, null, null);
+        return process(roverObsPath, baseObsPath, navPath, null, null, null, null);
     }
 
     public PostPosResult process(String roverObsPath, String navPath) {
-        return process(roverObsPath, null, navPath, null, null, null);
+        return process(roverObsPath, null, navPath, null, null, null, null);
     }
 
     private PostPosResult processForward(List<List<Obsd>> roverEpochs,
