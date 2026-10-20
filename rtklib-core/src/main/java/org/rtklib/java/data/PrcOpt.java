@@ -339,8 +339,8 @@ public class PrcOpt implements Serializable {
         this.rb = other.rb.clone();
         this.anttype = other.anttype.clone();
         this.pcvr = new Pcv[2];
-        this.pcvr[0] = new Pcv();
-        this.pcvr[1] = new Pcv();
+        this.pcvr[0] = new Pcv(other.pcvr[0]);
+        this.pcvr[1] = new Pcv(other.pcvr[1]);
         this.odisp = new double[2][2][11][3];
         this.antdel = new double[2][3];
         for (int i = 0; i < 2; i++) this.antdel[i] = other.antdel[i].clone();

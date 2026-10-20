@@ -46,6 +46,7 @@ public class RinexRtkProcessor {
     private final RtkConfig rtkConfig;
     private final PosHandler handler;
     private final Writer writer;
+    private String atxPath;
 
     private final Rtk rtk;
     private int totalEpochs = 0;
@@ -126,6 +127,10 @@ public class RinexRtkProcessor {
         }
     }
 
+    public void setAtxPath(String atxPath) {
+        this.atxPath = atxPath;
+    }
+
     /**
      * 处理RINEX观测文件和导航文件进行RTK定位。
      * 委托PostPosProcessor，支持前向/后向/组合模式。
@@ -140,12 +145,17 @@ public class RinexRtkProcessor {
         if (rtk.rb[0] != 0.0 || rtk.rb[1] != 0.0 || rtk.rb[2] != 0.0) {
             procOpt.rb = new double[]{rtk.rb[0], rtk.rb[1], rtk.rb[2]};
         }
-        SolOpt effectiveSolOpt = solOpt != null ? new SolOpt(solOpt) : new SolOpt();
-        if (isStaticMode(procOpt.mode) && effectiveSolOpt.solstatic == 0) {
-            effectiveSolOpt.solstatic = 1;
+        SolOpt effectiveSolOpt;
+        if (solOpt != null) {
+            effectiveSolOpt = new SolOpt(solOpt);
+        } else {
+            effectiveSolOpt = new SolOpt();
+            if (isStaticMode(procOpt.mode)) {
+                effectiveSolOpt.solstatic = 1;
+            }
         }
         PostPosProcessor proc = new PostPosProcessor(procOpt, effectiveSolOpt, rtkConfig);
-        PostPosProcessor.PostPosResult result = proc.process(roverObsPath, baseObsPath, navPath);
+        PostPosProcessor.PostPosResult result = proc.process(roverObsPath, baseObsPath, navPath, null, null, atxPath);
 
         totalEpochs = result.totalEpochs;
         successCount = result.successCount;
@@ -190,6 +200,14 @@ public class RinexRtkProcessor {
     public static RtkProcessor.RtkResult processRinex(String roverObsPath, String baseObsPath,
                                                        String navPath, PrcOpt opt, RtkConfig rtkConfig) {
         RinexRtkProcessor processor = new RinexRtkProcessor(opt, null, rtkConfig, null, null);
+        return processor.process(roverObsPath, baseObsPath, navPath);
+    }
+
+    public static RtkProcessor.RtkResult processRinex(String roverObsPath, String baseObsPath,
+                                                       String navPath, PrcOpt opt,
+                                                       RtkConfig rtkConfig, String atxPath) {
+        RinexRtkProcessor processor = new RinexRtkProcessor(opt, null, rtkConfig, null, null);
+        processor.setAtxPath(atxPath);
         return processor.process(roverObsPath, baseObsPath, navPath);
     }
 

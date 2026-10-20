@@ -34,8 +34,8 @@ RTKLIB_EX_2.5.0/
 RTKLIB_EX-2.5.1/
 RTKLIB_EX_2.5.1/
 
-# Antenna files (large, use test-data/product/ instead)
-atx/
+# Antenna files (large, download via ProductDownloader)
+# atx/ -- uncommented to allow committing igs14.atx for RTK validation
 
 # Compiled class files outside target/ (only root-level org/)
 /org/
