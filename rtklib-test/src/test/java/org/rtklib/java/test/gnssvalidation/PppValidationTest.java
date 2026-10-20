@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
+import org.rtklib.java.product.ProductDownloader;
 import org.rtklib.java.rinex.RinexPppProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +22,7 @@ public class PppValidationTest {
     private static final Logger log = LoggerFactory.getLogger(PppValidationTest.class);
 
     private static final String DATA_DIR = TestDataConfig.getTestDataDir()
-            + File.separator + "gnss-validation" + File.separator + "ppp" + File.separator + "bjfs";
+            + File.separator + "gnss-validation" + File.separator + "ppp" + File.separator + "algo";
 
     private static final String PRODUCT_DIR = TestDataConfig.getTestDataDir()
             + File.separator + "gnss-validation" + File.separator + "product";
@@ -38,15 +39,33 @@ public class PppValidationTest {
 
     static boolean dataAvailable() { return dataAvailable; }
 
+    private static final int TEST_YEAR = 2024;
+    private static final int TEST_DOY = 60;
+
     @BeforeAll
     static void checkData() {
-        File obsDir = new File(DATA_DIR);
+        GnssValidationDataHelper helper = new GnssValidationDataHelper(TestDataConfig.getTestDataDir());
+
+        if (!GnssValidationDataHelper.isDataAvailable(DATA_DIR)) {
+            log.info("PPP观测数据不在本地，尝试自动下载ALGO RINEX 3...");
+            helper.ensureIgsStationRinex("ppp", "algo", TEST_YEAR, TEST_DOY);
+        }
+
         File sp3Dir = new File(PRODUCT_DIR + File.separator + "sp3");
         File clkDir = new File(PRODUCT_DIR + File.separator + "clk");
+        if (!sp3Dir.exists() || !clkDir.exists() || sp3Dir.list().length == 0 || clkDir.list().length == 0) {
+            log.info("MGEX精密产品不在本地，尝试自动下载SP3+CLK...");
+            helper.ensureMgexProducts(TEST_YEAR, TEST_DOY,
+                    ProductDownloader.ProductType.SP3, ProductDownloader.ProductType.CLK);
+        }
+
+        File obsDir = new File(DATA_DIR);
+        sp3Dir = new File(PRODUCT_DIR + File.separator + "sp3");
+        clkDir = new File(PRODUCT_DIR + File.separator + "clk");
         File refDir = new File(REFERENCE_DIR);
 
-        obsFile = findFile(obsDir, ".obs", ".25o", ".24o", ".23o", ".21o", ".18o");
-        navFile = findFile(obsDir, ".nav", ".25n", ".24n", ".23n", ".21n", ".18n");
+        obsFile = findFile(obsDir, "_MO.rnx", ".obs", ".25o", ".24o", ".23o", ".21o", ".18o");
+        navFile = findFile(obsDir, "_MN.rnx", ".nav", ".25n", ".24n", ".23n", ".21n", ".18n");
         sp3File = findFile(sp3Dir, ".sp3", ".SP3");
         clkFile = findFile(clkDir, ".clk", ".CLK");
         sinexFile = findFile(refDir, ".snx", ".SNX", ".pos", ".POS");
@@ -149,9 +168,9 @@ public class PppValidationTest {
             if (sol.status == SolutionStatus.NONE) continue;
             Position llh = sol.getPosition(CoordType.LLH);
             if (llh == null) continue;
-            sumLat += llh.val1 * Constants.R2D;
-            sumLon += llh.val2 * Constants.R2D;
-            sumH += llh.val3;
+            sumLat += llh.v1 * Constants.R2D;
+            sumLon += llh.v2 * Constants.R2D;
+            sumH += llh.v3;
             pppCount++;
         }
 
@@ -192,10 +211,10 @@ public class PppValidationTest {
             Position ecef = sol.getPosition(CoordType.ECEF);
             if (ecef == null) continue;
             if (firstEcef == null) {
-                firstEcef = new double[]{ecef.val1, ecef.val2, ecef.val3};
+                firstEcef = new double[]{ecef.v1, ecef.v2, ecef.v3};
                 continue;
             }
-            double[] rr = new double[]{ecef.val1, ecef.val2, ecef.val3};
+            double[] rr = new double[]{ecef.v1, ecef.v2, ecef.v3};
             double[] dr = new double[]{rr[0] - firstEcef[0], rr[1] - firstEcef[1], rr[2] - firstEcef[2]};
             double[] pos = new double[3];
             org.rtklib.java.coord.CoordTransform.ecef2pos(firstEcef, pos);

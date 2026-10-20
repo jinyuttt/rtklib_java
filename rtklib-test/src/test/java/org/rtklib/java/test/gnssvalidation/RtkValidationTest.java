@@ -37,8 +37,24 @@ public class RtkValidationTest {
     static boolean shortDataAvailable() { return shortDataAvailable; }
     static boolean longDataAvailable() { return longDataAvailable; }
 
+    private static final int TEST_YEAR = 2024;
+    private static final int TEST_DOY = 60;
+
     @BeforeAll
     static void checkData() {
+        GnssValidationDataHelper helper = new GnssValidationDataHelper(TestDataConfig.getTestDataDir());
+
+        if (!GnssValidationDataHelper.isDataAvailable(SHORT_DIR)) {
+            log.info("短基线数据不在本地，尝试自动下载SatRef HKWS+HKSS...");
+            helper.ensureSatRefRinex(SHORT_DIR, "hkws", TEST_YEAR, TEST_DOY, "30s");
+            helper.ensureSatRefRinex(SHORT_DIR, "hkss", TEST_YEAR, TEST_DOY, "30s");
+        }
+        if (!GnssValidationDataHelper.isDataAvailable(LONG_DIR)) {
+            log.info("长基线数据不在本地，尝试自动下载SatRef HKWS+HKSL...");
+            helper.ensureSatRefRinex(LONG_DIR, "hkws", TEST_YEAR, TEST_DOY, "30s");
+            helper.ensureSatRefRinex(LONG_DIR, "hksl", TEST_YEAR, TEST_DOY, "30s");
+        }
+
         shortDataAvailable = findRtkFiles(SHORT_DIR, "短基线HKWS-HKSS");
         longDataAvailable = findRtkFiles(LONG_DIR, "长基线HKWS-HKSL");
 
@@ -218,7 +234,7 @@ public class RtkValidationTest {
                 if (!hasRef && sol.getPosition(CoordType.LLH) != null) {
                     Position llh = sol.getPosition(CoordType.LLH);
                     double[] refRr = new double[3];
-                    CoordTransform.pos2ecef(new double[]{llh.val1, llh.val2, llh.val3}, refRr);
+                    CoordTransform.pos2ecef(new double[]{llh.v1, llh.v2, llh.v3}, refRr);
                     double[] refEnu = new double[3];
                     hasRef = true;
                 }
@@ -236,10 +252,10 @@ public class RtkValidationTest {
                 Position ecef = sol.getPosition(CoordType.ECEF);
                 if (ecef == null) continue;
                 if (firstEcef == null) {
-                    firstEcef = new double[]{ecef.val1, ecef.val2, ecef.val3};
+                    firstEcef = new double[]{ecef.v1, ecef.v2, ecef.v3};
                     continue;
                 }
-                double[] rr = new double[]{ecef.val1, ecef.val2, ecef.val3};
+                double[] rr = new double[]{ecef.v1, ecef.v2, ecef.v3};
                 double[] enu = new double[3];
                 double[] pos = new double[3];
                 CoordTransform.ecef2pos(firstEcef, pos);
@@ -256,7 +272,7 @@ public class RtkValidationTest {
                     if (sol.status != SolutionStatus.FIX) continue;
                     Position ecef = sol.getPosition(CoordType.ECEF);
                     if (ecef == null || firstEcef == null) continue;
-                    double[] rr = new double[]{ecef.val1, ecef.val2, ecef.val3};
+                    double[] rr = new double[]{ecef.v1, ecef.v2, ecef.v3};
                     double[] enu = new double[3];
                     double[] pos = new double[3];
                     CoordTransform.ecef2pos(firstEcef, pos);
@@ -287,8 +303,8 @@ public class RtkValidationTest {
                 Position p2 = last.getPosition(CoordType.LLH);
                 if (p1 != null && p2 != null) {
                     double[] r1 = new double[3], r2 = new double[3];
-                    CoordTransform.pos2ecef(new double[]{p1.val1, p1.val2, p1.val3}, r1);
-                    CoordTransform.pos2ecef(new double[]{p2.val1, p2.val2, p2.val3}, r2);
+                    CoordTransform.pos2ecef(new double[]{p1.v1, p1.v2, p1.v3}, r1);
+                    CoordTransform.pos2ecef(new double[]{p2.v1, p2.v2, p2.v3}, r2);
                     double dx = r1[0] - r2[0], dy = r1[1] - r2[1], dz = r1[2] - r2[2];
                     m.baselineLength = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 }

@@ -20,12 +20,31 @@
 └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    自动数据获取层                                     │
+│                                                                     │
+│  GnssValidationDataHelper (测试内)     ProductDownloader (产品模块)  │
+│  ├── BJFS RINEX → 武大IGS FTP         ├── SP3/CLK → bdspride/IGN  │
+│  ├── SatRef RINEX → FTPS/HTTPS        ├── BIA/ERP → bdspride/WHU  │
+│  └── Hatanaka解压 (crx2rnx)           └── VMF3/GPT3 → Vienna TU   │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
                     ┌──────────────────┐
                     │ 收尾：Galileo HAS │
                     │ (NTRIP实时SSR)    │
                     │ 需注册，独立步骤   │
                     └──────────────────┘
 ```
+
+### 数据获取职责划分
+
+| 数据 | 下载实现 | 模块 | 理由 |
+|------|---------|------|------|
+| BJFS RINEX (IGS站) | `GnssValidationDataHelper.ensureBjfsRinex()` | 测试内 | 业务验证专用，非通用功能 |
+| SatRef RINEX (HKWS/HKSS/HKSL) | `GnssValidationDataHelper.ensureSatRefRinex()` | 测试内 | 业务验证专用，非通用功能 |
+| Hatanaka解压 | `GnssValidationDataHelper.hatanakaDecompress()` | 测试内 | SatRef数据格式需求 |
+| MGEX SP3/CLK/ERP/BIA | `ProductDownloader.download()` | 产品模块 | 通用精密产品下载，同时测试产品模块 |
 
 ### 各阶段核心产出
 
@@ -292,74 +311,79 @@ SPP数据文件未找到于: ...\test-data\gnss-validation\spp\bjfs
 
 ---
 
-## 六、数据下载脚本
+## 六、自动数据获取机制
 
-### 6.1 需要创建的脚本
+**不需要外部下载脚本**。所有数据获取在测试 `@BeforeAll` 中自动完成：
+本地已有数据则跳过下载，否则自动从远程获取。
 
-**`test-data/download-gnss-validation-data.ps1`** — 覆盖全部4阶段数据：
+### 6.1 数据获取流程
 
 ```
-[1] SatRef → HKWS/HKSS/HKSL RINEX
-    - FTPS匿名 (rinex.geodetic.gov.hk:990) 或 HTTPS (端口443)
-    - Hatanaka压缩 → crx2rnx解压 → 标准RINEX
-    - 输出: gnss-validation/rtk/short-baseline/hkws-hkss/
-           gnss-validation/rtk/long-baseline/hkws-hksl/
-
-[2] 武大IGS → BJFS RINEX
-    - FTP匿名 (igs.gnsswhu.cn)
-    - gzip解压
-    - 输出: gnss-validation/spp/bjfs/
-           gnss-validation/ppp/bjfs/
-           gnss-validation/ppp-rtk/bjfs/
-
-[3] 武大IGS / CDDIS → MGEX精密产品
-    - SP3/CLK (阶段3+4共用)
-    - BIA/ATX (阶段4额外, CDDIS需.netrc)
-    - 输出: gnss-validation/product/sp3/
-           gnss-validation/product/clk/
-           gnss-validation/product/bia/
-           gnss-validation/product/atx/
-
-[4] IGS → SINEX参考坐标
-    - HTTPS (files.igs.org)
-    - 输出: gnss-validation/reference/
+@BeforeAll checkData():
+  1. 检查本地数据目录是否已有RINEX文件
+  2. 若无 → GnssValidationDataHelper 自动下载
+  3. 检查本地是否已有MGEX精密产品
+  4. 若无 → ProductDownloader 自动下载（同时测试产品模块）
+  5. 扫描本地文件，设置 dataAvailable 标志
 ```
 
-### 6.2 脚本参数设计
+### 6.2 各阶段数据获取详情
 
-```powershell
-.\download-gnss-validation-data.ps1 `
-    -TargetDir "D:\code\rtklib_java\test-data" `
-    -Year "2024" `
-    -Doy "001" `
-    -Hour "00" `
-    -Duration "1h" `
-    -SkipSatRef `
-    -SkipBjfs `
-    -SkipProduct `
-    -SkipReference
-```
+| 阶段 | 观测数据获取 | 精密产品获取 |
+|------|-------------|-------------|
+| 1 SPP | `helper.ensureBjfsRinex("spp", year, doy)` → 武大IGS FTP | 无需 |
+| 2 RTK | `helper.ensureSatRefRinex(dir, station, year, doy, "30s")` → SatRef FTPS/HTTPS | 无需 |
+| 3 PPP | `helper.ensureBjfsRinex("ppp", year, doy)` → 武大IGS FTP | `ProductDownloader.download(date, SP3, CLK)` |
+| 4 PPP-RTK | `helper.ensureBjfsRinex("ppp-rtk", year, doy)` → 武大IGS FTP | `ProductDownloader.download(date, SP3, CLK, BIA)` |
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `-TargetDir` | `$PSScriptRoot` | test-data根目录 |
-| `-Year` | `2024` | 数据年份 |
-| `-Doy` | `001` | 年积日 |
-| `-Hour` | `00` | 起始小时（SatRef 1小时数据） |
-| `-Duration` | `1h` | 时段长度（1h=1小时, 24h=1天） |
-| `-SkipSatRef` | false | 跳过SatRef下载 |
-| `-SkipBjfs` | false | 跳过BJFS下载 |
-| `-SkipProduct` | false | 跳过MGEX产品下载 |
-| `-SkipReference` | false | 跳过SINEX参考下载 |
+### 6.3 GnssValidationDataHelper 核心方法
 
-### 6.3 认证配置
+| 方法 | 功能 | 数据源 |
+|------|------|--------|
+| `ensureBjfsRinex(subDir, year, doy)` | 下载BJFS站RINEX obs+nav | 武大IGS FTP → IGN回退 |
+| `ensureIgsRinex(dir, station, year, doy)` | 下载任意IGS站RINEX | 武大IGS FTP → IGN回退 |
+| `ensureSatRefRinex(dir, station, year, doy, sampling)` | 下载香港SatRef站RINEX | SatRef FTPS(990) → HTTPS回退 |
+| `ensureMgexProducts(year, doy, types)` | 下载MGEX精密产品 | `ProductDownloader`（bdspride/IGN/WHU） |
+| `hatanakaDecompress(path)` | Compact RINEX → 标准RINEX | 纯Java实现，无需外部crx2rnx |
+| `decompressGz(path)` | gzip解压 | 纯Java实现 |
+
+### 6.4 下载优先级与回退
+
+**BJFS RINEX (IGS站)**:
+1. 武大IGS `ftp://igs.gnsswhu.cn/pub/gps/data/daily/` — 国内首选
+2. IGN `ftp://igs.ign.fr/pub/igs/data/daily/` — 国际回退
+
+**SatRef RINEX (香港站)**:
+1. FTPS `ftps://rinex.geodetic.gov.hk:990/RINEX3/` — 官方首选
+2. HTTPS `https://rinex.geodetic.gov.hk/RINEX3/` — 回退
+
+**MGEX精密产品 (ProductDownloader)**:
+1. `ftps://bdspride.com/wum/{GPSW}/` — PRIDE主源
+2. `ftp://igs.ign.fr/pub/igs/products/mgex/{GPSW}/` — IGS官方
+3. `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/` — WHU镜像
+4. `ftps://bdspride.com/wcc/{GPSW}/` — WCC回退
+5. WHU IGS2/COD最终产品 — 历史回退
+
+### 6.5 认证配置
 
 | 数据源 | 认证方式 | 配置 |
 |--------|---------|------|
 | SatRef | 匿名 | 无需配置 |
 | 武大IGS | 匿名FTP | 无需配置 |
-| CDDIS | NASA Earthdata | `~/.netrc`: `machine urs.earthdata.nasa.gov login USER password PASS` |
+| bdspride.com | 匿名FTPS | 无需配置 |
+| IGN | 匿名FTP | 无需配置 |
+| CDDIS | NASA Earthdata | `~/.rtklib/credentials.properties`: `cddis.username=USER` `cddis.password=PASS` |
 | GSC HAS | NTRIP凭证 | 需在 https://gsc-europa.eu 注册审批 |
+
+### 6.6 测试参数配置
+
+各测试类通过常量指定测试日期，可按需修改：
+
+```java
+// SppValidationTest.java / RtkValidationTest.java / PppValidationTest.java / PppRtkValidationTest.java
+private static final int TEST_YEAR = 2024;  // 修改为所需年份
+private static final int TEST_DOY = 001;    // 修改为所需年积日
+```
 
 ---
 
