@@ -68,7 +68,7 @@ public class PppOptimizations {
         double el = azel[1];
 
         double bH = 0.0029052;
-        double bW = vmf3Bw(lat, doy);
+        double bW = vmf3Bw(lat);
 
         if (nav != null && nav.vmf3OpLoaded && nav.vmf3Coeff != null) {
             double mjd = Vmf3OpReader.mjdFromGTime(time);
@@ -88,7 +88,7 @@ public class PppOptimizations {
         double mfh = vmf3[0];
         double mfw = vmf3[1];
 
-        double[] zhdZwd = saastamoinenZhdZwd(p, T, lat, hell);
+        double[] zhdZwd = saastamoinenZhdZwd(p, T, lat, hell, e);
         double zhd = zhdZwd[0];
         double zwd = zhdZwd[1];
 
@@ -138,7 +138,7 @@ public class PppOptimizations {
         double sinLon = Math.sin(lon * Math.PI / 180.0);
 
         double P0 = 1013.25 * Math.pow(1.0 - 0.0000226 * hell, 5.225);
-        double T0 = 15.0 - 0.0065 * hell;
+        double T0 = 15.0 - 0.0065 * hell + 273.15;
         double e0 = 0.01 * Math.exp(-0.000639 * hell);
 
         double dT = 0.0;
@@ -208,6 +208,16 @@ public class PppOptimizations {
         return 0.0;
     }
 
+    /**
+     * VMF3 映射函数（Landskron &amp; Böhm 2018, VMF3/GPT3, Eq. 4）：
+     * <pre>
+     * m(e) = (1 + a/(1 + b/(1 + c))) / (sin(e) + a/(sin(e) + b/(sin(e) + c)))
+     * </pre>
+     * c 系数按 VMF3 论文取年/半年谐波：
+     * ch = c0h + c11h*cos(t) + c10h*cos(2t)，c0h=0.062, c11h=0.001, c10h=0.005；
+     * cw = 0.001（c11w=c10w=0），t = 2π(doy-28)/365.25。
+     * 高度修正仅施加于静力学分量（与 NMF/GMF 基线 tropmapf 约定一致）。
+     */
     private static double[] vmf3(double el, double lat, double hell, double doy,
                                  double ah, double aw, double bH, double bW) {
         double[] result = new double[2];
@@ -215,41 +225,35 @@ public class PppOptimizations {
         double sinel = Math.sin(el);
         if (sinel < 0.01) sinel = 0.01;
 
-        double ch = 0.0;
-        double cw = 0.0;
+        double t = 2.0 * Math.PI * (doy - 28.0) / 365.25;
+        double ch = 0.062 + 0.001 * Math.cos(t) + 0.005 * Math.cos(2.0 * t);
+        double cw = 0.001;
 
-        double mfh = 1.0 + ah / (1.0 + bH / (1.0 + ch / sinel));
-        double mfw = 1.0 + aw / (1.0 + bW / (1.0 + cw / sinel));
+        double mfh = (1.0 + ah / (1.0 + bH / (1.0 + ch)))
+                   / (sinel + ah / (sinel + bH / (sinel + ch)));
+        double mfw = (1.0 + aw / (1.0 + bW / (1.0 + cw)))
+                   / (sinel + aw / (sinel + bW / (sinel + cw)));
 
         double htCorr = vmf3HtCorr(el, hell);
         mfh *= htCorr;
-        mfw *= htCorr;
 
         result[0] = mfh;
         result[1] = mfw;
         return result;
     }
 
-    private static double vmf3Bw(double lat, double doy) {
+    /** VMF3 bw 纬度分段（Landskron &amp; Böhm 2018, Table 1）：|lat|<=15° 取 0.00108，
+     *  15°~75° 线性插值至 0.00225，>75° 取 0.00225。 */
+    private static double vmf3Bw(double lat) {
         double absLat = Math.abs(lat);
-        double t = (doy - 28.0) / 365.25 * 2.0 * Math.PI;
 
         if (absLat <= 15.0) {
             return 0.00108;
-        } else if (absLat <= 30.0) {
-            double f = (absLat - 15.0) / 15.0;
-            return 0.00108 * (1.0 - f) + 0.00148 * f;
-        } else if (absLat <= 45.0) {
-            double f = (absLat - 30.0) / 15.0;
-            return 0.00148 * (1.0 - f) + 0.00220 * f;
-        } else if (absLat <= 60.0) {
-            double f = (absLat - 45.0) / 15.0;
-            return 0.00220 * (1.0 - f) + 0.00334 * f;
         } else if (absLat <= 75.0) {
-            double f = (absLat - 60.0) / 15.0;
-            return 0.00334 * (1.0 - f) + 0.00536 * f;
+            double f = (absLat - 15.0) / 60.0;
+            return 0.00108 * (1.0 - f) + 0.00225 * f;
         } else {
-            return 0.00536;
+            return 0.00225;
         }
     }
 
@@ -262,16 +266,17 @@ public class PppOptimizations {
         return htCorr;
     }
 
-    private static double[] saastamoinenZhdZwd(double p, double T, double lat, double hell) {
+    /**
+     * Saastamoinen 天顶延迟（与 TroposphereModel.saastamoinen 基线公式一致）：
+     * zhd = 0.0022768*p / (1 - 0.00266*cos(2lat) - 0.00028*h/1E3)，p 单位 hPa；
+     * zwd = 0.002277*(1255/T + 0.05)*e，T 单位 K，e 单位 hPa。
+     */
+    private static double[] saastamoinenZhdZwd(double p, double Tkelvin, double lat, double hell, double e) {
         double[] result = new double[2];
 
-        double cosLat = Math.cos(lat * Math.PI / 180.0);
-        if (cosLat < 0.01) cosLat = 0.01;
-
-        double zhd = 0.00002412 * p / (1.0 - 0.00266 * cosLat * cosLat - 0.00028 * hell / 1000.0);
-
-        double Tkelvin = T + 273.15;
-        double zwd = 0.00000385 * 0.01 * Tkelvin * Tkelvin / (1.0 + 0.0000226 * hell);
+        double latRad = lat * Math.PI / 180.0;
+        double zhd = 0.0022768 * p / (1.0 - 0.00266 * Math.cos(2.0 * latRad) - 0.00028 * hell / 1E3);
+        double zwd = 0.002277 * (1255.0 / Tkelvin + 0.05) * e;
 
         result[0] = zhd;
         result[1] = zwd;

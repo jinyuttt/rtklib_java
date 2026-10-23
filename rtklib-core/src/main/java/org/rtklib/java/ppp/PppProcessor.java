@@ -180,6 +180,11 @@ public class PppProcessor {
         opt.sateph = Constants.EPHOPT_PREC;
         opt.dynamics = 0;
         opt.posopt = new int[6];
+        opt.posopt[0] = 1;
+        opt.posopt[1] = 1;
+        opt.posopt[2] = 1;
+        opt.posopt[3] = 1;
+        opt.tidecorr = 1;
         return opt;
     }
 
@@ -511,6 +516,11 @@ public class PppProcessor {
         }
         mergePreciseProducts(batchRtcm.nav, rtcm.nav);
 
+        // 自动加载 GPT3 网格（RTCM 批处理历元使用 batchRtcm.nav）
+        if (rtk.rtkConfig != null && rtk.rtkConfig.gpt3GridFile != null && !rtk.rtkConfig.gpt3GridFile.isEmpty()) {
+            org.rtklib.java.ephemeris.Gpt3GridReader.readGpt3Grid(rtk.rtkConfig.gpt3GridFile, batchRtcm.nav);
+        }
+
         int ephWeek = findEphWeek(batchRtcm.nav);
         if (ephWeek > 0) {
             for (int i = 0; i < batchObsTimeList.size(); i++) {
@@ -582,6 +592,11 @@ public class PppProcessor {
         }
 
         mergePreciseProducts(parser.nav, rtcm.nav);
+
+        // 自动加载 GPT3 网格（RINEX 批处理历元使用 parser.nav）
+        if (rtk.rtkConfig != null && rtk.rtkConfig.gpt3GridFile != null && !rtk.rtkConfig.gpt3GridFile.isEmpty()) {
+            org.rtklib.java.ephemeris.Gpt3GridReader.readGpt3Grid(rtk.rtkConfig.gpt3GridFile, parser.nav);
+        }
 
         if (parser.obs.n == 0) {
             log.warn("No observation data in RINEX file");
@@ -773,7 +788,12 @@ public class PppProcessor {
 
         GTime prevTime = new GTime(rtk.sol.time);
         if (rtk.sol.stat == Constants.SOLQ_NONE) {
-            PntPos.pntpos(obsData, n, nav, opt, rtk.sol, null, rtk.ssat);
+            PrcOpt sppInitOpt = new PrcOpt(opt);
+            sppInitOpt.mode = Constants.PMODE_SINGLE;
+            sppInitOpt.navsys = Constants.SYS_GPS;
+            sppInitOpt.ionoopt = Constants.IONOOPT_BRDC;
+            sppInitOpt.tropopt = Constants.TROPOPT_SAAS;
+            PntPos.pntpos(obsData, n, nav, sppInitOpt, rtk.sol, null, rtk.ssat);
             if (log.isDebugEnabled() && rtk.sol.stat != Constants.SOLQ_NONE) {
                 double[] llh = new double[3];
                 CoordTransform.ecef2pos(rtk.sol.rr, llh);
@@ -1122,7 +1142,12 @@ public class PppProcessor {
 
             GTime prevTime = new GTime(rtkB.sol.time);
             if (rtkB.sol.stat == Constants.SOLQ_NONE) {
-                PntPos.pntpos(obsData, n, nav, opt, rtkB.sol, null, rtkB.ssat);
+                PrcOpt sppInitOptB = new PrcOpt(opt);
+                sppInitOptB.mode = Constants.PMODE_SINGLE;
+                sppInitOptB.navsys = Constants.SYS_GPS;
+                sppInitOptB.ionoopt = Constants.IONOOPT_BRDC;
+                sppInitOptB.tropopt = Constants.TROPOPT_SAAS;
+                PntPos.pntpos(obsData, n, nav, sppInitOptB, rtkB.sol, null, rtkB.ssat);
             } else {
                 rtkB.sol.time = obsData[0].time;
             }
