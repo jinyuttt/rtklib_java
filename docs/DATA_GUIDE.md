@@ -551,7 +551,7 @@ List<String> files = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile
 | `UrbanCanyonRtkDiagTest` | RTK完整诊断：Fix/Float/Single/None统计、坐标RMSE、ratio分布 |
 | `urbancanyon.UrbanCanyonSppOptTest` | SPP优化对比：LS/EKF/抗差/零速各策略在城市峡谷下的效果 |
 
-> 📊 SPP优化详细测试结果见 [URBAN_CANYON_SPP_TEST_RESULTS.md](URBAN_CANYON_SPP_TEST_RESULTS.md)
+> 📊 SPP优化详细测试结果见 [URBAN_CANYON_SPP_TEST_RESULTS.md](archive/URBAN_CANYON_SPP_TEST_RESULTS.md)（已归档：历史实测）
 
 ---
 

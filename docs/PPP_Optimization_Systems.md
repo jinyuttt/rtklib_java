@@ -296,7 +296,7 @@ PPP-RTK 专属优化项（SSR 改正 → AR → Fix-and-Hold）
 | 本文档 | 体系认知：三体系划分、判定、验收指标、测试纪律、场景矩阵 |
 | [PPP_Extra_Optimizations.md](PPP_Extra_Optimizations.md) | 实现细节：各模块原理、代码侵入点、单元测试清单、逐项对照原始数据 |
 | [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) | 算法修复记录：FIX-ALG-001~029（按编号索引） |
-| [PPP_Test_Plan.md](PPP_Test_Plan.md) | 测试计划 |
+| [PPP_Test_Plan.md](archive/PPP_Test_Plan.md) | 测试计划（已归档） |
 
 ## 8. 非组合 PPP（EST）死锁修复与实测（FIX-ALG-020，2026-10-21）
 

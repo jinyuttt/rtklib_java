@@ -75,7 +75,7 @@
 | 方向 | 现状 | 缺口与前置条件 | 接入方式 | 优先级 |
 |---|---|---|---|---|
 | **QZSS CLAS** | `CompactSsrDecoder` 已实现 MT4073 子类型 1-12 解码；`enableCompactSsr` 开关就位 | 缺公开 L6 二进制样本做端到端冒烟；区域改正覆盖日本及周边 | 解码结果写入 `nav.ssr` 后走 `ppprtkos()`，与 RTCM SSR 同构 | 高（唯一可立即验证） |
-| **Galileo HAS** | 未实现，`GalHasReader` 为已登记架构债 | IDD 为专有二进制（需对齐 2.4.3 b34 解码）；互联网 IDD 需注册审批；无公开事后存档 | 新增独立转换层 → `nav.ssr`，复用现有 SsrCorrector | 中 |
+| **Galileo HAS** | `HasSsrDecoder` 已实现 COMPACT-SSR（MT1~MT9）→ `nav.ssr`；互联网 IDD 接入未实现 | IDD 为专有二进制，需补帧同步层；互联网 IDD 需注册审批；无公开事后存档 | 新增 IDD 读取层 → `HasSsrDecoder` → 复用现有 SsrCorrector | 中 |
 | **IMU 紧组合** | 无实现，当前为纯 GNSS | 缺 IMU 数据与标定；EKF 状态需扩姿态/速度/零偏，动力学模型改动最大 | 扩展 `PppCore` 状态向量与过程噪声，天线杆臂纳入观测模型 | 低 |
 | **SSR 权限接入**（前置） | CAS 观测流可用，SSRA*/SSRC* 未授权；北航 2025 数据集待申请 | 账号权限与凭据（详见 [ROADMAP.md](ROADMAP.md) §8.8） | 仅需改 Caster 地址 + `enablePppRtk = true` | 中 |
 
