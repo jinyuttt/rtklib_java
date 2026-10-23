@@ -35,12 +35,16 @@ public class PppRtkValidationTest {
     private static String clkFile;
     private static String biaFile;
     private static String atxFile;
+    private static String localAtxPath;
     private static boolean dataAvailable;
 
     static boolean dataAvailable() { return dataAvailable; }
 
     private static final int TEST_YEAR = 2024;
     private static final int TEST_DOY = 60;
+
+    /** ALGO 站 IGS20 参考坐标（与 PppValidationTest REF_ECEF 同源，FIX-ALG-019 修正值） */
+    private static final double[] REF_ECEF = {918129.074497908, -4346071.34240674, 4561977.92989306};
 
     @BeforeAll
     static void checkData() {
@@ -76,6 +80,13 @@ public class PppRtkValidationTest {
         biaFile = findFile(biaDir, ".bia", ".BIA", ".bsx", ".BSX");
         atxFile = findFile(atxDir, ".atx", ".ATX");
 
+        String tableDir = TestDataConfig.getTestDataDir() + File.separator + "gnss-validation" + File.separator + "table";
+        localAtxPath = findFile(new File(tableDir), ".atx", ".ATX");
+        if (localAtxPath == null && atxFile != null) localAtxPath = atxFile;
+        if (localAtxPath != null) {
+            log.info("ANTEX文件: {}", localAtxPath);
+        }
+
         dataAvailable = obsFile != null && navFile != null && sp3File != null && clkFile != null;
 
         log.info("PPP-RTK数据: obs={}, nav={}", obsFile, navFile);
@@ -110,7 +121,51 @@ public class PppRtkValidationTest {
         opt.sateph = Constants.EPHOPT_PREC;
         opt.dynamics = 0;
         opt.posopt = new int[6];
+        opt.anttype[0] = "*";
         return opt;
+    }
+
+    private static RtkConfig createPppRtkConfig() {
+        RtkConfig cfg = new RtkConfig();
+        cfg.enablePppRtk = true;
+        cfg.enablePppRtkAR = true;
+        return cfg;
+    }
+
+    /** ENU 精度评估（收敛期跳过前 1/3 历元），返回统计行文本；无有效解返回 null */
+    private static String assessEnu(String label, List<SolData> solutions) {
+        if (solutions.size() < 30) {
+            log.info("[{}] 历元数不足({})，无法评估精度", label, solutions.size());
+            return null;
+        }
+        double[] refLlh = new double[3];
+        org.rtklib.java.coord.CoordTransform.ecef2pos(REF_ECEF, refLlh);
+
+        int convergeSkip = solutions.size() / 3;
+        double sumE = 0, sumN = 0, sumU = 0;
+        int count = 0;
+        for (int i = convergeSkip; i < solutions.size(); i++) {
+            SolData sol = solutions.get(i);
+            if (sol.status == SolutionStatus.NONE) continue;
+            Position ecef = sol.getPosition(CoordType.ECEF);
+            if (ecef == null) continue;
+            double[] dr = {ecef.v1 - REF_ECEF[0], ecef.v2 - REF_ECEF[1], ecef.v3 - REF_ECEF[2]};
+            double[] enu = new double[3];
+            org.rtklib.java.coord.CoordTransform.ecef2enu(refLlh, dr, enu);
+            sumE += enu[0] * enu[0];
+            sumN += enu[1] * enu[1];
+            sumU += enu[2] * enu[2];
+            count++;
+        }
+        if (count < 1) {
+            log.info("[{}] 收敛后无有效解", label);
+            return null;
+        }
+        double rmsE = Math.sqrt(sumE / count);
+        double rmsN = Math.sqrt(sumN / count);
+        double rmsU = Math.sqrt(sumU / count);
+        return String.format("[%s] ENU RMS: E=%.4fm N=%.4fm U=%.4fm 2D=%.4fm (%d历元)",
+                label, rmsE, rmsN, rmsU, Math.sqrt(rmsE * rmsE + rmsN * rmsN), count);
     }
 
     @Test
@@ -145,15 +200,15 @@ public class PppRtkValidationTest {
         }
 
         PrcOpt opt = createPppRtkOpt();
-        RtkConfig cfg = new RtkConfig();
-        cfg.enablePppRtk = true;
-        cfg.enablePppRtkAR = true;
+        RtkConfig cfg = createPppRtkConfig();
 
-        RinexPppProcessor ppp = new RinexPppProcessor(opt);
+        RinexPppProcessor ppp = new RinexPppProcessor(opt, null, cfg, null);
+        ppp.setAtxPath(localAtxPath);
         RinexPppProcessor.PppResult result = ppp.process(obsFile, navFile, sp3File, clkFile);
 
         log.info("PPP-RTK结果: 总历元={}, 成功={}, 失败={}", result.totalEpochs, result.successCount, result.failCount);
         assertTrue(result.totalEpochs > 0, "PPP-RTK应有历元被处理");
+        assertTrue(result.successCount > 0, "PPP-RTK应至少有一个成功历元");
     }
 
     @Test
@@ -165,7 +220,9 @@ public class PppRtkValidationTest {
         }
 
         PrcOpt opt = createPppRtkOpt();
-        RinexPppProcessor ppp = new RinexPppProcessor(opt);
+        RtkConfig cfg = createPppRtkConfig();
+        RinexPppProcessor ppp = new RinexPppProcessor(opt, null, cfg, null);
+        ppp.setAtxPath(localAtxPath);
         RinexPppProcessor.PppResult result = ppp.process(obsFile, navFile, sp3File, clkFile);
 
         List<SolData> solutions = result.solutions;
@@ -179,6 +236,11 @@ public class PppRtkValidationTest {
 
         double fixRate = total > 0 ? (double) fixCount / total * 100 : 0;
         log.info(String.format("PPP-RTK固定率: %.1f%% (固定=%d, 浮点=%d, 总=%d)", fixRate, fixCount, floatCount, total));
+        String enu = assessEnu("4.3", solutions);
+        if (enu != null) log.info(enu);
+        /* SSR 数据尚未接入（nav.ssr 为空时 ppprtkos 退化为普通 PPP，无 Fix 能力），
+         * fixRate 下限断言待 SSR 流录制+decode_ssr 移植后启用 */
+        assertTrue(result.totalEpochs > 0, "PPP-RTK应有历元被处理");
     }
 
     @Test
@@ -190,7 +252,8 @@ public class PppRtkValidationTest {
         }
 
         PrcOpt pppRtkOpt = createPppRtkOpt();
-        RinexPppProcessor pppRtkProc = new RinexPppProcessor(pppRtkOpt);
+        RinexPppProcessor pppRtkProc = new RinexPppProcessor(pppRtkOpt, null, createPppRtkConfig(), null);
+        pppRtkProc.setAtxPath(localAtxPath);
         RinexPppProcessor.PppResult pppRtkResult = pppRtkProc.process(obsFile, navFile, sp3File, clkFile);
 
         PrcOpt pppOpt = new PrcOpt();
@@ -203,12 +266,27 @@ public class PppRtkValidationTest {
         pppOpt.sateph = Constants.EPHOPT_PREC;
         pppOpt.dynamics = 0;
         pppOpt.posopt = new int[6];
+        pppOpt.posopt[0] = 1;
+        pppOpt.posopt[1] = 1;
+        pppOpt.posopt[2] = 1;
+        pppOpt.posopt[3] = 1;
+        pppOpt.tidecorr = 1;
+        pppOpt.anttype[0] = "*";
 
-        RinexPppProcessor pppProc = new RinexPppProcessor(pppOpt);
+        /* 对照组为标准 PPP 浮点基线（无 AR/RTK 开关），cfg 不传保持默认 */
+        RinexPppProcessor pppProc = new RinexPppProcessor(pppOpt, null, new RtkConfig(), null);
+        pppProc.setAtxPath(localAtxPath);
         RinexPppProcessor.PppResult pppResult = pppProc.process(obsFile, navFile, sp3File, clkFile);
 
         log.info(String.format("PPP-RTK: 总=%d, 成功=%d | PPP浮点: 总=%d, 成功=%d",
                 pppRtkResult.totalEpochs, pppRtkResult.successCount,
                 pppResult.totalEpochs, pppResult.successCount));
+        String enuRtk = assessEnu("4.4 PPP-RTK", pppRtkResult.solutions);
+        if (enuRtk != null) log.info(enuRtk);
+        String enuPpp = assessEnu("4.4 PPP浮点", pppResult.solutions);
+        if (enuPpp != null) log.info(enuPpp);
+        assertTrue(pppRtkResult.totalEpochs > 0, "PPP-RTK路径应有历元被处理");
+        assertTrue(pppResult.totalEpochs > 0, "PPP浮点对照路径应有历元被处理");
+        assertTrue(pppResult.successCount > 0, "PPP浮点基线应有成功历元");
     }
 }

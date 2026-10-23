@@ -179,7 +179,7 @@ public class GnssValidationDataHelper {
             return false;
         }
 
-        if (hasRinexInDir(dir)) {
+        if (hasStationRinexInDir(dir, station)) {
             log.info("SatRef {} RINEX already exists in {}", station, dir);
             return true;
         }
@@ -190,19 +190,14 @@ public class GnssValidationDataHelper {
         }
 
         String st = station.toLowerCase();
-        String yy = String.format("%02d", year % 100);
+        String ST = station.toUpperCase();
         String ddd = String.format("%03d", doy);
+        String sampDir = sampling.toLowerCase();
 
-        String[] remotePaths;
-        if ("1h".equals(sampling)) {
-            remotePaths = new String[]{
-                    String.format("/RINEX3/%d/%s/%s/%s%s0.%sd.gz", year, ddd, sampling, st, ddd, yy),
-            };
-        } else {
-            remotePaths = new String[]{
-                    String.format("/RINEX3/%d/%s/%s/%s%s0.%sd.gz", year, ddd, sampling, st, ddd, yy),
-            };
-        }
+        String rinex3Obs = String.format("/rinex3/%d/%s/%s/%s/%s00HKG_R_%d%s0000_01D_%s_MO.crx.gz",
+                year, ddd, st, sampDir, ST, year, ddd, sampling.toUpperCase());
+
+        String[] remotePaths = new String[]{rinex3Obs};
 
         boolean downloaded = false;
         for (String remotePath : remotePaths) {
@@ -785,6 +780,19 @@ public class GnssValidationDataHelper {
                 String n = p.getFileName().toString().toLowerCase();
                 return n.endsWith(".obs") || n.endsWith(".25o") || n.endsWith(".24o") || n.endsWith(".23o")
                         || n.endsWith(".22o") || n.endsWith(".21o") || n.endsWith(".18o") || n.endsWith(".rnx");
+            });
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private boolean hasStationRinexInDir(Path dir, String station) {
+        if (!Files.isDirectory(dir)) return false;
+        String stUpper = station.toUpperCase();
+        try {
+            return Files.list(dir).anyMatch(p -> {
+                String n = p.getFileName().toString().toUpperCase();
+                return n.startsWith(stUpper) && (n.endsWith(".RNX") || n.endsWith(".O") || n.endsWith(".OBS"));
             });
         } catch (IOException e) {
             return false;

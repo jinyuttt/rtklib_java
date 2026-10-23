@@ -195,8 +195,8 @@ public final class PppAmbFixBds3 {
         if (nav.fcbFromOsb) {
             if (nav.fcbWlByCode == null) return 0.0;
             if (sat < 1 || sat > Constants.MAXSAT) return 0.0;
-            double osbL1 = getOsb(nav, sat, code0);
-            double osbL2 = getOsb(nav, sat, code1);
+            double osbL1 = PppAmbFix.getOsbAt(nav, sat, code0, time);
+            double osbL2 = PppAmbFix.getOsbAt(nav, sat, code1, time);
             double wlFcb = osbL1 / LAM_B1C - osbL2 / LAM_B2A;
             String prn = org.rtklib.java.common.SatUtils.satno2id(sat);
             LOG.debug("FCB-DIAG-BDS3 prn={} sat={} code0={} code1={} osbL1={} osbL2={} wlFcb={}",
@@ -210,7 +210,7 @@ public final class PppAmbFixBds3 {
         if (nav.fcbFromOsb) {
             if (nav.fcbWlByCode == null) return 0.0;
             if (sat < 1 || sat > Constants.MAXSAT) return 0.0;
-            double osbL1 = getOsb(nav, sat, code0);
+            double osbL1 = PppAmbFix.getOsbAt(nav, sat, code0, time);
             return osbL1 / LAM_NL_BDS3;
         }
         return org.rtklib.java.ephemeris.FcbReader.getFcbNl(nav, sat, time);

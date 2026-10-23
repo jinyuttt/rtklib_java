@@ -105,6 +105,18 @@ public class Nav implements Serializable {
     public boolean fcbFromOsb;
     public double[][] fcbWlByCode;
     public double[][] fcbNlByCode;
+    public double[][] cbiasOsb;
+
+    /**
+     * 时变 OSB 序列：key = ((sat-1)*(MAXCODE+1)+code)*2 + (码OSB:0/相位OSB:1)，
+     * value = List of double[]{startGpsSec, endGpsSec, valueM}（按 START 升序）。
+     * 由 OsbReader 从 Bias-SINEX 的 START/END 列解析；常量型产品（单全天
+     * 区间）同样写入，取值语义统一。数值取值走 PppAmbFix.getOsbAt /
+     * PppCore.getCodeOsb（按历元时间命中区间），fcbWlByCode/cbiasOsb
+     * 数组保留为快照（完备性检查与时变未命中时的回退）。
+     */
+    public java.util.Map<Long, java.util.List<double[]>> osbSeries;
+
     public double[][] updWl;
     public double[][] updNl;
     public double[][] osb;
@@ -203,6 +215,7 @@ public class Nav implements Serializable {
 
         this.cbias = new double[Constants.MAXSAT][Constants.NFREQ][Constants.NFREQ];
         this.rbias = new double[Constants.MAXSAT][Constants.NFREQ][Constants.NFREQ];
+        this.cbiasOsb = new double[Constants.MAXSAT][Constants.MAXCODE + 1];
     }
 
     /**

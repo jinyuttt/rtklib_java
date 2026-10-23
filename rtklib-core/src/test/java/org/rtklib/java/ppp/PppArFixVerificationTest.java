@@ -136,6 +136,9 @@ public class PppArFixVerificationTest {
         cfg.pppPartialArMinSats = 4;
         cfg.pppPartialArMinRatio = 2.0;
         cfg.pppPartialArMaxTries = 10;
+        // synthetic single-epoch setup: relax the NL arc maturity gate (real
+        // pipeline default is PRIDE-PPPAR minsav=4)
+        cfg.pppArNlMinsav = 1;
 
         double freq1 = Constants.FREQL1;
         double freq2 = Constants.FREQL2;
@@ -203,6 +206,9 @@ public class PppArFixVerificationTest {
         cfg.pppPartialArMinSats = 4;
         cfg.pppPartialArMinRatio = 2.0;
         cfg.pppPartialArMaxTries = 10;
+        // synthetic single-epoch setup: relax the NL arc maturity gate (real
+        // pipeline default is PRIDE-PPPAR minsav=4)
+        cfg.pppArNlMinsav = 1;
 
         double freq1 = Constants.FREQL1;
         double freq2 = Constants.FREQL2;
@@ -263,6 +269,9 @@ public class PppArFixVerificationTest {
         cfg.pppPartialArMinSats = 4;
         cfg.pppPartialArMinRatio = 2.0;
         cfg.pppPartialArMaxTries = 10;
+        // synthetic single-epoch setup: relax the NL arc maturity gate (real
+        // pipeline default is PRIDE-PPPAR minsav=4)
+        cfg.pppArNlMinsav = 1;
 
         double freq1Gps = Constants.FREQL1;
         double freq2Gps = Constants.FREQL2;

@@ -178,6 +178,7 @@ test-data/
 |------|------|---------|
 | `test-data/download-test-data.ps1` | 从GitHub数据仓库克隆 | rinex/nav/rtcm/product/reference/nmea/config/tle |
 | `test-data/download-igs-data.ps1` | IGS/MGEX公开数据 | WTZR/BRUX/PORE RINEX + CODE MGEX SP3/CLK + IONEX + ERP |
+| `test-data/download-ssr-data.ps1` | SSR/OSB 数据三源（2026-10 新增） | pppwizard cit OSB（免注册）/ CDDIS IGS RTS 日文件（Earthdata）/ NTRIP 实时流录制（IGS caster 账号） |
 
 > **注意**: 现有脚本不覆盖 `gnss-validation/` 目录结构，需创建专用下载脚本
 > `test-data/download-gnss-validation-data.ps1`，见第六节。
@@ -258,6 +259,24 @@ test-data/
 - `4.2` PPP-RTK解算链路通
 - `4.3` PPP-RTK固定率统计
 - `4.4` PPP-RTK与PPP浮点解对照
+
+**SSR 数据来源（三路并行准备，2026-10 实测，任一可用即可）**:
+
+| 路径 | 门槛 | 内容 | 覆盖 | 状态 |
+|------|------|------|------|------|
+| A. CNES ppp-wizard `cit*.bia` | 免注册 | OSB 相位偏差（Bias SINEX），配 WUM SP3/CLK 走 PPP-AR 路线 | 2024-01-08~01-24（cit22961~22983） | **已到手**：`product/cnes_bia/cit22983.bia`（DOY 024，184MB），BJFS obs DOY 024 经 BKG HTTPS 可得 |
+| B. CDDIS IGS RTS 日文件 | Earthdata 免费自助注册（非审批） | **精密产品而非 SSR**（实测）：`igc{YYYY}{dow}.sp3/clk.Z`（IGC01 实时流，CoM，30s）+ `igt{YYYY}{dow}.clk/sum.Z`（组合钟）；目录 `rtpp/{YYYY}/`（NASA 文档页的 WWWW/ 周目录描述已过时） | 全球 | **已闭环验证**（2026-10）：igc/igt 20243 四文件下载成功，SP3 头验证 30s 采样完整；.Z 为 unix compress（LZW），Java 侧读取需 LZW 解码或 Python unlzw3 预解压；定位为精密产品冗余源，非 PPP-RTK SSR 输入 |
+| C. IGS RTS NTRIP 实时流录制 | IGS caster 免费自助注册（https://igs.bkg.bund.de/ntrip） | str2str 录制 SSRA00WHU1+OSBC00WHU1（RTCM SSR，C decode_ssr 有对齐锚点，**推荐**）或 SSRC00CNE1（IGS-SSR 自定义帧，含 VTEC，无 C 锚点需按 ICD 新写） | 全球 | **PPP-RTK 唯一真实 SSR 数据源**；录制后需写对应解码器接 nav.ssr |
+
+### 4.4.1 PPP-RTK 测试链路就绪状态（2026-10-21）
+
+- **代码侧已就绪**：`RtkCore.rtkpos()` 事后路径已补 `enablePppRtk` 分发（优先于 AR/偏差开关组，对齐 PppProcessor 实时路径分发模式）；`PppRtkValidationTest` 4 用例 cfg 已传入 4 参构造，4.3/4.4 带 ENU 精度评估与基本断言。**PppRtkValidationTest 4/4 通过**：无 SSR 时 `ppprtkos` 退化为普通 PPP，ALGO 2880 历元 ENU RMS E=1.67cm/N=2.47cm/U=11.08cm（1920 有效历元）
+- **数据侧待完成**：录制 SSR 流（路径 C）→ 写 decode_ssr 移植（RTCM SSR 1057~1068 对齐 C preceph.c）接 `nav.ssr` → 启用 4.3 固定率下限断言
+
+> 注意：BKG GEPOS SSRC00VETA 为注册审批制且仅覆盖欧洲区域（BJFS/ALGO 站不可用），
+> 不再作为等待目标。三路径获取脚本统一在 `test-data/download-ssr-data.ps1`
+> （`-Source pppwizard|cddis|ntrip`）。RtkCore `enablePppRtk` 分发与测试骨架
+> 已修复（2026-10-21，见 4.4.1）；代码侧仅余 SSR 解码器（RTCM SSR → nav.ssr）。
 
 ---
 

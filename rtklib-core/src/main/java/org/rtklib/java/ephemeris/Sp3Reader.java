@@ -2,7 +2,9 @@ package org.rtklib.java.ephemeris;
 
 import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.constants.Constants;
+import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
+import org.rtklib.java.rtkpos.Tides;
 import org.rtklib.java.time.TimeSystem;
 
 import org.slf4j.Logger;
@@ -252,15 +254,15 @@ public final class Sp3Reader {
         if (varc != null) varc[0] = 0.0;
 
         if (nav.ne < NMAX + 1) {
-            LOG.warn("pephpos FAIL: sat={} ne={} < NMAX+1={}", sat, nav.ne, NMAX + 1);
+            LOG.debug("pephpos: no prec ephem, sat={} ne={} < NMAX+1={}", sat, nav.ne, NMAX + 1);
             return 0;
         }
         if (TimeSystem.timediff(time, nav.peph[0].time) < -MAXDTE) {
-            LOG.warn(String.format("pephpos FAIL: sat=%d time before SP3 range by %.0fs", sat, -TimeSystem.timediff(time, nav.peph[0].time)));
+            LOG.debug(String.format("pephpos: no prec ephem sat=%d time before SP3 range by %.0fs", sat, -TimeSystem.timediff(time, nav.peph[0].time)));
             return 0;
         }
         if (TimeSystem.timediff(time, nav.peph[nav.ne - 1].time) > MAXDTE) {
-            LOG.warn(String.format("pephpos FAIL: sat=%d time after SP3 range by %.0fs", sat, TimeSystem.timediff(time, nav.peph[nav.ne - 1].time)));
+            LOG.debug(String.format("pephpos: no prec ephem sat=%d time after SP3 range by %.0fs", sat, TimeSystem.timediff(time, nav.peph[nav.ne - 1].time)));
             return 0;
         }
 
@@ -285,7 +287,7 @@ public final class Sp3Reader {
                 norm += nav.peph[start + ii].pos[sat - 1][jj] * nav.peph[start + ii].pos[sat - 1][jj];
             }
             if (Math.sqrt(norm) <= 0.0) {
-                LOG.warn(String.format("pephpos FAIL: sat=%d pos=0 at peph[%d] (start=%d ii=%d)", sat, start + ii, start, ii));
+                LOG.debug(String.format("pephpos: prec ephem outage sat=%d pos=0 at peph[%d] (start=%d ii=%d)", sat, start + ii, start, ii));
                 return 0;
             }
         }
@@ -303,48 +305,56 @@ public final class Sp3Reader {
             rs[ii] = interppol(t, p[ii].clone(), NMAX + 1);
         }
 
+        double std = 0.0;
         if (vare != null) {
-            double[] s = new double[3];
-            for (int ii = 0; ii < 3; ii++) s[ii] = nav.peph[index].std[sat - 1][ii];
-            double std = Math.sqrt(s[0] * s[0] + s[1] * s[1] + s[2] * s[2]);
+            double s0 = nav.peph[index].std[sat - 1][0];
+            double s1 = nav.peph[index].std[sat - 1][1];
+            double s2 = nav.peph[index].std[sat - 1][2];
+            std = Math.sqrt(s0 * s0 + s1 * s1 + s2 * s2);
             if (t[0] > 0.0) std += 5E-7 * t[0] * t[0] / 2.0;
             else if (t[NMAX] < 0.0) std += 5E-7 * t[NMAX] * t[NMAX] / 2.0;
             vare[0] = std * std;
         }
 
+        int idx1 = index + 1 < nav.ne ? index + 1 : index;
         double t0 = TimeSystem.timediff(time, nav.peph[index].time);
-        double t1 = TimeSystem.timediff(time, nav.peph[index + 1 < nav.ne ? index + 1 : index].time);
+        double t1 = TimeSystem.timediff(time, nav.peph[idx1].time);
         double c0 = nav.peph[index].pos[sat - 1][3];
-        double c1 = nav.peph[index + 1 < nav.ne ? index + 1 : index].pos[sat - 1][3];
+        double c1 = nav.peph[idx1].pos[sat - 1][3];
 
         if (t0 <= 0.0) {
-            dts[0] = c0;
+            if ((dts[0] = c0) != 0.0) {
+                std = nav.peph[index].std[sat - 1][3] * Constants.CLIGHT - 1E-3 * t0;
+            }
         } else if (t1 >= 0.0) {
-            dts[0] = c1;
+            if ((dts[0] = c1) != 0.0) {
+                std = nav.peph[idx1].std[sat - 1][3] * Constants.CLIGHT + 1E-3 * t1;
+            }
         } else if (c0 != 0.0 && c1 != 0.0) {
             dts[0] = (c1 * t0 - c0 * t1) / (t0 - t1);
+            int ii = t0 < -t1 ? 0 : 1;
+            /* NOTE: no *CLIGHT here, faithful to RTKLIB preceph.c pephpos() */
+            std = nav.peph[ii == 0 ? index : idx1].std[sat - 1][3] + 1E-3 * Math.abs(ii == 0 ? t0 : t1);
         } else {
             dts[0] = 0.0;
         }
+        if (varc != null) varc[0] = std * std;
 
         return 1;
     }
 
+    /**
+     * Satellite clock by precise clock.
+     * Aligned with RTKLIB preceph.c pephclk().
+     * - No clock product / time out of range: return 1 keeping dts set by
+     *   pephpos() (SP3 clock used instead, C L651-656).
+     * - Clock outage (c=0): return 0 (satellite dropped, C L671/675/685).
+     */
     public static int pephclk(GTime time, int sat, Nav nav, double[] dts, double[] varc) {
-        dts[0] = 0.0;
-        if (varc != null) varc[0] = 0.0;
-
-        if (nav.nc < 2) {
-            LOG.warn("pephclk FAIL: sat={} nc={} < 2", sat, nav.nc);
-            return 0;
-        }
-        if (TimeSystem.timediff(time, nav.pclk[0].time) < -MAXDTE) {
-            LOG.warn(String.format("pephclk FAIL: sat=%d time before CLK range by %.0fs", sat, -TimeSystem.timediff(time, nav.pclk[0].time)));
-            return 0;
-        }
-        if (TimeSystem.timediff(time, nav.pclk[nav.nc - 1].time) > MAXDTE) {
-            LOG.warn(String.format("pephclk FAIL: sat=%d time after CLK range by %.0fs", sat, TimeSystem.timediff(time, nav.pclk[nav.nc - 1].time)));
-            return 0;
+        if (nav.nc < 2 ||
+            TimeSystem.timediff(time, nav.pclk[0].time) < -MAXDTE ||
+            TimeSystem.timediff(time, nav.pclk[nav.nc - 1].time) > MAXDTE) {
+            return 1;
         }
 
         int i = 0, j = nav.nc - 1;
@@ -355,38 +365,92 @@ public final class Sp3Reader {
         }
         int index = i <= 0 ? 0 : i - 1;
 
-        double t0 = TimeSystem.timediff(time, nav.pclk[index].time);
         int idx1 = index + 1 < nav.nc ? index + 1 : index;
+        double t0 = TimeSystem.timediff(time, nav.pclk[index].time);
         double t1 = TimeSystem.timediff(time, nav.pclk[idx1].time);
         double c0 = nav.pclk[index].clk[sat - 1][0];
         double c1 = nav.pclk[idx1].clk[sat - 1][0];
 
         double std;
         if (t0 <= 0.0) {
-            if (c0 == 0.0) {
-                LOG.debug(String.format("pephclk: sat=%d c0=0 at index=%d t0=%.1f (no CLK data)", sat, index, t0));
-                return 0;
-            }
-            dts[0] = c0;
+            if ((dts[0] = c0) == 0.0) return 0;
             std = nav.pclk[index].std[sat - 1][0] * Constants.CLIGHT - 1E-3 * t0;
         } else if (t1 >= 0.0) {
-            if (c1 == 0.0) {
-                LOG.debug(String.format("pephclk: sat=%d c1=0 at idx1=%d t1=%.1f (no CLK data)", sat, idx1, t1));
-                return 0;
-            }
-            dts[0] = c1;
+            if ((dts[0] = c1) == 0.0) return 0;
             std = nav.pclk[idx1].std[sat - 1][0] * Constants.CLIGHT + 1E-3 * t1;
         } else if (c0 != 0.0 && c1 != 0.0) {
             dts[0] = (c1 * t0 - c0 * t1) / (t0 - t1);
             int ii = t0 < -t1 ? 0 : 1;
             int idx = ii == 0 ? index : idx1;
-            std = nav.pclk[idx].std[sat - 1][0] * Constants.CLIGHT + 1E-3 * Math.abs(t0 < -t1 ? t0 : t1);
+            std = nav.pclk[idx].std[sat - 1][0] * Constants.CLIGHT + 1E-3 * Math.abs(ii == 0 ? t0 : t1);
         } else {
-            LOG.debug(String.format("pephclk: sat=%d c0=%.12f c1=%.12f (no CLK data) index=%d idx1=%d", sat, c0, c1, index, idx1));
-            return 0;
+            return 0; /* prec clock outage */
         }
         if (varc != null) varc[0] = std * std;
         return 1;
+    }
+
+    /**
+     * Satellite antenna offset correction (satellite PCO: center-of-mass to
+     * antenna phase center) in ECEF.
+     * Aligned with RTKLIB preceph.c satantoff() L707-765.
+     * Uses iono-free LC coefficients of the two frequencies per system.
+     * With no satellite ANTEX loaded (nav.pcvs zero-filled) dant stays 0.
+     * @param time  time (gpst)
+     * @param rs    satellite position (ecef, center of mass)
+     * @param sat   satellite number
+     * @param nav   navigation data (nav.pcvs satellite antenna parameters)
+     * @param dant  output: satellite antenna offset {dx,dy,dz} (ecef, m)
+     */
+    public static void satantoff(GTime time, double[] rs, int sat, Nav nav, double[] dant) {
+        Pcv pcv = nav.pcvs[sat - 1];
+        double[] ex = new double[3], ey = new double[3], ez = new double[3];
+        double[] es = new double[3], r = new double[3], rsun = new double[3];
+        double[] erpv = new double[5];
+        double[] freq = new double[2];
+
+        dant[0] = dant[1] = dant[2] = 0.0;
+
+        /* sun position in ecef */
+        Tides.sunmoonpos(TimeSystem.gpst2utc(time), erpv, rsun, null, null);
+
+        /* unit vectors of satellite fixed coordinates */
+        for (int i = 0; i < 3; i++) r[i] = -rs[i];
+        if (!CoordTransform.normv3(r, ez)) return;
+        for (int i = 0; i < 3; i++) r[i] = rsun[i] - rs[i];
+        if (!CoordTransform.normv3(r, es)) return;
+        CoordTransform.cross3(ez, es, r);
+        if (!CoordTransform.normv3(r, ey)) return;
+        CoordTransform.cross3(ey, ez, ex);
+
+        /* iono-free LC coefficients */
+        int sys = SatUtils.satsys(sat, null);
+        if (sys == Constants.SYS_GPS || sys == Constants.SYS_QZS) { /* L1-L2 */
+            freq[0] = Constants.FREQL1;
+            freq[1] = Constants.FREQL2;
+        } else if (sys == Constants.SYS_GLO) { /* G1-G2 */
+            freq[0] = SatUtils.sat2freq(sat, Constants.CODE_L1C, nav);
+            freq[1] = SatUtils.sat2freq(sat, Constants.CODE_L2C, nav);
+        } else if (sys == Constants.SYS_GAL) { /* E1-E5b */
+            freq[0] = Constants.FREQL1;
+            freq[1] = Constants.FREQE5b;
+        } else if (sys == Constants.SYS_CMP) { /* B1I-B2I */
+            freq[0] = Constants.FREQ1_CMP;
+            freq[1] = Constants.FREQ2_CMP;
+        } else if (sys == Constants.SYS_IRN) { /* L5-S */
+            freq[0] = Constants.FREQL5;
+            freq[1] = Constants.FREQs;
+        } else return;
+
+        double C1 = freq[0] * freq[0] / (freq[0] * freq[0] - freq[1] * freq[1]);
+        double C2 = -freq[1] * freq[1] / (freq[0] * freq[0] - freq[1] * freq[1]);
+
+        /* iono-free LC */
+        for (int i = 0; i < 3; i++) {
+            double dant1 = pcv.off[0][0] * ex[i] + pcv.off[0][1] * ey[i] + pcv.off[0][2] * ez[i];
+            double dant2 = pcv.off[1][0] * ex[i] + pcv.off[1][1] * ey[i] + pcv.off[1][2] * ez[i];
+            dant[i] = C1 * dant1 + C2 * dant2;
+        }
     }
 
     private static double interppol(double[] x, double[] y, int n) {

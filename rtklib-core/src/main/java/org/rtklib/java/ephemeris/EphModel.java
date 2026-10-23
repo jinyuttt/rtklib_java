@@ -1,5 +1,6 @@
 package org.rtklib.java.ephemeris;
 
+import java.util.Locale;
 import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.Eph;
@@ -354,6 +355,11 @@ public final class EphModel {
                 }
             }
         }
+        if (best == null && LOG.isDebugEnabled()) {
+            int[] wk = new int[1];
+            double sow = TimeSystem.time2gpst(time, wk);
+            LOG.debug("ephemeris not found: sat={} t=(wk={} sow={})", sat, wk[0], sow);
+        }
         return best;
     }
 
@@ -459,74 +465,51 @@ public final class EphModel {
         }
     }
 
+    /**
+     * Satellite position/clock by precise ephemeris/clock.
+     * Aligned with RTKLIB preceph.c peph2pos().
+     * No broadcast fallback: pephpos/pephclk failure drops the satellite
+     * (C satpos EPHOPT_PREC branch: *svh=-1, return 0).
+     */
     private static boolean satposPrec(GTime time, int sat, Nav nav,
                                       double[] rs, double[] dts, double[] vare) {
-        double[] rsTmp = new double[3];
-        double[] dtsTmp = new double[1];
-        double[] vareTmp = new double[1];
-        double[] varcTmp = new double[1];
-
-        // Try precise ephemeris first
-        boolean precOk = Sp3Reader.pephpos(time, sat, nav, rsTmp, dtsTmp, vareTmp, varcTmp) != 0;
-        
-        if (!precOk) {
-            // Fallback to broadcast ephemeris for satellites missing from SP3/CLK
-            return satposBrdcFallback(time, sat, nav, rs, dts, vare);
-        }
-
-        rs[0] = rsTmp[0];
-        rs[1] = rsTmp[1];
-        rs[2] = rsTmp[2];
-        rs[3] = rs[4] = rs[5] = 0.0;
+        if (sat <= 0 || sat > Constants.MAXSAT) return false;
 
         double tt = 1E-3;
+        double[] rss = new double[3];
+        double[] rst = new double[3];
+        double[] dtss = new double[1];
+        double[] dtst = new double[1];
+        double[] vareP = new double[1];
+        double[] varcP = new double[1];
+
+        /* satellite position and clock bias */
+        if (Sp3Reader.pephpos(time, sat, nav, rss, dtss, vareP, varcP) == 0) return false;
+        if (Sp3Reader.pephclk(time, sat, nav, dtss, varcP) == 0) return false;
+
+        /* satellite position/clock at time+tt for velocity/drift */
         GTime time2 = TimeSystem.timeadd(time, tt);
-        double[] rs2 = new double[3];
-        double[] dts2 = new double[1];
-        if (Sp3Reader.pephpos(time2, sat, nav, rs2, dts2, null, null) != 0) {
-            for (int i = 0; i < 3; i++) rs[i + 3] = (rs2[i] - rs[i]) / tt;
+        if (Sp3Reader.pephpos(time2, sat, nav, rst, dtst, null, null) == 0) return false;
+        if (Sp3Reader.pephclk(time2, sat, nav, dtst, null) == 0) return false;
+
+        /* satellite antenna offset correction (C peph2pos L804-811, opt=1) */
+        double[] dant = new double[3];
+        Sp3Reader.satantoff(time, rss, sat, nav, dant);
+        for (int i = 0; i < 3; i++) {
+            rs[i] = rss[i] + dant[i];
+            rs[i + 3] = (rst[i] - rss[i]) / tt;
         }
 
-        if (Sp3Reader.pephclk(time, sat, nav, dtsTmp, varcTmp) != 0) {
-            dts[0] = dtsTmp[0];
-            double[] dts2c = new double[1];
-            GTime time2c = TimeSystem.timeadd(time, tt);
-            if (Sp3Reader.pephclk(time2c, sat, nav, dts2c, null) != 0) {
-                dts[1] = (dts2c[0] - dts[0]) / tt;
-            }
-        } else {
-            // Fallback to broadcast clock if precise clock unavailable
-            double[] dtOut = new double[1];
-            if (!ephclk(time, time, sat, nav, dtOut)) return false;
-            dts[0] = dtOut[0];
-            dts[1] = 0.0;
-            vare[0] = Constants.SQR_STD_BRDCCLK;
-            return true;
+        /* relativistic effect correction */
+        if (dtss[0] != 0.0) {
+            double dot = rs[0] * rs[3] + rs[1] * rs[4] + rs[2] * rs[5];
+            dts[0] = dtss[0] - 2.0 * dot / Constants.CLIGHT / Constants.CLIGHT;
+            dts[1] = (dtst[0] - dtss[0]) / tt;
+        } else { /* no precise clock */
+            dts[0] = dts[1] = 0.0;
         }
+        vare[0] = vareP[0] + varcP[0];
 
-        vare[0] = vareTmp[0];
-        return true;
-    }
-
-    /**
-     * Fallback to broadcast ephemeris when precise ephemeris is unavailable.
-     * @param time Computation time
-     * @param sat Satellite number
-     * @param nav Navigation data
-     * @param rs Output satellite position/velocity (6 elements)
-     * @param dts Output satellite clock bias/drift (2 elements)
-     * @param vare Output variance
-     * @return true if successful, false otherwise
-     */
-    private static boolean satposBrdcFallback(GTime time, int sat, Nav nav,
-                                              double[] rs, double[] dts, double[] vare) {
-        int[] svh = new int[1];
-        double[] varei = new double[1];
-        if (!satposBrdc(time, time, sat, nav, rs, dts, varei, svh)) {
-            // Broadcast ephemeris also failed for this satellite
-            return false;
-        }
-        vare[0] = varei[0];
         return true;
     }
 
@@ -571,6 +554,10 @@ public final class EphModel {
     private static double geph2clk(GTime time, Geph geph) {
         double t = TimeSystem.timediff(time, geph.toe);
         double ts = t;
+        if (Math.abs(geph.taun) > 1.0) {
+            LOG.warn(String.format(Locale.US, "[geph2clk] INVALID taun=%.6e sat=%d, returning 0", geph.taun, geph.sat));
+            return 0.0;
+        }
         for (int i = 0; i < 2; i++) {
             t = ts - (-geph.taun + geph.gamn * t);
         }

@@ -1,7 +1,6 @@
 package org.rtklib.java.ppp;
 
 import org.rtklib.java.common.RtklibCommon;
-import java.util.Locale;
 import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
@@ -18,8 +17,6 @@ import org.rtklib.java.trace.Trace;
 import org.rtklib.java.trace.TraceConfig;
 import org.rtklib.java.trace.TraceCallback;
 import org.rtklib.java.trace.TraceControl;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.rtklib.java.troposphere.TroposphereModel;
 import org.rtklib.java.ppprtk.SsrCorrector;
 import org.rtklib.java.ppp.PppOsbModel;
@@ -28,7 +25,6 @@ public class PppCore {
     private PppCore() {
     }
 
-    private static final Logger LOG = LoggerFactory.getLogger(PppCore.class);
     public static final int MAX_ITER = 8;
     public static final int MIN_NSAT_SOL = 4;
 
@@ -134,23 +130,12 @@ public class PppCore {
         TraceCallback v2cb = rtk.traceCallback;
         rtk.epoch++;
 
-        {
-            int vsCount = 0;
-            for (int ii = 0; ii < Constants.MAXSAT; ii++) {
-                if (rtk.ssat[ii].vs != 0) vsCount++;
-            }
-            LOG.debug("pppos entry: vsCount={}", vsCount);
-        }
-
         if (rtk.nx == 0 || rtk.nx != nx) {
             rtk.nx = nx;
             rtk.x = new double[nx];
             rtk.P = new double[nx * nx];
             rtk.xa = new double[nx];
             rtk.Pa = new double[nx * nx];
-            for (int i = 0; i < 3 && i < nx; i++) {
-                rtk.x[i] = rtk.sol.rr[i];
-            }
         }
 
         PppWorkBuffer wb = (PppWorkBuffer) rtk.workBufPpp;
@@ -199,32 +184,6 @@ public class PppCore {
             SsrCorrector.applyHrClockCorrection(nav.ssr, dts, obs, n);
         }
 
-        if (LOG.isDebugEnabled() && rtk.epoch <= 3) {
-            int satOk = 0, satFail = 0;
-            for (int ii = 0; ii < n && ii < Constants.MAXOBS; ii++) {
-                double normRs = Math.sqrt(rs[ii*6]*rs[ii*6] + rs[ii*6+1]*rs[ii*6+1] + rs[ii*6+2]*rs[ii*6+2]);
-                if (normRs > 1E4) satOk++; else satFail++;
-            }
-            double[] rrInit = new double[3];
-            for (int ii = 0; ii < 3; ii++) rrInit[ii] = rtk.sol.rr[ii];
-            double[] posInit = new double[3];
-            CoordTransform.ecef2pos(rrInit, posInit);
-            LOG.debug(String.format("pppos epoch=%d satposs: n=%d satOk=%d satFail=%d sateph=%d rr=(%.3f,%.3f,%.3f) pos=(%.6f,%.6f,%.1f)",
-                rtk.epoch, n, satOk, satFail, opt.sateph,
-                rrInit[0], rrInit[1], rrInit[2],
-                posInit[0]*Constants.R2D, posInit[1]*Constants.R2D, posInit[2]));
-            if (opt.sateph == Constants.EPHOPT_PREC && nav.ne > 0) {
-                double t0 = TimeSystem.timediff(nav.peph[0].time, obs[0].time);
-                double t1 = TimeSystem.timediff(nav.peph[nav.ne-1].time, obs[0].time);
-                LOG.debug(String.format("  SP3 time range: first=%.0fs last=%.0fs relative to obs ne=%d", t0, t1, nav.ne));
-            }
-            if (opt.sateph == Constants.EPHOPT_PREC && nav.nc > 0) {
-                double t0 = TimeSystem.timediff(nav.pclk[0].time, obs[0].time);
-                double t1 = TimeSystem.timediff(nav.pclk[nav.nc-1].time, obs[0].time);
-                LOG.debug(String.format("  CLK time range: first=%.0fs last=%.0fs relative to obs nc=%d", t0, t1, nav.nc));
-            }
-        }
-
         if (opt.posopt[3] != 0) {
             testeclipse(obs, n, nav, rs);
         }
@@ -249,8 +208,6 @@ public class PppCore {
 
             int nv = pppRes(0, obs, n, rs, dts, var, svh, exc, nav, xp, rtk, v, H, R, azel, nx);
 
-            LOG.debug("pppos iter={} nv={} nx={}", iter, nv, nx);
-
             if (iter == 0) {
                 PppTrace.tracePppSatPos(ctrl, cb, rtk.epoch, obs[0].time, obs, n, rs, dts, var, svh, azel, exc);
             }
@@ -259,7 +216,6 @@ public class PppCore {
             Trace.emit("FILTER", "RESIDUAL", v2cfg, v2cb, rtk.epoch, obs[0].time, "nv", nv);
 
             if (nv == 0) {
-                LOG.debug("pppos epoch={} iter={} nv=0 no valid observations", rtk.epoch, iter);
                 break;
             }
 
@@ -273,34 +229,21 @@ public class PppCore {
                     "info", info, "nv", nv, "nx", nx);
 
             if (info != 0) {
-                LOG.debug("pppos epoch={} iter={} KF update failed info={}", rtk.epoch, iter, info);
                 break;
             }
 
-            // Always save the latest state
-            System.arraycopy(xp, 0, rtk.x, 0, nx);
-            System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
-
-            if (pppRes(iter + 1, obs, n, rs, dts, var, svh, exc, nav, xp, rtk, null, null, null, azel, nx) != 0) {
+            /* C ppp.c pppos: commit xp/Pp to rtk.x/P only when postfit accepted */
+            int postfitStat = pppRes(iter + 1, obs, n, rs, dts, var, svh, exc, nav, xp, rtk, null, null, null, azel, nx);
+            if (postfitStat != 0) {
+                System.arraycopy(xp, 0, rtk.x, 0, nx);
+                System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
                 stat = Constants.SOLQ_PPP;
-                if (LOG.isDebugEnabled() && rtk.epoch <= 5) {
-                    double[] posNew = new double[3];
-                    CoordTransform.ecef2pos(new double[]{xp[0], xp[1], xp[2]}, posNew);
-                    LOG.debug(String.format("pppos epoch=%d iter=%d CONVERGED xp=(%.4f,%.4f,%.4f) pos=(%.8f,%.8f,%.3f)",
-                        rtk.epoch, iter, xp[0], xp[1], xp[2],
-                        posNew[0]*Constants.R2D, posNew[1]*Constants.R2D, posNew[2]));
-                }
                 break;
             }
         }
 
         if (stat == Constants.SOLQ_PPP) {
             updateStat(rtk, obs, n, stat, nx);
-        } else {
-            if (rtk.epoch <= 10) {
-                LOG.info("pppos epoch={} did not converge after {} iterations, stat={}", rtk.epoch, MAX_ITER, stat);
-            }
-            LOG.debug("pppos epoch={} did not converge, stat={}", rtk.epoch, stat);
         }
 
         PppTrace.tracePppResult(ctrl, cb, rtk.epoch, obs[0].time, rtk.sol, MAX_ITER);
@@ -418,10 +361,16 @@ public class PppCore {
         double dtr;
 
         for (int i = 0; i < NC(); i++) {
-            if (opt.sateph == Constants.EPHOPT_PREC) {
-                dtr = rtk.sol.dtr[0];
-            } else {
+            /* aligned with C ppp.c udclk_ppp L620-630: EPHOPT_PREC branch
+             * neglects receiver inter-system bias (all systems init from
+             * sol.dtr[0]); broadcast branch uses per-system ISB dtr[0]+dtr[i].
+             * enablePppIsbClockInit (JAVA-ONLY, default off) extends the
+             * broadcast semantics to the precise branch so multi-GNSS PPP
+             * keeps GLO/GAL clocks inside maxinno. */
+            if (i == 0 || opt.sateph != Constants.EPHOPT_PREC || rtk.rtkConfig.enablePppIsbClockInit) {
                 dtr = i == 0 ? rtk.sol.dtr[0] : rtk.sol.dtr[0] + rtk.sol.dtr[i];
+            } else {
+                dtr = rtk.sol.dtr[0];
             }
             initx(x, P, nx, Constants.CLIGHT * dtr, VAR_CLK, IC(i, opt));
         }
@@ -462,29 +411,45 @@ public class PppCore {
         double[] x = rtk.x;
         double[] P = rtk.P;
         PrcOpt opt = rtk.opt;
+        int gapResion = Constants.GAP_RESION;
 
-        if (rtk.epoch <= 1) {
-            double[] pos = new double[3];
-            CoordTransform.ecef2pos(rtk.sol.rr, pos);
-            double[] azelZenith = {0.0, Constants.PI / 2.0};
-            double[] ionOut = new double[2];
-            IonosphereModel.ionocorr(rtk.sol.time, nav, 1, pos, azelZenith,
-                    Constants.IONOOPT_BRDC, ionOut);
-            double zenithDelay = ionOut[0];
-            if (zenithDelay < 1.0) {
-                zenithDelay = 10.0;
-            }
-            for (int i = 0; i < Constants.MAXSAT; i++) {
-                int idx = II(i + 1, opt);
-                initx(x, P, nx, zenithDelay, VAR_IONO_INIT, idx);
+        for (int i = 0; i < Constants.MAXSAT; i++) {
+            int j = II(i + 1, opt);
+            if (x[j] != 0.0 && rtk.ssat[i].outc[0] > gapResion) {
+                x[j] = 0.0;
             }
         }
 
         for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
             int sat = obs[i].sat;
-            int idx = II(sat, opt);
-            double sinel = Math.sin(rtk.ssat[sat - 1].azel[1]);
-            P[idx * nx + idx] += SQR(opt.prn[1] / Math.max(sinel, 0.1)) * Math.abs(rtk.tt);
+            int j = II(sat, opt);
+
+            /* initialize ionosphere delay estimates if zero (C ppp.c L681-697):
+             * C re-initializes unconditionally whenever the state is zero; the
+             * former Java variant required outc<=GAP_RESION, but after the
+             * GAP_RESION reset above sets x[j]=0.0 the stale outc counter
+             * (>gap) blocked re-initialization forever and the satellite
+             * never returned. C has no testsnr() calls here either. */
+            if (x[j] == 0.0) {
+                int f2 = RtklibCommon.seliflc(opt.nf, SatUtils.satsys(sat, null));
+                double freq1 = SatUtils.sat2freq(sat, obs[i].code[0], nav);
+                double freq2 = SatUtils.sat2freq(sat, obs[i].code[f2], nav);
+                if (obs[i].P[0] == 0.0 || obs[i].P[f2] == 0.0 || freq1 == 0.0 || freq2 == 0.0) {
+                    continue;
+                }
+                /* use pseudorange difference adjusted by freq for initial estimate */
+                double[] pos = new double[3];
+                CoordTransform.ecef2pos(rtk.sol.rr, pos);
+                double[] azel = rtk.ssat[sat - 1].azel;
+                double ion = (obs[i].P[0] - obs[i].P[f2])
+                        / (SQR(Constants.FREQL1 / freq1) - SQR(Constants.FREQL1 / freq2));
+                /* adjust delay estimate by path length */
+                ion /= ionmapf(pos, azel);
+                initx(x, P, nx, ion, VAR_IONO, j);
+            } else {
+                double sinel = Math.sin(Math.max(rtk.ssat[sat - 1].azel[1], 5.0 * Constants.D2R));
+                P[j * nx + j] += SQR(opt.prn[1] / sinel) * Math.abs(rtk.tt);
+            }
         }
     }
 
@@ -510,40 +475,31 @@ public class PppCore {
         detslpGf(rtk, obs, n, nav);
         detslpMw(rtk, obs, n, nav);
 
-        int nSlip = 0;
-        for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
-            int sat = obs[i].sat;
-            for (int j = 0; j < opt.nf; j++) {
-                if (rtk.ssat[sat - 1].slip[j] != 0) nSlip++;
-            }
-        }
-        if (nSlip > 0 || rtk.epoch <= 5) {
-            LOG.info(String.format(Locale.US, "SLIP-DIAG epoch=%d nSlip=%d", rtk.epoch, nSlip));
-            for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
-                int sat = obs[i].sat;
-                for (int j = 0; j < opt.nf; j++) {
-                    if (rtk.ssat[sat - 1].slip[j] != 0) {
-                        LOG.info(String.format(Locale.US, "SLIP-DIAG epoch=%d sat=%d f=%d slip=1", rtk.epoch, sat, j));
-                    }
-                }
-            }
-        }
-
         for (int f = 0; f < NF(opt); f++) {
+            /* reset phase-bias if expire obs outage counter (C ppp.c L743-749):
+             * reset is unconditional with variance 0.0 whenever the outage
+             * counter expires, modear==ARMODE_INST, or a day-boundary clock
+             * jump occurs (clk_jump relies on posopt[5]/time2gpst and has no
+             * Java counterpart). The former Java variant required vsat!=0,
+             * re-initialized with VAR_BIAS, cleared outc/vsat and skipped
+             * excluded satellites, so the bias of a rejected satellite was
+             * never reset and it stayed rejected forever once re-observed. */
             for (int i = 0; i < Constants.MAXSAT; i++) {
-                if (++rtk.ssat[i].outc[f] > opt.maxout && rtk.ssat[i].vsat[f] != 0) {
-                    int idx = IB(i + 1, f, opt);
-                    if (idx < nx && x[idx] != 0.0) {
-                        initx(x, P, nx, 0.0, VAR_BIAS, idx);
-                        rtk.ssat[i].mw[0] = 0.0;
-                        rtk.ssat[i].gf[0] = 0.0;
-                        rtk.ssat[i].xrwl = 0.0;
-                        rtk.ssat[i].rw = 0.0;
-                        rtk.ssat[i].xswl = 0.0;
-                        rtk.ssat[i].niwl = 0;
-                    }
-                    rtk.ssat[i].outc[f] = 0;
-                    rtk.ssat[i].vsat[f] = 0;
+                if (++rtk.ssat[i].outc[f] > opt.maxout || opt.modear == Constants.ARMODE_INST) {
+                    initx(x, P, nx, 0.0, 0.0, IB(i + 1, f, opt));
+                    /* JAVA-ONLY: clear slip-detection history so a fresh MW/GF
+                     * reference is re-established after the bias reset */
+                    rtk.ssat[i].mw[0] = 0.0;
+                    rtk.ssat[i].gf[0] = 0.0;
+                    rtk.ssat[i].xrwl = 0.0;
+                    rtk.ssat[i].rw = 0.0;
+                    rtk.ssat[i].xswl = 0.0;
+                    rtk.ssat[i].niwl = 0;
+                    /* JAVA-ONLY NL arc: bias state reset starts a new arc */
+                    rtk.ssat[i].xrnl = 0.0;
+                    rtk.ssat[i].rn = 0.0;
+                    rtk.ssat[i].xsnl = 0.0;
+                    rtk.ssat[i].ninl = 0;
                 }
             }
 
@@ -616,6 +572,11 @@ public class PppCore {
                 rtk.ssat[sat - 1].rw = 0.0;
                 rtk.ssat[sat - 1].xswl = 0.0;
                 rtk.ssat[sat - 1].niwl = 0;
+                /* JAVA-ONLY NL arc: slip re-init starts a new arc */
+                rtk.ssat[sat - 1].xrnl = 0.0;
+                rtk.ssat[sat - 1].rn = 0.0;
+                rtk.ssat[sat - 1].xsnl = 0.0;
+                rtk.ssat[sat - 1].ninl = 0;
             }
         }
     }
@@ -640,8 +601,6 @@ public class PppCore {
             rtk.ssat[obs[i].sat - 1].gf[0] = g1;
 
             if (g0 != 0.0 && Math.abs(g1 - g0) > rtk.opt.thresslip) {
-                LOG.info(String.format(Locale.US, "SLIP-GF epoch=%d sat=%d gf_diff=%.6f thres=%.6f triggered=true",
-                        rtk.epoch, obs[i].sat, g1 - g0, rtk.opt.thresslip));
                 for (int j = 0; j < rtk.opt.nf; j++) {
                     rtk.ssat[obs[i].sat - 1].slip[j] |= 1;
                 }
@@ -721,7 +680,7 @@ public class PppCore {
         double[] dion_vari = new double[2];
         double[] varr = new double[n * 2 * NF(opt)];
         int nv = 0;
-        int stat = 0;
+        int stat = 1;
 
         // For post-fit residual check
         int[] obsi = new int[n * 2];
@@ -743,27 +702,16 @@ public class PppCore {
                         TimeSystem.gpst2utc(obs[0].time), rr, opt.tidecorr, nav.erp, opt.odisp[0], rtk.rtkConfig);
                 if (disp2010 != null) {
                     for (int i = 0; i < 3; i++) disp[i] = disp2010[i];
-                    if (rtk.epoch <= 1) LOG.info("IERS2010 tide disp: [{},{},{}]m, erp.n={}",
-                            String.format("%.5f", disp[0]), String.format("%.5f", disp[1]), String.format("%.5f", disp[2]),
-                            nav.erp != null ? nav.erp.n : 0);
                 } else {
                     tidedisp(TimeSystem.gpst2utc(obs[0].time), rr, opt.tidecorr, nav.erp, opt.odisp[0], disp);
-                    if (rtk.epoch <= 1) LOG.info("Standard tide disp (IERS2010 null): [{},{},{}]m",
-                            String.format("%.5f", disp[0]), String.format("%.5f", disp[1]), String.format("%.5f", disp[2]));
                 }
             } else {
                 tidedisp(TimeSystem.gpst2utc(obs[0].time), rr, opt.tidecorr, nav.erp, opt.odisp[0], disp);
-                if (rtk.epoch <= 1) LOG.info("Standard tide disp: [{},{},{}]m",
-                        String.format("%.5f", disp[0]), String.format("%.5f", disp[1]), String.format("%.5f", disp[2]));
             }
             for (int i = 0; i < 3; i++) rr[i] += disp[i];
-        } else {
-            if (rtk.epoch <= 1) LOG.info("tidecorr=0, no tide correction applied");
         }
 
         CoordTransform.ecef2pos(rr, pos);
-
-        int excCount = 0, geodistFail = 0, elFail = 0, sysFail = 0, tropFail = 0, ionoFail = 0, measFail = 0;
 
         for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
             int sat = obs[i].sat;
@@ -776,7 +724,6 @@ public class PppCore {
             double r = RtklibCommon.geodist(rsi, rr, e);
             if (r <= 0.0) {
                 exc[i] = 1;
-                geodistFail++;
                 continue;
             }
 
@@ -785,11 +732,7 @@ public class PppCore {
             azel[i * 2] = azelI[0];
             azel[i * 2 + 1] = azelI[1];
             if (el < opt.elmin) {
-                if (rtk.epoch <= 1 && elFail < 3) {
-                    LOG.info(String.format("pppRes: sat=%d el=%.1fdeg < elmin=%.1fdeg", sat, el * Constants.R2D, opt.elmin * Constants.R2D));
-                }
                 exc[i] = 1;
-                elFail++;
                 continue;
             }
 
@@ -798,13 +741,7 @@ public class PppCore {
 
             if (sys == 0 || rtk.ssat[sat - 1].vs == 0 ||
                     RtklibCommon.satexclude(sat, varRs[i], svh[i], opt) != 0 || exc[i] != 0) {
-                if (post == 0 && sysFail < 3) {
-                    LOG.debug(String.format("pppRes sat=%d sys=%d vs=%d satexcl=%d exc=%d varRs=%.3f svh=%d",
-                        sat, sys, rtk.ssat[sat - 1].vs,
-                        RtklibCommon.satexclude(sat, varRs[i], svh[i], opt), exc[i], varRs[i], svh[i]));
-                }
                 exc[i] = 1;
-                sysFail++;
                 continue;
             }
 
@@ -812,13 +749,17 @@ public class PppCore {
             double vart = 0.0;
             double[] dtrpArr = new double[1];
             double[] vartArr = new double[1];
-            if (!modelTrop(obs[i].time, pos, azelI, opt, x, dtdx, nav, dtrpArr, vartArr, rtk)) { tropFail++; continue; }
+            if (!modelTrop(obs[i].time, pos, azelI, opt, x, dtdx, nav, dtrpArr, vartArr, rtk)) {
+                continue;
+            }
             dtrp = dtrpArr[0];
             vart = vartArr[0];
 
             double dion = 0.0;
             double vari = 0.0;
-            if (!modelIono(obs[i].time, pos, azelI, opt, sat, x, nav, dion_vari)) { ionoFail++; continue; }
+            if (!modelIono(obs[i].time, pos, azelI, opt, sat, x, nav, dion_vari)) {
+                continue;
+            }
             dion = dion_vari[0];
             vari = dion_vari[1];
 
@@ -901,7 +842,9 @@ public class PppCore {
                 }
 
                 if (opt.ionoopt == Constants.IONOOPT_EST || opt.ionoopt == Constants.IONOOPT_SSR) {
-                    if (x[II(sat, opt)] == 0.0) continue;
+                    if (rtk.x[II(sat, opt)] == 0.0) {
+                        continue;
+                    }
                     if (H != null) H[nv * nx + II(sat, opt)] = C * ionmapf(pos, azelI);
                 }
 
@@ -931,7 +874,18 @@ public class PppCore {
                 varr[nv] += vart + SQR(C) * vari + varRs[i];
                 if (sys == Constants.SYS_GLO && code == 1) varr[nv] += VAR_GLO_IFB;
 
-                if (post == 0 && opt.maxinno[code] > 0.0 && Math.abs(res) > opt.maxinno[code]) {
+                /* reject satellite by pre-fit residuals (C ppp.c pppres L1057) */
+                /* JAVA-ONLY enableIonoEstRobust: EST 模式下本历元刚 initx 的 bias/ion
+                 * 状态（P 恰为 VAR_BIAS/VAR_IONO，尚未被任何 KF 更新吸收）跳过相位行
+                 * prefit 剔除，让 EKF 一次性吸收码偏差，解除首历元死锁。开关关闭时
+                 * freshEstState 恒 false，与 C 行为逐值一致。 */
+                boolean freshEstState = code == 0 && post == 0
+                        && rtk.rtkConfig != null && rtk.rtkConfig.enableIonoEstRobust
+                        && opt.ionoopt == Constants.IONOOPT_EST
+                        && (rtk.P[IB(sat, frq, opt) * nx + IB(sat, frq, opt)] == VAR_BIAS
+                            || rtk.P[II(sat, opt) * nx + II(sat, opt)] == VAR_IONO);
+                if (post == 0 && opt.maxinno[code] > 0.0
+                        && Math.abs(res) > opt.maxinno[code] && !freshEstState) {
                     exc[i] = 1;
                     rtk.ssat[sat - 1].rejc[frq]++;
                     continue;
@@ -948,7 +902,6 @@ public class PppCore {
                 if (code == 0) {
                     rtk.ssat[sat - 1].vsat[frq] = 1;
                     rtk.ssat[sat - 1].code[frq][0] = obs[i].code[frq];
-                    stat++;
                 }
                 nv++;
             }
@@ -979,20 +932,6 @@ public class PppCore {
                 for (int i = 0; i < nv; i++) R[j * nv + i] = 0.0;
                 R[j * nv + j] = varr[j];
             }
-        }
-
-        if (post == 0) {
-            if (nv == 0 && rtk.epoch <= 2) {
-                double[] posDiag = new double[3];
-                CoordTransform.ecef2pos(rr, posDiag);
-                LOG.info("pppRes: nv=0! n={} geodist={} el={} sys={} trop={} iono={} meas={} vsCount={} rr=({},{},{}) pos=({},{},{})",
-                    n, geodistFail, elFail, sysFail, tropFail, ionoFail, measFail,
-                    java.util.Arrays.stream(rtk.ssat).filter(s -> s.vs != 0).count(),
-                    String.format("%.0f", rr[0]), String.format("%.0f", rr[1]), String.format("%.0f", rr[2]),
-                    String.format("%.4f", posDiag[0]*Constants.R2D), String.format("%.4f", posDiag[1]*Constants.R2D), String.format("%.1f", posDiag[2]));
-            }
-            LOG.debug("pppRes: n={} nv={} geodist={} el={} sys={} trop={} iono={} meas={}",
-                n, nv, geodistFail, elFail, sysFail, tropFail, ionoFail, measFail);
         }
 
         return post != 0 ? stat : nv;
@@ -1218,10 +1157,6 @@ public class PppCore {
         }
 
         rtk.sol.stat = (byte)(rtk.sol.ns < MIN_NSAT_SOL ? Constants.SOLQ_NONE : stat);
-        
-        if (rtk.sol.ns < MIN_NSAT_SOL && rtk.epoch <= 5) {
-            LOG.info("updateStat: epoch={} ns={} < MIN_NSAT_SOL={}, stat set to NONE", rtk.epoch, rtk.sol.ns, MIN_NSAT_SOL);
-        }
 
         for (int i = 0; i < 3; i++) {
             rtk.sol.rr[i] = rtk.x[i];
@@ -1418,7 +1353,7 @@ public class PppCore {
                         wele = 0.0;
                     }
 
-                    if (slip || rtk.ssat[sat - 1].lock[2] <= 1) {
+                    if (slip || rtk.ssat[sat - 1].lock[0] <= 1) {
                         rtk.ssat[sat - 1].xrewl = 0.0;
                         rtk.ssat[sat - 1].rew = 0.0;
                         rtk.ssat[sat - 1].xsewl = 0.0;
@@ -1478,26 +1413,85 @@ public class PppCore {
         double f1mf2 = freq1 - freq2;
         double f1pf2 = freq1 + freq2;
 
+        double L1 = obs.L[0];
+        double L2 = obs.L[1];
         double P1 = obs.P[0];
         double P2 = obs.P[1];
-        int sys = SatUtils.satsys(obs.sat, null);
-        int biasIx1 = SppCore.code2biasIx(sys, obs.code[0]);
-        if (biasIx1 > 0 && nav.cbias != null && obs.sat - 1 < nav.cbias.length &&
-                nav.cbias[obs.sat - 1] != null && nav.cbias[obs.sat - 1][0] != null &&
-                biasIx1 - 1 < nav.cbias[obs.sat - 1][0].length) {
-            P1 += nav.cbias[obs.sat - 1][0][biasIx1 - 1];
-        }
-        int biasIx2 = SppCore.code2biasIx(sys, obs.code[1]);
-        if (biasIx2 > 0 && nav.cbias != null && obs.sat - 1 < nav.cbias.length &&
-                nav.cbias[obs.sat - 1] != null && nav.cbias[obs.sat - 1][1] != null &&
-                biasIx2 - 1 < nav.cbias[obs.sat - 1][1].length) {
-            P2 += nav.cbias[obs.sat - 1][1][biasIx2 - 1];
+
+        if (nav.fcbFromOsb && nav.fcbWlByCode != null) {
+            /* Integer-clock (WHU WUM0MGXRAP) framework: the clock has absorbed
+             * the IF combination of the reference signals (C1W/C2W for GPS), and
+             * the OSB values in the BIA file are absolute biases relative to
+             * that zero point. The observation must be corrected by subtracting
+             * its OWN OSB directly (same as PRIDE-PPPAR); relative-to-reference
+             * (residual) corrections are wrong here.
+             * FIX-ALG-028: 仅施相位 OSB，不施码 OSB。WUM 自洽产品的 WL 偏差
+             * 同现于 MW 组合的相位项与码项，相位 OSB 施加后 WL 改正已完成
+             * （wlMean 相对原始 MW 抬升恰为 +fcbWl）；再施码 OSB 属二次改正，
+             * 除非 AR 固定时以 -fcbWl 回吐一次否则 WL 取整中毒（2×2 矩阵实
+             * 测，见 ALGORITHM_FIX_LOG.md FIX-ALG-028）。码 OSB 仍用于 AR 候
+             * 选完备性检查（PppAmbFix）并经 nav.cbias 进入 EWL 组合。 */
+            double osbL1 = PppAmbFix.getOsbAt(nav, obs.sat, obs.code[0], obs.time.time);
+            double osbL2 = PppAmbFix.getOsbAt(nav, obs.sat, obs.code[1], obs.time.time);
+            L1 -= osbL1 / lam1;
+            L2 -= osbL2 / lam2;
+        } else {
+            int sys = SatUtils.satsys(obs.sat, null);
+            int biasIx1 = SppCore.code2biasIx(sys, obs.code[0]);
+            if (biasIx1 > 0 && nav.cbias != null && obs.sat - 1 < nav.cbias.length &&
+                    nav.cbias[obs.sat - 1] != null && nav.cbias[obs.sat - 1][0] != null &&
+                    biasIx1 - 1 < nav.cbias[obs.sat - 1][0].length) {
+                P1 += nav.cbias[obs.sat - 1][0][biasIx1 - 1];
+            }
+            int biasIx2 = SppCore.code2biasIx(sys, obs.code[1]);
+            if (biasIx2 > 0 && nav.cbias != null && obs.sat - 1 < nav.cbias.length &&
+                    nav.cbias[obs.sat - 1] != null && nav.cbias[obs.sat - 1][1] != null &&
+                    biasIx2 - 1 < nav.cbias[obs.sat - 1][1].length) {
+                P2 += nav.cbias[obs.sat - 1][1][biasIx2 - 1];
+            }
         }
 
-        double mw = (obs.L[0] - obs.L[1]) * Constants.CLIGHT / f1mf2 -
+        double mw = (L1 - L2) * Constants.CLIGHT / f1mf2 -
                (freq1 * P1 + freq2 * P2) / f1pf2;
 
         return mw;
+    }
+
+    /** 码 OSB 取值（FIX-ALG-027 时变化）：优先按历元时间命中 nav.osbSeries
+     *  区间；未命中（数据缺口/常量型产品）回退 cbiasOsb 快照。 */
+    static double getCodeOsb(Nav nav, int sat, int code, double time) {
+        if (code < 0 || code > Constants.MAXCODE) return 0.0;
+        if (sat < 1 || sat > Constants.MAXSAT) return 0.0;
+        if (nav.osbSeries != null) {
+            /* FIX-ALG-027: 码 OSB 占低半区键（×2），相位 OSB 在高半区（×2+1） */
+            java.util.List<double[]> list = nav.osbSeries.get(((long) (sat - 1) * (Constants.MAXCODE + 1) + code) * 2);
+            if (list != null) {
+                for (double[] r : list) {
+                    if (time >= r[0] && time < r[1]) return r[2];
+                }
+            }
+        }
+        if (nav.cbiasOsb == null) return 0.0;
+        if (nav.cbiasOsb[sat - 1] == null) return 0.0;
+        return nav.cbiasOsb[sat - 1][code];
+    }
+
+    static int[] getRefCodes(int sys) {
+        if (sys == Constants.SYS_GPS) {
+            return new int[]{Constants.CODE_L1W, Constants.CODE_L2W, Constants.CODE_L1W, Constants.CODE_L2W};
+        } else if (sys == Constants.SYS_GAL) {
+            return new int[]{Constants.CODE_L1C, Constants.CODE_L5Q, Constants.CODE_L1C, Constants.CODE_L5Q};
+        } else if (sys == Constants.SYS_CMP) {
+            return new int[]{Constants.CODE_L2I, Constants.CODE_L6I, Constants.CODE_L2I, Constants.CODE_L6I};
+        }
+        return new int[]{Constants.CODE_L1C, Constants.CODE_L2W, Constants.CODE_L1C, Constants.CODE_L2W};
+    }
+
+    static int getRefPhaseCode(int sys) {
+        if (sys == Constants.SYS_GPS) return Constants.CODE_L1C;
+        if (sys == Constants.SYS_GAL) return Constants.CODE_L1C;
+        if (sys == Constants.SYS_CMP) return Constants.CODE_L2I;
+        return Constants.CODE_L1C;
     }
 
     public static void testeclipse(Obsd[] obs, int n, Nav nav, double[] rs) {
