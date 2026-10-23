@@ -4,13 +4,15 @@ RTKLIB 的 Java 移植版本，基于 [RTKLIB 2.5.0](https://github.com/tomojita
 
 项目定位为**算法引擎库（Library）**而非独立软件，可嵌入 Java 应用中实现 GNSS 数据处理与定位解算。
 
+> **当前版本 v3.1.0（2026-10-23 封存）**：算法能力已冻结，此后仅接受 bugfix，不再新增算法特性。29 项算法修复的闭环索引与精度实测见 [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md)，版本级变更见 [CHANGELOG](docs/CHANGELOG.md)。
+
 > **功能边界**：Java版专注核心定位算法（SPP/RTK/PPP/PPP-RTK），数据流通讯由 `rtklib-stream` 模块提供（NTRIP客户端+串口），不包含C版的TCP/UDP服务端、NTRIP Caster、接收机原始协议（u-blox/NovAtel等）、NMEA输出等功能。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
 ## 模块
 
 ### rtklib-core — 核心定位算法
 
-支持 SPP（米级）、RTK（厘米~毫米）、PPP（分米~厘米）、PPP-RTK（厘米级快速收敛）四种定位模式，数据入口支持 RTCM3 实时流和 RINEX 3.x 事后文件以及RTCM解码。
+支持 SPP（米级）、RTK（厘米~毫米）、PPP（分米~厘米）、PPP-RTK（厘米级快速收敛）四种定位模式，数据入口支持 RTCM3 实时流与 RINEX 2.x/3.x 事后文件。
 
 | 定位模式 | 常量 | 精度 | 数据入口 |
 |----------|------|------|----------|
@@ -86,7 +88,7 @@ IGS/MGEX精密产品自动下载器，下载规则对齐PRIDE-PPPAR v3.2 `pdp3.s
 
 GNSS数据流通讯模块，对齐原版RTKLIB的 `stream.c` 核心功能，提供NTRIP客户端和串口通讯能力。
 
-- **NTRIP客户端**：连接NTRIP Caster获取差分数据流（RTCM3观测值、SSR改正数等），支持NTRIP v2.0、HTTP Basic认证、Sourcetable查询、断线自动重连、NMEA GGA上行
+- **NTRIP客户端**：连接NTRIP Caster获取差分数据流（RTCM3观测值、SSR改正数等），支持NTRIP v2.0、HTTP Basic认证、Sourcetable查询、分块传输（chunked）与 gzip 解码、断线自动重连、NMEA GGA上行
 - **SSL/TLS**：支持TLS加密连接，兼容EUREF/IGS等要求HTTPS的Caster；可自定义SSLContext（自签名证书、双向TLS认证）
 - **串口通讯**：基于jSerialComm实现跨平台串口读写（Windows COM、Linux /dev/ttyUSB*、macOS /dev/cu.*），支持可配置波特率/数据位/校验位/流控
 - **统一监听器**：`StreamListener` 接口统一数据/错误/关闭事件回调
@@ -121,6 +123,16 @@ org.rtklib.java.adjust
 ├── engine/         GnssBaselineAdjust（平差引擎）、BaseStationDiagnoser（基站诊断器）
 └── datasource/     GnssDataSource（数据源接口）、RtcmFileDataSource、RinexFileDataSource、RtcmMemoryDataSource
 ```
+
+### rtklib-research — 前沿研究沙盒
+
+面向 FGO（因子图优化）、IMU 预积分与场景自适应的研究模块。与 `rtklib-core` **无代码级耦合**（仅依赖 EJML/slf4j），独立演进、不参与主模块依赖链；API 可能随研究进展变动，生产集成请优先使用 `rtklib-core`。
+
+- **FGO 框架**：滑动窗口优化 + 边缘化 + SwitchVariable
+- **IMU 预积分**：预积分量与协方差传播
+- **IACE 聚类 / 场景自适应**：FE-GUT 数据集验证
+
+验证：FE-GUT 仿真数据集（`PipelineIntegrationTest`、`PreintegrationTest`）。
 
 ### rtklib-otl — 海潮负荷BLQ系数生成
 
@@ -158,10 +170,23 @@ org.rtklib.java.otl
 | [实现差异](docs/RTKLIB_Differences.md) | Java 版与 C 版的有意差异说明 |
 | [矩阵存储参考](docs/MATRIX_DIMENSION_REFERENCE.md) | Kalman 滤波矩阵维度、存储约定及运算差异 |
 | [优化介绍](docs/RTK_Extra_Optimizations.md) | Java 版额外优化项（C 版没有的），独立开关控制 |
+| [PPP 优化说明](docs/PPP_Extra_Optimizations.md) | PPP 扩展优化项原理、调用架构与逐项对照测试 |
+| [SPP 优化说明](docs/SPP_Extra_Optimizations.md) | SPP 优化项（EKF、M 估计、零速约束、多普勒+SNR 加权） |
+| [PPP 体系指南](docs/PPP_Optimization_Systems.md) | 浮点 PPP / PPP-AR / PPP-RTK 三分支的定位与测试纪律 |
 | [优化功能矩阵](docs/CORE_OPTIMIZATION_MATRIX.md) | 按定位模式×场景分类的优化功能矩阵，含静态实测结论、动态适用性、基线类型标记 |
+| [算法修复档案](docs/ALGORITHM_FIX_LOG.md) | FIX-ALG-001~029 逐条 C 依据 / 根因 / 验证（改算法前必读） |
 | [测试用例与数据指南](docs/DATA_GUIDE.md) | 测试规范、测试类总览、数据依赖、优化矩阵测试用例、上传规范 |
 | [轨道模块技术参考](docs/ORBIT_MODULE_REFERENCE.md) | TLE解析、SGP4/SDP4传播、六根数转换、二体传播 |
-| [开发路线图](docs/ROADMAP.md) | 各模块完成度、Phase 1~5 规划、完好性监测 / PPP-RTK区域约束 / FGO融合等研究方向、暂缓原则 |
+| [开发路线图](docs/ROADMAP.md) | 各模块完成度、四梯队（0~3）规划、v3.1.0 封存策略、暂缓与恢复条件 |
+
+### 项目级
+
+| 文档 | 说明 |
+|------|------|
+| [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md) | 一句话定位 + 精度实测汇总 + FIX-ALG 001~029 闭环索引 + HAS/IMU/CLAS 扩展路线 |
+| [变更日志](docs/CHANGELOG.md) | 版本级变更摘要（当前至 3.1.0） |
+| [发布说明](RELEASE.md) | v3.1.0 封存版发布稿：本版重点、配置项、兼容性、已知问题、验收口径 |
+| [SSR 接入手册](docs/SSR_ACCESS_PLAYBOOK.md) | 权限到位后的两行改动、五步接入、开关表、验收清单与已知坑 |
 
 ### rtklib-product
 
@@ -260,6 +285,9 @@ org.rtklib.java.otl
 | PPP + IERS2010 | PPP | 同上 | 端到端解算 |
 | PPP + ISB/IFCB | PPP | 同上 | 端到端解算 |
 | PPP-AR + Fix-and-Hold | PPP-AR | 同上 + WHU UPD(WL/NL) | 端到端解算 |
+| PPP-AR 三频 (EWL+WL+NL) | PPP-AR | ALGO 2024 DOY060 + WUM | 固定率 65.7%（1226 历元）/ 2D RMS 3.00 cm（C 参考 3.54 cm） |
+| PPP + GPT3 真网格 | PPP | HKWS / HKSL 2018 DOY157 | U RMS 0.806 / 1.662 m，优于 NMF 基线 |
+| 实时 NTRIP 流 + MSM7 | SPP | WUH20 实时流（CAS） | 262 帧 CRC 全通过；73 历元 SPP 3D 偏差 1.89 m |
 | 精密产品读取 | — | IGS CODE WHU (SP3/CLK/IONEX/OSB/ATX) | 文件解析验证 |
 | 多基线间接平差 | Adjust | 本地RTCM3 2基站9小时 | σ₀+Baarda验证 |
 
@@ -281,7 +309,7 @@ org.rtklib.java.otl
 
 | 场景 | 定位模式 | 数据获取方式 |
 |------|----------|-------------|
-| PPP-RTK 实时 | PPP-RTK | MADOCA/Galileo HAS/QZSS CLAS SSR 流可注册获取，需录制+事后产品对齐 |
+| PPP-RTK 实时 | PPP-RTK | CAS / 北航 / Galileo HAS / QZSS CLAS 四条线的权限门槛与接入步骤见 [SSR 接入手册](docs/SSR_ACCESS_PLAYBOOK.md) |
 | 三频 RTK/PPP | RTK/PPP | IGS MGEX 三频测站 RINEX（BDS-3 B1c/B2a/B3i 或 GAL E1/E5a/E5b） |
 
 **数据确实稀缺，需自采或社区贡献**：
@@ -311,15 +339,17 @@ org.rtklib.java.otl
 | SPP 单点定位 + EKF + 抗差 + 零速约束 | ✅ | 真实RINEX数据 vs C版参考结果 |
 | RTK 相对定位 + 6项高级优化 | ✅ | 真实RINEX数据 vs C版参考结果 |
 | PPP + PPP-AR + 5项高级优化 | ✅ | 真实RINEX+精密星历数据 |
-| PPP-RTK 基础（SSR改正） | ✅ | 真实SSR数据 + 数值验证 |
-| Compact SSR / CLAS / HAS 解码 | ✅ | Python cssrlib交叉验证 / 单元测试 |
+| PPP-RTK 基础（SSR改正） | ✅ | SSR 解码→`nav.ssr`→`SsrCorrector`→`ppprtkos()` 链路；解码经公开 SSR 样本单测（`SsrDecodeSmokeTest`） |
+| Compact SSR / CLAS / HAS 解码 | ✅ | 单元测试（CLAS MT4073 子类型 1-12、HAS MT1~MT9）/ CSSRlib 交叉验证 |
 | 多基线间接平差 | ✅ | 真实RTCM实测数据 |
 | 因子图优化 FGO + IMU 预积分 | ✅ | FE-GUT 仿真数据集 |
 | 轨道模块 + 海潮负荷 | ✅ | Vallado/Fortran 参考对比 |
 
 剩余：PPP-RTK 区域大气约束、完好性保护级（HPL/VPL）、ARAIM、固定解完好性增强——均属研究深化方向，**无上游场景驱动，定版不再投入（WONTFIX）**。
 
-**Phase 3 🟢 — 测试加固与工程质量**（部分启动）：工程质量可推进（单元测试补充、CI回归、性能基准、C版差异消除）；场景验证（动态车载、长基线、城市峡谷RTK等）为🤝**社区贡献项**，核心依赖外部测试数据。
+**梯队 0/1 ✅ — 性能基准与工程质量**（已完成 2026-10-12）：JMH 微基准 + 端到端计时基线、RtkCore/PppCore 工作数组复用、SLF4J 日志统一、异常捕获改进、SSR 对流层直接改正、34 个关键算法单元测试。
+
+**梯队 2/3 🔴 — 已关闭**：3A Kalman 优化与 3.5B null 消除经 JMH 基准实测后放弃；CI 真实数据回归、CLAS STEC 多项式、场景验证等依赖外部数据/条件，随 v3.1.0 封存整体 WONTFIX。恢复条件见 [开发路线图 §10](docs/ROADMAP.md)。
 
 **未实现的C版功能**（设计上不实现）：TCP/UDP服务端、NTRIP Caster、接收机原始协议（u-blox/NovAtel等）、NMEA输出、GPX/KML输出、大地水准面/基准转换。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
