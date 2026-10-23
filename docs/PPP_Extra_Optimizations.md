@@ -2,7 +2,7 @@
 
 > 版本：v3.1  
 > 日期：2026-10-23  
-> 基于：rtklib-java v2.4.0  
+> 基于：rtklib-java v3.1.0  
 > 对标：PRIDE-PPPAR / GAMP / RTKLIB-demo5  
 
 ---

@@ -5,13 +5,15 @@
 
 | 项 | 内容 |
 |---|---|
-| 发布状态 | 正式版 **v2.4.0**（2026-10-23） |
+| 发布状态 | 封存版 **v3.1.0**（2026-10-23） |
 | 最后更新 | 2026-10-23 |
 | 运行环境 | Java 17、Maven 3.8+ |
 | 主要依赖 | EJML 0.41、SLF4J、Logback |
 | 产物 | `rtklib-core`、`rtklib-stream`、`rtklib-adjust`、`rtklib-product` 四个 jar |
 
-> 注意：`pom.xml` 与各模块版本均为 `2.4.0`，tag 必须与 pom 版本一致（`release.yml` 会校验，不一致直接失败）。
+> 注意：`pom.xml` 与各模块版本均为 `3.1.0`，tag 必须与 pom 版本一致（`release.yml` 会校验，不一致直接失败）。
+>
+> **v3.1.0 为封存版本**：算法内容与 v2.4.0 完全一致（无算法变更），新增 [docs/PROJECT_FINAL_SUMMARY.md](docs/PROJECT_FINAL_SUMMARY.md)（终期技术摘要），仅版本号与文档同步。
 
 ---
 
@@ -125,7 +127,7 @@ WUM 2024 DOY060 数据上，3F 固定解 2D 精度 **3.00 cm**，优于 C 版 RT
 
 ## 七、发布清单（维护者）
 
-- [x] `pom.xml` 版本号升级至 `2.4.0`
+- [x] `pom.xml` 版本号升级至 `3.1.0`
 - [x] `docs/CHANGELOG.md` 将 `[Unreleased]` 改为正式版本与日期
 - [ ] `mvn test` 全绿（含 `-pl rtklib-stream`、`-pl rtklib-core`）
 - [ ] `mvn package -DskipTests` 产出四个 jar
