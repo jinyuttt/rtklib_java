@@ -1101,11 +1101,11 @@ python rtk_compare/compare_results.py \
 | [rtkcmn.c](file:///D:/code/rtklib_java/RTKLIB-2.5.0/src/rtkcmn.c#L681-L694) | 681-694 | **code2freq_BDS() 函数** |
 | [rtkcmn.c](file:///D:/code/rtklib_java/RTKLIB-2.5.0/src/rtkcmn.c#L722-L736) | 722-736 | **code2idx() 函数** |
 | **Java源码** | | |
-| [Constants.java](file:///D:/code/rtklib_java/src/main/java/org/rtklib/java/constants/Constants.java) | 全文 | **NFREQ=6, NEXOBS=2 定义** |
-| [Rtcm.java](file:///D:/code/rtklib_java/src/main/java/org/rtklib/java/rtcm/Rtcm.java#L1747-L1773) | 1747-1773 | **promoteExtSig() 实现** |
-| [Rtcm.java](file:///D:/code/rtklib_java/src/main/java/org/rtklib/java/rtcm/Rtcm.java#L1630-L1750) | 1630-1750 | **saveMsmObs() 调用promoteExtSig** |
-| [ObsCode.java](file:///D:/code/rtklib_java/src/main/java/org/rtklib/java/common/ObsCode.java#L354-L399) | 354-399 | **sigindex() 实现** |
-| [ObsCode.java](file:///D:/code/rtklib_java/src/main/java/org/rtklib/java/common/ObsCode.java#L228-L240) | 228-240 | **code2freqBds() 映射** |
+| [Constants.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/constants/Constants.java) | 全文 | **NFREQ=6, NEXOBS=2 定义** |
+| [Rtcm.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java#L2030-L2062) | 2030-2062 | **promoteExtSig() 实现** |
+| [Rtcm.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java#L1932-L2028) | 1932-2028 | **saveMsmObs() 调用promoteExtSig** |
+| [ObsCode.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/common/ObsCode.java#L354-L399) | 354-399 | **sigindex() 实现** |
+| [ObsCode.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/common/ObsCode.java#L228-L240) | 228-240 | **code2freqBds() 映射** |
 | **技术文档** | | |
 | [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](file:///D:/code/rtklib_java/docs/RTKLIB_JAVA_TECHNICAL_REFERENCE.md) | 第11章 | **promoteExtSig详细技术说明** |
 | [RTK_Extra_Optimizations.md](file:///D:/code/rtklib_java/docs/RTK_Extra_Optimizations.md) | 全文 | **其他Java版独有优化项** |
