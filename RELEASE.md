@@ -129,7 +129,7 @@ WUM 2024 DOY060 数据上，3F 固定解 2D 精度 **3.00 cm**，优于 C 版 RT
 
 - [x] `pom.xml` 版本号升级至 `3.1.0`
 - [x] `docs/CHANGELOG.md` 将 `[Unreleased]` 改为正式版本与日期
+- [x] 打新 tag `v3.1.0`（**不可复用旧 tag**，否则不会触发新 workflow）
 - [ ] `mvn test` 全绿（含 `-pl rtklib-stream`、`-pl rtklib-core`）
 - [ ] `mvn package -DskipTests` 产出四个 jar
-- [ ] 打新 tag（**不可复用旧 tag**，否则不会触发新 workflow）
 - [ ] 确认 release 产物不含测试数据
