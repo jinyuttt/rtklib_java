@@ -29,7 +29,7 @@
 
 | 文档 | 定位 | 状态 | 最后更新 |
 |------|------|------|----------|
-| [CHANGELOG.md](CHANGELOG.md) | 面向用户的版本级变更摘要（当前至 2.4.0） | ✅ 活跃 | 2026-10-23 |
+| [CHANGELOG.md](CHANGELOG.md) | 面向用户的版本级变更摘要（当前至 3.1.0） | ✅ 活跃 | 2026-10-23 |
 | [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) | **定版核心档案**：每次改变数值行为的修改（C 依据/根因/验证），现存 FIX-ALG-001~029 | ✅ 活跃 | 2026-10-23 |
 | [RTKLIB_Differences.md](RTKLIB_Differences.md) | 与 RTKLIB 2.5.0 C 版的长期差异声明（设计选择，非 Bug） | ✅ 活跃 | 2026-10-21 |
 
@@ -89,6 +89,7 @@
 | 文档 | 定位 | 状态 | 最后更新 |
 |------|------|------|----------|
 | [ROADMAP.md](ROADMAP.md) | 模块状态总览与阶段路线图（Phase 1/2、梯队 0~3） | ✅ 活跃 | 2026-10-19 |
+| [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) | **终期技术摘要**：一句话定位 + 精度实测 + 001~029 闭环索引 + HAS/IMU/CLAS 扩展路线 | ✅ 活跃 | 2026-10-23 |
 | [TraceLog_V2_Design.md](TraceLog_V2_Design.md) | 追踪日志 V2 设计与实现（取代 archive 中的 V1 设计） | ✅ 活跃 | 2026-10-08 |
 | [gnss-adaptive-design.md](gnss-adaptive-design.md) | GNSS 引擎自适应切换方案（场景判定规则树）设计稿 v2.0 | 🟡 待复核（实现落地状态未在文档中声明） | 2026-10-20 |
 
@@ -135,7 +136,7 @@
 | P1-1 | ALGORITHM_FIX_LOG 标题层级混用（001~018 用 `###`，020~029 用 `##`） | ✅ 统一为 `##`，仅 027 勘误小节保留 `###` |
 | P1-2 | 编号顺序非递增，FIX-ALG-019 无独立章节 | ✅ 文首加编号说明；019 为汇总表行记录，已在说明中标注 |
 | P1-3 | PPP_Optimization_Systems 存在两个 `## 7` | ✅ EST 章节改为 §8（8.1~8.3） |
-| P1-4 | PPP_Extra 版本基线过期（v2.3.0） | ✅ 更新为 v3.1 / 2026-10-23 / 基于 v2.4.0 |
+| P1-4 | PPP_Extra 版本基线过期（v2.3.0） | ✅ 更新为 v3.1 / 2026-10-23 / 基于 v3.1.0 |
 | P1-5 | TECHNICAL_REFERENCE §8/§9 状态滞后 | ✅ §8 加注：FIX-ALG-020 之后统一指向 ALGORITHM_FIX_LOG |
 | P1-6 | DATA_GUIDE 未收录新增测试 | ✅ 补 `Gpt3GridReaderTest`、`SsrDecodeSmokeTest`、`Wuh20MsmSppTest` |
 

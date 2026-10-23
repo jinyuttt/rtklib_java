@@ -454,6 +454,8 @@
 | FIX-ALG-026 | 2026-10-22 | ppp/PppAmbFix.java | 双频主路径/PartialAR IFLC 逐星取整分支（对角协方差 LAMBDA 退化修复，WL+NL/FixHold/Partial 复活）+ FRACDUMP 插桩 + δ 门（整数域一致性检验，半周界+基准自检，0 污染）；深挖修正根因：无差分 median 对齐整周平移自由度（fcbWl=+0.7714 相位 OSB frac 跨界）+ 3F 双重改正错进错出；处置收口：双频 IFLC 记录受限、生产推荐 3F、min=3 不采纳 |
 | FIX-ALG-027 | 2026-10-22 | ephemeris/OsbReader.java, data/Nav.java, ppp/PppAmbFix.java, ppp/PppCore.java, ppp/PppAmbFixBds3.java | 时变 OSB 读取兼容：Bias-SINEX START/END 解析 + osbSeries 时间戳序列（码/相位分键 ×2）+ GBM SVN 空缺列偏移自适应 + 码 OSB cbias 累加守卫（timedShort）；WUM 常量语义零影响 |
 | FIX-ALG-028 | 2026-10-22 | ephemeris/OsbReader.java, ppp/PppAmbFix.java, ppp/PppCore.java | WUM 3F 67.81cm 回归三因素闭环：getEwlFcb 恢复快照（L5Q 时变补偿失配）+ sh 双令牌判别 v2（27 星 OSB 丢失）+ MW 组合 OSB 单次施加裁决（2×2 矩阵：单次+无码OSB=3.00cm 终态，027 勘误） |
+| FIX-ALG-029 | 2026-10-23 | ppp/PppOptimizations.java, ephemeris/Gpt3GridReader.java, ppp/PppProcessor.java | GPT3+VMF3 U 向 +793% 三缺陷闭环：vmf3 缺连续分数分母（主导）+ ZHD 单位 hPa/Pa 错配 + ch/cw/bw 对齐官方；Gpt3GridReader 按 f90 全文重写并接线双路径，真网格 HKWS U 7.365→0.806m（基线 0.821）、HKSL 1.662m（基线 1.684） |
+
 ## FIX-ALG-020 EST 模式死锁：DCB 产品加载 + enableIonoEstRobust 开关
 
 **日期**: 2026-10-21
