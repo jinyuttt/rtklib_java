@@ -96,6 +96,10 @@ test-data/reference/*.pos
 test-data/ppc/
 test-data/urbannav/
 
+# GNSS validation datasets (public-source large binaries; 2024/WUM + 2026/GBM
+# product sets incl. 259MB time-varying BIA, see docs/ALGORITHM_FIX_LOG.md)
+test-data/gnss-validation/
+
 # Download script temp directory
 test-data/_data_download/
 
@@ -107,3 +111,13 @@ reference-projects/
 
 # Test output files
 test_bds_output.txt
+test-output.txt
+ar-test-output*.txt
+float-baseline-output.txt
+cascade_ab_report*.txt
+
+# Local run artifacts
+.tmp/
+cas_sourcetable.txt
+rtklib-product/cp.txt
+cascade_epochs_*.csv

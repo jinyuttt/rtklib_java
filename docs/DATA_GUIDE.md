@@ -225,6 +225,7 @@ List<String> files = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile
 | **PppOptimizationsTest** | PPP | 无（纯配置验证） | 内置 | ✅ |
 | **PppArFixVerificationTest** | PPP-AR | 无（构造输入） | 内置 | ✅ |
 | **B1OsbEquivalenceTest** | PPP-AR | 无（构造输入） | 内置 | ✅ |
+| **Gpt3GridReaderTest** | PPP 对流层 | GPT3 5°×5° 网格 | 公共: product/gpt3/ | ✅ |
 | **RtkOptimizationsBdsBiasTest** | RTK | 无（纯数值） | 内置 | ✅ |
 | **RtkOptimizationsPartialARTest** | RTK | 无（纯数值） | 内置 | ✅ |
 | **RtkOptimizationsCascadeARTest** | RTK | 无（纯数值） | 内置 | ✅ |
@@ -233,6 +234,7 @@ List<String> files = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile
 | **RtkOptimizationsConfigTest** | RTK | 无（配置+数值） | 内置 | ✅ |
 | **ProductReaderTest** | 产品读取 | SP3+CLK+IONEX+OSB+ATX | 公共: product/ | ✅ |
 | **CompactSsrDecoderTest** | PPP-RTK | 无（构造输入） | 内置 | ✅ |
+| **SsrDecodeSmokeTest** | PPP-RTK | RTCM SSR 单帧样本 ×10 | 公共: rtcm/ssr/ | ✅ |
 | **SampleDataRtcmTest** | 数据解析 | RTCM3 (私有消息) | 公共: open-sky_base | ✅ |
 | **RtcmFileParserTest** | 数据解析 | RTCM3 (私有消息) | 公共: open-sky_base | ✅ |
 | **RtcmSampleDataTest** | 数据解析 | RTCM3 + TLE | 公共: open-sky_base + tle | ✅ |
@@ -247,7 +249,7 @@ List<String> files = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile
 
 ### 1.2 需要本地/私有数据的测试
 
-> **核心障碍**：特定场景的公开数据不存在，而非"私有数据"本身。大部分测试已使用公开数据集（GREAT-PVT sample_data、RTKLIB_EX_2.5.0、IGS产品等）。仅 RtkIonoptTest 因使用含设备ID的RTCM3流而依赖本地私有数据；RtkTest/RtkOptimizationTest等虽有本地私有数据验证结果，但缺可公开的同步base+rover RTCM3文件对。
+> **核心障碍**：特定场景的公开数据不存在，而非"私有数据"本身。大部分测试已使用公开数据集（GREAT-PVT sample_data、RTKLIB_EX_2.5.0、IGS产品等）。RtkIonoptTest 因使用含设备ID的RTCM3流、Wuh20MsmSppTest 因使用账号自采录制流，依赖本地私有数据；RtkTest/RtkOptimizationTest等虽有本地私有数据验证结果，但缺可公开的同步base+rover RTCM3文件对。
 
 | 测试类 | 原因 | 所需数据 | 无私有数据时行为 | 配置方式 |
 |--------|------|----------|------------------|----------|
@@ -258,6 +260,7 @@ List<String> files = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile
 | **RtkArDebugTest** | 同RtkTest | 同上 | ⚠️退化SPP | 同上 |
 | **RtkTraceTest** | 需base+rover RTCM3对（含设备ID，不可公开），无公共数据回退 | base+rover对 | ❌跳过 | `test-data.properties` 中 `rover.file` + `base.file` |
 | **RtkIonoptTest** | 需完整RTCM3基站+流动站多小时数据（含设备ID，不可公开） | 设备ID+日期+时段 | ❌跳过 | `test-data.properties` 中 `rover.file` + `base.file`（支持目录模式，详见 §0.7） |
+| **Wuh20MsmSppTest** | 自采 RTCM MSM7 录制流（CAS 账号获取） | 录制文件 + 当日 BRDC 星历 | ❌跳过 | 环境变量 `WUH20_RTCM` / `WUH20_BRDC`；默认路径 `test-data/gnss-validation/` |
 
 ### 1.3 数据覆盖与缺口分析
 

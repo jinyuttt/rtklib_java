@@ -1501,3 +1501,107 @@ NEXOBS）。全量 6 组 PPC 数据集 Fix 对比：
 
 tokyo run2 过度固定与 nagoya run1 固定不足同时消除。剩余偏差（合计 +466，
 +12%）属 AR 决策层已知差异（见 §15.7 ar_poly_coeffs 阈值调整未实现项）。
+
+## 17. PPP 精密模式 ISB 钟差初始化——enablePppIsbClockInit（v2.3.1 JAVA-ONLY 扩展，默认关闭）
+
+### 17.1 C 版行为（RTKLIB-2.5.0/src/ppp.c L612-631 udclk_ppp）
+
+```c
+for (i=0;i<NSYS;i++) {
+    if (rtk->opt.sateph==EPHOPT_PREC) {
+        /* time of prec ephemeris is based gpst */
+        /* neglect receiver inter-system bias  */
+        dtr=rtk->sol.dtr[0];
+    }
+    else {
+        dtr=i==0?rtk->sol.dtr[0]:rtk->sol.dtr[0]+rtk->sol.dtr[i];
+    }
+    initx(rtk,CLIGHT*dtr,VAR_CLK,IC(i,&rtk->opt));
+}
+```
+
+C 为双分支设计：精密星历模式忽略接收机系统间偏差（全部系统用 `dtr[0]` 初始化），
+广播星历模式用各系统 ISB（`dtr[0]+dtr[i]`，`sol.dtr[i]` 由 SPP 输出，见 pntpos.c
+L452-459：dtr[1]=GLO-GPS、dtr[2]=GAL-GPS 等）。
+
+### 17.2 C 版行为的实际后果（有意偏离的动机）
+
+C 的精密分支假设"精密钟差统一 GPST 尺、接收机 ISB 可忽略"，但实测 GLO-GPS 接收机
+ISB 达 μs 级（数百米）。`initx` 每历元重置钟差（白噪声模型）导致初值偏差无法收敛：
+GLO/GAL 残差（约 -750/-800 m）持续超 maxinno 被剔除——**C 版精密模式 PPP 实际上仅
+GPS 参与解算**，多系统能量被静默丢弃。
+
+### 17.3 Java 版行为
+
+- 默认（`enablePppIsbClockInit=false`）：恢复 C 双分支逐值语义（精密模式忽略 ISB）。
+- 开启（`=true`）：精密模式也采用 ISB 初始化（广播分支语义），GLO 钟差初值偏差从
+  约 790 m 降至约 49 m，GLO 观测参与解算（nv 28→42，残差 -750 m→约 50 m）。
+
+### 17.4 适用限制
+
+Galileo 的 ISB 依赖 SPP 联合解算；当广播星历缺失该系统（如 BRDC 无 GAL）时
+`dtr[i]≈0`，开关对该系统无效，需从其他途径获得先验（超出本扩展范围）。
+相关修复记录：ALGORITHM_FIX_LOG.md FIX-ALG-010（SPP 多系统恢复，C 对齐）与
+FIX-ALG-011（udclk_ppp 双分支 + 开关）。
+## 18. EST 模式首历元死锁与 DCB 产品加载
+
+### 18.1 C 版行为（固有缺陷）
+
+非组合 PPP（`IONOOPT_EST`）首历元，各卫星电离层状态由双频伪距差初始化
+（`udiono()`），相位偏差状态由 `MW` 组合初始化（`udbias()`）。此时相位 prefit 残差含
+未建模的接收机/卫星码偏差（`dcb` 项），典型量级 L1 +17.8 m、L2 -7 m，远超
+`maxinno[0]=5.0` 门限（`prcopt_t.maxinno={5,30}`）——相位行全部被 prefit 剔除，仅码行
+进入 EKF。码行观测方程不含 bias 状态（H 为 0），bias/电离层状态协方差永不收缩、
+状态值永不更新，下一历元相位残差依旧超限 → **永久死锁，全历元 SOLQ_NONE**。
+
+C 2.5.0 通过 `postpos.c` L1092-1108 规避：处理前先把 `navs.cbias` 全置 -1（FIXME 注释
+自认 quirk），扫描输入文件找 `.BIA/.BSX`（`readdcb()`），失败再用 `fopt->dcb` 指定文件。
+加载码偏差产品后相位 prefit 残差降至门限内，死锁不触发。若两种来源都没有，C 版同样
+死锁（且 `corr_meas` 还会应用 -1 m 的残留哨兵值——哨兵未被清理的二次缺陷）。
+
+### 18.2 Java 版行为
+
+- `DcbReader.readdcb(file, nav, stas)` 完整移植 C `preceph.c readdcb()`
+  （L514-544）：入口清零 `nav.cbias`（对齐 L523-525），按扩展名分发
+  `.BIA/.BSX → readbiaf`（OSB/DSB Bias-SINEX，L449-502）、`.DCB → readdcbf`
+  （P1-C1/P2-C2 传统格式，L378-417），值统一 ×1E-9×CLIGHT（ns→m）。
+  GAL 频率映射对齐 C：L1→freq0、L5→freq1（E5b 记录 C 版同样丢弃）。
+  码偏差经 `corr_meas`/`prange` 应用（`SppCore.code2biasIx`，对齐 C code2bias_ix）。
+  RINEX 路径经 `PostPosProcessor.setDcbPath()`/`RinexPppProcessor.setDcbPath()` 接线，
+  与 C postpos 的 `fopt->dcb` 等价（C 版扫描输入文件目录的分支 Java 不做，显式传路径）。
+- 与 C 的差异（有意）：`readdcb` 失败（无文件/无记录）时 Java 侧 `cbias` 保持 0
+  （无偏移），不复制 C 的 -1 哨兵残留缺陷。
+- `RtkConfig.enableIonoEstRobust`（**JAVA-ONLY**，默认 false）：无 DCB 产品时的兜底
+  开关。开启后 EST 模式对本历元刚 `initx` 的 bias/ion 状态（协方差恰为
+  `VAR_BIAS`/`VAR_IONO`，即尚未被任何 KF 更新吸收，覆盖首历元与周跳后重置两种情形）
+  跳过相位行的 prefit maxinno 剔除，让 EKF 一次性吸收常数偏差；状态被估计一历元后
+  协方差偏离初值，自动恢复正常剔除。仅放宽相位行（code==0），码行剔除与 C 一致。
+  开关关闭时判定条件恒 false，与 C 行为逐值一致。
+
+### 18.3 验证
+
+见 ALGORITHM_FIX_LOG.md FIX-ALG-020。正确解法是配置 DCB 产品（开关关闭）；
+`enableIonoEstRobust` 仅作无产品的退化兜底，其假设（首历元偏差可被 EKF 吸收）
+在长观测弧、多卫星场景成立，单星/短弧场景慎用。
+
+### 18.4 超时重置链移植偏差修正（FIX-ALG-021）
+
+FIX-ALG-020 后 EST 成功率仍仅 401~509/2880，曾推测"剩余失败与被剔卫星
+outc>GAP_RESION 的电离层重置链有关，属 EST 体系固有困难"。实测排查确认该处
+并非 C 固有困难，而是**两处 Java 移植偏差**：
+
+1. `udbias()` bias 超时重置（C ppp.c L744-748）：C 为 `++outc>maxout ||
+   modear==ARMODE_INST || clk_jump` 时**无条件** `initx(0.0, 0.0)`（方差 0.0 擦除
+   状态，不清 outc/vsat）；Java 原实现加了 `&& vsat!=0` 条件、`x[idx]!=0.0` 守卫、
+   方差 VAR_BIAS，且重置后清 outc/vsat——被剔卫星（vsat=0）永不满足条件，
+   stale bias 永不重置，卫星重新出现时被永久剔除。
+2. `udiono()` 重初始化（C ppp.c L681）：C 为 `x[j]==0.0` 无条件初始化（GAP_RESION
+   重置 L674-676 仅置 `x[j]=0.0`，outc 不动，下一观测历元即重建）；Java 原实现
+   多加 `outc<=GAP_RESION` 条件，重置发生时 outc 已超限且无人清零，电离层状态
+   永不重建。Java 另有两处 C 没有的 `testsnr()` 调用，已一并移除。
+
+Java 修复后对齐 C 语义：`initx(0.0, 0.0, IB(...))` 无条件重置 + `x[j]==0.0`
+无条件重初始化。C 的 `clk_jump`（日边界钟跳，posopt[5]+time2gpst）无 Java 对应
+机制（需日边界处理链），日边界数据存在已知差异。MW/GF 周跳检测历史清理为
+JAVA-ONLY 扩展保留。实测：EST 6 配置 401~509→2880/2880，EST+DCB 4→1537，
+EST+MultiSys+DCB 0→1760，IFLC 基线 2679→2880（详见 FIX-ALG-021）。
