@@ -2,6 +2,13 @@
 
 上传短时段 RTCM3 采样文件用于解码和转换测试。
 
+## 目录说明
+
+| 路径 | 内容 |
+|------|------|
+| `*.rtcm3` + `.meta` | 自采短时段观测流，命名与字段见下文 |
+| `ssr/` | 单帧 RTCM SSR 报文样本（电文 1057~1270），供 `SsrDecodeSmokeTest` 使用；来源为公开仓库 `earthscope/gnsstools` 的 `codecs/rtcm/rtcm3/data`，非自采数据 |
+
 ## 命名约定
 
 ```
