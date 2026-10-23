@@ -1,10 +1,10 @@
 # 测试用例与数据指南
 
-> **版本**：v1.0  
-> **日期**：2026-10-09  
+> **版本**：v1.1  
+> **日期**：2026-10-23  
 > **前置文档**：[test-data/README.md](../test-data/README.md)（数据规范）、[优化功能矩阵](CORE_OPTIMIZATION_MATRIX.md)（优化项定义）
 
-> **适用范围**：数据与元数据规范（第 0 章）以 **rtklib-core** 和 **rtklib-adjust** 为准；第 1 章测试类总览覆盖全仓，含 rtklib-stream 的 NTRIP 用例。其余模块（rtklib-test、rtklib-product、rtklib-research）如需提交测试，须遵循本规范。
+> **适用范围**：数据与元数据规范（第 0 章）以 **rtklib-core** 和 **rtklib-adjust** 为准；第 1 章总览以 core/adjust 算法测试为主体，并补入 rtklib-stream 的 NTRIP 用例。rtklib-test 的验证测试（`PppArValidationTest` 等）由环境变量门卫控制运行，不在此表。
 
 ---
 
