@@ -86,8 +86,11 @@
 本版为**代码封存版**：算法能力冻结，仅接受 bug 修复，不再新增特性。SSR 数据源权限到位后，接入成本被压缩到两处改动——
 
 ```java
-cfg.ntripUrl = "rtsp://<caster>:<port>/<mountpoint>";  // 1. 改 Caster 地址
-cfg.enablePppRtk = true;                               // 2. 打开 PPP-RTK 路由
+// 1. 改 Caster 地址与挂载点
+NtripClient client = new NtripClient(host, port, mountpoint, username, password, listener);
+
+// 2. 打开 PPP-RTK 路由
+cfg.enablePppRtk = true;
 ```
 
 底层链路（RTCM/SSR 解码 → `nav.ssr` → SsrCorrector → ppprtkos）已全程贯通并有离线单测覆盖，无需再改算法代码。
