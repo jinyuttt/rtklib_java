@@ -329,6 +329,8 @@ mvn test -pl rtklib-core -Dtest="MyNewRtkTest"
 mvn test -pl rtklib-core -Dtest="MyNewRtkTest" 2>&1 | Select-String "Tests run|BUILD"
 ```
 
+> **注意**：surefire 不会把 `mvn -D自定义键=值` 传给 fork 出的 JVM。测试内的开关请用 `System.getenv()` 读取环境变量，需要按次覆盖时先 `$env:MY_FLAG="1"` 再运行。
+
 ---
 
 ## 5. 更新文档
