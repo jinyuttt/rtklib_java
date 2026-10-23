@@ -65,7 +65,9 @@ public final class ClkReader {
                 }
 
                 double clkVal = str2num(line, 40 + timeOff, 19);
-                double clkStd = str2num(line, 59 + timeOff, 19);
+                /* C rinex.c readrnxclk L1563: data[i]=str2num(buff,40+off+i*20,19)
+                 * std field starts at 60+off (clk field is 19 chars + 1 separator) */
+                double clkStd = str2num(line, 60 + timeOff, 19);
 
                 last.clk[sat - 1][0] = clkVal;
                 last.std[sat - 1][0] = (float) clkStd;

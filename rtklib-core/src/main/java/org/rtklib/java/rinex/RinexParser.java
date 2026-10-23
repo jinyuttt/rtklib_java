@@ -203,16 +203,17 @@ public class RinexParser {
                 this.sta.name = line.substring(0, 60).trim();
             } else if (label.equals("MARKER NUMBER")) {
                 this.sta.marker = line.substring(0, 20).trim();
-            } else if (label.equals("ANTENNA - DELTA H/E/N")) {
-                this.sta.del[2] = parseDouble(line, 0, 14);  // H
-                this.sta.del[0] = parseDouble(line, 14, 14); // E
-                this.sta.del[1] = parseDouble(line, 28, 14); // N
-            } else if (label.equals("ANTENNA - DELTA X/Y/Z")) {
-                this.sta.del[3] = parseDouble(line, 0, 14);  // X
-                this.sta.del[4] = parseDouble(line, 14, 14); // Y
-                this.sta.del[5] = parseDouble(line, 28, 14); // Z
-            } else if (label.equals("ANTENNA TYPE")) {
-                this.sta.antdes = line.substring(0, 20).trim();
+            } else if (label.equals("ANTENNA: DELTA H/E/N")) {
+                this.sta.del[2] = parseDouble(line, 0, 14);
+                this.sta.del[0] = parseDouble(line, 14, 14);
+                this.sta.del[1] = parseDouble(line, 28, 14);
+            } else if (label.equals("ANTENNA: DELTA X/Y/Z")) {
+                this.sta.del[3] = parseDouble(line, 0, 14);
+                this.sta.del[4] = parseDouble(line, 14, 14);
+                this.sta.del[5] = parseDouble(line, 28, 14);
+            } else if (label.equals("ANT # / TYPE")) {
+                this.sta.antsno = line.substring(0, 20).trim();
+                this.sta.antdes = line.substring(20, 40).trim();
             } else if (label.equals("APPROX POSITION XYZ")) {
                 this.sta.pos[0] = parseDouble(line, 0, 14);
                 this.sta.pos[1] = parseDouble(line, 14, 14);
@@ -291,6 +292,8 @@ public class RinexParser {
             } else if (label.equals("END OF HEADER")) {
                 endOfHeader = true;
                 break;
+            } else {
+                decodeNavh(line, label);
             }
         }
 
@@ -300,6 +303,113 @@ public class RinexParser {
         }
 
         return true;
+    }
+
+    /**
+     * Decode navigation file header fields (C rinex.c decode_navh()).
+     * Fills ionosphere (ion_gps/ion_gal/ion_qzs/ion_cmp/ion_irn), UTC
+     * (utc_gps/utc_glo/utc_gal/utc_qzs/utc_cmp/utc_sbs/utc_irn) parameters.
+     * @param line header line (padded to 80 chars)
+     * @param label header label (cols 61-80, trimmed)
+     */
+    private void decodeNavh(String line, String label) {
+        if (label.contains("ION ALPHA")) { /* opt ver.2 */
+            for (int i = 0, j = 2; i < 4; i++, j += 12) {
+                this.nav.ion_gps[i] = parseDouble(line, j, 12);
+            }
+        } else if (label.contains("ION BETA")) { /* opt ver.2 */
+            for (int i = 0, j = 2; i < 4; i++, j += 12) {
+                this.nav.ion_gps[i + 4] = parseDouble(line, j, 12);
+            }
+        } else if (label.contains("DELTA-UTC: A0,A1,T,W")) { /* opt ver.2 */
+            int i = 0, j = 3;
+            for (; i < 2; i++, j += 19) {
+                this.nav.utc_gps[i] = parseDouble(line, j, 19);
+            }
+            for (; i < 4; i++, j += 9) {
+                this.nav.utc_gps[i] = parseDouble(line, j, 9);
+            }
+        } else if (label.contains("IONOSPHERIC CORR")) { /* opt ver.3 */
+            if (line.startsWith("GPSA")) {
+                for (int i = 0, j = 5; i < 4; i++, j += 12) {
+                    this.nav.ion_gps[i] = parseDouble(line, j, 12);
+                }
+            } else if (line.startsWith("GPSB")) {
+                for (int i = 0, j = 5; i < 4; i++, j += 12) {
+                    this.nav.ion_gps[i + 4] = parseDouble(line, j, 12);
+                }
+            } else if (line.startsWith("GAL")) {
+                for (int i = 0, j = 5; i < 4; i++, j += 12) {
+                    this.nav.ion_gal[i] = parseDouble(line, j, 12);
+                }
+            } else if (line.startsWith("QZSA")) { /* v.3.02 */
+                for (int i = 0, j = 5; i < 4; i++, j += 12) {
+                    this.nav.ion_qzs[i] = parseDouble(line, j, 12);
+                }
+            } else if (line.startsWith("QZSB")) { /* v.3.02 */
+                for (int i = 0, j = 5; i < 4; i++, j += 12) {
+                    this.nav.ion_qzs[i + 4] = parseDouble(line, j, 12);
+                }
+            } else if (line.startsWith("BDSA")) { /* v.3.02 */
+                for (int i = 0, j = 5; i < 4; i++, j += 12) {
+                    this.nav.ion_cmp[i] = parseDouble(line, j, 12);
+                }
+            } else if (line.startsWith("BDSB")) { /* v.3.02 */
+                for (int i = 0, j = 5; i < 4; i++, j += 12) {
+                    this.nav.ion_cmp[i + 4] = parseDouble(line, j, 12);
+                }
+            } else if (line.startsWith("IRNA")) { /* v.3.03 */
+                for (int i = 0, j = 5; i < 4; i++, j += 12) {
+                    this.nav.ion_irn[i] = parseDouble(line, j, 12);
+                }
+            } else if (line.startsWith("IRNB")) { /* v.3.03 */
+                for (int i = 0, j = 5; i < 4; i++, j += 12) {
+                    this.nav.ion_irn[i + 4] = parseDouble(line, j, 12);
+                }
+            }
+        } else if (label.contains("TIME SYSTEM CORR")) { /* opt ver.3 */
+            if (line.startsWith("GPUT")) {
+                this.nav.utc_gps[0] = parseDouble(line, 5, 17);
+                this.nav.utc_gps[1] = parseDouble(line, 22, 16);
+                this.nav.utc_gps[2] = parseDouble(line, 38, 7);
+                this.nav.utc_gps[3] = parseDouble(line, 45, 5);
+            } else if (line.startsWith("GLUT")) {
+                this.nav.utc_glo[0] = -parseDouble(line, 5, 17); /* tau_C */
+            } else if (line.startsWith("GLGP")) {
+                this.nav.utc_glo[1] = parseDouble(line, 5, 17); /* tau_GPS */
+            } else if (line.startsWith("GAUT")) { /* v.3.02 */
+                this.nav.utc_gal[0] = parseDouble(line, 5, 17);
+                this.nav.utc_gal[1] = parseDouble(line, 22, 16);
+                this.nav.utc_gal[2] = parseDouble(line, 38, 7);
+                this.nav.utc_gal[3] = parseDouble(line, 45, 5);
+            } else if (line.startsWith("QZUT")) { /* v.3.02 */
+                this.nav.utc_qzs[0] = parseDouble(line, 5, 17);
+                this.nav.utc_qzs[1] = parseDouble(line, 22, 16);
+                this.nav.utc_qzs[2] = parseDouble(line, 38, 7);
+                this.nav.utc_qzs[3] = parseDouble(line, 45, 5);
+            } else if (line.startsWith("BDUT")) { /* v.3.02 */
+                this.nav.utc_cmp[0] = parseDouble(line, 5, 17);
+                this.nav.utc_cmp[1] = parseDouble(line, 22, 16);
+                this.nav.utc_cmp[2] = parseDouble(line, 38, 7);
+                this.nav.utc_cmp[3] = parseDouble(line, 45, 5);
+            } else if (line.startsWith("SBUT")) { /* v.3.02 */
+                this.nav.utc_sbs[0] = parseDouble(line, 5, 17);
+                this.nav.utc_sbs[1] = parseDouble(line, 22, 16);
+                this.nav.utc_sbs[2] = parseDouble(line, 38, 7);
+                this.nav.utc_sbs[3] = parseDouble(line, 45, 5);
+            } else if (line.startsWith("IRUT")) { /* v.3.03 */
+                this.nav.utc_irn[0] = parseDouble(line, 5, 17);
+                this.nav.utc_irn[1] = parseDouble(line, 22, 16);
+                this.nav.utc_irn[2] = parseDouble(line, 38, 7);
+                this.nav.utc_irn[3] = parseDouble(line, 45, 5);
+                this.nav.utc_irn[8] = 0.0; /* A2 */
+            }
+        } else if (label.contains("LEAP SECONDS")) { /* opt */
+            this.nav.utc_gps[4] = parseDouble(line, 0, 6);
+            this.nav.utc_gps[7] = parseDouble(line, 6, 6);
+            this.nav.utc_gps[5] = parseDouble(line, 12, 6);
+            this.nav.utc_gps[6] = parseDouble(line, 18, 6);
+        }
     }
 
     /**
@@ -801,14 +911,19 @@ public class RinexParser {
             eph.tgd[0] = data[25];
         }
 
-        if (nav.n < nav.nmax) {
-            nav.eph[nav.n] = eph;
-            nav.n++;
-            log.trace("decodeEph: stored eph sat={}, week={}, toes={}, nav.n={}",
-                    sat, eph.week, eph.toes, nav.n);
-        } else {
-            log.warn("decodeEph: nav buffer full, nav.n={}, nav.nmax={}", nav.n, nav.nmax);
+        /* C rinex.c add_eph(): dynamically grow nav->eph by 1024, never drop */
+        if (nav.n >= nav.nmax) {
+            int newMax = nav.nmax + 1024;
+            Eph[] newEph = new Eph[newMax];
+            System.arraycopy(nav.eph, 0, newEph, 0, nav.nmax);
+            for (int i = nav.nmax; i < newMax; i++) newEph[i] = new Eph();
+            nav.eph = newEph;
+            nav.nmax = newMax;
         }
+        nav.eph[nav.n] = eph;
+        nav.n++;
+        log.trace("decodeEph: stored eph sat={}, week={}, toes={}, nav.n={}",
+                sat, eph.week, eph.toes, nav.n);
     }
 
     /**
@@ -869,10 +984,17 @@ public class RinexParser {
 
         if (geph.frq > 128) geph.frq -= 256;
 
-        if (nav.ng < nav.ngmax) {
-            nav.geph[nav.ng] = geph;
-            nav.ng++;
+        /* C rinex.c add_geph(): dynamically grow nav->geph by 1024, never drop */
+        if (nav.ng >= nav.ngmax) {
+            int newMax = nav.ngmax + 1024;
+            Geph[] newGeph = new Geph[newMax];
+            System.arraycopy(nav.geph, 0, newGeph, 0, nav.ngmax);
+            for (int i = nav.ngmax; i < newMax; i++) newGeph[i] = new Geph();
+            nav.geph = newGeph;
+            nav.ngmax = newMax;
         }
+        nav.geph[nav.ng] = geph;
+        nav.ng++;
     }
 
     /**
@@ -913,10 +1035,17 @@ public class RinexParser {
         seph.svh = (int) data[6];
         seph.sva = uraindex(data[10]);
 
-        if (nav.ns < nav.nsmax) {
-            nav.seph[nav.ns] = seph;
-            nav.ns++;
+        /* C rinex.c add_seph(): dynamically grow nav->seph by 1024, never drop */
+        if (nav.ns >= nav.nsmax) {
+            int newMax = nav.nsmax + 1024;
+            Seph[] newSeph = new Seph[newMax];
+            System.arraycopy(nav.seph, 0, newSeph, 0, nav.nsmax);
+            for (int i = nav.nsmax; i < newMax; i++) newSeph[i] = new Seph();
+            nav.seph = newSeph;
+            nav.nsmax = newMax;
         }
+        nav.seph[nav.ns] = seph;
+        nav.ns++;
     }
 
     /**

@@ -27,7 +27,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "[2/3] Copying data files..." -ForegroundColor Yellow
-$subdirs = @("rinex", "nav", "rtcm", "product", "reference", "nmea", "config", "tle")
+$subdirs = @("rinex", "nav", "rtcm", "product", "reference", "nmea", "config", "tle", "gnss-validation")
 foreach ($subdir in $subdirs) {
     $src = Join-Path $tempDir $subdir
     $dst = Join-Path $TargetDir $subdir

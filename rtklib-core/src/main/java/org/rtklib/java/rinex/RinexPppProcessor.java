@@ -1,5 +1,6 @@
 package org.rtklib.java.rinex;
 
+import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
 import org.rtklib.java.rtkpos.RtkProcessor;
@@ -25,6 +26,12 @@ public class RinexPppProcessor {
     private final PrcOpt opt;
     private final SolOpt solOpt;
     private final Writer writer;
+    private RtkConfig rtkConfig;
+    private String atxPath;
+    private String fcbPath;
+    private String osbPath;
+    private String updPath;
+    private String dcbPath;
 
     private int totalEpochs = 0;
     private int successCount = 0;
@@ -42,6 +49,11 @@ public class RinexPppProcessor {
         opt.sateph = Constants.EPHOPT_PREC;
         opt.dynamics = 0;
         opt.posopt = new int[6];
+        opt.posopt[0] = 1;
+        opt.posopt[1] = 1;
+        opt.posopt[2] = 1;
+        opt.posopt[3] = 1;
+        opt.tidecorr = 1;
         return opt;
     }
 
@@ -66,15 +78,52 @@ public class RinexPppProcessor {
         this(opt, null, null);
     }
 
+    /** 构造带 RtkConfig 的处理器（JAVA-ONLY 开关如 enablePppIsbClockInit 经此传入） */
+    public RinexPppProcessor(PrcOpt opt, SolOpt solOpt, RtkConfig rtkConfig, OutputStream outputStream) {
+        this(opt, solOpt, outputStream);
+        this.rtkConfig = rtkConfig;
+    }
+
+    public void setAtxPath(String atxPath) {
+        this.atxPath = atxPath;
+    }
+
+    public void setFcbPath(String fcbPath) {
+        this.fcbPath = fcbPath;
+    }
+
+    public void setOsbPath(String osbPath) {
+        this.osbPath = osbPath;
+    }
+
+    public void setUpdPath(String updPath) {
+        this.updPath = updPath;
+    }
+
+    public void setDcbPath(String dcbPath) {
+        this.dcbPath = dcbPath;
+    }
+
     public PppResult process(String obsFilePath, String navFilePath,
                              String sp3FilePath, String clkFilePath) {
         PrcOpt procOpt = new PrcOpt(opt);
-        SolOpt effectiveSolOpt = solOpt != null ? new SolOpt(solOpt) : new SolOpt();
-        if (isStaticMode(procOpt.mode) && effectiveSolOpt.solstatic == 0) {
-            effectiveSolOpt.solstatic = 1;
+        SolOpt effectiveSolOpt;
+        if (solOpt != null) {
+            effectiveSolOpt = new SolOpt(solOpt);
+        } else {
+            effectiveSolOpt = new SolOpt();
+            if (isStaticMode(procOpt.mode)) {
+                effectiveSolOpt.solstatic = 1;
+            }
         }
-        PostPosProcessor proc = new PostPosProcessor(procOpt, effectiveSolOpt);
-        PostPosProcessor.PostPosResult result = proc.process(obsFilePath, null, navFilePath, sp3FilePath, clkFilePath);
+        PostPosProcessor proc = rtkConfig != null
+                ? new PostPosProcessor(procOpt, effectiveSolOpt, rtkConfig)
+                : new PostPosProcessor(procOpt, effectiveSolOpt);
+        if (fcbPath != null) proc.setFcbPath(fcbPath);
+        if (osbPath != null) proc.setOsbPath(osbPath);
+        if (updPath != null) proc.setUpdPath(updPath);
+        if (dcbPath != null) proc.setDcbPath(dcbPath);
+        PostPosProcessor.PostPosResult result = proc.process(obsFilePath, null, navFilePath, sp3FilePath, clkFilePath, null, atxPath);
 
         totalEpochs = result.totalEpochs;
         successCount = result.successCount;

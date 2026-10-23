@@ -2,6 +2,7 @@ package org.rtklib.java.rtkpos;
 
 import org.rtklib.java.ambiguity.Lambda;
 import org.rtklib.java.common.ObsCode;
+import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.common.RtklibCommon;
 import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.constants.Constants;
@@ -13,6 +14,8 @@ import org.rtklib.java.kalman.KalmanFilter;
 import org.rtklib.java.pntpos.PntPos;
 import org.rtklib.java.pntpos.SppCore;
 import org.rtklib.java.ppp.PppCore;
+import org.rtklib.java.ppp.PppCoreEx;
+import org.rtklib.java.ppprtk.PppRtkCore;
 import org.rtklib.java.rtkpos.Tides;
 import org.rtklib.java.time.TimeSystem;
 import org.rtklib.java.coord.CoordTransform;
@@ -59,8 +62,11 @@ public final class RtkCore {
         prevTime.sec = rtk.sol.time.sec;
 
         if (rtk.P[0] == 0 || rtk.P[0] > STD_PREC_VAR_THRESH) {
-            int sppResult = PntPos.pntpos(obs, nu, nav, opt, rtk.sol, null, rtk.ssat);
-            if (sppResult == 0) {
+            PrcOpt sppInitOpt = new PrcOpt(opt);
+            sppInitOpt.mode = Constants.PMODE_SINGLE;
+            sppInitOpt.ionoopt = Constants.IONOOPT_BRDC;
+            sppInitOpt.tropopt = Constants.TROPOPT_SAAS;
+            if (PntPos.pntpos(obs, nu, nav, sppInitOpt, rtk.sol, null, rtk.ssat) == 0) {
                 /* aligned with C rtkpos.c L2364-2371: SPP failure does not invalidate
                  * the epoch. In dynamics mode the filter propagates its state (udpos)
                  * and relpos proceeds with rtk.x as linearization point. */
@@ -87,7 +93,23 @@ public final class RtkCore {
         }
 
         if (opt.mode >= Constants.PMODE_PPP_KINEMA) {
-            PppCore.pppos(rtk, obs, nu, nav);
+            RtkConfig cfg = rtk.rtkConfig;
+            /* PPP-RTK (SSR) dispatch first, mirroring PppProcessor L816-825:
+             * enablePppRtk takes precedence over the PppCoreEx (AR/bias) switch
+             * group. Without SSR data present in nav.ssr this degrades to
+             * standard PPP via PppRtkCore internally. */
+            if (cfg != null && cfg.enablePppRtk) {
+                PppRtkCore.ppprtkos(rtk, obs, nu, nav);
+                return 1;
+            }
+            boolean useEx = cfg != null && (cfg.enablePppAR || cfg.enablePppPartialAR || cfg.enablePppArFixHold
+                    || cfg.enableBds3PppAR || cfg.enableMultiFreqAR || cfg.enableIsbIfcbIfb
+                    || cfg.enableOsb || cfg.enableAt1S2 || cfg.useGpt3Grid);
+            if (useEx) {
+                PppCoreEx.ppos(rtk, obs, nu, nav, cfg);
+            } else {
+                PppCore.pppos(rtk, obs, nu, nav);
+            }
             return 1;
         }
 

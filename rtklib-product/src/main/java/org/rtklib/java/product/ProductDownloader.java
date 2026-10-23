@@ -370,6 +370,28 @@ public class ProductDownloader {
                 String igs2Obx = "IGS2R03FIN_" + year + doyStr + "0000_01D_30S_ATT.OBX.gz";
                 urls.add(urlWhu + "/pub/whu/phasebias/" + year + "/orbit/" + igs2Obx);
                 break;
+
+            case FCB:
+                String wumFcb = "WUM0MGXRTS_" + year + doyStr + "0000_01D_05M_FCB.FCB.gz";
+                urls.add(urlBdspride + "/wum/" + weekStr + "/" + wumFcb);
+                urls.add(urlIgn + "/pub/igs/products/mgex/" + weekStr + "/" + wumFcb);
+                urls.add(urlWhu + "/pub/whu/phasebias/" + year + "/bias/" + wumFcb);
+                String casFcb = "CAS0MGXRTS_" + year + doyStr + "0000_01D_05M_FCB.FCB.gz";
+                urls.add(urlIgn + "/pub/igs/products/mgex/" + weekStr + "/" + casFcb);
+                urls.add(urlBdspride + "/wum/" + weekStr + "/" + casFcb);
+                String wumFcbRts = "WUM0MGXRTS_" + weekStr + "0_01D_05M_FCB.FCB.gz";
+                urls.add(urlBdspride + "/wum/" + weekStr + "/" + wumFcbRts);
+                urls.add(urlWhu + "/pub/whu/phasebias/" + year + "/bias/" + wumFcbRts);
+                break;
+
+            case UPD:
+                String whuUpd = year + doyStr + "0.UPD.gz";
+                urls.add(urlBdspride + "/wum/" + weekStr + "/" + whuUpd);
+                urls.add(urlWhu + "/pub/whu/phasebias/" + year + "/" + (doy / 50 + 1) + "/" + whuUpd);
+                String wumUpd = "WUM0MGXFIN_" + weekStr + "0_01D_15M_UPD.UPD.gz";
+                urls.add(urlBdspride + "/wum/" + weekStr + "/" + wumUpd);
+                urls.add(urlWhu + "/pub/whu/phasebias/" + year + "/bias/" + wumUpd);
+                break;
         }
 
         return urls;

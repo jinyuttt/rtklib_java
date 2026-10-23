@@ -64,6 +64,24 @@ public class LogTraceTest {
         org.junit.jupiter.api.Assumptions.assumeTrue(dataAvailable, "No RTCM3 base+rover data");
     }
 
+    /**
+     * GMSD 样例流每个历元含 4 条分系统 MSM（1077/1087/1117/1127），仅 BDS 消息 sync=0。
+     * 与 RTKLIB C 版 convbin 重放行为一致：默认仅 sync=0 的 BDS 历元被视为完整历元，
+     * 而流中星历只有 GPS(1019)+GLONASS(1020)，BDS 观测全部无星历可用，SPP 全部失败。
+     * 启用 relaxSyncFlag 使每条 MSM 独立成历元，GPS/GLONASS 历元即可命中星历产生有效解。
+     *
+     * 流中无 RTCM 1005/1006 站坐标消息，refpos=POSOPT_RTCM 下 rtk.rb 恒为 (0,0,0)，
+     * relpos 第一步 zdres(base) 即失败（C 版 norm(rb,3)<=RE_WGS84/2 同样拦截），
+     * RTK 链路与 trace 均无法执行。改用 POSOPT_SINGLE（对齐 C postpos antpos/avepos），
+     * 从基准观测平均 SPP 求基准坐标。
+     */
+    private static PrcOpt createOpt() {
+        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        opt.relaxSyncFlag = true;
+        opt.refpos = Constants.POSOPT_SINGLE;
+        return opt;
+    }
+
     @Test
     @DisplayName("1. Trace all stages")
     void testTraceAllStages() {
@@ -79,7 +97,7 @@ public class LogTraceTest {
 
         TraceCallback cb = traceLines::add;
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         rtk.setTraceControl(ctrl);
         rtk.setTraceCallback(cb);
@@ -127,7 +145,7 @@ public class LogTraceTest {
 
         TraceCallback cb = traceLines::add;
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         rtk.setTraceControl(ctrl);
         rtk.setTraceCallback(cb);
@@ -166,7 +184,7 @@ public class LogTraceTest {
 
         TraceCallback cb = traceLines::add;
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         rtk.setTraceControl(ctrl);
         rtk.setTraceCallback(cb);
@@ -205,7 +223,7 @@ public class LogTraceTest {
 
         TraceCallback cb = traceLines::add;
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         rtk.setTraceControl(ctrl);
         rtk.setTraceCallback(cb);
@@ -240,7 +258,7 @@ public class LogTraceTest {
 
         TraceCallback cb = traceLines::add;
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         rtk.setTraceControl(ctrl);
         rtk.setTraceCallback(cb);
@@ -257,7 +275,7 @@ public class LogTraceTest {
         skipIfNoData();
         List<String> traceLines = new ArrayList<>();
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         rtk.setTraceCallback(traceLines::add);
 
@@ -275,7 +293,7 @@ public class LogTraceTest {
         ctrl.enabled = true;
         ctrl.stages = 0x7F;
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         rtk.setTraceControl(ctrl);
         rtk.setTraceCallback(null);
@@ -299,7 +317,7 @@ public class LogTraceTest {
 
         TraceCallback cb = traceLines::add;
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         rtk.setTraceControl(ctrl);
         rtk.setTraceCallback(cb);
@@ -343,7 +361,7 @@ public class LogTraceTest {
 
         TraceCallback cb = traceLines::add;
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         rtk.setTraceControl(ctrl);
         rtk.setTraceCallback(cb);
@@ -376,7 +394,7 @@ public class LogTraceTest {
         ctrlFull.enabled = true;
         ctrlFull.stages = TraceControl.STAGE_UDSTATE | TraceControl.STAGE_LAMBDA;
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
 
         RtkProcessor rtk1 = new RtkProcessor(opt);
         rtk1.setTraceControl(ctrlFull);
@@ -417,7 +435,7 @@ public class LogTraceTest {
 
         TraceCallback cb = queue::offer;
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         rtk.setTraceControl(ctrl);
         rtk.setTraceCallback(cb);
@@ -448,7 +466,7 @@ public class LogTraceTest {
         ctrl.enabled = true;
         ctrl.stages = 0x7F;
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
 
         try (PrintWriter pw = new PrintWriter(new BufferedWriter(new FileWriter(traceFile)))) {
             TraceCallback cb = pw::println;
@@ -497,7 +515,7 @@ public class LogTraceTest {
 
         TraceCallback cb = traceLines::add;
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         rtk.setTraceControl(ctrl);
         rtk.setTraceCallback(cb);
@@ -534,7 +552,7 @@ public class LogTraceTest {
             throw new RuntimeException("Simulated callback error");
         };
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         rtk.setTraceControl(ctrl);
         rtk.setTraceCallback(badCb);
@@ -558,7 +576,7 @@ public class LogTraceTest {
         ctrl.enabled = true;
         ctrl.stages = TraceControl.STAGE_INPUT | TraceControl.STAGE_RESULT;
 
-        PrcOpt opt = RtkProcessor.createDefaultOpt();
+        PrcOpt opt = createOpt();
 
         try (OutputStream os = new BufferedOutputStream(new FileOutputStream(posFile))) {
             RtkProcessor rtk = new RtkProcessor(opt, new PosHandler() {

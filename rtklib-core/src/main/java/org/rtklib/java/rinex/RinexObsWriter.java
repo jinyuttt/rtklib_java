@@ -135,8 +135,9 @@ public class RinexObsWriter {
         String recType = sta.rectype != null && !sta.rectype.isEmpty() ? sta.rectype : "UNKNOWN";
         writer.write(String.format("%-20s%-20s%-20s%-20s\n", "", recType, "", "REC # / TYPE / VERS"));
 
+        String antSno = sta.antsno != null && !sta.antsno.isEmpty() ? sta.antsno : "";
         String antType = sta.antdes != null && !sta.antdes.isEmpty() ? sta.antdes : "UNKNOWN";
-        writer.write(String.format("%-20s%-20s%-40s%-20s\n", "", antType, "", "ANT # / TYPE"));
+        writer.write(String.format("%-20s%-20s%-20s%-20s\n", antSno, antType, "", "ANT # / TYPE"));
 
         if (sta.pos != null && sta.pos.length == 3) {
             writer.write(String.format("%14.4f%14.4f%14.4f%-18s%-20s\n",

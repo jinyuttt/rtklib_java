@@ -46,6 +46,10 @@ public class PostPosProcessor {
 
     private List<SbsMsg> sbsMsgs = Collections.emptyList();
     private int sbsMsgIdx;
+    private String fcbPath;
+    private String osbPath;
+    private String updPath;
+    private String dcbPath;
 
     public PostPosProcessor(PrcOpt opt, SolOpt sopt, RtkConfig rtkConfig, PosHandler handler, OutputStream outputStream) {
         this.opt = new PrcOpt(opt);
@@ -86,6 +90,11 @@ public class PostPosProcessor {
         this(opt, null, null, null, null);
     }
 
+    public void setFcbPath(String fcbPath) { this.fcbPath = fcbPath; }
+    public void setOsbPath(String osbPath) { this.osbPath = osbPath; }
+    public void setUpdPath(String updPath) { this.updPath = updPath; }
+    public void setDcbPath(String dcbPath) { this.dcbPath = dcbPath; }
+
     public PostPosResult process(String roverObsPath, String baseObsPath,
                                  String navPath, String sp3Path, String clkPath,
                                  String sbsPath, String atxPath) {
@@ -114,6 +123,22 @@ public class PostPosProcessor {
         if (clkPath != null) {
             ClkReader.readclk(clkPath, nav);
             log.info("Loaded CLK: {} records", nav.nc);
+        }
+        if (fcbPath != null) {
+            org.rtklib.java.ephemeris.FcbReader.readFcb(fcbPath, nav);
+            log.info("Loaded FCB: {}", fcbPath);
+        }
+        if (osbPath != null) {
+            org.rtklib.java.ephemeris.OsbReader.readOsb(osbPath, nav);
+            log.info("Loaded OSB: {}", osbPath);
+        }
+        if (updPath != null) {
+            org.rtklib.java.ephemeris.UpdReader.readUpd(updPath, nav);
+            log.info("Loaded UPD: {}", updPath);
+        }
+        if (dcbPath != null) {
+            org.rtklib.java.ephemeris.DcbReader.readdcb(dcbPath, nav, null);
+            log.info("Loaded DCB: {}", dcbPath);
         }
         if (sbsPath != null) {
             sbsMsgs = SbsMsgReader.readsbsmsg(sbsPath);

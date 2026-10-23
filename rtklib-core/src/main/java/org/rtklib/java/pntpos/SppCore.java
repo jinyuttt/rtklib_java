@@ -343,15 +343,6 @@ public final class SppCore {
                 continue;
             }
             v[nv] = P - (r + dtr - Constants.CLIGHT * dts[i * 2] + dion + dtrp);
-            if (iter == 0 && nv < 30) {
-                String gloInfo = (sys == Constants.SYS_GLO) ?
-                    String.format(" P[0]=%.3f P[1]=%.3f", obs[i].P[0], obs[i].P[1]) : "";
-                LOG.info("SPP i={} sat={} sys={} P={:.3f} r={:.3f} rs=({:.3f},{:.3f},{:.3f}) dts={:.12f} dtr={:.6f} v={:.3f} el={:.1f}{}".replace("{:.3f}", "{}").replace("{:.12f}", "{}").replace("{:.6f}", "{}").replace("{:.1f}", "{}"),
-                    i, sat, sys, String.format("%.3f",P), String.format("%.3f",r),
-                    String.format("%.3f",rs[i*6]), String.format("%.3f",rs[i*6+1]), String.format("%.3f",rs[i*6+2]),
-                    String.format("%.12f",dts[i*2]), String.format("%.6f",dtr), String.format("%.3f",v[nv]),
-                    String.format("%.1f",Math.toDegrees(ae[1])), gloInfo);
-            }
             for (int j = 0; j < NX; j++) {
                 H[nv * NX + j] = (j < 3) ? -e[j] : (j == 3 ? 1.0 : 0.0);
             }
@@ -458,6 +449,11 @@ public final class SppCore {
                 sol.dtr[3] = cmpIdx >= 0 ? x[cmpIdx] / Constants.CLIGHT : 0.0;
                 sol.dtr[4] = irnIdx >= 0 ? x[irnIdx] / Constants.CLIGHT : 0.0;
                 sol.dtr[5] = qzsIdx >= 0 ? x[qzsIdx] / Constants.CLIGHT : 0.0;
+                LOG.info(String.format("SPP-CLK: x[3]=%.3f dtr0=%.12e gloIdx=%d x[glo]=%.3f dtr1=%.12e dtr0+dtr1=%.3f galIdx=%d x[gal]=%.3f dtr2=%.12e dtr0+dtr2=%.3f",
+                        x[3], sol.dtr[0], gloIdx, gloIdx >= 0 ? x[gloIdx] : 0.0, sol.dtr[1],
+                        Constants.CLIGHT * (sol.dtr[0] + sol.dtr[1]),
+                        galIdx, galIdx >= 0 ? x[galIdx] : 0.0, sol.dtr[2],
+                        Constants.CLIGHT * (sol.dtr[0] + sol.dtr[2])));
                 for (int j = 0; j < 6; j++) sol.rr[j] = (j < 3) ? x[j] : 0.0;
                 for (int j = 0; j < 3; j++) sol.qr[j] = (float) Q[j * NX + j];
                 sol.qr[3] = (float) Q[1];

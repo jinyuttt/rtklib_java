@@ -116,6 +116,18 @@ public class Ssat implements Serializable {
     /** EWL累积：累积历元数 */
     public int niewl;
 
+    /** NL累积：加权sum of滤波状态NL值/cycles（PRIDE-PPPAR style，JAVA-ONLY） */
+    public double xrnl;
+
+    /** NL累积：权重和 */
+    public double rn;
+
+    /** NL累积：加权sum of squares (cycles²) */
+    public double xsnl;
+
+    /** NL累积：累积历元数 */
+    public int ninl;
+
     /**
      * [JAVA-ONLY] IFLC频率对协商结果：两站共同可用的频率槽位对 {slot1, slot2}。
      * 槽位为RTKLIB code2idx固定频段槽位（两站同一槽位对应同一频段频率）。

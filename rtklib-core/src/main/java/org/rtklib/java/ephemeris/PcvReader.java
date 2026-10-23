@@ -159,6 +159,7 @@ public final class PcvReader {
 
     public static Pcv searchpcv(int sat, String type, GTime time, List<Pcv> pcvs) {
         if (pcvs == null || pcvs.isEmpty()) return null;
+
         if (sat != 0) {
             for (Pcv pcv : pcvs) {
                 if (pcv.sat != sat) continue;
@@ -168,21 +169,25 @@ public final class PcvReader {
             }
             return null;
         }
-        String[] types = type != null ? type.trim().split("\\s+") : new String[0];
-        if (types.length == 0) return null;
+
+        if (type == null || type.trim().isEmpty()) return null;
+        String targetType = type.trim();
+
         for (Pcv pcv : pcvs) {
-            boolean match = true;
-            for (String t : types) {
-                if (!pcv.type.contains(t)) { match = false; break; }
-            }
-            if (match) return pcv;
+            if (pcv.sat != 0) continue;
+            if (pcv.type.equals(targetType)) return pcv;
         }
+
+        String baseType = targetType.length() >= 16 ? targetType.substring(0, 16).trim() : targetType;
         for (Pcv pcv : pcvs) {
-            if (pcv.type.startsWith(types[0])) {
-                LOG.info("pcv without radome is used type={}", type);
+            if (pcv.sat != 0) continue;
+            String pcvBase = pcv.type.length() >= 16 ? pcv.type.substring(0, 16).trim() : pcv.type;
+            if (pcvBase.equals(baseType)) {
+                LOG.info("pcv without radome is used type={}", targetType);
                 return pcv;
             }
         }
+
         return null;
     }
 
@@ -201,6 +206,8 @@ public final class PcvReader {
         int mode = (Constants.PMODE_DGPS <= popt.mode && popt.mode <= Constants.PMODE_FIXED) ? 2 : 1;
         for (int i = 0; i < mode; i++) {
             popt.pcvr[i] = new Pcv(pcv0);
+            popt.antdel[i][0] = popt.antdel[i][1] = popt.antdel[i][2] = 0.0;
+
             if (popt.anttype[i].equals("*") && stas != null && i < stas.length) {
                 popt.anttype[i] = stas[i].antdes;
                 if (stas[i].del.length > 3 && stas[i].del[3] == 1.0) {
@@ -219,14 +226,19 @@ public final class PcvReader {
                     for (int j = 0; j < 3 && j < stas[i].del.length; j++) popt.antdel[i][j] = stas[i].del[j];
                 }
             }
+
             Pcv pcv = searchpcv(0, popt.anttype[i], time, pcvRecList);
             if (pcv == null) {
-                LOG.warn("no receiver antenna pcv: {}", popt.anttype[i]);
+                LOG.warn("no receiver antenna pcv found for type: {}, using ZERO PCV", popt.anttype[i]);
                 popt.anttype[i] = "";
-                continue;
+            } else {
+                popt.anttype[i] = pcv.type;
+                popt.pcvr[i] = new Pcv(pcv);
+                LOG.info(String.format("[ANT-DEBUG] rcv=%d anttype=%s, PCO_L1=[%.4f, %.4f, %.4f] PCO_L2=[%.4f, %.4f, %.4f]",
+                        i, pcv.type,
+                        pcv.off[0][0], pcv.off[0][1], pcv.off[0][2],
+                        pcv.off[1][0], pcv.off[1][1], pcv.off[1][2]));
             }
-            popt.anttype[i] = pcv.type;
-            popt.pcvr[i] = new Pcv(pcv);
         }
         LOG.info("setpcv: satellite and receiver antenna parameters set");
     }
@@ -250,12 +262,14 @@ public final class PcvReader {
         if (s == null || s.length() < pos + len) return null;
         String str = s.substring(pos, Math.min(pos + len, s.length())).trim();
         try {
-            int year = Integer.parseInt(str.substring(0, 4).trim());
-            int month = Integer.parseInt(str.substring(5, 7).trim());
-            int day = Integer.parseInt(str.substring(8, 10).trim());
-            int hour = Integer.parseInt(str.substring(11, 13).trim());
-            int min = Integer.parseInt(str.substring(14, 16).trim());
-            double sec = Double.parseDouble(str.substring(17).trim());
+            String[] tokens = str.split("\\s+");
+            if (tokens.length < 6) return null;
+            int year = Integer.parseInt(tokens[0]);
+            int month = Integer.parseInt(tokens[1]);
+            int day = Integer.parseInt(tokens[2]);
+            int hour = Integer.parseInt(tokens[3]);
+            int min = Integer.parseInt(tokens[4]);
+            double sec = Double.parseDouble(tokens[5]);
             double[] ep = {year, month, day, hour, min, sec};
             return TimeSystem.epoch2time(ep);
         } catch (Exception e) {
@@ -269,7 +283,7 @@ public final class PcvReader {
         List<Double> vals = new ArrayList<>();
         String[] tokens = s.trim().split("\\s+");
         for (int i = 0; i < tokens.length && vals.size() < n; i++) {
-            try { vals.add(Double.parseDouble(tokens[i])); }
+            try { vals.add(Double.parseDouble(tokens[i]) * 1E-3); }
             catch (NumberFormatException e) { /* skip */ }
         }
         if (vals.isEmpty()) return null;

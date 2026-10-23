@@ -625,8 +625,11 @@ public class RtkProcessor implements Serializable {
             Obsd[] baseObs = findMatchingBaseObs(roverTime);
             int baseN = (baseObs != null) ? baseObs.length : 0;
 
+            Nav nav = rtcmRover.nav;
+            mergeNav(nav, rtcmBase.nav);
+
             if (baseObs != null && opt.refpos == Constants.POSOPT_SINGLE) {
-                averageBasePos(baseObs, baseN);
+                averageBasePos(baseObs, baseN, nav);
             }
 
             Obsd[] combined = new Obsd[roverN + baseN];
@@ -635,8 +638,6 @@ public class RtkProcessor implements Serializable {
                 System.arraycopy(baseObs, 0, combined, roverN, baseN);
             }
 
-            Nav nav = rtcmRover.nav;
-            mergeNav(nav, rtcmBase.nav);
             processEpoch(combined, roverN + baseN, roverTime, nav);
         }
     }
@@ -664,7 +665,7 @@ public class RtkProcessor implements Serializable {
         return result;
     }
 
-    private void averageBasePos(Obsd[] baseObs, int baseN) {
+    private void averageBasePos(Obsd[] baseObs, int baseN, Nav nav) {
         if (baseObs == null || baseN <= 0) return;
 
         if (opt.maxaveep > 0 && nave >= opt.maxaveep) {
@@ -678,8 +679,6 @@ public class RtkProcessor implements Serializable {
         sppOpt.tropopt = Constants.TROPOPT_SAAS;
 
         Sol sol = new Sol();
-        Nav nav = rtcmRover.nav;
-        mergeNav(nav, rtcmBase.nav);
 
         int result = PntPos.pntpos(baseObs, baseN, nav, sppOpt, sol, null, null);
         if (result == 1 && sol.stat != Constants.SOLQ_NONE) {
@@ -924,6 +923,10 @@ public class RtkProcessor implements Serializable {
             Obsd[] baseObs = findMatchingBaseObsFromList(
                     batchBaseObsList, batchBaseObsCountList, batchBaseObsTimeList, roverTime);
             int baseN = (baseObs != null) ? baseObs.length : 0;
+
+            if (baseObs != null && opt.refpos == Constants.POSOPT_SINGLE) {
+                averageBasePos(baseObs, baseN, batchRtcmRover.nav);
+            }
 
             Obsd[] combined = new Obsd[roverN + baseN];
             System.arraycopy(roverObs, 0, combined, 0, roverN);

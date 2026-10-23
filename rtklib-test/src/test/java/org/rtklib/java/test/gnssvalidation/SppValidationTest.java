@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.constants.Constants;
+import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
 import org.rtklib.java.rinex.RinexSppProcessor;
 import org.slf4j.Logger;
@@ -33,6 +34,10 @@ public class SppValidationTest {
 
     private static final int TEST_YEAR = 2024;
     private static final int TEST_DOY = 60;
+
+    private static final double ALGO_X = 918129.4000;
+    private static final double ALGO_Y = -4346071.2000;
+    private static final double ALGO_Z = 4561977.8000;
 
     @BeforeAll
     static void checkData() {
@@ -144,5 +149,89 @@ public class SppValidationTest {
         double successRate = (double) result.successCount / result.totalEpochs * 100;
         log.info(String.format("SPP成功率: %d/%d = %.1f%%", result.successCount, result.totalEpochs, successRate));
         assertTrue(successRate > 50, "SPP成功率应>50%（单站广播星历）");
+    }
+
+    @Test
+    @DisplayName("1.4 SPP解算ENU RMS精度验证（对比ALGO站ITRF已知坐标）")
+    void testSppEnuRmsAccuracy() {
+        if (!dataAvailable) {
+            log.info("跳过: 数据不可用");
+            return;
+        }
+
+        double[] refPos = new double[3];
+        CoordTransform.ecef2pos(new double[]{ALGO_X, ALGO_Y, ALGO_Z}, refPos);
+
+        PrcOpt opt = RinexSppProcessor.createDefaultOpt();
+        RinexSppProcessor spp = new RinexSppProcessor(opt);
+        RinexSppProcessor.SppResult result = spp.process(obsFile, navFile);
+
+        List<SolData> solutions = result.solutions;
+        assertNotNull(solutions, "解算结果不应为null");
+
+        int validCount = 0;
+        double sumE = 0, sumN = 0, sumU = 0;
+        double sumE2 = 0, sumN2 = 0, sumU2 = 0;
+        double maxE = 0, maxN = 0, maxU = 0;
+
+        double[] dr = new double[3];
+        double[] enu = new double[3];
+
+        for (SolData sol : solutions) {
+            if (sol.status == SolutionStatus.NONE) continue;
+            Position ecef = sol.getPosition(CoordType.ECEF);
+            if (ecef == null) continue;
+
+            dr[0] = ecef.v1 - ALGO_X;
+            dr[1] = ecef.v2 - ALGO_Y;
+            dr[2] = ecef.v3 - ALGO_Z;
+
+            CoordTransform.ecef2enu(refPos, dr, enu);
+
+            double e = enu[0], n = enu[1], u = enu[2];
+            sumE += e;  sumN += n;  sumU += u;
+            sumE2 += e * e;  sumN2 += n * n;  sumU2 += u * u;
+            maxE = Math.max(maxE, Math.abs(e));
+            maxN = Math.max(maxN, Math.abs(n));
+            maxU = Math.max(maxU, Math.abs(u));
+            validCount++;
+        }
+
+        assertTrue(validCount > 0, "应有有效SPP解算历元");
+
+        double meanE = sumE / validCount;
+        double meanN = sumN / validCount;
+        double meanU = sumU / validCount;
+
+        double rmsE = Math.sqrt(sumE2 / validCount);
+        double rmsN = Math.sqrt(sumN2 / validCount);
+        double rmsU = Math.sqrt(sumU2 / validCount);
+        double rms2D = Math.sqrt((sumE2 + sumN2) / validCount);
+
+        double stdE = Math.sqrt(sumE2 / validCount - meanE * meanE);
+        double stdN = Math.sqrt(sumN2 / validCount - meanN * meanN);
+        double stdU = Math.sqrt(sumU2 / validCount - meanU * meanU);
+
+        log.info("====== SPP ENU RMS 精度评估 ======");
+        log.info(String.format("参考站: ALGO (ITRF)  X=%.4f  Y=%.4f  Z=%.4f", ALGO_X, ALGO_Y, ALGO_Z));
+        log.info(String.format("参考LLH: lat=%.6f° lon=%.6f° h=%.3fm",
+                refPos[0] / Constants.D2R, refPos[1] / Constants.D2R, refPos[2]));
+        log.info(String.format("有效历元: %d / %d", validCount, result.totalEpochs));
+        log.info("--- 偏差(bias) / 标准差(std) / RMS / 最大值 ---");
+        log.info(String.format("  E(东): bias=%+7.3f m  std=%6.3f m  RMS=%6.3f m  max=%6.3f m", meanE, stdE, rmsE, maxE));
+        log.info(String.format("  N(北): bias=%+7.3f m  std=%6.3f m  RMS=%6.3f m  max=%6.3f m", meanN, stdN, rmsN, maxN));
+        log.info(String.format("  U(天): bias=%+7.3f m  std=%6.3f m  RMS=%6.3f m  max=%6.3f m", meanU, stdU, rmsU, maxU));
+        log.info(String.format("  2D水平RMS = %6.3f m", rms2D));
+        log.info("--- SPP物理极限判据 ---");
+        log.info(String.format("  水平(E/N) RMS 1~2m: E=%.3f %s  N=%.3f %s",
+                rmsE, (rmsE >= 0.5 && rmsE <= 3.0) ? "✓" : "✗",
+                rmsN, (rmsN >= 0.5 && rmsN <= 3.0) ? "✓" : "✗"));
+        log.info(String.format("  高程(U)   RMS 3~5m: U=%.3f %s",
+                rmsU, (rmsU >= 1.0 && rmsU <= 8.0) ? "✓" : "✗"));
+        log.info("=================================");
+
+        assertTrue(rmsE < 5.0, "E方向RMS应<5m（SPP广播星历）: " + rmsE);
+        assertTrue(rmsN < 5.0, "N方向RMS应<5m（SPP广播星历）: " + rmsN);
+        assertTrue(rmsU < 10.0, "U方向RMS应<10m（SPP广播星历）: " + rmsU);
     }
 }

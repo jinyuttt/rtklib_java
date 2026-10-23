@@ -26,10 +26,20 @@ public class PppCoreEx {
 
     public static void ppos(Rtk rtk, Obsd[] obs, int n, Nav nav, RtkConfig cfg) {
         LOG.info("PppCoreEx.ppos called: pppAR={}, bds3AR={}", cfg.enablePppAR, cfg.enableBds3PppAR);
-        if (!cfg.enableIsbIfcbIfb && !cfg.enablePppAR && !cfg.enablePppArFixHold
-            && !cfg.enablePppPartialAR && !cfg.enableBds3PppAR && !cfg.enableOsb
-            && !cfg.enableAt1S2 && !cfg.useGpt3Grid && !cfg.enableMultiFreqAR) {
+        boolean needExtendedState = cfg.enableIsbIfcbIfb || cfg.enableOsb || cfg.enableAt1S2 || cfg.useGpt3Grid;
+        boolean needAr = cfg.enablePppAR || cfg.enablePppArFixHold || cfg.enablePppPartialAR
+                || cfg.enableBds3PppAR || cfg.enableMultiFreqAR;
+
+        if (!needExtendedState && !needAr) {
             PppCore.pppos(rtk, obs, n, nav);
+            return;
+        }
+
+        if (!needExtendedState && needAr) {
+            PppCore.pppos(rtk, obs, n, nav);
+            if (rtk.sol.stat == Constants.SOLQ_PPP || rtk.sol.stat == Constants.SOLQ_FLOAT) {
+                applyAmbiguityResolution(rtk, nav, cfg);
+            }
             return;
         }
 
@@ -173,50 +183,7 @@ public class PppCoreEx {
 
         if (stat == Constants.SOLQ_PPP) {
             PppCore.updateStat(rtk, obs, n, stat, nx);
-
-            if (cfg.enableMultiFreqAR) {
-                LOG.info("PppCoreEx: calling pppAmbFixEwlWlNl, epoch={}", rtk.epoch);
-                int nb = PppAmbFix.pppAmbFixEwlWlNl(rtk, null, rtk.xa, 1, 0, 0, nav);
-                if (nb > 1) {
-                    rtk.sol.stat = Constants.SOLQ_FIX;
-                    LOG.debug("PppCoreEx: PPP-AR 3F fixed {} ambiguities", nb);
-                }
-            }
-
-            if (cfg.enablePppAR && rtk.sol.stat != Constants.SOLQ_FIX) {
-                LOG.info("PppCoreEx: calling pppAmbFixWlNl, epoch={}", rtk.epoch);
-                int nb = PppAmbFix.pppAmbFixWlNl(rtk, null, rtk.xa, 1, 0, 0, nav);
-                if (nb > 1) {
-                    rtk.sol.stat = Constants.SOLQ_FIX;
-                    LOG.debug("PppCoreEx: PPP-AR fixed {} ambiguities", nb);
-                }
-            }
-
-            if (cfg.enablePppPartialAR && rtk.sol.stat != Constants.SOLQ_FIX) {
-                int nb = PppAmbFix.pppPartialAR(rtk, null, rtk.xa, 1, 0, 0, nav);
-                if (nb > 1) {
-                    rtk.sol.stat = Constants.SOLQ_FIX;
-                    LOG.debug("PppCoreEx: PPP Partial AR fixed {} ambiguities", nb);
-                }
-            }
-
-            if (cfg.enableBds3PppAR) {
-                int nb = PppAmbFixBds3.pppAmbFixBds3(rtk, null, rtk.xa, nav);
-                if (nb > 1) {
-                    rtk.sol.stat = Constants.SOLQ_FIX;
-                    LOG.debug("PppCoreEx: BDS-3 PPP-AR fixed {} ambiguities", nb);
-                }
-            }
-
-            if (rtk.sol.stat == Constants.SOLQ_FIX) {
-                rtk.nfix++;
-            } else {
-                rtk.nfix = 0;
-            }
-
-            if (cfg.enablePppArFixHold && rtk.sol.stat == Constants.SOLQ_FIX) {
-                PppAmbFix.pppArFixHold(rtk, nav);
-            }
+            applyAmbiguityResolution(rtk, nav, cfg);
         } else {
             rtk.nfix = 0;
             LOG.info("PppCoreEx epoch={} did not converge, stat={}", rtk.epoch, stat);
@@ -232,6 +199,52 @@ public class PppCoreEx {
         } else {
             Trace.emit("RESULT", "FAIL", v2cfg, v2cb, rtk.epoch, obs[0].time,
                     "Q", (int) rtk.sol.stat, "reason", "no_convergence");
+        }
+    }
+
+    private static void applyAmbiguityResolution(Rtk rtk, Nav nav, RtkConfig cfg) {
+        if (cfg.enableMultiFreqAR) {
+            LOG.info("PppCoreEx: calling pppAmbFixEwlWlNl, epoch={}", rtk.epoch);
+            int nb = PppAmbFix.pppAmbFixEwlWlNl(rtk, null, rtk.xa, 1, 0, 0, nav);
+            if (nb > 1) {
+                rtk.sol.stat = Constants.SOLQ_FIX;
+                LOG.debug("PppCoreEx: PPP-AR 3F fixed {} ambiguities", nb);
+            }
+        }
+
+        if (cfg.enablePppAR && rtk.sol.stat != Constants.SOLQ_FIX) {
+            LOG.info("PppCoreEx: calling pppAmbFixWlNl, epoch={}", rtk.epoch);
+            int nb = PppAmbFix.pppAmbFixWlNl(rtk, null, rtk.xa, 1, 0, 0, nav);
+            if (nb > 1) {
+                rtk.sol.stat = Constants.SOLQ_FIX;
+                LOG.debug("PppCoreEx: PPP-AR fixed {} ambiguities", nb);
+            }
+        }
+
+        if (cfg.enablePppPartialAR && rtk.sol.stat != Constants.SOLQ_FIX) {
+            int nb = PppAmbFix.pppPartialAR(rtk, null, rtk.xa, 1, 0, 0, nav);
+            if (nb > 1) {
+                rtk.sol.stat = Constants.SOLQ_FIX;
+                LOG.debug("PppCoreEx: PPP Partial AR fixed {} ambiguities", nb);
+            }
+        }
+
+        if (cfg.enableBds3PppAR) {
+            int nb = PppAmbFixBds3.pppAmbFixBds3(rtk, null, rtk.xa, nav);
+            if (nb > 1) {
+                rtk.sol.stat = Constants.SOLQ_FIX;
+                LOG.debug("PppCoreEx: BDS-3 PPP-AR fixed {} ambiguities", nb);
+            }
+        }
+
+        if (rtk.sol.stat == Constants.SOLQ_FIX) {
+            rtk.nfix++;
+        } else {
+            rtk.nfix = 0;
+        }
+
+        if (cfg.enablePppArFixHold && rtk.sol.stat == Constants.SOLQ_FIX) {
+            PppAmbFix.pppArFixHold(rtk, nav);
         }
     }
 
