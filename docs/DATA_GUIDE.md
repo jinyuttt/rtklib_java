@@ -4,7 +4,7 @@
 > **日期**：2026-10-23  
 > **前置文档**：[test-data/README.md](../test-data/README.md)（数据规范）、[优化功能矩阵](CORE_OPTIMIZATION_MATRIX.md)（优化项定义）
 
-> **适用范围**：数据与元数据规范（第 0 章）以 **rtklib-core** 和 **rtklib-adjust** 为准；第 1 章总览以 core/adjust 算法测试为主体，并补入 rtklib-stream 的 NTRIP 用例。rtklib-test 的验证测试（`PppArValidationTest` 等）由环境变量门卫控制运行，不在此表。
+> **适用范围**：数据与元数据规范（第 0 章）适用于全部模块；第 1 章 §1.1 列出按定位模式分类的主要算法测试，§1.4 补齐诊断/基准/其它模块测试，§1.5 列出 rtklib-test 的端到端验证测试（数据位于 `test-data/gnss-validation/`，未就绪时自动跳过）。
 
 ---
 
@@ -306,6 +306,51 @@ List<String> files = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile
 | **室内定位** | 严重遮挡 | ✅ |
 
 > **RTCM流式定位说明**：当前SPP已有RTCM直接定位测试（`SppTest`、`SppProcessorTest`）。RTK的RTCM流式端到端测试已有本地私有数据验证（`RtkTest` Fix率69.5%、`RtkProcessorTest`全部通过、`RtkOptimizationTest` Fix率62.7%~69.5%），但该数据含设备ID不可公开。公共数据下这些测试退化为SPP回退，无法产生RTK Fix率。现有公共RTCM文件中，`rtcm3_gmsd`为rover观测流，`open-sky_base`为VRS差分改正流而非标准base观测值流，无法构成RTK双流输入。如有可公开的同步base+rover RTCM3文件对，欢迎上传补充。
+
+### 1.4 诊断 / 基准 / 其它模块测试
+
+> §1.1 只收录按定位模式分类的主体算法测试，下表补齐诊断类、基准类以及 rtklib-adjust / rtklib-product / rtklib-research 的测试。
+
+| 测试类 | 模块 | 关注点 | 数据依赖 | 无数据可运行 |
+|--------|------|--------|----------|-------------|
+| **CoreAlgorithmTest** | rtklib-core | 核心算法单元测试 | 内置 | ✅ |
+| **IflcPairNegotiationTest** | rtklib-core | IFLC 逐卫星频率对协商（sticky 策略） | 内置 | ✅ |
+| **TestDataConfigTest** | rtklib-core | 目录模式 base/rover 配对解析 | 内置 | ✅ |
+| **RtcmDataCheckTest** | rtklib-core | RTCM 电文类型统计（硬编码 `D:\rtcmdata`，目录不存在则跳过） | **私有: D:\rtcmdata** | ❌ |
+| **RtcmTimeDiagTest** | rtklib-core | RTCM 观测时刻与星历 toe 诊断 | 公共: rtcm3_gmsd | ✅ |
+| **CssrDiagTest** | rtklib-core | 紧凑 SSR `nv=0` 诊断 | 公共: rinex304_gej_3034/sept | ✅ |
+| **RinexRtkProcessorTest** | rtklib-core | RINEX 短基线 RTK 处理 | 公共: rinex210_gps_0759/3040、rinex304_gej | ✅ |
+| **UrbanCanyonSppOptTest** | rtklib-core | 城市峡谷 SPP 优化对比（UC-1~） | 公共: MobileGNSS-SPP / PPC / UrbanNav | ✅ |
+| **UrbanCanyonRtkDiagTest** | rtklib-core | 城市峡谷 RTK 深度诊断 | 公共: Net_Diff urban（urban_rover/base_20000719） | ✅ |
+| **UrbanCanyonDataCheckTest** | rtklib-core | 城市峡谷 RINEX 数据检查 + SPP 分析 | 公共: Net_Diff urban + PPC | ✅ |
+| **CascadeArBehaviorTest** | rtklib-core | CascadeAR EST 模式 A/B 行为对比 | 公共: PPC-Dataset（`CASCADE_AB_*` 环境变量可裁剪数据集） | ✅ |
+| **DynamicRtkOptTest** | rtklib-core | 城市峡谷 RTK 12 变体对比（见 ROADMAP §7.0.6） | 公共: PPC + UrbanNav + Net_Diff | ✅ |
+| **E2ETimingTest** | rtklib-core | 端到端耗时基线（梯队0） | 公共: rinex304_gej | ✅ |
+| **JmhRunnerTest** | rtklib-core | JMH 微基准（全量运行 20min+，回归时可用 `-Dtest="!JmhRunnerTest"` 排除） | 内置 | ✅ |
+| **GnssBaselineAdjustTest** | rtklib-adjust | 单/多基线平差与 Baarda 检验（合成观测） | 内置 | ✅ |
+| **AdjustRealDataTest** | rtklib-adjust | 2 基站 1 测站多基线平差（连续 9h RTCM） | **私有: adjust 配置** | ❌ |
+| **BaseStationDiagnoserTest** | rtklib-adjust | 基站坐标异常诊断（2 基站 1 测站） | **私有: adjust 配置** | ❌ |
+| **BaseStationMonitorTest** | rtklib-adjust | 60min 窗口 SPP 中位数与突变监测 | **私有: adjust 配置** | ❌ |
+| **ProductDownloaderTest** | rtklib-product | 精密产品下载 | 网络: IGS / WHU 镜像 | ❌ |
+| **PppProductIntegrationTest** | rtklib-product | ProductDownloader + PppProcessor 集成 | 网络 + 公共产品 | ❌ |
+| **PipelineIntegrationTest** | rtklib-research | FGO 管线集成 | 内置/合成 | ✅ |
+| **PreintegrationTest** | rtklib-research | IMU 预积分 | 内置/合成 | ✅ |
+
+> rtklib-adjust 使用**独立的** `rtklib-adjust/src/test/resources/test-data.properties`（`data.root` / `base.group` / `rover.group` / `date`），与 core 的 `test-data.properties` 互不干扰；未配置时上述三个私有数据测试自动跳过。
+
+### 1.5 rtklib-test 端到端验证测试
+
+> 位于 `rtklib-test/src/test/java/org/rtklib/java/test/gnssvalidation/`，数据统一放在 `test-data/gnss-validation/`，由 `GnssValidationDataHelper` 按需下载（BKG HTTPS 优先、WHU FTP 回退）；数据缺失时测试自动跳过。核心模块回归不依赖这些用例。
+
+| 测试类 | 验证阶段 | 内容 | 环境变量 |
+|--------|----------|------|----------|
+| **SppValidationTest** | 阶段1 | RINEX 解析 + SPP 解算链路、时序合理性、成功率、对比 ALGO 站 ITRF 坐标的 ENU RMS | — |
+| **RtkValidationTest** | 阶段2 | 短基线（HKWS-HKSS，~6.8km）与长基线（HKWS-HKSL，~42km）RTK 链路、固定率与 ENU RMS 对照 | — |
+| **PppValidationTest** | 阶段3 | SP3/CLK 加载、PPP 链路、SINEX 参考比对、收敛后精度，以及 EST/多系统/ISB/IERS2010 等优化项逐项对照 | `PPP_DATA_SUBDIR` / `PPP_PRODUCT_SUBDIR` / `PPP_TABLE_SUBDIR` / `PPP_TEST_YEAR` / `PPP_TEST_DOY` |
+| **PppArValidationTest** | 阶段3-AR | PPP-AR 全链路（IFLC / 三频 / EST+ISB 等配置组合）固定率与精度 | 同上 + `PPP_REF_ECEF` |
+| **PppRtkValidationTest** | 阶段4 | PPP-RTK 事后 SSR 链路：产品加载、解算、固定率、与 PPP 浮点解对照 | 同上 |
+
+> 上述环境变量用于切换数据集（默认 `2024/WUM` 基线），须通过**环境变量**设置而非 `mvn -D`，原因见 [TEST_DEVELOPMENT_GUIDE.md](TEST_DEVELOPMENT_GUIDE.md)。
 
 ---
 
