@@ -121,3 +121,6 @@ cascade_ab_report*.txt
 cas_sourcetable.txt
 rtklib-product/cp.txt
 cascade_epochs_*.csv
+
+# Local private validation tests (credentials + self-recorded streams, never commit)
+**/localtest/
