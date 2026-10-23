@@ -46,7 +46,9 @@ jobs:
         run: mvn -B compile
 
       - name: Test
-        run: mvn -B test
+        # JMH 基准（JmhRunnerTest）全量运行 20min+ 且无回归价值，CI 排除；
+        # 需要时本地单独执行：mvn test -pl rtklib-core "-Dtest=JmhRunnerTest" -DfailIfNoTests=false
+        run: mvn -B test -Dtest='!JmhRunnerTest' -Dsurefire.failIfNoSpecifiedTests=false
 
       - name: Upload test reports
         if: always()

@@ -42,9 +42,12 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
-          generate_release_notes: true
+          # Release 正文使用仓库内发布稿，避免自动生成的说明与 RELEASE.md 口径不一致
+          body_path: RELEASE.md
           files: |
             rtklib-core/target/rtklib-core-*.jar
             rtklib-stream/target/rtklib-stream-*.jar
             rtklib-adjust/target/rtklib-adjust-*.jar
             rtklib-product/target/rtklib-product-*.jar
+            rtklib-otl/target/rtklib-otl-*.jar
+            rtklib-research/target/rtklib-research-*.jar
