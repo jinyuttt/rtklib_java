@@ -235,6 +235,31 @@ public class PppIndividualOptTest {
         cfgGpt3.enableGpt3Vmf3 = true;
         PppRunResult gpt3 = runPpp(station, optGpt3, cfgGpt3, maxEpochs);
 
+        // GPT3 网格对照：默认探测 test-data/product/gpt3/gpt3_5.grd，可用环境变量 PPP_GPT3_GRID 覆盖；
+        // PPP_GPT3_STATE=1 时额外启用湿延迟状态估计（useGpt3Grid）
+        String gpt3GridPath = resolveGpt3Grid();
+        boolean gpt3GridStateOn = "1".equals(System.getenv("PPP_GPT3_STATE"));
+        PppRunResult gpt3Grid = null;
+        PppRunResult gpt3GridState = null;
+        if (gpt3GridPath != null) {
+            log.info("--- + GPT3+VMF3+GRID ---");
+            PrcOpt optG3 = createBaseOpt(station.navsys);
+            RtkConfig cfgG3 = new RtkConfig();
+            cfgG3.enableGpt3Vmf3 = true;
+            cfgG3.gpt3GridFile = gpt3GridPath;
+            gpt3Grid = runPpp(station, optG3, cfgG3, maxEpochs);
+
+            if (gpt3GridStateOn) {
+                log.info("--- + GPT3+VMF3+GRID+WETSTATE ---");
+                PrcOpt optG3s = createBaseOpt(station.navsys);
+                RtkConfig cfgG3s = new RtkConfig();
+                cfgG3s.enableGpt3Vmf3 = true;
+                cfgG3s.gpt3GridFile = gpt3GridPath;
+                cfgG3s.useGpt3Grid = true;
+                gpt3GridState = runPpp(station, optG3s, cfgG3s, maxEpochs);
+            }
+        }
+
         log.info("--- + IERS2010 ---");
         PrcOpt optIers = createBaseOpt(station.navsys);
         RtkConfig cfgIers = new RtkConfig();
@@ -267,6 +292,8 @@ public class PppIndividualOptTest {
         double[] sAt1s2 = computeRms(at1s2.positions, refEcef, skip);
         double[] sIsb = computeRms(isb.positions, refEcef, skip);
         double[] sUc = computeRms(uc.positions, refEcef, skip);
+        double[] sGpt3Grid = gpt3Grid != null ? computeRms(gpt3Grid.positions, refEcef, skip) : null;
+        double[] sGpt3GridState = gpt3GridState != null ? computeRms(gpt3GridState.positions, refEcef, skip) : null;
 
         log.info("");
         log.info("====== {} PPP 逐项对照 ======", station.name);
@@ -278,6 +305,8 @@ public class PppIndividualOptTest {
                 sBase[0], sBase[1], sBase[2], sBase[3], sBase[4]));
 
         printOptLine("+ GPT3+VMF3", gpt3, sGpt3, sBase);
+        if (sGpt3Grid != null) printOptLine("+ GPT3+VMF3+GRID", gpt3Grid, sGpt3Grid, sBase);
+        if (sGpt3GridState != null) printOptLine("+ GPT3+VMF3+GRID+WETSTATE", gpt3GridState, sGpt3GridState, sBase);
         printOptLine("+ IERS2010", iers, sIers, sBase);
         printOptLine("+ IERS2010+S1/S2", at1s2, sAt1s2, sBase);
         printOptLine("+ ISB/IFCB/IFB", isb, sIsb, sBase);
@@ -294,6 +323,8 @@ public class PppIndividualOptTest {
                 sBase[0], sBase[1], sBase[2], sBase[3], sBase[4]);
 
         printOptLineStdout("+ GPT3+VMF3", gpt3, sGpt3, sBase);
+        if (sGpt3Grid != null) printOptLineStdout("+ GPT3+VMF3+GRID", gpt3Grid, sGpt3Grid, sBase);
+        if (sGpt3GridState != null) printOptLineStdout("+ GPT3+VMF3+GRID+WETSTATE", gpt3GridState, sGpt3GridState, sBase);
         printOptLineStdout("+ IERS2010", iers, sIers, sBase);
         printOptLineStdout("+ IERS2010+S1/S2", at1s2, sAt1s2, sBase);
         printOptLineStdout("+ ISB/IFCB/IFB", isb, sIsb, sBase);
@@ -320,6 +351,14 @@ public class PppIndividualOptTest {
         System.out.printf("%-30s %3d/%-3d %6.3f  %6.3f  %6.3f  %6.3f  %6.3f  ΔN=%+.1f%% ΔE=%+.1f%% ΔU=%+.1f%%%n",
                 label, result.successCount, result.totalEpochs,
                 rms[0], rms[1], rms[2], rms[3], rms[4], dN, dE, dU);
+    }
+
+    /** GPT3 网格路径：环境变量 PPP_GPT3_GRID 优先，否则探测 test-data/product/gpt3/gpt3_5.grd */
+    private static String resolveGpt3Grid() {
+        String env = System.getenv("PPP_GPT3_GRID");
+        if (env != null && !env.isEmpty()) return env;
+        String def = TestDataConfig.getTestDataDir() + "/product/gpt3/gpt3_5.grd";
+        return Files.exists(Paths.get(def)) ? def : null;
     }
 
     @Test
