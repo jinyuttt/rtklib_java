@@ -524,11 +524,11 @@ mvn test -pl rtklib-core -Dtest="DynamicRtkOptTest#testPpcTokyoRun1"
 
 ---
 
-## 7. 梯队3 — 依赖外部条件 🟠
+## 8. 梯队3 — 依赖外部条件 🟠
 
 > 核心原则：**代码基础好但缺数据/场景**。当前可做技术准备（数据结构/接口设计），等条件满足后快速推进。
 
-### 7.1 项目优先级矩阵
+### 8.1 项目优先级矩阵
 
 | # | 优化项 | 预期收益 | 缺的外部条件 | 代码基础 |
 |---|--------|----------|-------------|----------|
@@ -538,13 +538,13 @@ mvn test -pl rtklib-core -Dtest="DynamicRtkOptTest#testPpcTokyoRun1"
 | 4F | 对流层SSR改正验证 | 量化直接改正vs估计差距 | 梯队1 3.5D完成 + 真实SSR数据 | `getTrop()` 已实现 |
 | 4G | 伪观测值约束引擎 | 收敛加速（论文: 东向85%/高程69%） | 4E + 4F + 区域STEC/ZTD产品 | 数据结构待设计 |
 
-### 7.2 3.5G — CI 真实数据回归测试
+### 8.2 3.5G — CI 真实数据回归测试
 
 **依赖**: 精选测试数据（1h静态RINEX + 1h车载RINEX）入库 `test-data/`。
 
 **目标**: 每次 commit 自动运行端到端定位，对比参考解，精度变化超过阈值则告警。
 
-### 7.3 场景验证（🤝 社区贡献项）
+### 8.3 场景验证（🤝 社区贡献项）
 
 > 以下任务的核心依赖是**外部测试数据**。欢迎社区贡献数据或测试结果。
 
@@ -558,7 +558,7 @@ mvn test -pl rtklib-core -Dtest="DynamicRtkOptTest#testPpcTokyoRun1"
 | PPP-RTK 实时流验证 | IGS SSR 流 + CLAS L6 流 | 同上 |
 | 边缘场景回归 | 低仰角/高遮挡/单系统/单频/电离层活跃 | 同上 |
 
-### 7.4 4E — CLAS STEC多项式路径打通
+### 8.4 4E — CLAS STEC多项式路径打通
 
 **现状**: `LocalCorr` 数据结构 100% 就绪（`stecQuality`, `ci[]`, `dstec`），`SsrIono.stecModel()` 中优先级链已有（SSR dispBias → IONEX → 广播），仅差 LocalCorr 分支。
 
@@ -571,13 +571,13 @@ mvn test -pl rtklib-core -Dtest="DynamicRtkOptTest#testPpcTokyoRun1"
 └── 依赖: 梯队1 3.5D 接入后验证 LocalCorr + SSR对流层联合效果
 ```
 
-### 7.5 4F — 对流层SSR改正验证
+### 8.5 4F — 对流层SSR改正验证
 
 **依赖**: 梯队1 3.5D 完成 `getTrop()` 接入 + 真实SSR对流层数据（IGS SSR流或CLAS L6流）。
 
 **验证内容**: 对比 `TROPOPT_SSR` 直接改正 vs `udtrop()` 估计 ZTD 的收敛时间/稳态精度。
 
-### 7.6 4G — 伪观测值约束引擎
+### 8.6 4G — 伪观测值约束引擎
 
 **依赖**: 4E + 4F + 区域STEC/ZTD产品可用。
 
@@ -599,17 +599,29 @@ mvn test -pl rtklib-core -Dtest="DynamicRtkOptTest#testPpcTokyoRun1"
 - [ ] LocalCorr 结构补全：当前字段已齐，可写 GridDefinition + 双线性插值器
 - [ ] 参考 CSSRlib `zdres()` 中 SSR STEC/ZTD 约束实现（Python）
 
-### 7.7 rtklib-research 定位说明
+### 8.7 rtklib-research 定位说明
 
 rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码级耦合，定位为前沿算法的实验场所（FGO/IACE/预积分/场景自适应等）。其价值在于提供独立验证途径，成熟后可按需收录到核心模块。**不要求与 rtklib-core 做数据桥接**，两者各自独立演进。
 
 ---
 
-## 8. 暂不建议投入 🔴
+### 8.8 SSR 数据源获取（⏳ 等待处理中）
+
+> 状态：**等待外部资源**。代码链路已就绪（RTCM SSR 解码 → `nav.ssr[]` → `SsrCorrector` → `ppprtkos`），当前缺口是可验证的数据源。
+
+| 来源 | 状态 | 说明 |
+|------|------|------|
+| Galileo HAS IDD | 待注册审批 | 无公开事后存档；`GalHasReader` 尚未实现 |
+| BDS PPP-B2b（BDSet） | 公开归档可用 | 无相位偏差，仅支撑浮点 PPP 验证 |
+| 北航 2025 全球区域 SSR | 待离线申请 | 元数据未明确含相位偏差/区域大气改正 |
+| CAS IGS SSRA*/SSRC* | 权限未授权 | 账号当前仅开放观测流挂载点 |
+| QZSS CLAS L6 | 公开样本待寻 | 日本区域；`CompactSsrDecoder` 已就绪，缺公开 L6 二进制存档 |
+
+## 9. 暂不建议投入 🔴
 
 > 核心原则：**无上游场景驱动**。暂不建议投入 ≠ 永远不做，等恢复条件触发后再启动。
 
-### 8.1 完好性监测（原 Phase 4A~D）
+### 9.1 完好性监测（原 Phase 4A~D）
 
 > RAIM FDE（`PntPos.raimFde()`）已移植。以下均为 **WONTFIX**。
 
@@ -625,7 +637,7 @@ rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码�
 - RTK-EVC `src/rtklib/pntpos.cpp`（C++ RAIM）
 - Galileo HAS ICD（完好性信息定义 SIS-A/SIS-M）
 
-### 8.2 长期研究方向（原 Phase 5）
+### 9.2 长期研究方向（原 Phase 5）
 
 | 方向 | 说明 | 暂缓原因 |
 |------|------|----------|
@@ -637,7 +649,7 @@ rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码�
 
 ---
 
-## 9. 暂缓原则与恢复条件
+## 10. 暂缓原则与恢复条件
 
 ### 暂缓原则
 
@@ -665,7 +677,7 @@ rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码�
 
 ---
 
-## 10. 变更日志
+## 11. 变更日志
 
 | 版本 | 变更 |
 |------|------|

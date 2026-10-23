@@ -147,6 +147,8 @@ org.rtklib.java.otl
 
 ## 文档
 
+> 全部文档的索引、状态标注（活跃/待复核/归档）与已知不一致清单见 [文档地图](docs/README.md)。
+
 ### rtklib-core
 
 | 文档 | 说明 |

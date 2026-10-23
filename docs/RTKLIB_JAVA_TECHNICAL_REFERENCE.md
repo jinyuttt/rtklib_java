@@ -485,6 +485,8 @@ BASE_PATH  = "<base_rtcm3_file_path>";
 | 12 | udpos Kinematic模式重置逻辑 | 2026-07-02 | ✅ 完成 |
 | 13 | SPP dtr数组动态索引→固定索引 | 2026-07-12 | ✅ 完成 |
 
+> 注：本节仅保留早期（2026-07）修复条目。FIX-ALG-020 及之后的修复统一登记于 [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md)，避免双份维护产生偏差。
+
 ---
 
 ## 9. 待完善项

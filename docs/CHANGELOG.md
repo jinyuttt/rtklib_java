@@ -1,10 +1,64 @@
-Y# RTKLIB Java 变更记录
+# RTKLIB Java 变更记录
 
 本文件记录版本间的重要变更、Bug修复及与GitHub Issue的对应关系。
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/)，版本号遵循 [Semantic Versioning](https://semver.org/)。
 
 ---
+
+## [Unreleased]
+
+## [2.4.0] - 2026-10-23
+
+### Added
+
+- **DcbReader 码偏差产品读取（C 对齐移植）**：完整移植 RTKLIB preceph.c `readdcb()`（L514-544）——入口清零 `nav.cbias`（对齐 C L523-525），`.BIA/.BSX` 走 `readbiaf`（Bias-SINEX OSB/DSB 记录，C L449-502）、`.DCB` 走 `readdcbf`（P1-C1/P2-C2 传统格式，C L378-417），值统一 ×1E-9×CLIGHT（ns→m），GAL 频率映射对齐 C（L1→freq0、L5→freq1，E5b 丢弃）；码偏移索引经 `ObsCode.obs2code` + `SppCore.code2biasIx`（对齐 C `init_bias_ix` 的 −1=不支持语义）。防御性修复 C 两处缺陷：OSB 对未收录码（bias_ix=−1）时 C 写 `cbias[-2]` 越界（UB），Java 跳过；readdcb 失败时 C 的 −1 哨兵被 corr_meas 应用为 −1 m 伪距偏移，Java 保持 0
+- **DCB 接线 RINEX 路径**：`PostPosProcessor.setDcbPath()` / `RinexPppProcessor.setDcbPath()`（RTCM 路径 `PppProcessor` 原已有 readdcb 调用），对应 C postpos 的 `fopt->dcb`
+- **EST 模式健壮初始化开关 [JAVA-ONLY]**：`RtkConfig.enableIonoEstRobust`（默认 `false`，关闭时与 C 行为逐值一致）——IONOOPT_EST 首历元（及周跳/超时重置）对本历元刚 initx 的 bias/iono 状态（协方差恰为 VAR_BIAS/VAR_IONO=3600，尚未被任何 KF 更新吸收）跳过相位行 prefit maxinno 剔除，让 EKF 一次性吸收常数偏差；仅放宽相位行（code==0），码行剔除与 C 一致；拷贝构造同步复制。实测 ALGO 2880 历元：EST 6 配置 0→401~509 success（EST+MultiSys E 4.8/N 1.5/U 5.2 cm），IFLC 基线 2679/2880 不变（详见 `ALGORITHM_FIX_LOG.md` FIX-ALG-020）
+- **PppValidationTest 3.14/3.15**：EST±MultiSys + WUM0MGXRAP_20240600000_01D_01D_OSB.BIA（2024 DOY 060，与测试数据日期匹配，DCB 开关关闭）对照测试
+
+### Fixed
+
+- **GPT3+VMF3 对流层路径 U 向恶化闭环**（FIX-ALG-029）：三缺陷叠加——① `PppOptimizations.vmf3()` 只实现了映射函数的分子 `1+a/(1+b/(1+c))`、缺失连续分数分母，el=15° 时 mfh 算得 1.00001（正确 3.863），斜延迟每星少修正约 6.6m，为 U 向 +793% 的主毒源；② `saastamoinenZhdZwd` 系数 `0.00002412·p` 要求 p 为 Pa 而输入为 hPa，ZHD 低估 100 倍（2.44m→0.024m），解释了网格与 fallback 路径同错；③ ch/cw 硬编码 0、bw 误用 GMF 分段（75° 达 0.00536），一并按 Landskron & Böhm 2018 官方值修正。同时 `Gpt3GridReader` 按官方 `gpt3_5.f90` 全文重写（36×72 格元中心 / 64 列 / 谐波相位直接取 doy / 高程归约 / 极区最近邻），`RtkConfig.gpt3GridFile` 由死字段接线至 `PppProcessor` 的 `process(byte[])`（`batchRtcm.nav`）与 `processRinex`（`parser.nav`）双路径。实测全天 2880 历元：真网格 HKWS U 7.365→0.806m（基线 0.821，−1.9%）、HKSL 1.662m（基线 1.684，−1.3%），3D 均优于 NMF 基线，非 GPT3 配置逐值零连带回归；环境变量 `PPP_GPT3_GRID` 可覆盖网格路径，测试默认探测 `test-data/product/gpt3/gpt3_5.grd`
+- **NTRIP Sourcetable 响应解码补全**：`NtripClient.getSourcetable()` 原实现直接按行读取 socket，Caster 若对 Sourcetable 返回 `Transfer-Encoding: chunked` 或 `Content-Encoding: gzip`，块长行/压缩字节会混入文本导致解析失败。现解析响应头并按 HTTP 编码施加的逆序处理：先解块（新增 `ChunkedInputStream`，RFC 7230 §4.1，支持块扩展与 0 长度结束块、块尾 CRLF 消费）再解压（`GZIPInputStream`）；同时跳过状态行以兼容 NTRIP 1.0（`SOURCETABLE 200 OK`）与 2.0（`HTTP/1.1 200 OK`）。数据流（挂载点订阅）路径行为不变。新增 `NtripSourcetableDecodeTest` 以本地 ServerSocket 模拟三种响应形态（明文 / chunked / chunked+gzip），3/3 通过；`NtripLiveRecordTest` 因无凭据按 assume 跳过，全模块 4 用例 0 失败
+- **PppAmbFix WL 门限按 PRIDE-PPPAR 对齐**（FIX-ALG-022）：① OSB 完备性门槛扩展至码 OSB（对齐 PRIDE `lsq.f90` nbias_used≥4 语义，L1/L2 相位+码四信号 OSB 齐全才可参与 AR，否则保浮点——GAL/BDS 第二频码 OSB 缺失星与无 OSB 行星被排除出候选）；② 主路径与 PartialAR 增加中位数对齐 maxdev 检验（`RtkConfig.pppArWlMaxdev=0.20`，PRIDE config_template 'Widelane decision' 第 1 参数，bdeci prob=0 硬条件；maxsig=0.15 被既有 3σ>0.2 弧段预滤覆盖未重复实现）；③ PartialAR OSB 模式双重改正修复（`yWl=wlMean−fcbWl` 中 fcbWl 二次改正，修复为 `wlMean−medCand`）。缺口②（WL 弧段加权平均）经核对与 PRIDE `lsq_add_obs.f90` 完全等价，未修改。A/B 实测：EST+ISB fix 4→19（0.2%→1.0%，RMS 不变为非假 Fix），Partial fix 0→50（均为 ~2m 假 Fix，per-epoch NL 自洽假 Fix 既有问题被双重改正掩盖后暴露，列为后续修复项）；PppValidationTest 浮点基线无回归
+- **PppAmbFix NL 弧段级机制（PRIDE-PPPAR 对齐）**（FIX-ALG-023）：修复 PartialAR per-epoch NL LAMBDA 自洽假 Fix（FIX-ALG-022 后暴露的 50 个 ~2m 假 Fix）。新增 Ssat NL 弧段累加字段（xrnl/rn/xsnl/ninl）与 `accumulateNlArc()`（wele 高度角权重、slip/lock 重置、x=0 未初始化哨兵跳过，累加点在 `pppPartialAR` 入口滤波更新后）；`RtkConfig` 新增 `pppArNlMaxdev/pppArNlMaxsig=0.15`（PRIDE 'Narrowlane decision'）与 `pppArNlMinsav=4`（'Critical search'），拷贝构造同步复制；候选级弧段成熟度门（ninl<minsav 拒绝）+ σ 门（ninl>1）+ 中位数对齐 NL dev 门（临时 WL 整数 wlProv 构造 nlProv，消公共接收机 NL UPD）；子集 LAMBDA 输入改用弧段均值（原始量 x[IB]/λ_NL 累加、固定时以当期 wlFixed 补减，弧段序列与单历元 WL 结果解耦）；PppCore 偏差超时重置与 slip 重初始化两点补弧段重置。PRIDE chisq 角色由 σ门+dev门+ratio 组合承担（整数域统计已实证无法拦截自洽假 Fix）。实测：Partial fix 50（全假）→38（全真，1.3%），ENU E 32.9cm→1.56cm 回落至浮点基线；FixHold/3F/WL+NL/EST+ISB 零回归；主路径与 3F 路径 NL 仍 per-epoch 列为后续候选
+- **PppAmbFix 3F PPP-AR WL/NL median 对齐 + IFLC 逐星取整**（FIX-ALG-024）：修复 3F 配置（EWL+WL+NL）固定率 0%。三处编译作用域错误修复（`hasDualFreq`→`useDualFreqWl`、`info`/`wlRatio`/`nlRatio` 声明提升）；WL epoch median 对齐（`medWl3f`，LAMBDA 与取整分支共用 datum，消除公共接收机 WL UPD——OSB 产品仅改卫星端的残余）；IFLC 分支 WL/NL 均改逐星取整（median 对齐 + frac<0.25 门 + nFixed≥4，对角协方差下 LAMBDA ratio 恒 1.00 无区分度），LAMBDA 仅保留 EST 双频路径；NL 重构改用 nlFixed[]。实测：3F fix 0→1226（65.7%），ENU RMS E=2.16/N=2.81/U=5.08cm 与浮点基线同量级无假 Fix；其余 6 配置零回归
+- **PppAmbFix 3F NL 构造公式验证 + EST 分支系数/符号修复 + 弧段均值实验负结果**（FIX-ALG-025）：IFLC 下 nlFloat = x[IB]/λ_NL − wlFixed·f2/(f1−f2) ≡ N1（L1 整周模糊度），重构公式精确复原 IF 模糊度真值，datum 完全自洽；EST 分支减项 `wlFixed·f2/(f1−f2)` → **`+ wlFixed·f2/(f1+f2)`**（系数与符号同时修正，N1 = NL + f2·WL/(f1+f2)，符号与 IFLC 分支相反——两分支原始量 N2 系数符号相反，消项方向相反），重构改为 n1=fixedNl、n2=fixedNl−wlFixed；3F 弧段均值实验（FIX-ALG-023 机制接入）负结果回退——fallback 式设计放行收敛期瞬态弧段，fix 1226→1454 但 2D 3.54→8.21cm、dE/dU 8/11cm 系统偏差，弧段均值仅适用于 Partial 的拒绝式+全门场景，3F 保持 per-epoch
+- **PppCore bias/iono 超时重置链对齐 C ppp.c**（FIX-ALG-021）：`udbias_ppp` 超时重置原被 `vsat!=0` 条件阻塞且重置后清 outc/vsat，被剔卫星 stale bias 永不重置、永久退出解算——对齐 C L744-748 改为 `++outc>maxout || modear==ARMODE_INST` 时无条件 `initx(0.0, 0.0)`（方差 0.0 擦除，不清 outc/vsat；clk_jump 无 Java 对应机制已注明）；`udiono_ppp` 重初始化原多加 `outc<=GAP_RESION` 条件，GAP_RESION 重置后 outc 恒超限导致电离层永不重建——对齐 C L681 改回 `x[j]==0.0` 无条件初始化，并移除 C 没有的两处 `testsnr()` 调用。MW/GF 周跳检测历史清理保留为 JAVA-ONLY 扩展。实测 ALGO 2880 历元：EST 6 配置 401~509→2880（100%），EST+DCB 4→1537，EST+MultiSys+DCB 0→1760，IFLC 基线 2679→2880
+- **RtkCore PPP-RTK 分发缺失修复**：`RtkCore.rtkpos()` 事后 PPP 分支不含 `enablePppRtk` 判定，`PMODE_PPPRTK_STATIC/KINEMA` 在 RINEX 路径永远落入 `PppCore.pppos()`/`PppCoreEx.ppos()`，`PppRtkCore.ppprtkos()` 无法到达（RTCM 实时路径 `PppProcessor` L816-825 已有此分发）。修复：分发优先级对齐 PppProcessor——`enablePppRtk` 优先于 AR/偏差开关组；无 SSR 数据时 `ppprtkos` 内部退化为普通 PPP
+- **PppRtkValidationTest 骨架修复**：4.2/4.3/4.4 原以单参 `new RinexPppProcessor(opt)` 构造，`enablePppRtk/enablePppRtkAR` 开关从未传入处理器（cfg 悬空）；修复为 4 参构造传入 cfg，4.3/4.4 补 ENU 精度评估（ALGO IGS20 参考坐标，收敛期跳过前 1/3）与基本断言；固定率下限断言待 SSR 数据接入后启用（nav.ssr 为空时 ppprtkos 退化为普通 PPP 无 Fix 能力）
+- **PppAmbFix/PppCore/OsbReader WUM 3F 67.81cm 回归三因素闭环**（FIX-ALG-028）：① `getEwlFcb` 恢复快照语义——EWL 弧段均值相位项无 OSB 改正，其无偏化全依赖固定时 `-fcbEwl` 单次常量补偿，027 切 getOsbAt 后 GPS L5Q 900s 时变序列使补偿值全天漂移 ±1.84 EWL 周（1900/2491 条序列记录与快照不一致），EWL 取整基准逐历元漂移致 3F 全路径中毒（A/B 探针：仅回退即 65.34→7.53cm）；② OsbReader sh 列偏移升级双令牌判别 v2——原单令牌规则把 WUM 行中落在 PRN 域内的 SVN（GPS 43-64 十六颗 + BDS-2 C005-C019 十一颗）误判为 GBM 版式致 27 星 OSB 静默丢失；③ MW 组合 WL 偏差改正"恰好施加一次"裁决（2×2 矩阵实测：单次+无码OSB=3.00cm 终态 / 双重+码OSB=3.54cm / 错配组合 7.5~8cm 中毒）——mwmeas OSB 分支移除码 OSB 施加（仅相位 OSB），3F WL 固定时不再补偿 ±fcbWl（与 MAIN 单次分支语义统一）；附 FIX-ALG-027 勘误（"WUM 零影响"证伪 + 日边界时间戳假设证伪）。实测 7/7：3F 3.00cm（优于金标准 3.54cm），MAIN 双频与 Float 逐值一致零连带回归
+- **OsbReader 时变 OSB 读取兼容**（FIX-ALG-027）：GBM 0MGXRAP 30s 时变 BIA 支持——① Bias-SINEX START/END 列解析（parseSinexTime "yyyy:ddd:sssss"→GPST 秒）+ `Nav.osbSeries` 时间戳序列，key=((sat,code))×2+(码0/相位1)（C1C/L1C 共享底层码号必须分键，混流会使相位改正误用码偏差）；② GBM 行 SVN 列空缺列偏移自适应（WUM 填 SVN→PRN 在 tokens[2]，GBM 空→tokens[1]，按 tokens[1] 是否为合法卫星号判定），GBM 259MB 全文 0 记录→phaseOSB=871709+codeOSB=1348308 全解析；③ 码 OSB timedShort（区间<86400s）只进 osbSeries 不进 cbias（防 2880 行累加爆炸），全天区间维持 WUM cbias 常量语义；④ `PppAmbFix.getOsbAt(time)` 按历元取值（未命中取最近记录保底、回退快照），getWlFcb/getNlFcb/getEwlFcb(+time)、`PppCore.getCodeOsb(+time)`、PppAmbFixBds3 同步，完备性检查保留快照语义。GBM-2026288 全套 7/7：双频 WL+NL/FixHold/Partial 固定率 0% 跨产品复现（δ 门 datum+2.25 周拦截、回退与浮点逐值一致）印证 FIX-ALG-026 整周平移自由度普适性；3F 0%（WUM 65.7%）列待深挖；EST+ISB fix=7（0.3%）。注：本条目"列偏移自适应"规则已被 FIX-ALG-028 双令牌判别 v2 取代，"WUM 常量语义零影响"结论已被 FIX-ALG-028 证伪并勘误
+- **mwmeas MW-OSB 诊断插桩清理**：移除 30 分钟限频的 System.out 逐星打印及配套 mwCorCyc 死代码（FIX-ALG-026 深挖使命已完成，OSB 应用语义结论已固化至算法修复文档），OSB 扣除逻辑本身不变
+- **PppAmbFix 双频主路径/PartialAR IFLC 逐星取整分支**（FIX-ALG-026）：修复双频 WL+NL/FixHold 固定率 0%（ratio~1.05）与 Partial 1.3%——IFLC 模式（单组合模糊度/星）下 rtk.P 给出对角 QbWl/QbNl，LAMBDA 退化为逐星取整且 ratio 恒 ~1.0-1.05。主路径 WL 阶段跳过 QbWl/LAMBDA，对已 median 对齐的 MW 弧段均值逐星取整（frac<0.25 门 + nFixed≥4 + 原位压缩）；NL 阶段不再填 QbNl，对 nlFloat 做 frac 中位数对齐后逐星取整；`pppPartialAR` 增加早期返回式同构 IFLC 分支（WL 取整对象 wlVals−medCand，NL 取整对象弧段均值 xrnl/rn 构造的 nlProv + kept 子集二次 median 对齐，Partial 语义由上游拒绝式 dev 门保持）；修复 NL else 分支 `info` 块级作用域编译错误。新增 `FRACDUMP` 插桩（环境变量 `PPPAR_FRAC_DUMP=1`，默认关闭；6 个插桩点 MAIN-WL/MAIN-NL/PARTIAL-WL/PARTIAL-NL/3F-WL/3F-NL）。实测 PppArValidationTest 7/7：WL+NL/FixHold/Partial 三模式复活（2D 14.75/14.75/29.84cm），3F 逐值零回归（2D 3.54cm）、Float 零回归；FRACDUMP 交叉定位 wrong fix 源头为 WL 级整周 OSB 偏差（PRN 23/25/26，主路径与已验证 3F 参考逐弧段比对偏差 ±1，frac 门对整周级偏差原理性盲区，收紧门/方差门均无效）。追加整数域 δ 门（JAVA-ONLY `enablePppArDeltaGate` 默认关闭 + `pppArDeltaMax=0.5` 半周界，双重规则：基准自检 |medDelta|>0.5 整历元放弃防 var=0 冻结投毒 + 逐星剔除 dev 超限；三轮标定 0.4 全拒/2.0 放行 NL±1 投毒 3.19cm/0.5+基准自检 0 污染）：该数据集收敛期 clean 星仅 ≤3 颗与 nFixed≥4 约定冲突，δ 门开启时双频固定率为 0（安全回退浮点 1.78cm）。处置收口（用户裁决）：维持 nFixed≥4，双频 IFLC 记录为"无差分 median 对齐整周平移自由度 + clean 星不足"固有受限（深挖修正根因定性——真实偏差为 fcbWl=+0.7714 相位 OSB WL 组合 frac 跨界，非 L2 码 OSB 产品误差；3F 的 −fcbWl 为双重改正、成功属"错进错出"），生产推荐 3F，min=3 不采纳；pppArDeltaMax=0.5 为半周界数学锚定值非拟合参数（详见 `ALGORITHM_FIX_LOG.md` FIX-ALG-026）
+
+### Docs
+
+- `ALGORITHM_FIX_LOG.md`：新增 FIX-ALG-022（PPP-AR WL 门限 PRIDE-PPPAR 对齐：OSB 完备性 + maxdev 检验 + PartialAR 双重改正修复 + A/B 验证 + Partial 假 Fix 已知问题）
+- `ALGORITHM_FIX_LOG.md`：新增 FIX-ALG-023（NL 弧段级机制：弧段累加 + minsav 成熟度门 + σ/dev 统计门 + chisq 等价性说明 + A/B 验证，Partial 假 Fix 50→38 全真）
+- `ALGORITHM_FIX_LOG.md`：新增 FIX-ALG-024（3F PPP-AR WL/NL epoch median 对齐 + IFLC 逐星取整 + 编译作用域修复，3F fix 0→1226 / 65.7%，ENU 厘米级无假 Fix）
+- `ALGORITHM_FIX_LOG.md`：新增 FIX-ALG-025（3F NL 构造公式验证 IFLC nlFloat≡N1 + EST 分支系数修复 + 弧段均值实验负结果回退归档）
+- `ALGORITHM_FIX_LOG.md`：新增 FIX-ALG-026（双频主路径/PartialAR IFLC 逐星取整分支 + FRACDUMP 定位插桩 + δ 门三轮标定，三模式复活 + 3F 零回归；深挖修正根因定性：整周平移自由度 + 3F 双重改正错进错出；处置收口：双频 IFLC 记录受限、生产推荐 3F + 架构债记录）
+- `ALGORITHM_FIX_LOG.md`：新增 FIX-ALG-027（时变 OSB 读取：osbSeries 时间戳序列码/相位分键 + GBM SVN 空缺列偏移自适应 + cbias 累加守卫；GBM-2026288 全套 7/7，双频 0% 跨产品印证整周平移自由度普适性 + 3F 0% 待深挖；更正 FIX-ALG-026 数据集名为 ALGO 2024060 + WUM BIA）
+- `ALGORITHM_FIX_LOG.md`：新增 FIX-ALG-028（WUM 3F 67.81cm 回归三因素根因闭环：getEwlFcb 快照恢复 + sh 双令牌判别 v2 + MW 组合 OSB 单次施加 2×2 矩阵裁决 3.00cm 终态；含 FIX-ALG-027 两项勘误：WUM 零影响证伪 + 日边界时间戳假设证伪）
+- `ALGORITHM_FIX_LOG.md`：新增 FIX-ALG-020（EST 死锁根因 + 双方案修复 + 实测验证；修正此前"C 靠自动加载 DCB 规避死锁"推断——卫星-only OSB 产品实测仅 0→4，接收机码偏差才是泄漏主项）
+- `RTKLIB_Differences.md`：新增 §18（EST 首历元死锁与 DCB 产品加载，C 固有缺陷 + 两处 C 缺陷的 Java 防御差异 + enableIonoEstRobust JAVA-ONLY 语义）
+- `PPP_Optimization_Systems.md`：新增 §7（EST 死锁修复与实测，修正结论与 EST 体系后续方向）
+
+### Fixed
+
+- **RtkCore PPP-AR 路由缺失修复**：`RtkCore.rtkpos()` 原硬编码 `PppCore.pppos()`，PPP 模式下无论 `enablePppAR` 是否开启均走基础浮点路径，AR/偏差改正代码完全绕过——`PppArValidationTest` 固定率 0% 的根因。修复：增加 `cfg` 判断分支，当 AR/偏差任一开关开启时路由到 `PppCoreEx.ppos()`，否则走 `PppCore.pppos()`。路径A（`PppProcessor`）原有此分发，路径B（`RinexPppProcessor → RtkCore`）缺失，现已对齐
+- **DcbReader.initCbias 三维数组遍历类型修复**：`nav.cbias` 类型为 `double[MAXSAT][NFREQ][NFREQ]`，`initCbias` 中 `for (double[] frqBias : nav.cbias)` 将 `double[][]` 赋给 `double[]`，编译错误。修复为 `for (double[][] satBias : nav.cbias)`
+- **PppCore diagSat 调试遗留清理**：`PppCore.ppos()` 中 `diagSat` 变量未定义（非组合PPP调试遗留），编译错误。移除相关 `System.out.printf` 调试代码
+
+### Changed
+
+- **PPP_Optimization_Systems.md 更新**：§2.2 新增路由架构（两条处理路径 A/B 及 AR 分发差异）；§2.5 新增当前测试状态（路由修复验证、AR 执行诊断、PppCoreEx 浮点解质量退化问题记录）
+
+### Known Issues
+
+- **PppCoreEx 浮点解质量退化**：同一 ALGO 数据，`PppCoreEx.ppos()` ENU RMS = 0.424/1.311/0.694m，比 `PppCore.pppos()` 的 0.025/0.007/0.044m 差约 50 倍。AR 在劣质浮点解上无法固定（WL ratio 恒为 1.0）。待排查 `pppResEx()` 与 `pppres()` 差异
 
 ## [2.3.3] - 2026-10-18
 
