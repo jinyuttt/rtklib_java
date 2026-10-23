@@ -10,7 +10,7 @@
 
 ### Build / CI
 
-- **CI 减负**：`ci.yml` 测试步骤排除 JMH 基准 `JmhRunnerTest`（全量运行 20min+ 且无回归价值），需要时本地单独执行 `mvn test -pl rtklib-core "-Dtest=JmhRunnerTest" -DfailIfNoTests=false`
+- **CI 减负**：`ci.yml` 测试步骤排除 JMH 基准 `JmhRunnerTest`（全量运行 20min+ 且无回归价值），需要时本地单独执行 `mvn test -pl rtklib-core "-Dtest=JmhRunnerTest" "-DfailIfNoTests=false"`
 - **发布收尾**：`release.yml` 的 Release 正文改为 `body_path: RELEASE.md`（不再使用自动生成说明，避免与发布稿口径不一致）；产物补齐 `rtklib-otl` 与 `rtklib-research` 两个 jar，与 README 模块清单一致
 
 ## [3.1.0] - 2026-10-23
