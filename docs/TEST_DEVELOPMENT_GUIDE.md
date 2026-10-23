@@ -331,7 +331,7 @@ mvn test -pl rtklib-core -Dtest="MyNewRtkTest" 2>&1 | Select-String "Tests run|B
 
 > **注意**：surefire 不会把 `mvn -D自定义键=值` 传给 fork 出的 JVM。测试内的开关请用 `System.getenv()` 读取环境变量，需要按次覆盖时先 `$env:MY_FLAG="1"` 再运行。
 
-> **全量回归**：`mvn test` 会连同 JMH 基准 `JmhRunnerTest` 一起执行（20min+，无回归价值）。日常与 CI 统一用 `mvn test -Dtest='!JmhRunnerTest' -Dsurefire.failIfNoSpecifiedTests=false`；需要基准数据时再单独跑 `JmhRunnerTest`。
+> **全量回归**：`mvn test` 会连同 JMH 基准 `JmhRunnerTest` 一起执行（20min+，无回归价值）。日常与 CI 统一用 `mvn test "-Dtest=!JmhRunnerTest" "-Dsurefire.failIfNoSpecifiedTests=false"`（PowerShell 下 `-D` 值含 `.` 会被拆词，必须加引号）；需要基准数据时再单独跑 `JmhRunnerTest`。
 
 ---
 
