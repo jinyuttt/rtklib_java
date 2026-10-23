@@ -64,7 +64,7 @@
 
 注: rtklib-research 独立演进，不参与上述依赖链。
 
-> **v2.3.x 定版策略**: 项目于 2026-10 进入稳定维护期。2.3.x 系列仅接受 bugfix，不再新增功能。
+> **v3.1.0 封存策略**: 项目于 2026-10-23 封存（tag `v3.1.0`）。3.1.0 起仅接受 bugfix，不再新增算法特性。
 > 梯队2 (3A/3.5B) 已确认放弃，梯队3 及暂缓项全部标记 WONTFIX。
 > 恢复条件详见 §9。
 ```
@@ -343,7 +343,7 @@ SimpleMatrix HPc = MatrixUtil.multiply(HcMat, PcMat);        // new nv×k
 
 ---
 
-## 6. 梯队2 — 需前置验证 🟡
+## 6. 梯队2 — 需前置验证 � 已关闭
 
 > 核心原则：**收益大但需要数据/语义支撑**，必须先完成前置验证再决定是否执行及方案选择。
 
@@ -611,11 +611,13 @@ rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码�
 
 | 来源 | 状态 | 说明 |
 |------|------|------|
-| Galileo HAS IDD | 待注册审批 | 无公开事后存档；`GalHasReader` 尚未实现 |
+| Galileo HAS IDD | 待注册审批 | 无公开事后存档；`HasSsrDecoder` 已实现 COMPACT-SSR（MT1~MT9）解码，缺 IDD 帧同步与互联网接入 |
 | BDS PPP-B2b（BDSet） | 公开归档可用 | 无相位偏差，仅支撑浮点 PPP 验证 |
 | 北航 2025 全球区域 SSR | 待离线申请 | 元数据未明确含相位偏差/区域大气改正 |
 | CAS IGS SSRA*/SSRC* | 权限未授权 | 账号当前仅开放观测流挂载点 |
 | QZSS CLAS L6 | 公开样本待寻 | 日本区域；`CompactSsrDecoder` 已就绪，缺公开 L6 二进制存档 |
+
+> 接入手册：权限到位后按 [SSR_ACCESS_PLAYBOOK.md](SSR_ACCESS_PLAYBOOK.md) 执行（两行改动 + 五步接入 + 验收清单）。
 
 ## 9. 暂不建议投入 🔴
 

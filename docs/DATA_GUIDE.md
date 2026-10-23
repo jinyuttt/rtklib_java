@@ -4,7 +4,7 @@
 > **日期**：2026-10-09  
 > **前置文档**：[test-data/README.md](../test-data/README.md)（数据规范）、[优化功能矩阵](CORE_OPTIMIZATION_MATRIX.md)（优化项定义）
 
-> **适用范围**：测试规范和样例仅针对 **rtklib-core** 和 **rtklib-adjust** 算法模块。其余模块（rtklib-test、rtklib-product、rtklib-research、rtklib-stream）需自行编写测试；如有提交价值，须遵循本规范。
+> **适用范围**：数据与元数据规范（第 0 章）以 **rtklib-core** 和 **rtklib-adjust** 为准；第 1 章测试类总览覆盖全仓，含 rtklib-stream 的 NTRIP 用例。其余模块（rtklib-test、rtklib-product、rtklib-research）如需提交测试，须遵循本规范。
 
 ---
 
@@ -235,6 +235,8 @@ List<String> files = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile
 | **ProductReaderTest** | 产品读取 | SP3+CLK+IONEX+OSB+ATX | 公共: product/ | ✅ |
 | **CompactSsrDecoderTest** | PPP-RTK | 无（构造输入） | 内置 | ✅ |
 | **SsrDecodeSmokeTest** | PPP-RTK | RTCM SSR 单帧样本 ×10 | 公共: rtcm/ssr/ | ✅ |
+| **NtripSourcetableDecodeTest** | NTRIP | 本地 ServerSocket 模拟（明文 / chunked / gzip） | 内置 | ✅ |
+| **NtripLiveRecordTest** | NTRIP | 实时 Caster 凭据 + 30 s 录制 | **私有: NTRIP_* 环境变量** | ❌ |
 | **SampleDataRtcmTest** | 数据解析 | RTCM3 (私有消息) | 公共: open-sky_base | ✅ |
 | **RtcmFileParserTest** | 数据解析 | RTCM3 (私有消息) | 公共: open-sky_base | ✅ |
 | **RtcmSampleDataTest** | 数据解析 | RTCM3 + TLE | 公共: open-sky_base + tle | ✅ |
@@ -261,6 +263,7 @@ List<String> files = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile
 | **RtkTraceTest** | 需base+rover RTCM3对（含设备ID，不可公开），无公共数据回退 | base+rover对 | ❌跳过 | `test-data.properties` 中 `rover.file` + `base.file` |
 | **RtkIonoptTest** | 需完整RTCM3基站+流动站多小时数据（含设备ID，不可公开） | 设备ID+日期+时段 | ❌跳过 | `test-data.properties` 中 `rover.file` + `base.file`（支持目录模式，详见 §0.7） |
 | **Wuh20MsmSppTest** | 自采 RTCM MSM7 录制流（CAS 账号获取） | 录制文件 + 当日 BRDC 星历 | ❌跳过 | 环境变量 `WUH20_RTCM` / `WUH20_BRDC`；默认路径 `test-data/gnss-validation/` |
+| **NtripLiveRecordTest** | 需实时 Caster 账号（密码不入库） | 30 s 实时流 | ❌跳过 | 环境变量 `NTRIP_HOST` / `NTRIP_PORT` / `NTRIP_MOUNT` / `NTRIP_USER` / `NTRIP_PASS` |
 
 ### 1.3 数据覆盖与缺口分析
 
