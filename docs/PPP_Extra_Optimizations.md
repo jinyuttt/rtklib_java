@@ -71,7 +71,7 @@
 
 ### 2.3 实现细节
 
-**调用位置**：[PppCore.java:973-975](file:///d:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L973-L975) — `tropoDelayPrec()` 方法中
+**调用位置**：[PppCore.java:973-975](file:///d:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L973-L975) — `modelTrop()` 方法中
 
 ```java
 if (rtk.rtkConfig != null && rtk.rtkConfig.enableGpt3Vmf3) {
@@ -153,7 +153,7 @@ IERS2010潮汐模型在IERS1996（RTKLIB标准）基础上增加三项改正：
 
 ### 3.3 实现细节
 
-**调用位置**：[PppCore.java:621](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L621) — `pppos()` 方法中
+**调用位置**：[PppCore.java:698-706](file:///d:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L698-L706) — `pppRes()` 方法中
 
 ```java
 if (rtk.rtkConfig != null && rtk.rtkConfig.enableIers2010) {
@@ -226,7 +226,7 @@ cfg.enableAt1S2 = true;      // S1/S2大气潮开关（已实现，由Atmospheri
 x = [pos(3), clk(1), ztd(1~3), amb(N*nf), ISB(3), IFCB(MAXSAT), IFB(4)]
 ```
 
-扩展维度计算（[PppBiasModel.extraDim()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppBiasModel.java#L12)）：
+扩展维度计算（[PppBiasModel.extraDim()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppBiasModel.java#L11)）：
 
 ```java
 int dim = 0;
@@ -237,7 +237,7 @@ if (cfg.estimateIfb)  dim += 4;           // GPS/GLO/GAL/BDS
 
 ### 4.3 实现细节
 
-**调用入口**：[PppProcessor.java:756](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppProcessor.java#L756)
+**调用入口**：[PppProcessor.java:829-836](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppProcessor.java#L829-L836)
 
 ```java
 if (rtk.rtkConfig != null && (rtk.rtkConfig.enableIsbIfcbIfb || rtk.rtkConfig.enablePppAR
@@ -256,9 +256,9 @@ if (rtk.rtkConfig != null && (rtk.rtkConfig.enableIsbIfcbIfb || rtk.rtkConfig.en
 2. 若状态向量维度不匹配，重新分配 `rtk.x[]`、`rtk.P[]`、`rtk.xa[]`、`rtk.Pa[]`
 3. 调用 `udstateEx()` 进行状态时间更新（含ISB/IFCB/IFB过程噪声）
 4. 迭代求解：`pppResEx()` 构建观测方程 → Kalman滤波更新 → 残差检验
-5. 收敛后依次尝试：PPP-AR WL+NL固定 → Partial AR → BDS-3 AR → Fix-and-Hold
+5. 收敛后按顺序尝试：三频 EWL→WL→NL（`enableMultiFreqAR`）→ 双频 WL+NL → Partial AR → BDS-3 AR → Fix-and-Hold
 
-**状态向量扩展**（[PppBiasModel.extendStateVector()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppBiasModel.java#L62)）：
+**状态向量扩展**（[PppBiasModel.extendStateVector()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppBiasModel.java#L61)）：
 
 ```java
 // 复制原有状态和协方差到扩展向量
@@ -272,13 +272,13 @@ PNew[idx * nxNew + idx] = varIfcb;  // IFCB: 30² = 900 m²
 PNew[idx * nxNew + idx] = varIfb;   // IFB: 60² = 3600 m²
 ```
 
-**观测方程扩展**（[PppCoreEx.pppResEx()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L245)）：
+**观测方程扩展**（[PppCoreEx.pppResEx()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L297)）：
 
 - ISB：GLO/GAL/BDS系统的观测方程中，对应ISB参数的H矩阵元素设为1.0
 - IFCB：第二频率载波相位观测方程中，对应卫星IFCB参数的H矩阵元素设为1.0
 - IFB：各系统码偏差观测方程中，对应系统IFB参数的H矩阵元素设为1.0
 
-**过程噪声更新**（[PppCoreEx.udstateEx()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L199)）：
+**过程噪声更新**（[PppCoreEx.udstateEx()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L251)）：
 
 ```java
 // ISB/IFCB/IFB参数采用随机游走模型
@@ -348,10 +348,15 @@ PPP-AR（Ambiguity Resolution）通过固定整周模糊度，将PPP从浮点解
 
 ### 5.3 WL+NL 固定（pppAmbFixWlNl）
 
-**调用位置**：[PppCoreEx.java:167](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L167)
+**调用位置**：[PppCoreEx.java:214-221](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L214-L221)
 
 ```java
-if (cfg.enablePppAR && rtk.sol.stat == Constants.SOLQ_PPP) {
+// 三频分支优先（enableMultiFreqAR）
+if (cfg.enableMultiFreqAR) {
+    int nb = PppAmbFix.pppAmbFixEwlWlNl(rtk, null, rtk.xa, 1, 0, 0, nav);
+    if (nb > 1) rtk.sol.stat = Constants.SOLQ_FIX;
+}
+if (cfg.enablePppAR && rtk.sol.stat != Constants.SOLQ_FIX) {
     int nb = PppAmbFix.pppAmbFixWlNl(rtk, null, rtk.xa, 1, 0, 0, nav);
     if (nb > 1) {
         rtk.sol.stat = Constants.SOLQ_FIX;
@@ -374,17 +379,18 @@ if (cfg.enablePppAR && rtk.sol.stat == Constants.SOLQ_PPP) {
 3. LAMBDA搜索，检查ratio > `pppArRatioNl`（默认3.0）
 4. 若NL ratio不足，返回失败
 
-**FCB/OSB产品支持**（[PppAmbFix.getWlFcb()/getNlFcb()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFix.java#L380)）：
+**FCB/OSB产品支持**（[PppAmbFix.getWlFcb()/getNlFcb()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFix.java#L1237-L1256)）：
 
 ```java
 // 支持两种FCB产品来源：
 // 1. 传统FCB产品：FcbReader.getFcbWl()/getFcbNl()
-// 2. OSB转换：nav.fcbFromOsb=true时，从OSB产品计算WL/NL FCB
-private static double getWlFcb(Nav nav, int sat, double lam1, double lam2, double time) {
-    if (nav.fcbWl == null) return 0.0;
+// 2. OSB转换：nav.fcbFromOsb=true 时按信号码型取时变 OSB（nav.fcbWlByCode）
+private static double getWlFcb(Nav nav, int sat, int code0, int code1,
+                               double lam1, double lam2, double time) {
     if (nav.fcbFromOsb) {
-        double osbL1 = nav.fcbWl[sat - 1][0];
-        double osbL2 = nav.fcbWl[sat - 1][1];
+        if (nav.fcbWlByCode == null) return 0.0;
+        double osbL1 = getOsbAt(nav, sat, code0, time);
+        double osbL2 = getOsbAt(nav, sat, code1, time);
         return osbL1 / lam1 - osbL2 / lam2;
     }
     return FcbReader.getFcbWl(nav, sat, time);
@@ -402,7 +408,7 @@ rtk.ssat[sat - 1].fix[f] = 1;
 
 ### 5.4 Fix-and-Hold（pppArFixHold）
 
-**调用位置**：[PppCoreEx.java:189](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L189)
+**调用位置**：[PppCoreEx.java:245-247](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L245-L247)
 
 模糊度固定后，将其协方差从浮点值(~1.0)收紧到`pppArFixHoldVar`(默认1e-6)，使后续历元中该模糊度不会被重新浮点化，从而"锁定"固定解。
 
@@ -418,7 +424,7 @@ if (cfg.enablePppArFixHold && rtk.sol.stat == Constants.SOLQ_FIX) {
 
 ### 5.5 Partial AR（pppPartialAR）
 
-**调用位置**：[PppCoreEx.java:174](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L174)
+**调用位置**：[PppCoreEx.java:223-229](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L223-L229)
 
 当全模糊度固定比率检验失败时，尝试固定一个子集：
 
@@ -442,7 +448,7 @@ if (cfg.enablePppPartialAR && rtk.sol.stat != Constants.SOLQ_FIX) {
 
 ### 5.6 BDS-3 PPP-AR（pppAmbFixBds3）
 
-**调用位置**：[PppCoreEx.java:182](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L182)
+**调用位置**：[PppCoreEx.java:231-237](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L231-L237)
 
 BDS-3新信号B1C(1575.42MHz)和B2a(1176.45MHz)的模糊度固定，仅针对PRN 19~46的BDS-3 MEO/IGSO卫星。固定策略与GPS/GAL的WL+NL一致。
 
@@ -847,7 +853,7 @@ cfg.enablePppRtkFixHold = true;  // 启用Fix-and-Hold
 
 ### 11.2 实现细节
 
-**观测方程分支**：[PppCore.pppRes()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L792)
+**观测方程分支**：[PppCore.pppRes()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L665)
 
 ```java
 if (opt.ionoopt == Constants.IONOOPT_IFLC) {
