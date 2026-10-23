@@ -31,6 +31,7 @@
 | **0** 性能基准 | 🟢✅ 已完成 | 无基准不优化 | JMH微基准 + 端到端计时 + GC监控基线 |
 | **1** 立刻做 | 🟢✅ 已完成 | 收益确定、难度低、不改变算法语义 | 3B数组复用 + 3C算术优化 + 3.5A日志 + 3.5C异常 + 3.5D对流层接入 + 3.5F测试 |
 | **2** 需前置验证 | 🔴 已关闭 | 收益大但需数据/语义支撑 → JMH基准实测放弃 | 3A Kalman优化 (放弃) + 3.5B null消除 (放弃) |
+| **2.5** 城市峡谷优化 | 🟡 部分落地（已冻结） | 仅 UC-1 已落地，其余随封存冻结 | 新息卡方检验（`enableSppInnovChisq`） |
 | **3** 依赖外部条件 | 🔴 WONTFIX | 代码基础好但缺数据/场景 | CI回归 + 场景验证 + CLAS多项式 + 约束引擎 |
 | **—** 暂不建议投入 | 🔴 WONTFIX | 无上游场景驱动，定版不投入 | 完好性(4A~D) + 长期研究 |
 
@@ -416,8 +417,9 @@ if (rtk.rtkConfig.enableIers2010) { ... }
 
 ---
 
-## 7. 梯队2.5 — 城市峡谷 SPP/RTK 优化 🟡
+## 7. 梯队2.5 — 城市峡谷 SPP/RTK 优化 🟡 部分落地（已冻结）
 
+> **状态（v3.1.0 封存时）**: 仅 UC-1 新息卡方检验已落地（`enableSppInnovChisq`，默认开启）；UC-2 自适应过程噪声、UC-3 EKF warm-up 未实施，UC-4/UC-5 零速门限未采纳（默认值仍为 0.5 m/s / 1 历元），UC-6~9 未启动。随封存冻结，恢复条件见 §10。  
 > **前置条件**: EKF 发散 Bug 已修复（`udposSpp` 方差重置条件拆分 + `estposFilter` diverged 状态跳过 KF update）  
 > **测试基准**: `archive/URBAN_CANYON_SPP_TEST_RESULTS.md`（历史实测，早于 FIX-ALG-010）  
 > **测试类**: `org.rtklib.java.urbancanyon.UrbanCanyonSppOptTest`  
@@ -524,9 +526,9 @@ mvn test -pl rtklib-core -Dtest="DynamicRtkOptTest#testPpcTokyoRun1"
 
 ---
 
-## 8. 梯队3 — 依赖外部条件 🟠
+## 8. 梯队3 — 依赖外部条件 � WONTFIX（已关闭）
 
-> 核心原则：**代码基础好但缺数据/场景**。当前可做技术准备（数据结构/接口设计），等条件满足后快速推进。
+> 核心原则：**代码基础好但缺数据/场景**。v3.1.0 封存后本梯队整体 WONTFIX，不再投入；下列内容仅作为条件具备时的恢复参考。
 
 ### 8.1 项目优先级矩阵
 
@@ -692,3 +694,4 @@ rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码�
 | v1.6 | **新增梯队2.5 城市峡谷优化**: UC-1~9（新息检验/自适应Q/warm-up/零速调优/RTK PAR等）；前置条件为 EKF 发散 Bug 修复；测试基准 `URBAN_CANYON_SPP_TEST_RESULTS.md` |
 | v1.7 | **梯队2.5 RTK 优化测试**: 新增 §7.0.6 DynamicRtkOptTest 12变体对比测试；记录 thresar[1] 关键发现（0.1→0.9999 是 Fix 率从 0% 提升的真正原因）；Joseph 形式等价性全量验证（8 数据集完全一致）；C-EX-Ref 全量结果表；rtklib-test 状态更新为 80% |
 | v1.8 | **定版**: 项目进入 2.3.x 稳定维护期，仅接受 bugfix。梯队2/3 全部关闭（3A+3B-2 JMH验证已放弃，3.5B 无语义异常）。RAIM FDE 标注修正：`PntPos.raimFde()` 已实现（§3.4/§8.1）。完好性/ARAIM/区域大气约束全部 WONTFIX。README 同步更新。 |
+| v1.9 | **封存 v3.1.0**（2026-10-23）：版本号 2.4.0 → 3.1.0，3.1.0 起仅接受 bugfix。§8 梯队3 状态由 🟠 统一为 🔴 WONTFIX（与 §1.1 对齐）；§7 梯队2.5 标注为"部分落地（已冻结）"（仅 UC-1 落地）；§8.8 Galileo HAS 口径修正为 `HasSsrDecoder` 已实现 COMPACT-SSR（MT1~MT9）解码，缺 IDD 帧同步与互联网接入；新增 [SSR_ACCESS_PLAYBOOK.md](SSR_ACCESS_PLAYBOOK.md) 接入手册与 [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) 终期摘要。 |
