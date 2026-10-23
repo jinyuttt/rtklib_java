@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.GZIPInputStream;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 
@@ -78,6 +79,8 @@ public class NtripClient {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private final AtomicInteger reconnectCount = new AtomicInteger(0);
+    /** 当前连接是否使用HTTP分块传输（Transfer-Encoding: chunked）。 */
+    private volatile boolean chunked = false;
     private Thread readThread;
     private Thread reconnectThread;
 
@@ -145,6 +148,11 @@ public class NtripClient {
      * 发送 GET / 请求，读取完整Sourcetable后关闭连接。
      * 本方法独立于 {@link #connect()}，不需要预先连接。
      * </p>
+     * <p>
+     * 兼容 NTRIP 1.0（SOURCETABLE 200 OK）与 2.0（HTTP/1.1 200 OK）响应，
+     * 并按响应头处理 {@code Transfer-Encoding: chunked} 与
+     * {@code Content-Encoding: gzip}：先解块再解压（HTTP 编码施加顺序的逆序）。
+     * </p>
      *
      * @return Sourcetable原始文本
      * @throws IOException 连接或读取失败
@@ -166,7 +174,27 @@ public class NtripClient {
         out.write(req.getBytes(StandardCharsets.UTF_8));
         out.flush();
 
-        String table = readSourcetable();
+        // 跳过状态行（NTRIP 1.0 为 "SOURCETABLE 200 OK"，2.0 为 "HTTP/1.1 200 OK"）
+        readLine();
+
+        boolean chunkedTable = false;
+        boolean gzipTable = false;
+        String line;
+        while ((line = readLine()) != null) {
+            if (line.isEmpty()) break;
+            String lower = line.toLowerCase();
+            if (lower.startsWith("transfer-encoding:") && lower.contains("chunked")) {
+                chunkedTable = true;
+            } else if (lower.startsWith("content-encoding:") && lower.contains("gzip")) {
+                gzipTable = true;
+            }
+        }
+
+        InputStream src = in;
+        if (chunkedTable) src = new ChunkedInputStream(src);
+        if (gzipTable) src = new GZIPInputStream(src);
+
+        String table = readSourcetable(src);
         closeSocket();
         return table;
     }
@@ -274,9 +302,14 @@ public class NtripClient {
             throw new IOException("NTRIP connection failed: " + statusLine);
         }
 
+        chunked = false;
         String line;
         while ((line = readLine()) != null) {
             if (line.isEmpty()) break;
+            if (line.regionMatches(true, 0, "Transfer-Encoding:", 0, 18)
+                    && line.toLowerCase().contains("chunked")) {
+                chunked = true;
+            }
         }
     }
 
@@ -288,15 +321,12 @@ public class NtripClient {
      * </p>
      */
     private void readLoop() {
-        byte[] buf = new byte[4096];
         try {
             socket.setSoTimeout(0);
-            while (running.get()) {
-                int n = in.read(buf);
-                if (n == -1) break;
-                if (n > 0 && listener != null) {
-                    listener.onData(buf, 0, n);
-                }
+            if (chunked) {
+                readChunkedLoop();
+            } else {
+                readRawLoop();
             }
         } catch (IOException e) {
             if (running.get()) {
@@ -308,6 +338,51 @@ public class NtripClient {
         } finally {
             running.set(false);
             log.info("NTRIP read loop ended");
+        }
+    }
+
+    /** 直接透传原始字节流（无HTTP分块编码）。 */
+    private void readRawLoop() throws IOException {
+        byte[] buf = new byte[4096];
+        while (running.get()) {
+            int n = in.read(buf);
+            if (n == -1) break;
+            if (n > 0 && listener != null) {
+                listener.onData(buf, 0, n);
+            }
+        }
+    }
+
+    /**
+     * 解析HTTP/1.1分块传输编码（Transfer-Encoding: chunked），
+     * 仅向监听器推送分块内的有效载荷，避免分块头污染RTCM数据流。
+     */
+    private void readChunkedLoop() throws IOException {
+        byte[] buf = new byte[8192];
+        while (running.get()) {
+            String sizeLine = readLine();
+            if (sizeLine == null) break;
+            sizeLine = sizeLine.trim();
+            if (sizeLine.isEmpty()) continue;
+            int ext = sizeLine.indexOf(';');
+            if (ext >= 0) sizeLine = sizeLine.substring(0, ext);
+            int size;
+            try {
+                size = Integer.parseInt(sizeLine, 16);
+            } catch (NumberFormatException e) {
+                throw new IOException("Invalid chunk size: " + sizeLine);
+            }
+            if (size == 0) break;
+            int remaining = size;
+            while (remaining > 0) {
+                int n = in.read(buf, 0, Math.min(buf.length, remaining));
+                if (n == -1) throw new IOException("Unexpected EOF in chunked stream");
+                if (n > 0 && listener != null) {
+                    listener.onData(buf, 0, n);
+                }
+                remaining -= n;
+            }
+            readLine();
         }
     }
 
@@ -388,12 +463,14 @@ public class NtripClient {
     }
 
     /**
-     * 读取完整Sourcetable文本，直到遇到ENDSOURCETABLE行。
+     * 从指定输入流读取完整Sourcetable文本，直到遇到ENDSOURCETABLE行。
+     *
+     * @param src 已按响应头完成解块/解压的输入流
      */
-    private String readSourcetable() throws IOException {
+    private String readSourcetable(InputStream src) throws IOException {
         StringBuilder sb = new StringBuilder();
         String line;
-        while ((line = readLine()) != null) {
+        while ((line = readLine(src)) != null) {
             sb.append(line).append("\n");
             if (line.startsWith("ENDSOURCETABLE")) break;
         }
@@ -407,15 +484,83 @@ public class NtripClient {
      * @return 一行文本，流结束时返回null
      */
     private String readLine() throws IOException {
+        return readLine(in);
+    }
+
+    /**
+     * 从指定输入流读取一行文本（以LF或CRLF结尾）。
+     * CR字符被跳过，LF作为行结束符。
+     *
+     * @return 一行文本，流结束时返回null
+     */
+    private static String readLine(InputStream src) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         int b;
-        while ((b = in.read()) != -1) {
+        while ((b = src.read()) != -1) {
             if (b == '\r') continue;
             if (b == '\n') break;
             baos.write(b);
         }
         if (b == -1 && baos.size() == 0) return null;
         return baos.toString(StandardCharsets.UTF_8.name());
+    }
+
+    /**
+     * HTTP/1.1 分块传输编码解码流（RFC 7230 §4.1）。
+     * <p>
+     * 仅向调用方暴露块内有效载荷：隐藏块长行、块扩展（{@code ;} 之后）与
+     * 块尾 CRLF，并把 0 长度块视为流结束。用于 Sourcetable 这类需要按行
+     * 读取、而 Caster 又可能启用 chunked 的响应。
+     * </p>
+     */
+    private static final class ChunkedInputStream extends InputStream {
+        private final InputStream src;
+        private int remaining = 0;
+        private boolean eof = false;
+
+        ChunkedInputStream(InputStream src) {
+            this.src = src;
+        }
+
+        @Override
+        public int read() throws IOException {
+            byte[] one = new byte[1];
+            int n = read(one, 0, 1);
+            return n == -1 ? -1 : (one[0] & 0xFF);
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            if (eof) return -1;
+            if (len == 0) return 0;
+            while (remaining == 0) {
+                String sizeLine = readLine(src);
+                if (sizeLine == null) {
+                    eof = true;
+                    return -1;
+                }
+                sizeLine = sizeLine.trim();
+                if (sizeLine.isEmpty()) continue;
+                int ext = sizeLine.indexOf(';');
+                if (ext >= 0) sizeLine = sizeLine.substring(0, ext).trim();
+                int size;
+                try {
+                    size = Integer.parseInt(sizeLine, 16);
+                } catch (NumberFormatException e) {
+                    throw new IOException("Invalid chunk size: " + sizeLine);
+                }
+                if (size == 0) {
+                    eof = true;
+                    return -1;
+                }
+                remaining = size;
+            }
+            int n = src.read(b, off, Math.min(len, remaining));
+            if (n == -1) throw new IOException("Unexpected EOF in chunked stream");
+            remaining -= n;
+            if (remaining == 0) readLine(src); // 消费块数据后的 CRLF
+            return n;
+        }
     }
 
     /** 安全关闭Socket，忽略异常。 */
