@@ -419,7 +419,7 @@ if (rtk.rtkConfig.enableIers2010) { ... }
 ## 7. 梯队2.5 — 城市峡谷 SPP/RTK 优化 🟡
 
 > **前置条件**: EKF 发散 Bug 已修复（`udposSpp` 方差重置条件拆分 + `estposFilter` diverged 状态跳过 KF update）  
-> **测试基准**: `URBAN_CANYON_SPP_TEST_RESULTS.md`  
+> **测试基准**: `archive/URBAN_CANYON_SPP_TEST_RESULTS.md`（历史实测，早于 FIX-ALG-010）  
 > **测试类**: `org.rtklib.java.urbancanyon.UrbanCanyonSppOptTest`  
 > **测试数据**: Net_Diff Urban / PPC Tokyo / PPC Nagoya / UrbanNav Tokyo
 
@@ -466,7 +466,7 @@ UC-1 (新息检验) → UC-2 (自适应Q) → UC-4+5 (零速调优) → UC-3 (wa
 ```bash
 mvn test -pl rtklib-core -Dtest="UrbanCanyonSppOptTest"
 ```
-对比 `URBAN_CANYON_SPP_TEST_RESULTS.md` 基准，确认改善方向正确、无回归。
+对比 `archive/URBAN_CANYON_SPP_TEST_RESULTS.md` 历史基准，确认改善方向正确、无回归。
 
 ### 7.0.6 RTK 城市峡谷优化测试（DynamicRtkOptTest）
 

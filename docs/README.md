@@ -38,7 +38,8 @@
 | 文档 | 定位 | 状态 | 最后更新 |
 |------|------|------|----------|
 | [USAGE_GUIDE.md](USAGE_GUIDE.md) | RTCM 解码、RINEX 转换、RTK/SPP/PPP 调用示例与输出字段语义 | ✅ 活跃 | 2026-10-08 |
-| [DATA_GUIDE.md](DATA_GUIDE.md) | 测试类总览、公共测试数据清单、测试用例详情、大文件仓库 | 🟡 待复核（新增测试类未收录） | 2026-10-14 |
+| [SSR_ACCESS_PLAYBOOK.md](SSR_ACCESS_PLAYBOOK.md) | **SSR 接入手册**：CAS/北航/Galileo/QZSS 四条线、凭据管理、两行改动、验收清单与已知坑 | ✅ 活跃 | 2026-10-23 |
+| [DATA_GUIDE.md](DATA_GUIDE.md) | 测试类总览、公共测试数据清单、测试用例详情、大文件仓库 | ✅ 活跃 | 2026-10-23 |
 | [TEST_DEVELOPMENT_GUIDE.md](TEST_DEVELOPMENT_GUIDE.md) | 测试开发标准流程与常见模式 | ✅ 活跃 | 2026-10-12 |
 
 ## 三、架构与技术参考
@@ -67,22 +68,18 @@
 | 文档 | 定位 | 状态 | 最后更新 |
 |------|------|------|----------|
 | [RTK_Extra_Optimizations.md](RTK_Extra_Optimizations.md) | RTK 独有优化项原理与开关（自适应 Q、锚固、IGGIII、SNR 中值等 7 项） | ✅ 活跃 | 2026-10-16 |
-| [RTK_OPTIMIZATION_TEST_RESULTS.md](RTK_OPTIMIZATION_TEST_RESULTS.md) | 城市峡谷动态场景 12 变体实测、thresar[1] 决定性结论、适用场景矩阵 | 🟡 待复核（2026-10-15 后 RTK 侧有修改） | 2026-10-15 |
 
 ### 4.3 SPP
 
 | 文档 | 定位 | 状态 | 最后更新 |
 |------|------|------|----------|
 | [SPP_Extra_Optimizations.md](SPP_Extra_Optimizations.md) | SPP 优化项原理与开关（EKF、M 估计、零速、多普勒+SNR 加权等） | ✅ 活跃 | 2026-10-15 |
-| [URBAN_CANYON_SPP_TEST_RESULTS.md](URBAN_CANYON_SPP_TEST_RESULTS.md) | 城市峡谷 + 手机数据实测、EKF 发散根因证据 | 🟡 待复核 | 2026-10-14 |
 
 ### 4.4 PPP / PPP-RTK
 
 | 文档 | 定位 | 状态 | 最后更新 |
 |------|------|------|----------|
-| [PPP_Extra_Optimizations.md](PPP_Extra_Optimizations.md) | PPP 扩展优化项原理 + 调用架构 + §7 逐项对照测试 + 开关一览 | 🟡 待复核（§2 正文与 §7.4 新结论冲突，见下方清单 P0-1） | 2026-10-23 |
-| [PPP_Test_Plan.md](PPP_Test_Plan.md) | PPP 优化项逐项对照测试计划（测试矩阵设计） | 📋 阶段性完成 | 2026-10-15 |
-| [PPPRTK_ALGO_2026288_DOWNLOAD.md](PPPRTK_ALGO_2026288_DOWNLOAD.md) | ALGO 2026 DOY288 测试数据下载清单与接线要点 | 📋 阶段性完成 | 2026-10-22 |
+| [PPP_Extra_Optimizations.md](PPP_Extra_Optimizations.md) | PPP 扩展优化项原理 + 调用架构 + §7 逐项对照测试 + 开关一览 | ✅ 活跃 | 2026-10-23 |
 
 ## 五、路线图与设计稿
 
@@ -91,11 +88,10 @@
 | [ROADMAP.md](ROADMAP.md) | 模块状态总览与阶段路线图（Phase 1/2、梯队 0~3） | ✅ 活跃 | 2026-10-19 |
 | [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) | **终期技术摘要**：一句话定位 + 精度实测 + 001~029 闭环索引 + HAS/IMU/CLAS 扩展路线 | ✅ 活跃 | 2026-10-23 |
 | [TraceLog_V2_Design.md](TraceLog_V2_Design.md) | 追踪日志 V2 设计与实现（取代 archive 中的 V1 设计） | ✅ 活跃 | 2026-10-08 |
-| [gnss-adaptive-design.md](gnss-adaptive-design.md) | GNSS 引擎自适应切换方案（场景判定规则树）设计稿 v2.0 | 🟡 待复核（实现落地状态未在文档中声明） | 2026-10-20 |
 
 ---
 
-## 六、archive/ 归档（10 份，仅历史追溯）
+## 六、archive/ 归档（16 份，仅历史追溯）
 
 | 文档 | 原主题 | 被谁取代 |
 |------|--------|----------|
@@ -109,7 +105,12 @@
 | [RTK_TraceLog_Design.md](archive/RTK_TraceLog_Design.md) | 追踪日志 V1 设计 | TraceLog_V2_Design.md |
 | [RTK_Parameter_Sensitivity.md](archive/RTK_Parameter_Sensitivity.md) | RTK 参数敏感性排序实验 | CORE_OPTIMIZATION_MATRIX |
 | [RTKLIB_JAVA_DEBUG_GUIDE.md](archive/RTKLIB_JAVA_DEBUG_GUIDE.md) | 早期调试日志格式与排查清单 | TEST_DEVELOPMENT_GUIDE |
-| [COMPARISON_REPORT.md](archive/COMPARISON_REPORT.md) | Java vs C 早期定位精度对比报告 | RTK_OPTIMIZATION_TEST_RESULTS |
+| [COMPARISON_REPORT.md](archive/COMPARISON_REPORT.md) | Java vs C 早期定位精度对比报告 | 历史实测，结论早于 FIX-ALG-006~010 |
+| [PPP_Test_Plan.md](archive/PPP_Test_Plan.md) | PPP 优化项逐项对照测试计划（v1.0，2026-10-15） | PPP_Extra_Optimizations §7 + CORE_OPTIMIZATION_MATRIX |
+| [PPPRTK_ALGO_2026288_DOWNLOAD.md](archive/PPPRTK_ALGO_2026288_DOWNLOAD.md) | ALGO 2026 DOY288 数据下载清单（任务已完成） | ALGORITHM_FIX_LOG FIX-ALG-027/028（GBM 2026-288 验证 7/7） |
+| [RTK_OPTIMIZATION_TEST_RESULTS.md](archive/RTK_OPTIMIZATION_TEST_RESULTS.md) | 城市峡谷动态 RTK 12 变体实测（2026-10-15） | 历史实测：早于 FIX-ALG-006/007/008，结论不代表当前代码 |
+| [URBAN_CANYON_SPP_TEST_RESULTS.md](archive/URBAN_CANYON_SPP_TEST_RESULTS.md) | 城市峡谷 + 手机 SPP 实测（2026-10-12） | 历史实测：早于 FIX-ALG-010（SPP 多系统恢复） |
+| [gnss-adaptive-design.md](archive/gnss-adaptive-design.md) | GNSS 引擎自适应切换设计稿 v2.0（未落地） | 无替代；解冻后如启动自适应引擎再复活 |
 
 ---
 
@@ -142,9 +143,9 @@
 
 ### P2 — 主题重叠（属设计如此，但需明确入口关系）
 
-- **RTK 三件套**：[RTK_Extra_Optimizations.md](RTK_Extra_Optimizations.md)（原理）↔ [RTK_OPTIMIZATION_TEST_RESULTS.md](RTK_OPTIMIZATION_TEST_RESULTS.md)（实测）↔ [CORE_OPTIMIZATION_MATRIX.md](CORE_OPTIMIZATION_MATRIX.md)（总矩阵）。三者是"原理/实测/汇总"分工，但总矩阵未在三者间建立互链
-- **SPP 两件套**：[SPP_Extra_Optimizations.md](SPP_Extra_Optimizations.md) ↔ [URBAN_CANYON_SPP_TEST_RESULTS.md](URBAN_CANYON_SPP_TEST_RESULTS.md)，已有互链，无需处理
-- **PPP 四件套**：[PPP_Optimization_Systems.md](PPP_Optimization_Systems.md)（体系）／[PPP_Extra_Optimizations.md](PPP_Extra_Optimizations.md)（原理+实测）／[PPP_Test_Plan.md](PPP_Test_Plan.md)（计划）／[PPPRTK_ALGO_2026288_DOWNLOAD.md](PPPRTK_ALGO_2026288_DOWNLOAD.md)（数据），入口关系清晰
+- **RTK**：[RTK_Extra_Optimizations.md](RTK_Extra_Optimizations.md)（原理）↔ [CORE_OPTIMIZATION_MATRIX.md](CORE_OPTIMIZATION_MATRIX.md)（总矩阵）。原实测报告已归档（结论早于 FIX-ALG-006~008）
+- **SPP**：[SPP_Extra_Optimizations.md](SPP_Extra_Optimizations.md)（原理）↔ [CORE_OPTIMIZATION_MATRIX.md](CORE_OPTIMIZATION_MATRIX.md)（总矩阵）。原实测报告已归档（早于 FIX-ALG-010）
+- **PPP 三件套**：[PPP_Optimization_Systems.md](PPP_Optimization_Systems.md)（体系）／[PPP_Extra_Optimizations.md](PPP_Extra_Optimizations.md)（原理+实测）／[PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md)（汇总），入口关系清晰；原测试计划与下载清单已归档
 
 ---
 

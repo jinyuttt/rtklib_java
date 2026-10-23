@@ -5,7 +5,7 @@
 
 参考项目：[MobileGNSS-SPP](https://github.com/ebhual/MobileGNSS-SPP)（C语言，基于RTKLIB 2.4.3的SPP优化）
 
-测试结果详见：[URBAN_CANYON_SPP_TEST_RESULTS.md](URBAN_CANYON_SPP_TEST_RESULTS.md)
+测试结果详见：[URBAN_CANYON_SPP_TEST_RESULTS.md](archive/URBAN_CANYON_SPP_TEST_RESULTS.md)（已归档：历史实测，早于 FIX-ALG-010）
 
 ---
 
