@@ -15,6 +15,8 @@ import org.rtklib.java.trace.Trace;
 import org.rtklib.java.trace.TraceConfig;
 import org.rtklib.java.trace.TraceCallback;
 import org.rtklib.java.trace.TraceControl;
+import org.rtklib.java.pppar.PppArConfig;
+import org.rtklib.java.pppar.PppArEngine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -203,49 +205,8 @@ public class PppCoreEx {
     }
 
     private static void applyAmbiguityResolution(Rtk rtk, Nav nav, RtkConfig cfg) {
-        if (cfg.enableMultiFreqAR) {
-            LOG.info("PppCoreEx: calling pppAmbFixEwlWlNl, epoch={}", rtk.epoch);
-            int nb = PppAmbFix.pppAmbFixEwlWlNl(rtk, null, rtk.xa, 1, 0, 0, nav);
-            if (nb > 1) {
-                rtk.sol.stat = Constants.SOLQ_FIX;
-                LOG.debug("PppCoreEx: PPP-AR 3F fixed {} ambiguities", nb);
-            }
-        }
-
-        if (cfg.enablePppAR && rtk.sol.stat != Constants.SOLQ_FIX) {
-            LOG.info("PppCoreEx: calling pppAmbFixWlNl, epoch={}", rtk.epoch);
-            int nb = PppAmbFix.pppAmbFixWlNl(rtk, null, rtk.xa, 1, 0, 0, nav);
-            if (nb > 1) {
-                rtk.sol.stat = Constants.SOLQ_FIX;
-                LOG.debug("PppCoreEx: PPP-AR fixed {} ambiguities", nb);
-            }
-        }
-
-        if (cfg.enablePppPartialAR && rtk.sol.stat != Constants.SOLQ_FIX) {
-            int nb = PppAmbFix.pppPartialAR(rtk, null, rtk.xa, 1, 0, 0, nav);
-            if (nb > 1) {
-                rtk.sol.stat = Constants.SOLQ_FIX;
-                LOG.debug("PppCoreEx: PPP Partial AR fixed {} ambiguities", nb);
-            }
-        }
-
-        if (cfg.enableBds3PppAR) {
-            int nb = PppAmbFixBds3.pppAmbFixBds3(rtk, null, rtk.xa, nav);
-            if (nb > 1) {
-                rtk.sol.stat = Constants.SOLQ_FIX;
-                LOG.debug("PppCoreEx: BDS-3 PPP-AR fixed {} ambiguities", nb);
-            }
-        }
-
-        if (rtk.sol.stat == Constants.SOLQ_FIX) {
-            rtk.nfix++;
-        } else {
-            rtk.nfix = 0;
-        }
-
-        if (cfg.enablePppArFixHold && rtk.sol.stat == Constants.SOLQ_FIX) {
-            PppAmbFix.pppArFixHold(rtk, nav);
-        }
+        PppArConfig arCfg = PppArConfig.from(cfg);
+        PppArEngine.applyAmbiguityResolution(rtk, nav, arCfg);
     }
 
     private static void udstateEx(Rtk rtk, Obsd[] obs, int n, Nav nav, int nx, RtkConfig cfg) {

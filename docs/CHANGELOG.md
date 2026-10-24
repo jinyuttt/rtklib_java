@@ -6,6 +6,21 @@
 
 ---
 
+## [3.2.0] - 2026-10-24
+
+### Added
+
+- **自适应引擎框架**：新增 `org.rtklib.java.adaptive` 包，14 类实现——AdaptiveController（主控，场景判定+静态保护+位置跳变回滚）、GnssScene（OPEN_SKY/URBAN_CANYON）、AdaptiveMode（SPP/RTK/PPP/PPP_AR/PPP_RTK）、FeatureMetrics（滑动平均 nSat/SNR + 进入\|\|/退出&& 判定）、PresetManager（5模式×2场景预设表+白名单/黑名单过滤）、AdaptiveOverride（覆盖层，启动快照/关闭恢复）、AdaptiveAuditLogger（CSV 审计日志+轮转）、OptimizationMonitor（过度降权 WARN+解发散自动关）、OptimizationStats（统计收集器）、SampleIntervalDetector（前 30 历元间隔统计+异常 WARN）、AdaptiveListener（回调接口）、AdaptiveEvent/AdaptiveRecommendation（事件/推荐数据）、AdaptiveState（状态查询+运行统计摘要）
+- **RtkConfig 自适应字段**：新增 12 个字段（enableAdaptiveScene/adaptiveWindowEpochs/adaptiveCooldownEpochs/adaptiveManagedParams/adaptiveLockedParams/adaptiveAuditEnabled/adaptiveAuditDir/adaptiveAuditMaxSizeKB/adaptiveAuditMaxFiles/adaptiveVerbose/adaptiveTraceAll/adaptiveListener），拷贝构造同步复制
+- **PPP-AR 轻量重构（方案 B）**：新增 `org.rtklib.java.pppar` 包（PppArEngine/PppArConfig），PppCoreEx.applyAmbiguityResolution 委托给 PppArEngine，不改算法逻辑
+- **自适应引擎 v3.0 设计文档定稿**：[gnss-adaptive-design-v3.md](gnss-adaptive-design-v3.md)，覆盖 29 项共识
+
+### Docs
+
+- README 更新：版本号 v3.2.0，核心包结构新增 adaptive/ + pppar/，新增自适应引擎组件表，开发状态新增自适应引擎框架行
+- ROADMAP 更新：模块总览标注自适应引擎，变更日志 v2.0/v2.1
+- PPP-AR 深度重构（方案 C）写入路线图待激活
+
 ## [3.1.0] - 2026-10-23
 
 ### Build / CI

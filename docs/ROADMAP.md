@@ -8,7 +8,7 @@
 
 | 模块 | 定位 | 完成度 | 状态说明 |
 |------|------|--------|----------|
-| rtklib-core | 核心定位算法（SPP/RTK/PPP/PPP-RTK） | **95%** | 四大定位模式全实现，高级优化已接齐（CascadeAR/PartialAR/GPT3+VMF3/IERS2010等）。RAIM FDE 已移植（`PntPos.raimFde()`）。剩余缺口（完好性监测/保护级/ARAIM、PPP-RTK区域大气约束）均为 WONTFIX——无上游场景驱动，不再投入 |
+| rtklib-core | 核心定位算法（SPP/RTK/PPP/PPP-RTK）+ 自适应引擎 | **95%** | 四大定位模式全实现，高级优化已接齐（CascadeAR/PartialAR/GPT3+VMF3/IERS2010等）。RAIM FDE 已移植（`PntPos.raimFde()`）。自适应引擎框架已实现（14类）。剩余缺口（完好性监测/保护级/ARAIM、PPP-RTK区域大气约束）均为 WONTFIX——无上游场景驱动，不再投入 |
 | rtklib-product | 精密产品下载 | **90%** | IGS/MGEX 11类产品全支持，多镜像源回退，可按需扩展其他中心 |
 | rtklib-stream | NTRIP/串口 | **85%** | NTRIP客户端+SSL/TLS+串口+统一监听器；缺：TCP客户端（无生产驱动） |
 | rtklib-adjust | 多基线间接平差 | **85%** | 核心流程+基站诊断+P0~P3优化；可按需扩展多时段累积平差 |
@@ -641,7 +641,18 @@ rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码�
 - RTK-EVC `src/rtklib/pntpos.cpp`（C++ RAIM）
 - Galileo HAS ICD（完好性信息定义 SIS-A/SIS-M）
 
-### 9.2 长期研究方向（原 Phase 5）
+### 9.2 PPP-AR 深度重构（方案 C）
+
+> 方案 B 已落地（PppArEngine/PppArConfig 抽出，PppCoreEx 委托）。方案 C 为下一步深度重构，待方案 B 验证通过后推进。
+
+| 内容 | 说明 |
+|------|------|
+| PppArCore 完全独立包 | PppAmbFix + PppAmbFixBds3 移入 `org.rtklib.java.pppar`，所有 AR 逻辑自包含 |
+| PppCoreEx 完全瘦身 | 只管扩展状态建模（ISB/IFCB/IFB），AR 和退化检测全部委托 |
+| 退化显式化 | OSB 缺失 / SSR 超时 / 产品过期 → 显式 DegradationEvent，而非隐式 fallback |
+| 恢复条件 | 方案 B 运行稳定 + PPP-AR 测试覆盖充分 |
+
+### 9.3 长期研究方向（原 Phase 5）
 
 | 方向 | 说明 | 暂缓原因 |
 |------|------|----------|
@@ -695,3 +706,5 @@ rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码�
 | v1.7 | **梯队2.5 RTK 优化测试**: 新增 §7.0.6 DynamicRtkOptTest 12变体对比测试；记录 thresar[1] 关键发现（0.1→0.9999 是 Fix 率从 0% 提升的真正原因）；Joseph 形式等价性全量验证（8 数据集完全一致）；C-EX-Ref 全量结果表；rtklib-test 状态更新为 80% |
 | v1.8 | **定版**: 项目进入 2.3.x 稳定维护期，仅接受 bugfix。梯队2/3 全部关闭（3A+3B-2 JMH验证已放弃，3.5B 无语义异常）。RAIM FDE 标注修正：`PntPos.raimFde()` 已实现（§3.4/§8.1）。完好性/ARAIM/区域大气约束全部 WONTFIX。README 同步更新。 |
 | v1.9 | **封存 v3.1.0**（2026-10-23）：版本号 2.4.0 → 3.1.0，3.1.0 起仅接受 bugfix。§8 梯队3 状态由 🟠 统一为 🔴 WONTFIX（与 §1.1 对齐）；§7 梯队2.5 标注为"部分落地（已冻结）"（仅 UC-1 落地）；§8.8 Galileo HAS 口径修正为 `HasSsrDecoder` 已实现 COMPACT-SSR（MT1~MT9）解码，缺 IDD 帧同步与互联网接入；新增 [SSR_ACCESS_PLAYBOOK.md](SSR_ACCESS_PLAYBOOK.md) 接入手册与 [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) 终期摘要。 |
+| v2.0 | **PPP-AR 轻量重构（方案 B）+ 自适应引擎 v3.0 设计**（2026-10-24）：方案 B 落地 — 新增 `org.rtklib.java.pppar` 包（PppArEngine/PppArConfig），PppCoreEx.applyAmbiguityResolution 委托给 PppArEngine，不改算法逻辑；方案 C（深度重构：PppArCore 完全独立包 + PppCoreEx 完全瘦身 + 退化显式化）写入路线图待激活；自适应引擎 v3.0 设计文档 [gnss-adaptive-design-v3.md](gnss-adaptive-design-v3.md) 定稿 |
+| v2.1 | **自适应引擎代码实现**（2026-10-24）：新增 `org.rtklib.java.adaptive` 包，14 类实现（AdaptiveController/GnssScene/AdaptiveMode/FeatureMetrics/PresetManager/AdaptiveOverride/AdaptiveAuditLogger/OptimizationMonitor/OptimizationStats/SampleIntervalDetector/AdaptiveListener/AdaptiveEvent/AdaptiveRecommendation/AdaptiveState）；RtkConfig 新增 12 个自适应字段；全量编译通过 |
