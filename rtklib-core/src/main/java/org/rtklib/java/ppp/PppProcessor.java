@@ -1,6 +1,7 @@
 package org.rtklib.java.ppp;
 
 import org.rtklib.java.config.RtkConfig;
+import org.rtklib.java.adaptive.AdaptiveController;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
@@ -123,6 +124,9 @@ public class PppProcessor {
     private byte[] pending = new byte[4096];
     private int pendingLen = 0;
 
+    /* 自适应引擎（JAVA-ONLY，默认关闭）：首个历元惰性启动，绑定 this.opt 与 rtk.rtkConfig 引用 */
+    private AdaptiveController adaptiveCtl;
+
     public PppProcessor(PrcOpt opt, SolOpt solOpt, PosHandler handler, OutputStream outputStream) {
         this.opt = new PrcOpt(opt);
         this.rtcm.relaxSyncFlag = this.opt.relaxSyncFlag;
@@ -219,6 +223,89 @@ public class PppProcessor {
     public PrcOpt getOpt() { return opt; }
 
     public Rtk getRtk() { return rtk; }
+
+    /**
+     * 接入适配：暴露内部 {@link Nav}（含 {@code nav.ssr[]}）。
+     * <p>仅用于本地接入验证工具读取已解码的 SSR 状态，不改变任何解算语义。</p>
+     */
+    public Nav getNav() { return rtcm.nav; }
+
+    /**
+     * 接入适配：载入 RINEX 广播星历并置位星历就绪标志。
+     * <p>实时 SSR 流本身不带广播星历，短时录制或纯 SSR 流场景下观测历元会永久排队。
+     * 本方法把外部 RINEX 导航文件的星历合并进内部 {@link Nav}，已解码的
+     * {@code nav.ssr[]} 保持不变；不改变任何解算语义。</p>
+     *
+     * @param navFilePath RINEX 导航文件路径
+     * @return 是否成功解析并载入
+     */
+    public boolean loadNav(String navFilePath) {
+        if (finished) {
+            throw new IllegalStateException("Processor already finished");
+        }
+        org.rtklib.java.rinex.RinexParser parser = new org.rtklib.java.rinex.RinexParser();
+        if (!parser.parseNav(navFilePath)) {
+            log.warn("Failed to parse navigation file: {}", navFilePath);
+            return false;
+        }
+        Nav src = parser.nav;
+        Nav dst = rtcm.nav;
+        if (src.eph != null && dst.eph != null) {
+            for (int i = 0; i < src.eph.length && i < dst.eph.length; i++) {
+                if (src.eph[i] != null) dst.eph[i] = src.eph[i];
+            }
+        }
+        if (src.geph != null && dst.geph != null) {
+            for (int i = 0; i < src.geph.length && i < dst.geph.length; i++) {
+                if (src.geph[i] != null) dst.geph[i] = src.geph[i];
+            }
+        }
+        if (src.seph != null && dst.seph != null) {
+            for (int i = 0; i < src.seph.length && i < dst.seph.length; i++) {
+                if (src.seph[i] != null) dst.seph[i] = src.seph[i];
+            }
+        }
+        dst.n = Math.max(dst.n, src.n);
+        dst.ng = Math.max(dst.ng, src.ng);
+        dst.ns = Math.max(dst.ns, src.ns);
+        if (src.utc_gps != null) dst.utc_gps = src.utc_gps;
+        if (src.utc_glo != null) dst.utc_glo = src.utc_glo;
+        if (src.utc_gal != null) dst.utc_gal = src.utc_gal;
+        if (src.utc_qzs != null) dst.utc_qzs = src.utc_qzs;
+        if (src.utc_cmp != null) dst.utc_cmp = src.utc_cmp;
+        if (src.ion_gps != null) dst.ion_gps = src.ion_gps;
+        if (src.ion_gal != null) dst.ion_gal = src.ion_gal;
+        if (src.ion_cmp != null) dst.ion_cmp = src.ion_cmp;
+        if (src.glo_fcn != null) dst.glo_fcn = src.glo_fcn;
+        ephReady = true;
+
+        // 接入适配：纯 MSM 录制流（无 1019/1041 等星历电文）情况下，Rtcm 内部时间基准
+        // 停留在 week=0，adjweek() 产出的观测历元周数与星历不匹配，satposs 会返回 rs=0，
+        // 全部卫星被 el<elmin 剔除。实时流里这一步由星历电文完成，这里用外部星历时刻补上。
+        if (rtcm.time == null || rtcm.time.time == 0) {
+            GTime refTime = null;
+            for (int i = 0; i < dst.n && i < dst.eph.length && refTime == null; i++) {
+                if (dst.eph[i] != null && dst.eph[i].toe != null && dst.eph[i].toe.time > 0) {
+                    refTime = dst.eph[i].toe;
+                }
+            }
+            for (int i = 0; i < dst.ng && i < dst.geph.length && refTime == null; i++) {
+                if (dst.geph[i] != null && dst.geph[i].toe != null && dst.geph[i].toe.time > 0) {
+                    refTime = dst.geph[i].toe;
+                }
+            }
+            if (refTime != null) {
+                rtcm.setReferenceTime(refTime);
+                int[] wk = new int[1];
+                double tow = TimeSystem.time2gpst(refTime, wk);
+                log.info("PPP nav reference time set: week={} tow={}", wk[0], tow);
+            }
+        }
+
+        log.info("PPP nav loaded: {} (eph={}, geph={}, seph={})",
+                navFilePath, dst.n, dst.ng, dst.ns);
+        return true;
+    }
 
     public boolean applyRtkState(Rtk saved) {
         if (saved == null) return false;
@@ -412,6 +499,7 @@ public class PppProcessor {
 
         pendingLen = 0;
         finished = false;
+        if (adaptiveCtl != null) { adaptiveCtl.deactivate(); adaptiveCtl = null; }
     }
 
     public void resetForNextBatch() {
@@ -431,6 +519,7 @@ public class PppProcessor {
         pendingLen = 0;
         ephReady = false;
         ephTypeCount.clear();
+        if (adaptiveCtl != null) { adaptiveCtl.deactivate(); adaptiveCtl = null; }
     }
 
     public PppResult finish() {
@@ -793,7 +882,11 @@ public class PppProcessor {
             sppInitOpt.navsys = Constants.SYS_GPS;
             sppInitOpt.ionoopt = Constants.IONOOPT_BRDC;
             sppInitOpt.tropopt = Constants.TROPOPT_SAAS;
-            PntPos.pntpos(obsData, n, nav, sppInitOpt, rtk.sol, null, rtk.ssat);
+            try {
+                PntPos.pntpos(obsData, n, nav, sppInitOpt, rtk.sol, null, rtk.ssat);
+            } catch (Throwable t) {
+                log.error("SPP init failed: {}", t.toString(), t);
+            }
             if (log.isDebugEnabled() && rtk.sol.stat != Constants.SOLQ_NONE) {
                 double[] llh = new double[3];
                 CoordTransform.ecef2pos(rtk.sol.rr, llh);
@@ -834,6 +927,10 @@ public class PppProcessor {
         } else {
             PppCore.pppos(rtk, obsData, n, nav);
         }
+
+        /* 自适应引擎：解算后驱动（开关关闭时 adaptiveCtl 恒为 null，零干预） */
+        if (adaptiveCtl == null) adaptiveCtl = AdaptiveController.startIfEnabled(opt, rtk);
+        if (adaptiveCtl != null) adaptiveCtl.onObsEpoch(totalEpochs, obsData, n, rtk);
 
         if (false && rtk.sol.stat != Constants.SOLQ_NONE && opt.tidecorr != 0) {
             double[] dispOut = new double[3];
@@ -961,6 +1058,7 @@ public class PppProcessor {
     }
 
     private PppResult finishInternal() {
+        if (adaptiveCtl != null) { adaptiveCtl.deactivate(); adaptiveCtl = null; }
         if (solstatic && bestSol != null) {
             outputBestSol();
         }

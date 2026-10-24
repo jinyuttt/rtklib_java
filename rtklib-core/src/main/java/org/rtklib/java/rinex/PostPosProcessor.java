@@ -1,6 +1,7 @@
 package org.rtklib.java.rinex;
 
 import org.rtklib.java.common.SatUtils;
+import org.rtklib.java.adaptive.AdaptiveController;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
@@ -235,6 +236,9 @@ public class PostPosProcessor {
                                           List<List<Obsd>> baseEpochs, Nav nav,
                                           double[] approxPos, double[] basePos) {
         Rtk rtk = createRtk(approxPos, basePos);
+        /* 自适应引擎接线（JAVA-ONLY，默认关闭）：控制器绑定 rtk 内部的 opt/rtkConfig 副本，
+         * 关闭时 startIfEnabled 返回 null，后续 null 检查保证逐值零干预 */
+        AdaptiveController adaptive = AdaptiveController.startIfEnabled(rtk.opt, rtk);
         int totalEpochs = 0, successCount = 0, failCount = 0;
         List<Sol> solutions = new ArrayList<>();
         List<Ssat[]> ssatList = new ArrayList<>();
@@ -258,6 +262,7 @@ public class PostPosProcessor {
             applySbsUpTo(obs[0].time, nav);
             RtklibCommon.corrPhaseBiasSsr(obs, obs.length, nav, opt.pppopt);
             int result = RtkCore.rtkpos(rtk, obs, obs.length, nav);
+            if (adaptive != null) adaptive.onObsEpoch(totalEpochs, obs, obs.length, rtk);
             if (result == 1 && rtk.sol.stat != Constants.SOLQ_NONE) {
                 if (segmentSigmaFilter != null && rtk.sol.stat == Constants.SOLQ_FIX) {
                     int solIdx = solutions.size();
@@ -302,6 +307,7 @@ public class PostPosProcessor {
             outputSolution(bestSol, lastSsat);
         }
 
+        if (adaptive != null) adaptive.deactivate();
         finishOutput(totalEpochs, successCount, failCount);
         PostPosResult pr = new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions, ssatList), solutions);
         pr.finalRtk = rtk;
@@ -311,6 +317,7 @@ public class PostPosProcessor {
     private PostPosResult processBackward(List<List<Obsd>> roverEpochs, List<List<Obsd>> baseEpochs,
                                            Nav nav, double[] approxPos, double[] basePos) {
         Rtk rtk = createRtk(approxPos, basePos);
+        AdaptiveController adaptive = AdaptiveController.startIfEnabled(rtk.opt, rtk);
         int totalEpochs = 0, successCount = 0, failCount = 0;
         List<Sol> solutions = new ArrayList<>();
         List<Ssat[]> ssatList = new ArrayList<>();
@@ -340,6 +347,7 @@ public class PostPosProcessor {
             totalEpochs++;
             RtklibCommon.corrPhaseBiasSsr(obs, obs.length, nav, opt.pppopt);
             int result = RtkCore.rtkpos(rtk, obs, obs.length, nav);
+            if (adaptive != null) adaptive.onObsEpoch(totalEpochs, obs, obs.length, rtk);
             if (result == 1 && rtk.sol.stat != Constants.SOLQ_NONE) {
                 if (backwardSigmaFilter != null && rtk.sol.stat == Constants.SOLQ_FIX) {
                     int solIdx = solutions.size();
@@ -388,6 +396,7 @@ public class PostPosProcessor {
             Ssat[] ssat = (i < ssatList.size()) ? ssatList.get(i) : null;
             outputSolution(solutions.get(i), ssat);
         }
+        if (adaptive != null) adaptive.deactivate();
         finishOutput(totalEpochs, successCount, failCount);
         PostPosResult pr = new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions, ssatList), solutions);
         pr.finalRtk = rtk;
@@ -398,6 +407,7 @@ public class PostPosProcessor {
                                            List<List<Obsd>> baseEpochs, Nav nav,
                                            double[] approxPos, double[] basePos) {
         Rtk rtkF = createRtk(approxPos, basePos);
+        AdaptiveController adaptiveF = AdaptiveController.startIfEnabled(rtkF.opt, rtkF);
         List<Sol> solfList = new ArrayList<>();
         List<double[]> rbfList = new ArrayList<>();
         sbsMsgIdx = 0;
@@ -414,6 +424,7 @@ public class PostPosProcessor {
             applySbsUpTo(obs[0].time, nav);
             RtklibCommon.corrPhaseBiasSsr(obs, obs.length, nav, opt.pppopt);
             int result = RtkCore.rtkpos(rtkF, obs, obs.length, nav);
+            if (adaptiveF != null) adaptiveF.onObsEpoch(solfList.size() + 1L, obs, obs.length, rtkF);
             if (result == 1 && rtkF.sol.stat != Constants.SOLQ_NONE) {
                 solfList.add(new Sol(rtkF.sol));
                 rbfList.add(new double[]{rtkF.rb[0], rtkF.rb[1], rtkF.rb[2]});
@@ -423,6 +434,7 @@ public class PostPosProcessor {
             }
         }
         log.info("Forward pass: {} epochs, {} valid solutions", roverEpochs.size(), solfList.stream().filter(s -> s != null).count());
+        if (adaptiveF != null) adaptiveF.deactivate();
 
         Rtk rtkB;
         if (opt.soltype == Constants.SOLTYPE_COMBINED_NORESET) {
@@ -430,6 +442,9 @@ public class PostPosProcessor {
         } else {
             rtkB = createRtk(approxPos, basePos);
         }
+        /* 反向通道独立控制器（COMBINED_NORESET 时 rtkB==rtkF：前向 deactivate 已恢复原始参数，
+         * 此处重新快照/激活，语义干净） */
+        AdaptiveController adaptiveB = AdaptiveController.startIfEnabled(rtkB.opt, rtkB);
 
         List<Sol> solbList = new ArrayList<>();
         List<double[]> rbbList = new ArrayList<>();
@@ -450,6 +465,7 @@ public class PostPosProcessor {
                 continue;
             }
             int result = RtkCore.rtkpos(rtkB, obs, obs.length, nav);
+            if (adaptiveB != null) adaptiveB.onObsEpoch(solbList.size() + 1L, obs, obs.length, rtkB);
             if (result == 1 && rtkB.sol.stat != Constants.SOLQ_NONE) {
                 solbList.add(new Sol(rtkB.sol));
                 rbbList.add(new double[]{rtkB.rb[0], rtkB.rb[1], rtkB.rb[2]});
@@ -461,6 +477,7 @@ public class PostPosProcessor {
         Collections.reverse(solbList);
         Collections.reverse(rbbList);
         log.info("Backward pass: {} epochs, {} valid solutions", roverEpochs.size(), solbList.stream().filter(s -> s != null).count());
+        if (adaptiveB != null) adaptiveB.deactivate();
 
         Sol[] solf = solfList.toArray(new Sol[0]);
         Sol[] solb = solbList.toArray(new Sol[0]);

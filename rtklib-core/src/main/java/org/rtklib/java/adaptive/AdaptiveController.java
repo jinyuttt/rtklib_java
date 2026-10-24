@@ -2,8 +2,10 @@ package org.rtklib.java.adaptive;
 
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
+import org.rtklib.java.data.Obsd;
 import org.rtklib.java.data.PrcOpt;
 import org.rtklib.java.data.Rtk;
+import org.rtklib.java.time.TimeSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,9 +49,10 @@ public class AdaptiveController {
     private final Set<String> lockedParams;
     private final AdaptiveListener listener;
 
-    private double prevPosN = Double.NaN;
-    private double prevPosE = Double.NaN;
-    private double prevPosU = Double.NaN;
+    private double prevPosX = Double.NaN;
+    private double prevPosY = Double.NaN;
+    private double prevPosZ = Double.NaN;
+    private boolean auditOpened = false;
 
     public AdaptiveController(int pmode, RtkConfig cfg, PrcOpt opt) {
         this.cfg = cfg;
@@ -88,7 +91,7 @@ public class AdaptiveController {
 
         override.snapshot(cfg, opt);
         override.activate();
-        PresetManager.applyPreset(mode, currentScene, override, managedParams, lockedParams);
+        PresetManager.applyPreset(mode, currentScene, override, managedParams, lockedParams, opt.dynamics);
         override.applyTo(cfg, opt);
 
         state = new AdaptiveState(mode);
@@ -97,6 +100,8 @@ public class AdaptiveController {
         auditLogger = new AdaptiveAuditLogger(
                 cfg.adaptiveAuditEnabled, cfg.adaptiveAuditDir,
                 cfg.adaptiveAuditMaxSizeKB, cfg.adaptiveAuditMaxFiles);
+        openAudit();
+        auditOpened = true;
 
         if (cfg.adaptiveVerbose) {
             LOG.info("[ADAPTIVE] 自适应引擎启动: mode={}, scene={}, window={}历元, cooldown={}历元, static={}",
@@ -110,10 +115,15 @@ public class AdaptiveController {
         state.incrementTotalEpochs();
         state.setEpoch(epoch);
         windowCounter++;
+        if (cooldownRemaining > 0) cooldownRemaining--;
 
         intervalDetector.feed(gpst);
-        if (intervalDetector.isDetectionComplete() && epoch <= 35) {
+        if (intervalDetector.isDetectionComplete()) {
             intervalDetector.warnIfAbnormal(windowEpochs, cooldownEpochs);
+            if (!auditOpened) {
+                openAudit();
+                auditOpened = true;
+            }
         }
 
         metrics.update(nSat, avgSnr);
@@ -127,19 +137,45 @@ public class AdaptiveController {
             state.incrementCanyonEpoch();
         }
 
-        if (isStatic && rtk != null && !Double.isNaN(prevPosN)) {
+        // 优化项效果监控: 过度降权 + 解发散 → 自动关闭对应优化项
+        optStats.update(nSat, Math.max(nSat, 1));
+        optMonitor.checkAndAct(optStats, cfg, override, auditLogger, listener);
+        if (rtk != null && rtk.P != null && rtk.nx > 2 && rtk.P.length > 2 * rtk.nx + 2) {
+            double posVarTrace = rtk.P[0] + rtk.P[rtk.nx + 1] + rtk.P[2 * rtk.nx + 2];
+            if (optMonitor.checkDivergence(posVarTrace)
+                    && optStats.getSlidingIggiiiRate() > OptimizationMonitor.IGGIII_RATE_MAX
+                    && (lockedParams == null || !lockedParams.contains("enableIggiii"))) {
+                override.set("enableIggiii", false);
+                override.applyTo(cfg, opt);
+                LOG.warn("[ADAPTIVE] IGGIII 过度降权且解发散, 自动关闭 enableIggiii");
+                auditLogger.logEvent(epoch, "", "OPT_DISABLE", "enableIggiii:true", "enableIggiii:false",
+                        "", "iggiiiRate=" + String.format("%.2f", optStats.getSlidingIggiiiRate()), "NONE");
+            }
+        }
+
+        if (isStatic && rtk != null && !Double.isNaN(prevPosX)) {
             checkPositionJump(epoch, rtk);
         }
         if (rtk != null) {
-            prevPosN = rtk.sol.rr[0];
-            prevPosE = rtk.sol.rr[1];
-            prevPosU = rtk.sol.rr[2];
+            prevPosX = rtk.sol.rr[0];
+            prevPosY = rtk.sol.rr[1];
+            prevPosZ = rtk.sol.rr[2];
         }
+    }
+
+    private void openAudit() {
+        double interval = intervalDetector.getDetectedInterval();
+        if (Double.isNaN(interval) || interval <= 0) interval = 1.0;
+        String dist = intervalDetector.isDetectionComplete()
+                ? intervalDetector.getDistributionSummary().replace("\n", " ") : "(detecting)";
+        String managed = managedParams == null ? "(all)" : String.join(",", managedParams);
+        String locked = lockedParams == null ? "(none)" : String.join(",", lockedParams);
+        auditLogger.open("GPST", mode, windowEpochs, cooldownEpochs, interval,
+                GnssScene.URBAN_CANYON, managed, locked, dist);
     }
 
     private void evaluateScene(long epoch) {
         if (cooldownRemaining > 0) {
-            cooldownRemaining--;
             return;
         }
 
@@ -174,7 +210,7 @@ public class AdaptiveController {
         state.incrementSwitchCount();
         cooldownRemaining = cooldownEpochs;
 
-        PresetManager.applyPreset(mode, newScene, override, managedParams, lockedParams);
+        PresetManager.applyPreset(mode, newScene, override, managedParams, lockedParams, opt.dynamics);
         override.applyTo(cfg, opt);
 
         String trigger = metrics.triggerInfo(oldScene, newScene, NSAT_OPEN_TO_CANYON, SNR_OPEN_TO_CANYON,
@@ -197,10 +233,10 @@ public class AdaptiveController {
     }
 
     private void checkPositionJump(long epoch, Rtk rtk) {
-        double dn = rtk.sol.rr[0] - prevPosN;
-        double de = rtk.sol.rr[1] - prevPosE;
-        double du = rtk.sol.rr[2] - prevPosU;
-        double jump = Math.sqrt(dn * dn + de * de + du * du);
+        double dx = rtk.sol.rr[0] - prevPosX;
+        double dy = rtk.sol.rr[1] - prevPosY;
+        double dz = rtk.sol.rr[2] - prevPosZ;
+        double jump = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
         double posStd = Math.sqrt(rtk.sol.qr[0] + rtk.sol.qr[1] + rtk.sol.qr[2]);
         if (posStd <= 0) return;
@@ -217,7 +253,7 @@ public class AdaptiveController {
         state.incrementRollback();
         cooldownRemaining = cooldownEpochs;
 
-        PresetManager.applyPreset(mode, rollbackTarget, override, managedParams, lockedParams);
+        PresetManager.applyPreset(mode, rollbackTarget, override, managedParams, lockedParams, opt.dynamics);
         override.applyTo(cfg, opt);
 
         if (cfg.adaptiveVerbose) {
@@ -252,7 +288,13 @@ public class AdaptiveController {
         active = false;
         override.restoreAll(cfg, opt);
         override.deactivate();
-        if (auditLogger != null) auditLogger.close();
+        if (auditLogger != null) {
+            if (!auditOpened) {
+                openAudit();
+                auditOpened = true;
+            }
+            auditLogger.close();
+        }
         if (cfg.adaptiveVerbose && state != null) {
             LOG.info(state.summary());
         }
@@ -268,10 +310,64 @@ public class AdaptiveController {
     public static AdaptiveMode resolveMode(int pmode, RtkConfig cfg) {
         if (pmode == Constants.PMODE_SINGLE || pmode == Constants.PMODE_DGPS) return AdaptiveMode.SPP;
         if (pmode == Constants.PMODE_KINEMA || pmode == Constants.PMODE_STATIC
-                || pmode == Constants.PMODE_STATIC_START) return AdaptiveMode.RTK;
+                || pmode == Constants.PMODE_STATIC_START || pmode == Constants.PMODE_MOVEB
+                || pmode == Constants.PMODE_FIXED) return AdaptiveMode.RTK;
         if (pmode == Constants.PMODE_PPPRTK_KINEMA || pmode == Constants.PMODE_PPPRTK_STATIC) return AdaptiveMode.PPP_RTK;
+        // PMODE_PPP_KINEMA / PMODE_PPP_STATIC / PMODE_PPP_FIXED 及未知模式按 AR 开关归 PPP_AR / PPP
         boolean hasAr = cfg.enablePppAR || cfg.enablePppArFixHold
                 || cfg.enablePppPartialAR || cfg.enableBds3PppAR || cfg.enableMultiFreqAR;
         return hasAr ? AdaptiveMode.PPP_AR : AdaptiveMode.PPP;
+    }
+
+    /**
+     * 处理器接线辅助：仅当 {@code cfg.enableAdaptiveScene=true} 时构造并激活控制器，
+     * 否则返回 null（默认关闭时零干预、零对象开销，调用方按 null 跳过即可）。
+     * <p>控制器直接绑定传入的 opt/cfg 引用，场景切换通过覆盖-恢复机制就地修改，
+     * 解算链路下一历元即读到新参数；{@link #deactivate()} 恢复全部原始值。</p>
+     *
+     * @param opt 解算实际使用的 PrcOpt（通常挂在 Rtk 上的那份）
+     * @param rtk 解算状态对象，其 rtkConfig 为开关与配置来源；可为 null（返回 null）
+     * @return 已激活的控制器，或 null（开关关闭/配置缺失）
+     */
+    public static AdaptiveController startIfEnabled(PrcOpt opt, Rtk rtk) {
+        if (opt == null || rtk == null) return null;
+        return startIfEnabled(opt, rtk.rtkConfig);
+    }
+
+    /**
+     * {@link #startIfEnabled(PrcOpt, Rtk)} 的显式配置版本，供无 Rtk 对象的链路（如 SPP）使用。
+     */
+    public static AdaptiveController startIfEnabled(PrcOpt opt, RtkConfig cfg) {
+        if (opt == null || cfg == null || !cfg.enableAdaptiveScene) return null;
+        AdaptiveController ctl = new AdaptiveController(opt.mode, cfg, opt);
+        ctl.activate();
+        return ctl;
+    }
+
+    /**
+     * 处理器接线辅助：从观测历元数组提取特征（nSat/avgSnr）并驱动 {@link #onEpoch}。
+     * <p>特征口径与验证 harness 一致：nSat=非基准站(rcv!=2)观测条数，
+     * avgSnr=这些观测首频点 SNR&gt;0 的均值（无有效 SNR 时为 0）。</p>
+     *
+     * @param epoch 历元序号（从 1 起，调用方维护）
+     * @param obs   当前历元观测数组（可含基准站 rcv==2，内部自动剔除）
+     * @param n     有效条数
+     * @param rtk   解算状态对象（用于解发散/位置跳变检测），无 Rtk 的链路传 null
+     */
+    public void onObsEpoch(long epoch, Obsd[] obs, int n, Rtk rtk) {
+        if (!active || obs == null || n <= 0) return;
+        int ns = 0, snrCnt = 0;
+        double snrSum = 0.0;
+        int m = Math.min(n, obs.length);
+        for (int i = 0; i < m; i++) {
+            if (obs[i] == null || obs[i].rcv == 2) continue;
+            ns++;
+            if (obs[i].SNR != null && obs[i].SNR.length > 0 && obs[i].SNR[0] > 0) {
+                snrSum += obs[i].SNR[0];
+                snrCnt++;
+            }
+        }
+        double gpst = TimeSystem.time2gpst(obs[0].time, null);
+        onEpoch(epoch, gpst, ns, snrCnt > 0 ? snrSum / snrCnt : 0.0, rtk);
     }
 }

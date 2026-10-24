@@ -121,6 +121,8 @@ org.rtklib.java.stream
 └── SerialPortConfig      串口配置
 ```
 
+> **实时流接入能力**：本项目已打通 NTRIP 2.0 协议，成功验证了 CAS IGS 实时 MSM 观测流（WUH20）的接入与解析。目前正在接入 CAS 的 SSR 改正流（SSRA*/SSRC* 挂载点，需单独申请权限），待权限开通后将实现完整的实时 PPP-RTK 闭环。
+
 ### rtklib-adjust — 多基线间接平差
 
 单历元GNSS多基线间接平差模块。基于高斯-马尔可夫最小二乘模型，对同一历元多条独立RTK基线进行融合平差，输出流动站最优坐标及精度评定（σ₀检验 + Baarda数据探测）。

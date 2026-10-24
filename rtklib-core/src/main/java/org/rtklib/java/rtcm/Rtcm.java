@@ -1199,13 +1199,46 @@ public class Rtcm implements Serializable {
     private double ssrUdi = 0.0;
     private int ssrMi = 0;
     private int ssrNsat = 0;
+    private int ssrProviderId = 0;
+    private int ssrSolutionId = 0;
+
+    /**
+     * 解码 SSR 历元时间（对齐 RTKLIB C {@code decode_ssr_epoch}）并写入 {@link #time}。
+     *
+     * <p>RTCM SSR 报文在 12 位电文号之后紧跟历元字段：GLONASS 为 17 位日内秒，
+     * 其余系统为 20 位周内秒。该字段此前被整体漏读，导致 {@code nav.ssr[].t0}
+     * 全部为 0、SSR 改正因超龄被全部拒绝。</p>
+     *
+     * @return 历元字段结束后的位位置
+     */
+    private int decodeSsrEpoch(int sys) {
+        int i = 24 + 12;
+        if (sys == Constants.SYS_GLO) {
+            double tod = BitUtils.getbitu(buff, i, 17);
+            i += 17;
+            adjdayGlot(tod);
+        } else {
+            double tow = BitUtils.getbitu(buff, i, 20);
+            i += 20;
+            adjweek(tow);
+        }
+        return i;
+    }
 
     private int decodeSsrHead(int i, int sys) {
-        ssrIod = (int) BitUtils.getbitu(buff, i, 4); i += 4;
-        ssrUdi = BitUtils.getbitu(buff, i, 4); i += 4;
-        ssrMi = (int) BitUtils.getbitu(buff, i, 1); i += 1;
-        int nsat = (int) BitUtils.getbitu(buff, i, 6); i += 6;
-        ssrNsat = nsat;
+        ssrUdi = BitUtils.getbitu(buff, i, 4);
+        i += 4;
+        ssrMi = (int) BitUtils.getbitu(buff, i, 1);
+        i += 1;
+        i += 1; /* satellite reference datum */
+        ssrIod = (int) BitUtils.getbitu(buff, i, 4);
+        i += 4;
+        ssrProviderId = (int) BitUtils.getbitu(buff, i, 16);
+        i += 16;
+        ssrSolutionId = (int) BitUtils.getbitu(buff, i, 4);
+        i += 4;
+        ssrNsat = (int) BitUtils.getbitu(buff, i, 6);
+        i += 6;
         return i;
     }
 
@@ -1220,8 +1253,7 @@ public class Rtcm implements Serializable {
     }
 
     private boolean decodeSsrOrbit(int sys) {
-        int i = 24 + 12;
-        i = decodeSsrHead(i, sys);
+        int i = decodeSsrHead(decodeSsrEpoch(sys), sys);
         GTime time = this.time != null ? this.time : new GTime();
         for (int k = 0; k < ssrNsat; k++) {
             i = decodeSsrSatId(i, sys);
@@ -1256,8 +1288,7 @@ public class Rtcm implements Serializable {
     }
 
     private boolean decodeSsrClock(int sys) {
-        int i = 24 + 12;
-        i = decodeSsrHead(i, sys);
+        int i = decodeSsrHead(decodeSsrEpoch(sys), sys);
         GTime time = this.time != null ? this.time : new GTime();
         for (int k = 0; k < ssrNsat; k++) {
             i = decodeSsrSatId(i, sys);
@@ -1279,8 +1310,7 @@ public class Rtcm implements Serializable {
     }
 
     private boolean decodeSsrHrClock(int sys) {
-        int i = 24 + 12;
-        i = decodeSsrHead(i, sys);
+        int i = decodeSsrHead(decodeSsrEpoch(sys), sys);
         GTime time = this.time != null ? this.time : new GTime();
         for (int k = 0; k < ssrNsat; k++) {
             i = decodeSsrSatId(i, sys);
@@ -1298,8 +1328,7 @@ public class Rtcm implements Serializable {
     }
 
     private boolean decodeSsrUra(int sys) {
-        int i = 24 + 12;
-        i = decodeSsrHead(i, sys);
+        int i = decodeSsrHead(decodeSsrEpoch(sys), sys);
         GTime time = this.time != null ? this.time : new GTime();
         for (int k = 0; k < ssrNsat; k++) {
             i = decodeSsrSatId(i, sys);
@@ -1318,8 +1347,7 @@ public class Rtcm implements Serializable {
     }
 
     private boolean decodeSsrCodeBias(int sys) {
-        int i = 24 + 12;
-        i = decodeSsrHead(i, sys);
+        int i = decodeSsrHead(decodeSsrEpoch(sys), sys);
         GTime time = this.time != null ? this.time : new GTime();
         for (int k = 0; k < ssrNsat; k++) {
             i = decodeSsrSatId(i, sys);
@@ -1347,8 +1375,7 @@ public class Rtcm implements Serializable {
     }
 
     private boolean decodeSsrPhaseBias(int sys) {
-        int i = 24 + 12;
-        i = decodeSsrHead(i, sys);
+        int i = decodeSsrHead(decodeSsrEpoch(sys), sys);
         GTime time = this.time != null ? this.time : new GTime();
         for (int k = 0; k < ssrNsat; k++) {
             i = decodeSsrSatId(i, sys);
@@ -1388,8 +1415,7 @@ public class Rtcm implements Serializable {
     }
 
     private boolean decodeSsrCombOrbClk(int sys) {
-        int i = 24 + 12;
-        i = decodeSsrHead(i, sys);
+        int i = decodeSsrHead(decodeSsrEpoch(sys), sys);
         GTime time = this.time != null ? this.time : new GTime();
         for (int k = 0; k < ssrNsat; k++) {
             i = decodeSsrSatId(i, sys);

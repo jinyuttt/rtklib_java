@@ -1410,3 +1410,69 @@ VMF3 官方：ch = 0.062 + 0.001·cos(t) + 0.005·cos(2t)，cw = 0.001
    量级（仅影响 zwd 调试日志，不参与 delay 计算），未修改；
 3. VMF3 OP 文件（`vmf3OpFile`，逐时次 ah/aw/bH/bW）路径未在本次
    实测（无公开样例数据），代码路径保持原有插值逻辑不变。
+
+---
+
+## FIX-ALG-030 / SSR 接入适配（2026-10-23）
+
+**性质**：接入适配，非算法特性改动。定版阶段允许的最小改动范畴。
+**背景**：用户需求"先打通 SSR 流程，结果精度不重要"。用匿名可达的 CAS
+`SSRC00CAS0`（仅轨道+钟差，无相位偏差）+ 本地多系统广播星历 + 观测录制，
+离线回放打通 RTCM SSR 解码 → nav.ssr[] → SsrCorrector → ppprtkos 全链路。
+**实测**：2026-296 WUH20 观测 + 295 BRDM 多系统日产品 + 296 CAS SSR；
+ppprtkos ENTRY 24/24 历元有输出，epoch 5/14/24 `sol.stat=SOLQ_PPP`
+即 PPP-RTK 解算器**实际产出解**。`nv=0` 主因（r<=0=38）为 DOY 295
+星历 TOE 距观测 TOE 25h45m（satposs 选不到足够近的 TOE），属星历新鲜度
+数据问题，非代码缺陷；maxinno=-3.8~-5.5km 为观测与 SSR 时刻差 6.3h
+（SSR 轨道改正套错历元），属时间对齐精度问题。
+
+### 改动 1：RTCM SSR 头部解码移植缺失
+
+**文件**：`rtklib-core/.../rtcm/Rtcm.java`
+**问题**：原 Java 版 `decodeSsrHead` 直接从 24+12=36 位偏移读 head
+字段，完全跳过了 C 版 `decode_ssr_epoch` 的 20 位 GLO-17/TOP-20 位历元
+时间读取，导致 `Rtcm.this.time` 停留在 week=0、SSR 头部的 UDI/sync/IOD
+也整体错位。实测 SSR t0.time 全为 0、nav.ssr 1284 槽 t0 零填。
+**修复**：新增 `decodeSsrEpoch(int sys)` 方法（对齐 C `decode_ssr_epoch`），
+读取 GLO 17 位日内秒或其他系统 20 位周内秒并归算到 `this.time`；
+`decodeSsrHead` 重写为 8 字段顺序（UDI/sync/refd/IOD/provider/solution/
+nsat）；7 处 SSR 电文调用点统一改为先 `decodeSsrEpoch` 再 `decodeSsrHead`。
+**影响范围**：所有 RTCM SSR 电文（1057/1058/1063/1064/1240/1241/
+1258/1259/1264~1270）。不影响非 SSR 电文路径。
+
+### 改动 2：PppProcessor.loadNav + setReferenceTime
+
+**文件**：`rtklib-core/.../ppp/PppProcessor.java`
+**问题**：纯 MSM 录制流（无 1019/1020/1041 等星历电文）里 `Rtcm.this.time`
+停留在 week=0，`adjweek(tow)` 把观测历元归算成 week=0，satposs 匹配
+week=2441 的 BRDC 星历失败，全体卫星 rs=0、el=-89.8°。实时流里这一步
+由星历电文自动完成，离线回放必须手工补。
+**修复**：新增 `public Nav getNav()` 供 SSR 时间对齐脚本访问 nav.ssr[]；
+新增 `public boolean loadNav(String navFilePath)` 合并外部 RINEX V3
+多系统导航到 `rtcm.nav`，置 `ephReady=true`；loadNav 末尾自动把外部星历
+首个有效 TOE 调 `rtcm.setReferenceTime(refTime)` 写回，让后续观测
+adjweek 用正确的 week 基准。Spp 初始化加 try/catch 保护（SPP 崩不
+影响后续 PPP）。
+**影响范围**：仅离线回放路径；实时流里 `ephReady` 由 onEph 置位，
+`setReferenceTime` 不生效。
+
+### 改动 3：SSR 接入诊断开关 + 时间对齐脚本
+
+**文件**：`rtklib-core/.../ppprtk/PppRtkCore.java`
+**问题**：离线回放 SSR 需与观测做时间对齐（SSR 录制时刻 ≠ 观测时刻），
+原代码没有逐星剔除原因统计，nv=0 的根因不可观测。
+**修复**：新增 `PPP_DEBUG_REJ=1` 环境变量开关，前 3 历元在 ppprtkRes
+内统计 r<=0 / el<elmin / excl / trop / iono / bias0 / maxinno 各分支
+的剔除数量并打印；同时 SsrAccessCheckTest（本地 gitignore 工具）新增
+`alignSsrToObs(Nav, String)` 时间对齐逻辑，自动读取 nav.ssr[] 全部
+t0 并相对观测首历元整体平移。
+**影响范围**：诊断代码默认关闭，不改变任何数值路径。
+
+### 顺带发现（归档，非本次修复）
+
+1. RinexParser.readNavEphV3 对 GLO prn>24（R25~R36）和 Galileo 星历
+   解析有缺口（BRDM 文件 GAL=0、R28 invalid），属既有缺陷，归档后续。
+2. CDDIS daily 分支仍兼容 HTTP Basic Auth；hourly 分支已升级到 Earthdata
+   OAuth Code Flow（302→urs→redirect→proxyauth），当前 Basic Auth 无法
+   下小时产品。定版阶段不新增 OAuth 支持，先用 DOY 295 日产品完成链路
+   验证，等实时流权限开通后再处理。

@@ -80,8 +80,26 @@ credentials.properties
 
 # Test data: small files (<=2MB) are committed to git
 # Large binary data files (>2MB) are ignored, downloaded via download-test-data.ps1
+# NOTE: RINEX files use year extensions (.25o/.25n/.17p), NOT .obs/.nav — the old
+# *.obs/*.nav rules matched nothing and let ~120MB of .17o/.18o/.25n files into git.
+# .meta sidecar files stay tracked (small, provenance info).
 test-data/rinex/*.obs
 test-data/rinex/*.nav
+test-data/rinex/*.??o
+test-data/rinex/*.??d
+test-data/rinex/*.rnx
+test-data/rinex/*.crx
+test-data/rinex/*.gz
+test-data/nav/*.??n
+test-data/nav/*.??p
+test-data/nav/*.??g
+test-data/nav/*.??l
+test-data/nav/*.??q
+test-data/nav/*.??c
+test-data/nav/*.??h
+test-data/nav/*.rnx
+test-data/nav/*.gz
+test-data/nmea/*.nmea
 test-data/product/*.sp3
 test-data/product/*.clk
 test-data/product/*.erp

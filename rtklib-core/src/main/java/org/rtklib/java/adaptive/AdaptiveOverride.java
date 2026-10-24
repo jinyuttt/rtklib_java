@@ -24,6 +24,7 @@ public class AdaptiveOverride {
         originals.put("enableAdaptiveQ", cfg.enableAdaptiveQ);
         originals.put("enableSppEkf", cfg.enableSppEkf);
         originals.put("enableSppRobust", cfg.enableSppRobust);
+        originals.put("enableSppInnovChisq", cfg.enableSppInnovChisq);
         originals.put("sppInnovOutlierThresh", cfg.sppInnovOutlierThresh);
     }
 
@@ -54,6 +55,7 @@ public class AdaptiveOverride {
         if (overrides.containsKey("enableAdaptiveQ")) cfg.enableAdaptiveQ = (boolean) overrides.get("enableAdaptiveQ");
         if (overrides.containsKey("enableSppEkf")) cfg.enableSppEkf = (boolean) overrides.get("enableSppEkf");
         if (overrides.containsKey("enableSppRobust")) cfg.enableSppRobust = (boolean) overrides.get("enableSppRobust");
+        if (overrides.containsKey("enableSppInnovChisq")) cfg.enableSppInnovChisq = (boolean) overrides.get("enableSppInnovChisq");
         if (overrides.containsKey("sppInnovOutlierThresh")) cfg.sppInnovOutlierThresh = (double) overrides.get("sppInnovOutlierThresh");
     }
 
@@ -68,6 +70,7 @@ public class AdaptiveOverride {
         if (originals.containsKey("enableAdaptiveQ")) cfg.enableAdaptiveQ = (boolean) originals.get("enableAdaptiveQ");
         if (originals.containsKey("enableSppEkf")) cfg.enableSppEkf = (boolean) originals.get("enableSppEkf");
         if (originals.containsKey("enableSppRobust")) cfg.enableSppRobust = (boolean) originals.get("enableSppRobust");
+        if (originals.containsKey("enableSppInnovChisq")) cfg.enableSppInnovChisq = (boolean) originals.get("enableSppInnovChisq");
         if (originals.containsKey("sppInnovOutlierThresh")) cfg.sppInnovOutlierThresh = (double) originals.get("sppInnovOutlierThresh");
         overrides.clear();
     }

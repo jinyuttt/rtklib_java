@@ -7,9 +7,9 @@ import org.slf4j.LoggerFactory;
 public class OptimizationMonitor {
     private static final Logger LOG = LoggerFactory.getLogger(OptimizationMonitor.class);
 
-    private static final double IGGIII_RATE_MAX = 0.50;
-    private static final double SEG_REJECT_RATE_MAX = 0.30;
-    private static final double SNR_MIN_WEIGHT_MIN = 0.01;
+    public static final double IGGIII_RATE_MAX = 0.50;
+    public static final double SEG_REJECT_RATE_MAX = 0.30;
+    public static final double SNR_MIN_WEIGHT_MIN = 0.01;
     private static final int DIVERGING_THRESHOLD = 3;
     private static final double DIVERGING_BASELINE_FACTOR = 3.0;
     private static final int BASELINE_WINDOW = 100;

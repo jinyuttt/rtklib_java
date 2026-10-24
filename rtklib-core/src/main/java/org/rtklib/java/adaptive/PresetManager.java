@@ -7,12 +7,12 @@ public class PresetManager {
     private static final Map<String, Object> SPP_OPEN = Map.of(
             "thresslip", 0.05, "maxinno0", 30.0, "maxinno1", 30.0,
             "elmin", Math.toRadians(15), "enableSppEkf", false, "enableSppRobust", false,
-            "sppInnovOutlierThresh", 5.0
+            "sppInnovOutlierThresh", 5.0, "enableSppInnovChisq", true
     );
     private static final Map<String, Object> SPP_CANYON = Map.of(
             "thresslip", 0.10, "maxinno0", 50.0, "maxinno1", 50.0,
             "elmin", Math.toRadians(20), "enableSppEkf", true, "enableSppRobust", true,
-            "sppInnovOutlierThresh", 7.0
+            "sppInnovOutlierThresh", 7.0, "enableSppInnovChisq", true
     );
     private static final Map<String, Object> RTK_OPEN = Map.of(
             "thresslip", 0.05, "maxinno0", 30.0, "maxinno1", 30.0,
@@ -81,8 +81,13 @@ public class PresetManager {
     }
 
     public static void applyPreset(AdaptiveMode mode, GnssScene scene, AdaptiveOverride override,
-                                   java.util.Set<String> managedParams, java.util.Set<String> lockedParams) {
-        Map<String, Object> preset = getPreset(mode, scene);
+                                   java.util.Set<String> managedParams, java.util.Set<String> lockedParams,
+                                   int dynamics) {
+        Map<String, Object> preset = new LinkedHashMap<>(getPreset(mode, scene));
+        // RTK enableAdaptiveQ: OPEN 仅动态(dynamics==1)开启, CANYON 恒开启 (设计文档 §7.2)
+        if (mode == AdaptiveMode.RTK) {
+            preset.put("enableAdaptiveQ", scene == GnssScene.URBAN_CANYON || dynamics == 1);
+        }
         for (Map.Entry<String, Object> e : preset.entrySet()) {
             String key = e.getKey();
             if (lockedParams != null && lockedParams.contains(key)) continue;
