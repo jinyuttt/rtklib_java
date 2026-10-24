@@ -4,7 +4,7 @@ RTKLIB 的 Java 移植版本，基于 [RTKLIB 2.5.0](https://github.com/tomojita
 
 项目定位为**算法引擎库（Library）**而非独立软件，可嵌入 Java 应用中实现 GNSS 数据处理与定位解算。
 
-> **当前版本 v3.1.0（2026-10-23 封存）**：算法能力已冻结，此后仅接受 bugfix，不再新增算法特性。29 项算法修复的闭环索引与精度实测见 [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md)，版本级变更见 [CHANGELOG](docs/CHANGELOG.md)。
+> **当前版本 v3.2.0（2026-10-24）**：算法能力已冻结，自适应引擎框架已实现。29 项算法修复的闭环索引与精度实测见 [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md)，版本级变更见 [CHANGELOG](docs/CHANGELOG.md)。
 
 > **功能边界**：Java版专注核心定位算法（SPP/RTK/PPP/PPP-RTK），数据流通讯由 `rtklib-stream` 模块提供（NTRIP客户端+串口），不包含C版的TCP/UDP服务端、NTRIP Caster、接收机原始协议（u-blox/NovAtel等）、NMEA输出等功能。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
@@ -25,6 +25,7 @@ RTKLIB 的 Java 移植版本，基于 [RTKLIB 2.5.0](https://github.com/tomojita
 
 ```
 org.rtklib.java
+├── adaptive/      自适应引擎（场景判定、参数预设、覆盖层、审计日志、安全监控）
 ├── ambiguity/     模糊度解算（LAMBDA算法）
 ├── common/        通用工具（矩阵运算、卫星工具、观测值编码）
 ├── constants/     常量定义（物理常数、模式常量、卡方分布表）
@@ -35,6 +36,7 @@ org.rtklib.java
 ├── kalman/        Kalman滤波器
 ├── pntpos/        单点定位（SPP、RAIM FDE、速度估计）
 ├── ppp/           精密单点定位（PPP动态、静态、固定坐标）
+├── pppar/         PPP-AR引擎（AR调度、AR配置只读视图）
 ├── ppprtk/        PPP-RTK定位（SSR改正、模糊度固定）
 ├── rinex/         RINEX 文件读写与处理
 ├── rtcm/          RTCM 数据解码
@@ -69,6 +71,23 @@ org.rtklib.java
 | PPP-RTK Fix-and-Hold | `enablePppRtkFixHold` | PPP-RTK固定后持续约束 |
 | GPT3+VMF3对流层 | `enableGpt3Vmf3` | GPT3先验+VMF3映射函数替代Saastamoinen+GMF |
 | IERS2010潮汐改正 | `enableIers2010` | IERS2010标准潮汐模型（极移、海潮负荷等） |
+
+**自适应引擎**（v3.2.0）：
+
+| 组件 | 类 | 说明 |
+|------|-----|------|
+| 主控 | `AdaptiveController` | 生命周期管理、场景判定、静态保护、位置跳变回滚 |
+| 场景枚举 | `GnssScene` | OPEN_SKY / URBAN_CANYON |
+| 模式枚举 | `AdaptiveMode` | SPP / RTK / PPP / PPP_AR / PPP_RTK |
+| 特征提取 | `FeatureMetrics` | 滑动平均 nSat/SNR + 进入\|\|/退出&& 判定 |
+| 参数预设 | `PresetManager` | 5模式×2场景预设表，白名单/黑名单过滤 |
+| 覆盖层 | `AdaptiveOverride` | 启动快照原始值，引擎写覆盖，关闭恢复 |
+| 审计日志 | `AdaptiveAuditLogger` | CSV格式完整决策记录，自动轮转 |
+| 安全监控 | `OptimizationMonitor` | 过度降权WARN + 解发散自动关 |
+| 采样检测 | `SampleIntervalDetector` | 前30历元间隔统计 + 异常WARN |
+| 回调接口 | `AdaptiveListener` | onSceneSwitch / onDegradation / onParamRecommendation |
+
+设计文档：[gnss-adaptive-design-v3.md](docs/gnss-adaptive-design-v3.md)
 
 轨道模块（v2.2.0新增）：TLE解析、SGP4/SDP4轨道传播、轨道六根数转换、二体传播。验证：Vallado标准14用例全通过，86颗真实TLE卫星0失败。详见 [轨道模块技术参考](docs/ORBIT_MODULE_REFERENCE.md)。
 
@@ -178,6 +197,7 @@ org.rtklib.java.otl
 | [测试用例与数据指南](docs/DATA_GUIDE.md) | 测试规范、测试类总览、数据依赖、优化矩阵测试用例、上传规范 |
 | [轨道模块技术参考](docs/ORBIT_MODULE_REFERENCE.md) | TLE解析、SGP4/SDP4传播、六根数转换、二体传播 |
 | [开发路线图](docs/ROADMAP.md) | 各模块完成度、四梯队（0~3）规划、v3.1.0 封存策略、暂缓与恢复条件 |
+| [自适应引擎设计](docs/gnss-adaptive-design-v3.md) | 场景判定、参数预设、安全机制、日志体系、包结构、测试策略 |
 
 ### 项目级
 
@@ -344,6 +364,7 @@ org.rtklib.java.otl
 | 多基线间接平差 | ✅ | 真实RTCM实测数据 |
 | 因子图优化 FGO + IMU 预积分 | ✅ | FE-GUT 仿真数据集 |
 | 轨道模块 + 海潮负荷 | ✅ | Vallado/Fortran 参考对比 |
+| 自适应引擎框架 | ✅ | 14类实现，编译通过；待集成测试验证 |
 
 剩余：PPP-RTK 区域大气约束、完好性保护级（HPL/VPL）、ARAIM、固定解完好性增强——均属研究深化方向，**无上游场景驱动，定版不再投入（WONTFIX）**。
 

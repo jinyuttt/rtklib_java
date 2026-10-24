@@ -1,7 +1,9 @@
 package org.rtklib.java.config;
 
 import java.io.Serializable;
+import java.util.Set;
 
+import org.rtklib.java.adaptive.AdaptiveListener;
 import org.rtklib.java.cssr.CompactSsrDecoder;
 
 public class RtkConfig implements Serializable {
@@ -263,6 +265,19 @@ public class RtkConfig implements Serializable {
     public boolean enableSsrTropDirect = false;
     public transient CompactSsrDecoder cssrDecoder = null;
 
+    public boolean enableAdaptiveScene = false;
+    public int adaptiveWindowEpochs = 0;
+    public int adaptiveCooldownEpochs = 0;
+    public Set<String> adaptiveManagedParams = null;
+    public Set<String> adaptiveLockedParams = null;
+    public boolean adaptiveAuditEnabled = true;
+    public String adaptiveAuditDir = "";
+    public int adaptiveAuditMaxSizeKB = 5120;
+    public int adaptiveAuditMaxFiles = 3;
+    public boolean adaptiveVerbose = true;
+    public boolean adaptiveTraceAll = false;
+    public transient AdaptiveListener adaptiveListener = null;
+
     public RtkConfig() {
     }
 
@@ -446,5 +461,18 @@ public class RtkConfig implements Serializable {
         this.compactSsrGridFile = other.compactSsrGridFile;
         this.enableSsrTropDirect = other.enableSsrTropDirect;
         this.cssrDecoder = other.cssrDecoder;
+
+        this.enableAdaptiveScene = other.enableAdaptiveScene;
+        this.adaptiveWindowEpochs = other.adaptiveWindowEpochs;
+        this.adaptiveCooldownEpochs = other.adaptiveCooldownEpochs;
+        this.adaptiveManagedParams = other.adaptiveManagedParams;
+        this.adaptiveLockedParams = other.adaptiveLockedParams;
+        this.adaptiveAuditEnabled = other.adaptiveAuditEnabled;
+        this.adaptiveAuditDir = other.adaptiveAuditDir;
+        this.adaptiveAuditMaxSizeKB = other.adaptiveAuditMaxSizeKB;
+        this.adaptiveAuditMaxFiles = other.adaptiveAuditMaxFiles;
+        this.adaptiveVerbose = other.adaptiveVerbose;
+        this.adaptiveTraceAll = other.adaptiveTraceAll;
+        this.adaptiveListener = other.adaptiveListener;
     }
 }
