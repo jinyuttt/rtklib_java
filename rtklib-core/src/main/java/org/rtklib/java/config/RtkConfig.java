@@ -268,6 +268,11 @@ public class RtkConfig implements Serializable {
     public boolean enableAdaptiveScene = false;
     public int adaptiveWindowEpochs = 0;
     public int adaptiveCooldownEpochs = 0;
+    /* 场景判定阈值（EMA 平滑特征）：OPEN→CANYON 满足 nSat<阈值 或 snr<阈值；CANYON→OPEN 需同时满足 */
+    public int adaptiveNsatOpenToCanyon = 8;
+    public double adaptiveSnrOpenToCanyon = 30.0;
+    public int adaptiveNsatCanyonToOpen = 14;
+    public double adaptiveSnrCanyonToOpen = 34.0;
     public Set<String> adaptiveManagedParams = null;
     public Set<String> adaptiveLockedParams = null;
     public boolean adaptiveAuditEnabled = true;
@@ -465,6 +470,10 @@ public class RtkConfig implements Serializable {
         this.enableAdaptiveScene = other.enableAdaptiveScene;
         this.adaptiveWindowEpochs = other.adaptiveWindowEpochs;
         this.adaptiveCooldownEpochs = other.adaptiveCooldownEpochs;
+        this.adaptiveNsatOpenToCanyon = other.adaptiveNsatOpenToCanyon;
+        this.adaptiveSnrOpenToCanyon = other.adaptiveSnrOpenToCanyon;
+        this.adaptiveNsatCanyonToOpen = other.adaptiveNsatCanyonToOpen;
+        this.adaptiveSnrCanyonToOpen = other.adaptiveSnrCanyonToOpen;
         this.adaptiveManagedParams = other.adaptiveManagedParams;
         this.adaptiveLockedParams = other.adaptiveLockedParams;
         this.adaptiveAuditEnabled = other.adaptiveAuditEnabled;

@@ -116,6 +116,30 @@ class AdaptiveControllerTest {
     }
 
     @Test
+    void configurableThresholdsControlSwitch() {
+        // 默认阈值 34: 20星/36dBHz 应切 OPEN
+        RtkConfig cfgDefault = newCfg();
+        cfgDefault.adaptiveWindowEpochs = 10;
+        PrcOpt optA = newOpt(Constants.PMODE_KINEMA, 1);
+        AdaptiveController a = new AdaptiveController(Constants.PMODE_KINEMA, cfgDefault, optA);
+        a.activate();
+        for (long e = 1; e <= 20; e++) a.onEpoch(e, 500000.0 + e, 20, 36.0, null);
+        assertEquals(GnssScene.OPEN_SKY, a.getCurrentScene(), "snr 36 > 默认阈值34 应切换");
+        a.deactivate();
+
+        // 抬高阈值到 40: 同样信号不切换
+        RtkConfig cfgHigh = newCfg();
+        cfgHigh.adaptiveWindowEpochs = 10;
+        cfgHigh.adaptiveSnrCanyonToOpen = 40.0;
+        PrcOpt optB = newOpt(Constants.PMODE_KINEMA, 1);
+        AdaptiveController b = new AdaptiveController(Constants.PMODE_KINEMA, cfgHigh, optB);
+        b.activate();
+        for (long e = 1; e <= 20; e++) b.onEpoch(e, 500000.0 + e, 20, 36.0, null);
+        assertEquals(GnssScene.URBAN_CANYON, b.getCurrentScene(), "snr 36 < 阈值40 不应切换");
+        b.deactivate();
+    }
+
+    @Test
     void deactivateRestoresOriginals() {
         RtkConfig cfg = newCfg();
         PrcOpt opt = newOpt(Constants.PMODE_KINEMA, 1);

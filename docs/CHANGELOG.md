@@ -13,6 +13,7 @@
 - **自适应引擎接线**：AdaptiveController 接入全部主链路历元循环——PostPosProcessor（RINEX 批处理 forward/backward/combined 三通道，控制器绑定 createRtk 内部 opt/rtkConfig 副本，不污染处理器字段）、PppProcessor.processEpoch（RTCM 流/批处理/RINEX 三路径共用漏斗，首个历元惰性启动）、RtkProcessor.processEpoch（流式 RTK 漏斗，adaptiveCtl 字段 transient 不参与序列化）、SppProcessor.processEpoch（无 Rtk 对象，绑定 rtkConfig 字段）；新增 `startIfEnabled` 静态工厂（enableAdaptiveScene=false 或 cfg=null 返回 null，全部调用点 null 守卫保证零干预）与 `onObsEpoch` 实例方法（观测数组→nSat/avgSnr 特征提取，rcv==2 基准站观测不计）；finishInternal/reset/resetForNextBatch 统一 deactivate 恢复用户参数快照。已知边界：PppProcessor.processBatchCombined 与 RtkProcessor.processBatchCombined/reprocess 的反向循环直接调 rtkpos 未经 processEpoch，未接线（次级再处理路径）
 - **自适应引擎框架**：新增 `org.rtklib.java.adaptive` 包，14 类实现——AdaptiveController（主控，场景判定+静态保护+位置跳变回滚）、GnssScene（OPEN_SKY/URBAN_CANYON）、AdaptiveMode（SPP/RTK/PPP/PPP_AR/PPP_RTK）、FeatureMetrics（滑动平均 nSat/SNR + 进入\|\|/退出&& 判定）、PresetManager（5模式×2场景预设表+白名单/黑名单过滤）、AdaptiveOverride（覆盖层，启动快照/关闭恢复）、AdaptiveAuditLogger（CSV 审计日志+轮转）、OptimizationMonitor（过度降权 WARN+解发散自动关）、OptimizationStats（统计收集器）、SampleIntervalDetector（前 30 历元间隔统计+异常 WARN）、AdaptiveListener（回调接口）、AdaptiveEvent/AdaptiveRecommendation（事件/推荐数据）、AdaptiveState（状态查询+运行统计摘要）
 - **RtkConfig 自适应字段**：新增 12 个字段（enableAdaptiveScene/adaptiveWindowEpochs/adaptiveCooldownEpochs/adaptiveManagedParams/adaptiveLockedParams/adaptiveAuditEnabled/adaptiveAuditDir/adaptiveAuditMaxSizeKB/adaptiveAuditMaxFiles/adaptiveVerbose/adaptiveTraceAll/adaptiveListener），拷贝构造同步复制
+- **场景判定阈值可配置**：新增 4 个字段 adaptiveNsatOpenToCanyon(8)/adaptiveSnrOpenToCanyon(30.0)/adaptiveNsatCanyonToOpen(14)/adaptiveSnrCanyonToOpen(34.0)，AdaptiveController 激活时解析（字段 <=0 时回退内置兜底值），拷贝构造同步复制
 - **PPP-AR 轻量重构（方案 B）**：新增 `org.rtklib.java.pppar` 包（PppArEngine/PppArConfig），PppCoreEx.applyAmbiguityResolution 委托给 PppArEngine，不改算法逻辑
 - **自适应引擎 v3.0 设计文档定稿**：[gnss-adaptive-design-v3.md](gnss-adaptive-design-v3.md)，覆盖 29 项共识
 
@@ -24,11 +25,12 @@
 - **预设与文档 §7 表对齐**：RTK 预设补 enableAdaptiveQ（OPEN 仅 dynamics==1 开启，CANYON 恒开）；SPP 预设补 enableSppInnovChisq（两场景恒 true）
 - **OptimizationMonitor 接线**：onEpoch 每历元更新统计并检查解发散（位置方差 trace 连续增长 3 历元且超基线 3 倍），过度降权+发散时自动关闭 enableIggiii（黑名单锁定除外）；IGGIII_RATE_MAX 等阈值常量转 public
 - **小问题**：审计头版本号 3.1.0→3.2.0；SampleIntervalDetector 异常告警加 once 标志（原 epoch 31~35 重复告警）；位置跳变变量命名 N/E/U→X/Y/Z（数值语义不变，ECEF）；设计文档 §3.3/§15 与实现对齐
+- **切回阈值 38 不可达（标定缺陷）**：真实数据实测 EMA(α=0.1) 平滑 avgSnr 峰值 opensky 仅 37.90、downtown 32.39，原 `SNR_CANYON_TO_OPEN=38` 数学上永不满足，开阔场景永久停留 URBAN_CANYON；重标定为 34（opensky 233 历元命中、downtown 零误报，32 时 downtown 开始误报），阈值同步提升为 RtkConfig 可配置项
 
 ### Tests
 
-- **adaptive 包单元测试（28 例）**：FeatureMetricsTest（滑动平均/进入\|\|/退出&&/滞后区间）、PresetManagerTest（预设表/白名单/黑名单/默认窗口冷却/RTK enableAdaptiveQ 语义）、SampleIntervalDetectorTest（间隔检测/告警 once/非正 dt 忽略）、AdaptiveControllerTest（开关关闭零干预/初始 CANYON 鲁棒预设/合成序列切换/冷却历元语义/静态窗口提升/静态位置跳变回滚/deactivate 恢复/审计文件生成/resolveMode 全模式/过度降权+发散自动关闭）、AdaptiveOverrideTest（快照/覆盖/恢复/diffString/发散判定）
-- **端到端接线验证（AdaptiveWiringE2ETest，localtest 本地包，不进 CI）**：E1 SPP opensky（PostPosProcessor 通道）默认关闭两次运行 1603 历元逐值一致（零干预实锤）、开启后审计头+1601 历元解算正常；E2 RTK GEJ 静态短基线（RinexRtkProcessor 5 参通道）开启后 60/60 成功，引擎启动日志+审计事件+监听器事件（epoch=4 位置跳变 0.212m 回滚并切回 OPEN_SKY）证实历元循环接线生效。已知限制：opensky avgSnr 上限 38.1 难破切回阈值 38，SPP 路径全程停留 CANYON 无场景事件（标定问题另行处理）
+- **adaptive 包单元测试（29 例）**：FeatureMetricsTest（滑动平均/进入\|\|/退出&&/滞后区间）、PresetManagerTest（预设表/白名单/黑名单/默认窗口冷却/RTK enableAdaptiveQ 语义）、SampleIntervalDetectorTest（间隔检测/告警 once/非正 dt 忽略）、AdaptiveControllerTest（开关关闭零干预/初始 CANYON 鲁棒预设/合成序列切换/冷却历元语义/静态窗口提升/静态位置跳变回滚/deactivate 恢复/审计文件生成/resolveMode 全模式/过度降权+发散自动关闭/阈值可配置驱动切换）、AdaptiveOverrideTest（快照/覆盖/恢复/diffString/发散判定）
+- **端到端接线验证（AdaptiveWiringE2ETest，localtest 本地包，不进 CI）**：E1 SPP opensky（PostPosProcessor 通道）默认关闭两次运行 1603 历元逐值一致（零干预实锤）、开启后审计头+1601 历元解算正常，阈值重标定后产生真实切换链 epoch=10 CANYON→OPEN（nSat 26/snr 37.7）、epoch=290 OPEN→CANYON（snr 20.7）、epoch=880 CANYON→OPEN（snr 34.1）；E2 RTK GEJ 静态短基线（RinexRtkProcessor 5 参通道）开启后 60/60 成功，引擎启动日志+审计事件+监听器事件（epoch=4 位置跳变 0.212m 回滚并切回 OPEN_SKY）证实历元循环接线生效
 
 ### Docs
 
