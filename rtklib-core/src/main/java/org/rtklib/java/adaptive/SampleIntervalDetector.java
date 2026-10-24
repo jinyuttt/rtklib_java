@@ -17,6 +17,7 @@ public class SampleIntervalDetector {
     private double prevTime = Double.NaN;
     private double detectedInterval = Double.NaN;
     private boolean detectionComplete = false;
+    private boolean warned = false;
 
     public void feed(double gpst) {
         if (detectionComplete) return;
@@ -59,8 +60,10 @@ public class SampleIntervalDetector {
     }
 
     public void warnIfAbnormal(int windowEpochs, int cooldownEpochs) {
+        if (warned) return;
         if (!detectionComplete || Double.isNaN(detectedInterval)) return;
         if (detectedInterval > 5.0) {
+            warned = true;
             double windowTime = windowEpochs * detectedInterval;
             double cooldownTime = cooldownEpochs * detectedInterval;
             LOG.warn("[ADAPTIVE] 历元间隔分布 (前{}历元):{}", DETECT_EPOCHS, getDistributionSummary());

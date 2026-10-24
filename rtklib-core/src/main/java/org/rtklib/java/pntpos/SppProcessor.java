@@ -117,6 +117,9 @@ public class SppProcessor {
     private RtkConfig rtkConfig;
     private SppEkfState ekfState;
 
+    /* 自适应引擎（JAVA-ONLY，默认关闭）：首个历元惰性启动，绑定 this.opt 与 rtkConfig 引用 */
+    private org.rtklib.java.adaptive.AdaptiveController adaptiveCtl;
+
     /**
      * 构造SPP处理器。
      *
@@ -350,6 +353,8 @@ public class SppProcessor {
         pendingLen = 0;
         finished = false;
 
+        if (adaptiveCtl != null) { adaptiveCtl.deactivate(); adaptiveCtl = null; }
+
         if (rtkConfig != null && rtkConfig.enableSppEkf && ekfState != null) {
             ekfState.reset();
         }
@@ -386,6 +391,8 @@ public class SppProcessor {
         pendingObsList.clear();
         pendingObsCountList.clear();
         pendingObsTimeList.clear();
+
+        if (adaptiveCtl != null) { adaptiveCtl.deactivate(); adaptiveCtl = null; }
 
         log.info("SPP complete: total={}, success={}, fail={}, ephTypes={}",
                 totalEpochs, successCount, failCount, ephTypeCount);
@@ -680,6 +687,10 @@ public class SppProcessor {
         String[] msg = new String[1];
 
         int result = PntPos.pntpos(obsData, n, nav, opt, sol, azel, ssat, rtkConfig, ekfState);
+
+        /* 自适应引擎：解算后驱动（开关关闭时 adaptiveCtl 恒为 null，零干预；SPP 无 Rtk 状态对象） */
+        if (adaptiveCtl == null) adaptiveCtl = org.rtklib.java.adaptive.AdaptiveController.startIfEnabled(opt, rtkConfig);
+        if (adaptiveCtl != null) adaptiveCtl.onObsEpoch(totalEpochs, obsData, n, null);
 
         if (result == 1) {
             successCount++;

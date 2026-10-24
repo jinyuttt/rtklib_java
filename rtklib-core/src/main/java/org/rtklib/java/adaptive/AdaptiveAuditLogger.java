@@ -47,7 +47,7 @@ public class AdaptiveAuditLogger {
                              String managedParams, String lockedParams, String intervalDist) {
         StringBuilder sb = new StringBuilder();
         sb.append("# RTKLIB-Java Adaptive Audit Log\n");
-        sb.append("# version: 3.1.0  ← 软件版本号，非本文档版本\n");
+        sb.append("# version: 3.2.0  ← 软件版本号，非本文档版本\n");
         sb.append("# mode: ").append(mode).append("\n");
         sb.append("# sampleInterval: ").append(String.format("%.3fs", sampleInterval))
                 .append(String.format(" (%.1fHz)", 1.0 / sampleInterval)).append("\n");

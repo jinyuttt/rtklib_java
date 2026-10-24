@@ -77,8 +77,10 @@ PPP-AR 可能因 OSB 产品缺失退化到 PPP，引擎检测并记录。
 static AdaptiveMode resolve(int pmode, RtkConfig cfg) {
     if (pmode == PMODE_SINGLE || pmode == PMODE_DGPS) return SPP;
     if (pmode == PMODE_KINEMA || pmode == PMODE_STATIC
-        || pmode == PMODE_STATIC_START || pmode == PMODE_MOVEB) return RTK;
+        || pmode == PMODE_STATIC_START || pmode == PMODE_MOVEB
+        || pmode == PMODE_FIXED) return RTK;
     if (pmode == PMODE_PPPRTK_KINEMA || pmode == PMODE_PPPRTK_STATIC) return PPP_RTK;
+    // PMODE_PPP_KINEMA / PMODE_PPP_STATIC / PMODE_PPP_FIXED 按 AR 开关归类
     boolean hasAr = cfg.enablePppAR || cfg.enablePppArFixHold
                     || cfg.enablePppPartialAR || cfg.enableBds3PppAR || cfg.enableMultiFreqAR;
     return hasAr ? PPP_AR : PPP;
@@ -495,6 +497,20 @@ public class AdaptiveOverride {
 关闭: restoreAll() → deactivate()
 ```
 
+### 11.1 处理器接线点（v3.2.0 实现）
+
+| 处理器 | 接线位置 | 绑定对象 | 说明 |
+|--------|---------|---------|------|
+| PostPosProcessor | processForward / processBackward / processCombined 三通道历元循环（rtkpos 调用后） | rtk.opt / rtk.rtkConfig（createRtk 内部副本） | RINEX 批处理漏斗，RinexRtk/Ppp/SppProcessor 三个薄壳均经此 |
+| PppProcessor | processEpoch 解算分支后（首个历元惰性启动） | this.opt / rtk.rtkConfig（用户引用，deactivate 恢复） | RTCM 流 / 批处理 / RINEX 三路径共用漏斗 |
+| RtkProcessor | processEpoch 中 rtkpos 后（首个历元惰性启动） | this.opt / rtk.rtkConfig（用户引用，deactivate 恢复） | 流式 RTK 漏斗；adaptiveCtl 字段 transient 不参与序列化 |
+| SppProcessor | processEpoch 中 pntpos 后（首个历元惰性启动） | this.opt / this.rtkConfig（用户引用，deactivate 恢复） | 无 Rtk 对象，onObsEpoch 传 rtk=null，静态保护与解发散监控自动跳过 |
+
+- **启动方式**：`AdaptiveController.startIfEnabled(opt, cfg/rtk)` 静态工厂，`enableAdaptiveScene=false` 或 cfg=null 时返回 null；全部调用点 `if (adaptive != null)` 守卫 → 关闭时零干预、零开销。
+- **特征提取**：`onObsEpoch(epoch, obs, n, rtk)`，nSat = 非基准站（rcv≠2）观测条数，avgSnr = 首频点 SNR[0]>0 均值，与测试 harness 口径一致。
+- **关闭时机**：finishInternal / reset / resetForNextBatch 统一 deactivate() → restoreAll() 恢复用户参数快照；RINEX 批处理在三通道循环结束后 deactivate。
+- **已知边界**：PppProcessor.processBatchCombined 与 RtkProcessor.processBatchCombined / reprocess 的反向循环直接调用 rtkpos、未经 processEpoch，未接线（次级再处理路径，前向通道已覆盖）。
+
 `enableAdaptiveScene=false` 时覆盖层 active=false，直接返回用户值，零开销。
 
 ---
@@ -659,11 +675,12 @@ org.rtklib.java.adaptive/
 ├── SampleIntervalDetector.java  // 采样间隔检测
 ├── AdaptiveAuditLogger.java     // 审计日志
 ├── AdaptiveEvent.java           // 事件：切换/退化/推荐
+├── AdaptiveRecommendation.java  // 参数调整建议（黑名单参数回调载体）
 ├── AdaptiveListener.java        // 回调接口
 └── AdaptiveState.java           // 状态查询
 ```
 
-13 个类。
+14 个类。
 
 ---
 

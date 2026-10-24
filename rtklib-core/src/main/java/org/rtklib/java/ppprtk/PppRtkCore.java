@@ -25,6 +25,8 @@ public final class PppRtkCore {
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(PppRtkCore.class);
+    /** 临时接入诊断：设置环境变量 PPP_DEBUG_REJ=1 时输出逐星剔除原因统计 */
+    private static final boolean DBG_REJ = System.getenv("PPP_DEBUG_REJ") != null;
     private static final int MAX_ITER = 8;
     private static final int MIN_NSAT_SOL = 4;
 
@@ -91,8 +93,13 @@ public final class PppRtkCore {
         rtk.epoch++;
 
         if (rtk.epoch <= 3) {
-            LOG.info("ppprtkos ENTRY epoch={} n={} nx={} hasSsr={} ionoopt={} tropopt={} sateph={}",
-                rtk.epoch, n, nx, hasSsr, opt.ionoopt, opt.tropopt, opt.sateph);
+            int[] owk = new int[1];
+            double otow = TimeSystem.time2gpst(obs[0].time, owk);
+            int[] ewk = new int[1];
+            double etow = nav.eph[0] != null ? TimeSystem.time2gpst(nav.eph[0].toe, ewk) : -1;
+            LOG.info("ppprtkos ENTRY epoch={} n={} nx={} hasSsr={} ionoopt={} tropopt={} sateph={} obsWeek={} obsTow={} eph0Week={} eph0Toe={}",
+                rtk.epoch, n, nx, hasSsr, opt.ionoopt, opt.tropopt, opt.sateph,
+                owk[0], String.format("%.1f", otow), ewk[0], String.format("%.1f", etow));
         }
 
         for (int i = 0; i < Constants.MAXSAT; i++) {
@@ -533,6 +540,15 @@ public final class PppRtkCore {
         int nv = 0;
         int stat = 0;
 
+        // 临时接入诊断（PPP_DEBUG_REJ=1）：逐星剔除原因统计
+        final boolean dbg = DBG_REJ && post == 0 && rtk.epoch <= 3;
+        int[] rejCnt = new int[8];
+        StringBuilder rejLog = dbg ? new StringBuilder() : null;
+        final String[] REJ_NAME = {"ok", "r<=0", "el<elmin", "excl", "trop", "iono", "bias0", "maxinno"};
+        if (dbg) {
+            for (int i = 0; i < 8; i++) rejCnt[i] = 0;
+        }
+
         // For post-fit residual rejection
         int[] obsi = new int[n * 2 * NF(opt)];
         int[] frqi = new int[n * 2 * NF(opt)];
@@ -575,6 +591,7 @@ public final class PppRtkCore {
             rsi[2] = rs[i * 6 + 2];
             double r = RtklibCommon.geodist(rsi, rr, e);
             if (r <= 0.0) {
+                if (dbg) { rejCnt[1]++; rejLog.append(sat).append(":r "); }
                 exc[i] = 1;
                 continue;
             }
@@ -584,6 +601,8 @@ public final class PppRtkCore {
             azel[i * 2] = azelI[0];
             azel[i * 2 + 1] = azelI[1];
             if (el < opt.elmin) {
+                if (dbg) { rejCnt[2]++; rejLog.append(sat).append(":el(")
+                        .append(String.format("%.1f", el * Constants.R2D)).append(") "); }
                 exc[i] = 1;
                 continue;
             }
@@ -593,6 +612,9 @@ public final class PppRtkCore {
 
             if (sys == 0 || rtk.ssat[sat - 1].vs == 0 ||
                     RtklibCommon.satexclude(sat, varRs[i], svh[i], opt) != 0 || exc[i] != 0) {
+                if (dbg) { rejCnt[3]++; rejLog.append(sat).append(":excl(vs=")
+                        .append(rtk.ssat[sat - 1].vs).append(",svh=").append(svh[i])
+                        .append(",rs0=").append(rs[i * 6] == 0.0 ? 1 : 0).append(") "); }
                 continue;
             }
 
@@ -600,14 +622,20 @@ public final class PppRtkCore {
             double vart = 0.0;
             double[] dtrpArr = new double[1];
             double[] vartArr = new double[1];
-            if (!PppCore.modelTrop(obs[i].time, pos, azelI, opt, x, dtdx, nav, dtrpArr, vartArr, rtk)) continue;
+            if (!PppCore.modelTrop(obs[i].time, pos, azelI, opt, x, dtdx, nav, dtrpArr, vartArr, rtk)) {
+                if (dbg) { rejCnt[4]++; rejLog.append(sat).append(":trop "); }
+                continue;
+            }
             dtrp = dtrpArr[0];
             vart = vartArr[0];
 
             double dion = 0.0;
             double vari = 0.0;
             boolean ionoFromSsr = false;
-            if (!PppCore.modelIono(obs[i].time, pos, azelI, opt, sat, x, nav, dion_vari)) continue;
+            if (!PppCore.modelIono(obs[i].time, pos, azelI, opt, sat, x, nav, dion_vari)) {
+                if (dbg) { rejCnt[5]++; rejLog.append(sat).append(":iono "); }
+                continue;
+            }
             dion = dion_vari[0];
             vari = dion_vari[1];
 
@@ -707,7 +735,10 @@ public final class PppRtkCore {
 
                 if (code == 0) {
                     bias = x[IB(sat, frq, opt)];
-                    if (bias == 0.0) continue;
+                    if (bias == 0.0) {
+                        if (dbg) { rejCnt[6]++; rejLog.append(sat).append(":bias0 "); }
+                        continue;
+                    }
                     if (H != null) H[nv * nx + IB(sat, frq, opt)] = 1.0;
                 }
 
@@ -729,6 +760,8 @@ public final class PppRtkCore {
                 if (post == 0 && opt.maxinno[code] > 0.0) {
                     double maxinno_val = (rtk.epoch <= 30 && code == 0) ? 30.0 : opt.maxinno[code];
                     if (Math.abs(res) > maxinno_val) {
+                        if (dbg) { rejCnt[7]++; rejLog.append(sat).append(":inno")
+                                .append(String.format("%.0f", res)).append(" "); }
                         exc[i] = 1;
                         rtk.ssat[sat - 1].rejc[frq]++;
                         continue;
@@ -776,6 +809,15 @@ public final class PppRtkCore {
                 for (int ii = 0; ii < nv; ii++) R[j * nv + ii] = 0.0;
                 R[j * nv + j] = varr[j];
             }
+        }
+
+        if (dbg) {
+            StringBuilder sums = new StringBuilder();
+            for (int i = 0; i < 8; i++) {
+                if (rejCnt[i] > 0) sums.append(REJ_NAME[i]).append('=').append(rejCnt[i]).append(' ');
+            }
+            LOG.warn("ppprtkRes REJ epoch={} n={} nv={} nxf={} {} | {}",
+                    rtk.epoch, n, nv, nx, sums.toString().trim(), rejLog.toString().trim());
         }
 
         if (post == 0 && rtk.epoch <= 2) {

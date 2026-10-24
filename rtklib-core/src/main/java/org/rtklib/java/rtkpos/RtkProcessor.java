@@ -1,6 +1,7 @@
 package org.rtklib.java.rtkpos;
 
 import org.rtklib.java.config.RtkConfig;
+import org.rtklib.java.adaptive.AdaptiveController;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
@@ -134,6 +135,10 @@ public class RtkProcessor implements Serializable {
     private int pendingRoverLen = 0;
     private byte[] pendingBase = new byte[4096];
     private int pendingBaseLen = 0;
+
+    /* 自适应引擎（JAVA-ONLY，默认关闭）：首个历元惰性启动，绑定 this.opt 与 rtk.rtkConfig 引用；
+     * transient：引擎不可序列化，反序列化后按 null 处理（下一历元重新惰性判定） */
+    private transient AdaptiveController adaptiveCtl;
 
     private EpochCache epochCache;
     private String lastRoverSourceId = null;
@@ -709,6 +714,10 @@ public class RtkProcessor implements Serializable {
 
         int result = RtkCore.rtkpos(rtk, obs, n, nav);
 
+        /* 自适应引擎：解算后驱动（开关关闭时 adaptiveCtl 恒为 null，零干预） */
+        if (adaptiveCtl == null) adaptiveCtl = AdaptiveController.startIfEnabled(opt, rtk);
+        if (adaptiveCtl != null) adaptiveCtl.onObsEpoch(totalEpochs, obs, n, rtk);
+
         if (result == 1 && rtk.sol.stat != Constants.SOLQ_NONE) {
             if (segmentSigmaFilter != null && rtk.sol.stat == Constants.SOLQ_FIX) {
                 int solIdx = solutions.size();
@@ -1155,6 +1164,7 @@ public class RtkProcessor implements Serializable {
     }
 
     private RtkResult finishInternal() {
+        if (adaptiveCtl != null) { adaptiveCtl.deactivate(); adaptiveCtl = null; }
         if (solstatic && bestSol != null) {
             outputBestSol();
         }
@@ -1227,6 +1237,7 @@ public class RtkProcessor implements Serializable {
         pendingRoverLen = 0;
         pendingBaseLen = 0;
         finished = false;
+        if (adaptiveCtl != null) { adaptiveCtl.deactivate(); adaptiveCtl = null; }
     }
 
     public void resetForNextBatch() {
@@ -1257,6 +1268,7 @@ public class RtkProcessor implements Serializable {
         pendingRoverLen = 0;
         pendingBaseLen = 0;
         ephReady = false;
+        if (adaptiveCtl != null) { adaptiveCtl.deactivate(); adaptiveCtl = null; }
     }
 
     public Rtk getRtk() {
