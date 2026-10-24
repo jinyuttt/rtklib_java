@@ -1476,3 +1476,50 @@ t0 并相对观测首历元整体平移。
    OAuth Code Flow（302→urs→redirect→proxyauth），当前 Basic Auth 无法
    下小时产品。定版阶段不新增 OAuth 支持，先用 DOY 295 日产品完成链路
    验证，等实时流权限开通后再处理。
+
+---
+
+## FIX-ALG-031 / 自适应场景切回阈值标定（2026-10-24）
+
+**性质**：默认参数标定缺陷修复 + 阈值可配置化。不改判定逻辑、不改解算算法。
+
+**问题**：`SNR_CANYON_TO_OPEN` 原值 38.0 dB-Hz，而引擎判定使用的是
+`FeatureMetrics` 的 EMA 平滑值（α=0.1），不是原始逐历元均值。真实数据实测：
+
+| 数据 | EMA 平滑 avgSnr 峰值 | 原阈值 38 命中历元 |
+|------|---------------------|--------------------|
+| opensky_rover_20250408（开阔） | **37.90** | **0** |
+| downtown_rover_20250408（峡谷） | 32.39 | 0 |
+
+开阔场景的平滑峰值低于 38，`slidingSnr > 38` 在数学上永不成立，导致引擎
+激活后永久停留在初始 URBAN_CANYON，场景切换能力实际失效（opensky 全程
+0 次切换，仅静态位置跳变回滚路径可见事件）。
+
+**修复**：
+
+1. `RtkConfig` 新增 4 个阈值字段（`adaptiveNsatOpenToCanyon=8`、
+   `adaptiveSnrOpenToCanyon=30.0`、`adaptiveNsatCanyonToOpen=14`、
+   `adaptiveSnrCanyonToOpen=34.0`），拷贝构造同步；
+   `AdaptiveController.activate()` 解析配置值，字段 <=0 时回退内置兜底常量。
+2. `SNR_CANYON_TO_OPEN` 兜底常量 38.0 → 34.0。
+
+**标定依据**（canyon→open 的 snr 阈值扫描，nSat 条件同时满足）：
+
+| 阈值 | opensky 命中 | downtown 命中 |
+|------|-------------|---------------|
+| 38 | 0 | 0 |
+| 36 | 48 | 0 |
+| 35 | 55 | 0 |
+| **34** | **233** | **0** |
+| 33 | 747 | 0 |
+| 32 | 1034 | **14（开始误报）** |
+
+34 为最优分界：开阔场景可稳定触发，峡谷场景零误报。
+
+**实测（opensky SPP 端到端）**：切换链 epoch=10 CANYON→OPEN
+（nSat 26/snr 37.7）、epoch=290 OPEN→CANYON（snr 20.7）、
+epoch=880 CANYON→OPEN（snr 34.1），1603 历元解算正常，默认关闭路径
+两次运行仍逐值一致（零干预不变）。
+
+**影响范围**：仅自适应场景判定阈值；关闭 `enableAdaptiveScene` 时无任何影响。
+

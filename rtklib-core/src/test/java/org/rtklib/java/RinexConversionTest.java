@@ -74,6 +74,22 @@ public class RinexConversionTest {
                 || (type >= 1134 && type <= 1137);
     }
 
+    /** 统计RTCM数据中的星历电文条数(1019~1046) */
+    static int countNavMessages(byte[] data) {
+        Rtcm rtcm = new Rtcm();
+        int offset = 0, navMsgs = 0;
+        while (offset < data.length) {
+            int consumed = rtcm.input(data, offset, data.length - offset);
+            if (consumed <= 0) {
+                offset++;
+                continue;
+            }
+            offset += consumed;
+            if (rtcm.type >= 1019 && rtcm.type <= 1046) navMsgs++;
+        }
+        return navMsgs;
+    }
+
     /**
      * Test RTCM to RINEX conversion for rover station.
      * Generates RINEX obs and nav files from RTCM3 data.
@@ -136,8 +152,14 @@ public class RinexConversionTest {
 
         assertTrue(Files.exists(obsFile), "RINEX observation file should exist");
         assertTrue(Files.size(obsFile) > 0, "RINEX observation file should not be empty");
-        assertTrue(Files.exists(navFile), "RINEX navigation file should exist");
-        assertTrue(Files.size(navFile) > 0, "RINEX navigation file should not be empty");
+
+        /* 基站流（VRS）可能只含观测电文，无星历则不会生成 nav 文件 */
+        if (countNavMessages(baseData) > 0) {
+            assertTrue(Files.exists(navFile), "RINEX navigation file should exist");
+            assertTrue(Files.size(navFile) > 0, "RINEX navigation file should not be empty");
+        } else {
+            log.warn("基站RTCM数据不含星历电文(1019~1046)，跳过nav文件校验");
+        }
 
         log.info("RTCM to RINEX base conversion test PASSED");
     }

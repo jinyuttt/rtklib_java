@@ -14,10 +14,11 @@ import java.util.Set;
 public class AdaptiveController {
     private static final Logger LOG = LoggerFactory.getLogger(AdaptiveController.class);
 
+    /* 阈值仅在 RtkConfig 对应字段 <=0 时作为兜底默认使用（正常路径取配置值） */
     private static final int NSAT_OPEN_TO_CANYON = 8;
     private static final int NSAT_CANYON_TO_OPEN = 14;
     private static final double SNR_OPEN_TO_CANYON = 30.0;
-    private static final double SNR_CANYON_TO_OPEN = 38.0;
+    private static final double SNR_CANYON_TO_OPEN = 34.0;
     private static final int NSAT_STATIC_OPEN_TO_CANYON = 5;
     private static final int STATIC_WINDOW_MIN = 100;
     private static final int STATIC_COOLDOWN_MIN = 900;
@@ -32,6 +33,10 @@ public class AdaptiveController {
     private int cooldownRemaining;
     private int windowEpochs;
     private int cooldownEpochs;
+    private int nSatOpenToCanyon;
+    private double snrOpenToCanyon;
+    private int nSatCanyonToOpen;
+    private double snrCanyonToOpen;
     private int windowCounter;
     private boolean active = false;
 
@@ -71,6 +76,10 @@ public class AdaptiveController {
 
         windowEpochs = cfg.adaptiveWindowEpochs > 0 ? cfg.adaptiveWindowEpochs : PresetManager.defaultWindow(mode);
         cooldownEpochs = cfg.adaptiveCooldownEpochs > 0 ? cfg.adaptiveCooldownEpochs : PresetManager.defaultCooldown(mode);
+        nSatOpenToCanyon = cfg.adaptiveNsatOpenToCanyon > 0 ? cfg.adaptiveNsatOpenToCanyon : NSAT_OPEN_TO_CANYON;
+        snrOpenToCanyon = cfg.adaptiveSnrOpenToCanyon > 0 ? cfg.adaptiveSnrOpenToCanyon : SNR_OPEN_TO_CANYON;
+        nSatCanyonToOpen = cfg.adaptiveNsatCanyonToOpen > 0 ? cfg.adaptiveNsatCanyonToOpen : NSAT_CANYON_TO_OPEN;
+        snrCanyonToOpen = cfg.adaptiveSnrCanyonToOpen > 0 ? cfg.adaptiveSnrCanyonToOpen : SNR_CANYON_TO_OPEN;
 
         if (isStatic) {
             if (windowEpochs < STATIC_WINDOW_MIN) {
@@ -179,9 +188,9 @@ public class AdaptiveController {
             return;
         }
 
-        int nSatThresh = isStatic && currentScene == GnssScene.OPEN_SKY ? NSAT_STATIC_OPEN_TO_CANYON : NSAT_OPEN_TO_CANYON;
-        GnssScene detected = metrics.detect(currentScene, nSatThresh, SNR_OPEN_TO_CANYON,
-                NSAT_CANYON_TO_OPEN, SNR_CANYON_TO_OPEN);
+        int nSatThresh = isStatic && currentScene == GnssScene.OPEN_SKY ? NSAT_STATIC_OPEN_TO_CANYON : nSatOpenToCanyon;
+        GnssScene detected = metrics.detect(currentScene, nSatThresh, snrOpenToCanyon,
+                nSatCanyonToOpen, snrCanyonToOpen);
 
         if (detected != currentScene) {
             if (pendingScene == detected) {
@@ -213,8 +222,8 @@ public class AdaptiveController {
         PresetManager.applyPreset(mode, newScene, override, managedParams, lockedParams, opt.dynamics);
         override.applyTo(cfg, opt);
 
-        String trigger = metrics.triggerInfo(oldScene, newScene, NSAT_OPEN_TO_CANYON, SNR_OPEN_TO_CANYON,
-                NSAT_CANYON_TO_OPEN, SNR_CANYON_TO_OPEN);
+        String trigger = metrics.triggerInfo(oldScene, newScene, nSatOpenToCanyon, snrOpenToCanyon,
+                nSatCanyonToOpen, snrCanyonToOpen);
         String changes = override.diffString();
 
         if (cfg.adaptiveVerbose) {

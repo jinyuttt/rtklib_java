@@ -118,9 +118,17 @@ OPEN→CANYON 和 CANYON→OPEN 用不同阈值，防卫星升降抖动：
 | NSAT_OPEN_TO_CANYON | 开阔→峡谷：nSat 低于此值才切 | 8 |
 | NSAT_CANYON_TO_OPEN | 峡谷→开阔：nSat 高于此值才切回 | 14 |
 | SNR_OPEN_TO_CANYON | 开阔→峡谷：avgSnr 低于此值才切 | 30 dB-Hz |
-| SNR_CANYON_TO_OPEN | 峡谷→开阔：avgSnr 高于此值才切回 | 38 dB-Hz |
+| SNR_CANYON_TO_OPEN | 峡谷→开阔：avgSnr 高于此值才切回 | 34 dB-Hz |
 
-中间地带（8 < nSat < 14 且 30 < avgSnr < 38）保持当前场景不切换。
+四个阈值均可通过 `RtkConfig` 的 `adaptiveNsatOpenToCanyon` / `adaptiveSnrOpenToCanyon` /
+`adaptiveNsatCanyonToOpen` / `adaptiveSnrCanyonToOpen` 现场调整（默认值即上表）。
+
+> 标定依据（2026-10-24 真实数据实测，EMA α=0.1）：opensky 数据的平滑 avgSnr 峰值仅
+> **37.90 dB-Hz**，原阈值 38 在数学上不可达，导致开阔场景永远无法切回 OPEN_SKY。
+> 取 34 时 opensky 有 233 个历元满足且 downtown（峰值 32.39）零误报；取 32 则 downtown
+> 开始出现 14 个历元误报。因此默认值重标定为 34。
+
+中间地带（8 < nSat < 14 且 30 < avgSnr < 34）保持当前场景不切换。
 
 ### 4.4 判定规则
 
@@ -141,7 +149,7 @@ GnssScene detect(FeatureMetrics m, GnssScene current) {
 }
 ```
 
-追踪日志记录触发指标（如 `trigger=nSat:7<8` 或 `trigger=nSat:15>14,snr:39.2>38`）。
+追踪日志记录触发指标（如 `trigger=nSat:7<8` 或 `trigger=nSat:26>14,snr:37.7>34`）。
 
 ### 4.5 初始场景
 
@@ -345,7 +353,7 @@ public int adaptiveCooldownEpochs = 0;  // 0 = 按模式默认
 | 判定窗口 | 30 历元 | **100 历元**（自动提升） |
 | 冷却窗口 | 90 历元 | **900 历元**（自动提升） |
 | 进入 CANYON 阈值 | nSat < 8 | **nSat < 5**（更保守） |
-| 切回 OPEN 阈值 | 同 §4.4（nSat>14 且 SNR>38） | **同 §4.4，不额外加严**（避免长期困在 CANYON） |
+| 切回 OPEN 阈值 | 同 §4.4（nSat>14 且 SNR>34） | **同 §4.4，不额外加严**（避免长期困在 CANYON） |
 | 确认次数 | 1 个窗口 | **连续 3 个窗口** |
 | 切换后 | 正常 | **位置跳变检测** |
 
