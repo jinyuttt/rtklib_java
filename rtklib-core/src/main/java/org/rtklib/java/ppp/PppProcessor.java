@@ -279,27 +279,18 @@ public class PppProcessor {
         if (src.glo_fcn != null) dst.glo_fcn = src.glo_fcn;
         ephReady = true;
 
-        // 接入适配：纯 MSM 录制流（无 1019/1041 等星历电文）情况下，Rtcm 内部时间基准
+        // 接入适配：纯 MSM 实时流（无 1019/1041 等可解码星历电文）情况下，Rtcm 内部时间基准
         // 停留在 week=0，adjweek() 产出的观测历元周数与星历不匹配，satposs 会返回 rs=0，
-        // 全部卫星被 el<elmin 剔除。实时流里这一步由星历电文完成，这里用外部星历时刻补上。
+        // 全部卫星被 el<elmin 剔除。实时流场景下模拟 C 版 rtksvr.c:656 的行为——用 CPU 当前
+        // 时间作为周基准。CPU time 与实时观测同周（只差几秒），adjweek ±3.5d 窗口足够覆盖。
+        // 若流中后续到达可解码星历消息（1019/1042 等），Rtcm 内部会用星历自身 week 纠偏，
+        // 这里的 setReferenceTime 只是兜底初始锚定。
         if (rtcm.time == null || rtcm.time.time == 0) {
-            GTime refTime = null;
-            for (int i = 0; i < dst.n && i < dst.eph.length && refTime == null; i++) {
-                if (dst.eph[i] != null && dst.eph[i].toe != null && dst.eph[i].toe.time > 0) {
-                    refTime = dst.eph[i].toe;
-                }
-            }
-            for (int i = 0; i < dst.ng && i < dst.geph.length && refTime == null; i++) {
-                if (dst.geph[i] != null && dst.geph[i].toe != null && dst.geph[i].toe.time > 0) {
-                    refTime = dst.geph[i].toe;
-                }
-            }
-            if (refTime != null) {
-                rtcm.setReferenceTime(refTime);
-                int[] wk = new int[1];
-                double tow = TimeSystem.time2gpst(refTime, wk);
-                log.info("PPP nav reference time set: week={} tow={}", wk[0], tow);
-            }
+            GTime refTime = TimeSystem.timeget();
+            rtcm.setReferenceTime(refTime);
+            int[] wk = new int[1];
+            double tow = TimeSystem.time2gpst(refTime, wk);
+            log.info("PPP nav reference time set (CPU): week={} tow={}", wk[0], tow);
         }
 
         log.info("PPP nav loaded: {} (eph={}, geph={}, seph={})",
@@ -1385,7 +1376,7 @@ public class PppProcessor {
 
     private static boolean isEphemerisType(int type) {
         return type == 1019 || type == 1020
-                || type == 1041 || type == 1042
+                || type == 1041 || type == 1042 || type == 1043
                 || type == 1044 || type == 1045 || type == 1046;
     }
 

@@ -1,5 +1,6 @@
 package org.rtklib.java.ppp;
 
+import org.rtklib.java.common.ObsCode;
 import org.rtklib.java.common.RtklibCommon;
 import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.constants.Constants;
@@ -20,8 +21,11 @@ import org.rtklib.java.trace.TraceControl;
 import org.rtklib.java.troposphere.TroposphereModel;
 import org.rtklib.java.ppprtk.SsrCorrector;
 import org.rtklib.java.ppp.PppOsbModel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class PppCore {
+    private static final Logger LOG = LoggerFactory.getLogger(PppCore.class);
     private PppCore() {
     }
 
@@ -544,6 +548,14 @@ public class PppCore {
                     }
                 }
 
+                // FIX-ALG-044: sanity-check initial ambiguity magnitude.
+                // See PppRtkCore.udbias for rationale. IFLC initial bias > 500 m is
+                // almost certainly corrupted pseudorange — skip initx instead of
+                // creating an infinite reject/reset loop each epoch.
+                if (bias[i] != 0.0 && Math.abs(bias[i]) > 500.0) {
+                    bias[i] = 0.0;
+                }
+
                 if (x[j] == 0.0 || slip[i] != 0 || bias[i] == 0.0) continue;
 
                 offset += bias[i] - x[j];
@@ -615,6 +627,15 @@ public class PppCore {
         return (obs.L[0] / freq1 - obs.L[1] / freq2) * Constants.CLIGHT;
     }
 
+    /**
+     * JAVA-ONLY FIX-ALG-037: 搜索所有可用频率对选最大频差（IFLC 噪声最小）。
+     * C 版 corr_meas 硬编码用 freq[0] + freq[seliflc(nf,sys)]，但 BDS 信号分布
+     * 在 RTCM MSM 场景下按 freq-index 填充 code 数组，导致 B3 在 code[3] 而非 code[2]。
+     * 原版只看 opt.nf 个槽位 → B1+B3 卫星（code[2]=0）直接 return，Lc=Pc=0。
+     *
+     * 修复：遍历全部 NFREQ 槽位，找到两个 freq 差最大且 L/P 都有效的频率做 IFLC。
+     * 这对 BDS 同时支持 B1+B3（code[0]+code[3]）和 B1+B2a（code[0]+code[2]）。
+     */
     public static void corrMeas(Obsd obs, Nav nav, double[] azel, PrcOpt opt,
                                  double[] dantr, double[] dants, double phw,
                                  double[] L, double[] P, double[] Lc, double[] Pc) {
@@ -624,8 +645,11 @@ public class PppCore {
 
         int sys = SatUtils.satsys(obs.sat, null);
 
-        for (int i = 0; i < opt.nf; i++) {
+        /* [FIX-037] 遍历全部 NFREQ 槽位，不仅限 opt.nf。
+         * RTCM MSM 按 freq-index 填充 obs.code，有效信号可能分散在 code[0..5] 任意位置。 */
+        for (int i = 0; i < Constants.NFREQ; i++) {
             L[i] = P[i] = 0.0;
+            if (obs.code[i] == 0) continue;
             freq[i] = SatUtils.sat2freq(obs.sat, obs.code[i], nav);
             lam[i] = freq[i] > 0.0 ? Constants.CLIGHT / freq[i] : 0.0;
             if (freq[i] == 0.0 || obs.L[i] == 0.0 || obs.P[i] == 0.0) continue;
@@ -652,14 +676,63 @@ public class PppCore {
             }
         }
 
-        int frq2 = L[1] == 0.0 ? 2 : 1;
-        if (freq[0] == 0.0 || freq[frq2] == 0.0) return;
+        /* [FIX-037] 搜索所有有效频率，选 freq 差最大的一对做 IFLC。
+         * 比 C 版硬编码 seliflc(nf,sys) 更健壮：覆盖 BDS B1+B3, GPS L1+L5, GAL E1+E5a 等所有组合。 */
+        int bestI = -1, bestJ = -1;
+        double bestDeltaF = 0;
+        int fallbackI = -1, fallbackJ = -1;
+        double fallbackDeltaF = 0;
+        for (int i = 0; i < Constants.NFREQ; i++) {
+            if (freq[i] == 0.0 || L[i] == 0.0 || P[i] == 0.0) continue;
+            for (int j = i + 1; j < Constants.NFREQ; j++) {
+                if (freq[j] == 0.0 || L[j] == 0.0 || P[j] == 0.0) continue;
+                double deltaF = Math.abs(freq[i] - freq[j]);
 
-        double C1 = SQR(freq[0]) / (SQR(freq[0]) - SQR(freq[frq2]));
-        double C2 = -SQR(freq[frq2]) / (SQR(freq[0]) - SQR(freq[frq2]));
+                // For BDS: prefer legacy signal pairs (B1+B3, B1+B2) over new signals (B2a+B1C)
+                // New signals may lack proper hardware delay calibration causing huge Lc-Pc bias
+                if (sys == Constants.SYS_CMP) {
+                    String obsI = ObsCode.code2obs(obs.code[i]);
+                    String obsJ = ObsCode.code2obs(obs.code[j]);
+                    boolean legacyI = !obsI.isEmpty() && (obsI.charAt(0) == '2' || obsI.charAt(0) == '7' || obsI.charAt(0) == '6');
+                    boolean legacyJ = !obsJ.isEmpty() && (obsJ.charAt(0) == '2' || obsJ.charAt(0) == '7' || obsJ.charAt(0) == '6');
+                    if (legacyI && legacyJ) {
+                        // Both legacy signals — strong preference
+                        if (deltaF > bestDeltaF) {
+                            bestDeltaF = deltaF;
+                            bestI = i;
+                            bestJ = j;
+                        }
+                    } else {
+                        // At least one new signal — fallback only if no legacy pair exists
+                        if (deltaF > fallbackDeltaF) {
+                            fallbackDeltaF = deltaF;
+                            fallbackI = i;
+                            fallbackJ = j;
+                        }
+                    }
+                } else {
+                    if (deltaF > bestDeltaF) {
+                        bestDeltaF = deltaF;
+                        bestI = i;
+                        bestJ = j;
+                    }
+                }
+            }
+        }
+        // Use fallback if no legacy pair found (BDS-2 satellites may only have legacy signals anyway)
+        if (bestI < 0 && fallbackI >= 0) {
+            bestI = fallbackI;
+            bestJ = fallbackJ;
+        }
+        if (bestI < 0 || bestJ < 0) return;
 
-        if (L[0] != 0.0 && L[frq2] != 0.0) Lc[0] = C1 * L[0] + C2 * L[frq2];
-        if (P[0] != 0.0 && P[frq2] != 0.0) Pc[0] = C1 * P[0] + C2 * P[frq2];
+        double f1 = freq[bestI], f2 = freq[bestJ];
+        double C1 = SQR(f1) / (SQR(f1) - SQR(f2));
+        double C2 = -SQR(f2) / (SQR(f1) - SQR(f2));
+
+        Lc[0] = C1 * L[bestI] + C2 * L[bestJ];
+        Pc[0] = C1 * P[bestI] + C2 * P[bestJ];
+
     }
 
     public static int pppRes(int post, Obsd[] obs, int n, double[] rs, double[] dts,
@@ -1156,7 +1229,11 @@ public class PppCore {
             }
         }
 
-        rtk.sol.stat = (byte)(rtk.sol.ns < MIN_NSAT_SOL ? Constants.SOLQ_NONE : stat);
+        // FIX-ALG-040: preserve SOLQ_FIX from AR resolution. PppArEngine may have
+        // upgraded rtk.sol.stat to SOLQ_FIX before updateStat runs — don't clobber it.
+        if (rtk.sol.stat != Constants.SOLQ_FIX) {
+            rtk.sol.stat = (byte)(rtk.sol.ns < MIN_NSAT_SOL ? Constants.SOLQ_NONE : stat);
+        }
 
         for (int i = 0; i < 3; i++) {
             rtk.sol.rr[i] = rtk.x[i];
@@ -1308,8 +1385,11 @@ public class PppCore {
                 }
             }
 
-            double freq1 = SatUtils.sat2freq(sat, obs[i].code[0], nav);
-            double freq2 = SatUtils.sat2freq(sat, obs[i].code[1], nav);
+            // 频率槽必须与 mwmeas 选取的一致，否则 BDS（B1I@槽0 + B3I@槽3）取不到
+            // freq2，宽巷累积永远为空，卫星会被 AR 一直判为 skipMw。
+            int[] mwPair = mwFreqIdx(sat, obs[i].code, nav);
+            double freq1 = SatUtils.sat2freq(sat, obs[i].code[mwPair[0]], nav);
+            double freq2 = SatUtils.sat2freq(sat, obs[i].code[mwPair[1]], nav);
             if (freq1 > 0 && freq2 > 0) {
                 double lamWl = Constants.CLIGHT / (freq1 - freq2);
                 double mwCycles = mw / lamWl;
@@ -1398,25 +1478,135 @@ public class PppCore {
             P3 += nav.cbias[obs.sat - 1][2][biasIx3 - 1];
         }
 
+        // FIX-ALG-039: same SSR code bias correction as mwmeas above.
+        if (nav.ssr != null && obs.sat >= 1 && obs.sat <= Constants.MAXSAT) {
+            double ssrCb2 = org.rtklib.java.ppprtk.SsrCorrector.getCodeBias(nav.ssr, obs.sat, obs.code[1]);
+            if (ssrCb2 != 0.0) P2 -= ssrCb2;
+            double ssrCb3 = org.rtklib.java.ppprtk.SsrCorrector.getCodeBias(nav.ssr, obs.sat, obs.code[2]);
+            if (ssrCb3 != 0.0) P3 -= ssrCb3;
+        }
+
         return (obs.L[1] - obs.L[2]) * Constants.CLIGHT / f2mf3 -
                (freq2 * P2 + freq3 * P3) / f2pf3;
     }
 
+    /**
+     * 选取构成 Melbourne-Wuebbena 宽巷组合的两个频率槽。
+     *
+     * RTKLIB 原始实现固定使用 code[0]+code[1]。但 BDS-2 只填充 code[0]=B1I 与
+     * code[3]=B3I（code[1] 为空），freq2=0 会让 MW 组合根本无法形成：
+     * detslpMw 里的宽巷累积量 (xrwl/rw/niwl) 永远为空，而 ssat.mw[0] 累计值一旦
+     * 被滑周或模糊度重置清零，该卫星就永久停留在 skipMw 状态，AR 再也无法使用它。
+     *
+     * 因此默认槽位取频失败时，在有效信号中挑选频距最大、且优先传统信号
+     * （40=B1I / 42=B3I / 27=B2I）的一对槽位。mwmeas / detslpMw / PppAmbFix
+     * 必须共用本函数，否则码-频对应关系错位（lamWl 会用错波长）。
+     *
+     * @param sat  卫星 PRN
+     * @param code 按频率槽排列的信号码数组（obs.code 或 ssat.code[fc][0]）
+     * @return {f1, f2} 两个频率槽下标
+     */
+    public static int[] mwFreqIdx(int sat, int[] code, Nav nav) {
+        int f1 = 0, f2 = 1;
+        if (code == null || code.length < 2) return new int[]{f1, f2};
+
+        double freq1Raw = SatUtils.sat2freq(sat, code[f1], nav);
+        double freq2Raw = SatUtils.sat2freq(sat, code[f2], nav);
+        if (freq1Raw != 0.0 && freq2Raw != 0.0) return new int[]{f1, f2};
+
+        if (SatUtils.satsys(sat, null) == Constants.SYS_CMP) {
+            int nSlot = Math.min(code.length, 6);
+            int bestI = -1, bestJ = -1;
+            double bestSep = 0.0;
+            for (int i = 0; i < nSlot; i++) {
+                if (code[i] == 0) continue;
+                double fi = SatUtils.sat2freq(sat, code[i], nav);
+                if (fi == 0.0) continue;
+                for (int j = i + 1; j < nSlot; j++) {
+                    if (code[j] == 0) continue;
+                    double fj = SatUtils.sat2freq(sat, code[j], nav);
+                    if (fj == 0.0) continue;
+                    double sep = Math.abs(fi - fj);
+                    // 优先传统信号：40(B1I) / 42(B3I) / 27(B2I)；
+                    // 新信号 26(B2aX)、12(B1C) 仅在无传统组合时才选用
+                    boolean tradI = (code[i] == 40 || code[i] == 42 || code[i] == 27);
+                    boolean tradJ = (code[j] == 40 || code[j] == 42 || code[j] == 27);
+                    if (sep > bestSep || (sep > bestSep * 0.9 && tradI && tradJ)) {
+                        bestSep = sep;
+                        bestI = i;
+                        bestJ = j;
+                    }
+                }
+            }
+            if (bestI >= 0 && bestJ >= 0) {
+                f1 = bestI;
+                f2 = bestJ;
+            }
+        }
+        return new int[]{f1, f2};
+    }
+
+    /**
+     * 宽巷/窄巷频率对回退。
+     *
+     * ssat.code 只分配了 NFREQ 个槽位，而 BDS-2 的 B3I 在 obs.code 中位于槽 3，
+     * 拷贝时被丢弃，导致 code[1] 恒为 0。此时必须回退到本系统常量
+     * （BDS 用 B1I/B3I = FREQ1_CMP/FREQ2_CMP），沿用 GPS 的 L1/L2 会让
+     * lamWl 少约 16%、lamNl 也不同，宽巷与窄巷整数全部错位。
+     *
+     * @param sat   卫星 PRN
+     * @param code0 L1 槽信号码
+     * @param code1 L2 槽信号码
+     * @return {freq1, freq2}（Hz）
+     */
+    public static double[] freqPair(int sat, int code0, int code1, Nav nav) {
+        double f1 = SatUtils.sat2freq(sat, code0, nav);
+        double f2 = SatUtils.sat2freq(sat, code1, nav);
+        if (f1 != 0.0 && f2 != 0.0) return new double[]{f1, f2};
+        boolean cmp = SatUtils.satsys(sat, null) == Constants.SYS_CMP;
+        if (f1 == 0.0) f1 = cmp ? Constants.FREQ1_CMP : Constants.FREQL1;
+        if (f2 == 0.0) f2 = cmp ? Constants.FREQ2_CMP : Constants.FREQL2;
+        return new double[]{f1, f2};
+    }
+
+    /**
+     * 宽巷/窄巷频率对（按卫星实际可用信号自动选槽）。
+     *
+     * 与 {@link #mwFreqIdx} 共用同一套槽位选择，保证 detslpMw 累积的宽巷周期数
+     * 与 PppAmbFix 里的 lamWl/lamNl 用的是同一个频率对。
+     */
+    public static double[] freqPair(int sat, int[] code, Nav nav) {
+        int[] pair = mwFreqIdx(sat, code, nav);
+        return freqPair(sat, code[pair[0]], code[pair[1]], nav);
+    }
+
+    /** 由 ssat.code[fc][0] 拼出按频率槽排列的信号码数组。 */
+    public static int[] ssatCodeArr(Ssat ssat) {
+        int[] codes = new int[Constants.NFREQ];
+        for (int fc = 0; fc < Constants.NFREQ; fc++) codes[fc] = ssat.code[fc][0];
+        return codes;
+    }
+
     public static double mwmeas(Obsd obs, Nav nav) {
-        double freq1 = SatUtils.sat2freq(obs.sat, obs.code[0], nav);
-        double freq2 = SatUtils.sat2freq(obs.sat, obs.code[1], nav);
-        if (freq1 == 0.0 || freq2 == 0.0 || obs.L[0] == 0.0 || obs.L[1] == 0.0 ||
-            obs.P[0] == 0.0 || obs.P[1] == 0.0) return 0.0;
+        int[] pair = mwFreqIdx(obs.sat, obs.code, nav);
+        int f1 = pair[0], f2 = pair[1];
+
+        double freq1 = SatUtils.sat2freq(obs.sat, obs.code[f1], nav);
+        double freq2 = SatUtils.sat2freq(obs.sat, obs.code[f2], nav);
+        if (freq1 == 0.0 || freq2 == 0.0 || obs.L[f1] == 0.0 || obs.L[f2] == 0.0 ||
+            obs.P[f1] == 0.0 || obs.P[f2] == 0.0) return 0.0;
 
         double lam1 = Constants.CLIGHT / freq1;
         double lam2 = Constants.CLIGHT / freq2;
         double f1mf2 = freq1 - freq2;
         double f1pf2 = freq1 + freq2;
 
-        double L1 = obs.L[0];
-        double L2 = obs.L[1];
-        double P1 = obs.P[0];
-        double P2 = obs.P[1];
+        double L1 = obs.L[f1];
+        double L2 = obs.L[f2];
+        double P1 = obs.P[f1];
+        double P2 = obs.P[f2];
+        int codeI = obs.code[f1];
+        int codeJ = obs.code[f2];
 
         if (nav.fcbFromOsb && nav.fcbWlByCode != null) {
             /* Integer-clock (WHU WUM0MGXRAP) framework: the clock has absorbed
@@ -1431,24 +1621,36 @@ public class PppCore {
              * 除非 AR 固定时以 -fcbWl 回吐一次否则 WL 取整中毒（2×2 矩阵实
              * 测，见 ALGORITHM_FIX_LOG.md FIX-ALG-028）。码 OSB 仍用于 AR 候
              * 选完备性检查（PppAmbFix）并经 nav.cbias 进入 EWL 组合。 */
-            double osbL1 = PppAmbFix.getOsbAt(nav, obs.sat, obs.code[0], obs.time.time);
-            double osbL2 = PppAmbFix.getOsbAt(nav, obs.sat, obs.code[1], obs.time.time);
+            double osbL1 = PppAmbFix.getOsbAt(nav, obs.sat, codeI, obs.time.time);
+            double osbL2 = PppAmbFix.getOsbAt(nav, obs.sat, codeJ, obs.time.time);
             L1 -= osbL1 / lam1;
             L2 -= osbL2 / lam2;
         } else {
             int sys = SatUtils.satsys(obs.sat, null);
-            int biasIx1 = SppCore.code2biasIx(sys, obs.code[0]);
+            int biasIx1 = SppCore.code2biasIx(sys, codeI);
             if (biasIx1 > 0 && nav.cbias != null && obs.sat - 1 < nav.cbias.length &&
-                    nav.cbias[obs.sat - 1] != null && nav.cbias[obs.sat - 1][0] != null &&
-                    biasIx1 - 1 < nav.cbias[obs.sat - 1][0].length) {
-                P1 += nav.cbias[obs.sat - 1][0][biasIx1 - 1];
+                    nav.cbias[obs.sat - 1] != null && nav.cbias[obs.sat - 1][f1] != null &&
+                    biasIx1 - 1 < nav.cbias[obs.sat - 1][f1].length) {
+                P1 += nav.cbias[obs.sat - 1][f1][biasIx1 - 1];
             }
-            int biasIx2 = SppCore.code2biasIx(sys, obs.code[1]);
+            int biasIx2 = SppCore.code2biasIx(sys, codeJ);
             if (biasIx2 > 0 && nav.cbias != null && obs.sat - 1 < nav.cbias.length &&
-                    nav.cbias[obs.sat - 1] != null && nav.cbias[obs.sat - 1][1] != null &&
-                    biasIx2 - 1 < nav.cbias[obs.sat - 1][1].length) {
-                P2 += nav.cbias[obs.sat - 1][1][biasIx2 - 1];
+                    nav.cbias[obs.sat - 1] != null && nav.cbias[obs.sat - 1][f2] != null &&
+                    biasIx2 - 1 < nav.cbias[obs.sat - 1][f2].length) {
+                P2 += nav.cbias[obs.sat - 1][f2][biasIx2 - 1];
             }
+        }
+
+        // FIX-ALG-039: SSR code bias correction for MW pseudoranges.
+        // corrMeas subtracts ssrCb from the observation (P_eff = P_raw - ssrCb),
+        // so mwmeas must do the same to stay consistent with KF residuals.
+        // Without this, the MW arc carries a per-system offset (0.25-0.50 cycles
+        // in our BDS PPP-RTK data) that completely kills the WL dev gate.
+        if (nav.ssr != null && obs.sat >= 1 && obs.sat <= Constants.MAXSAT) {
+            double ssrCb1 = org.rtklib.java.ppprtk.SsrCorrector.getCodeBias(nav.ssr, obs.sat, codeI);
+            if (ssrCb1 != 0.0) P1 -= ssrCb1;
+            double ssrCb2 = org.rtklib.java.ppprtk.SsrCorrector.getCodeBias(nav.ssr, obs.sat, codeJ);
+            if (ssrCb2 != 0.0) P2 -= ssrCb2;
         }
 
         double mw = (L1 - L2) * Constants.CLIGHT / f1mf2 -

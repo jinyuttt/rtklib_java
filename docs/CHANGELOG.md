@@ -6,6 +6,13 @@
 
 ---
 
+## [3.2.1] - 2026-10-26
+
+### Fixed
+
+- **PPP-RTK 初始化死循环防护（sat=107 型异常）**：修复 BDS-2 卫星（如 sat=107）初始 Pc-Lc 偏差超 500m 导致的无限重试死循环。新增三层防护：① 初始模糊度 sanity check（>500m 直接置零）；② 初始化阶段（前 10 历元）rejc>=10 触发永久冻结（rejc 锁存为 1000）；③ 永久排除检查（udbias offset/initx 循环与 ppprtkRes 均跳过 rejc>=100 卫星）。实测 WUH20 实时流 119 历元：sat=107 REJ 从 1-119 缩减至 1-7，fix 解数 78→92，GPS/GAL/其他 BDS 卫星零误杀。详见 [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md#fix-alg-038)
+- **BDS MW 宽巷频率槽自动选取**：修复 BDS-2 卫星（code=[40,0,0,42,0,0]）在 `detslpMw` 中因 `code[1]=0` 导致 `freq2=0`、宽巷波长 λ_wl 计算错误、卫星永久 skipMw 的问题。新增 `PppCore.mwFreqIdx()` 自动选择频距最大且优先传统信号（40=B1I / 42=B3I / 27=B2I）的槽位对，`mwmeas`/`detslpMw`/`PppAmbFix` 三处强制一致。新增 `PppCore.freqPair()` 统一频率对回退逻辑（BDS→FREQ1_CMP/FREQ2_CMP，GPS/GAL→FREQL1/FREQL2），替代原先 PppAmbFix 的错误 GPS L1/L2 回退。实测：skipMw 从 10/119 降至 5/119（仅滑周瞬态），epoch 119 nbWl 从 14 提升至 17，BDS 卫星宽巷波长对齐（sat=106 mw=44.19cyc vs wlMean=44.11cyc）。详见 [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md#fix-alg-037)
+
 ## [3.2.0] - 2026-10-24
 
 ### Added

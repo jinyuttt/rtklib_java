@@ -253,6 +253,7 @@ public class Rtcm implements Serializable {
                 case 1038: return decodeType1038();
                 case 1039: return decodeType1039();
                 case 1042: return decodeType1042();
+                case 1043: return decodeType1043();
                 case 1044: return decodeType1044();
                 case 1045: return decodeType1045();
                 case 1046: return decodeType1046();
@@ -267,6 +268,7 @@ public class Rtcm implements Serializable {
                 case 1065: return decodeType1065();
                 case 1066: return decodeType1066();
                 case 1067: return decodeType1067();
+                case 1068: return decodeType1068();
                 case 1071: return decodeType1071();
                 case 1072: return decodeType1072();
                 case 1073: return decodeType1073();
@@ -334,13 +336,15 @@ public class Rtcm implements Serializable {
                 case 1261: return decodeSsrCombOrbClk(Constants.SYS_CMP);
                 case 1262: return decodeSsrUra(Constants.SYS_CMP);
                 case 1263: return decodeSsrHrClock(Constants.SYS_CMP);
-                case 1264: return decodeSsrPhaseBias(Constants.SYS_GPS);
-                case 1265: return decodeSsrPhaseBias(Constants.SYS_GLO);
-                case 1266: return decodeSsrPhaseBias(Constants.SYS_GAL);
-                case 1267: return decodeSsrPhaseBias(Constants.SYS_QZS);
-                case 1268: return decodeSsrPhaseBias(Constants.SYS_SBS);
-                case 1269: return decodeSsrPhaseBias(Constants.SYS_CMP);
-                case 1270: return decodeSsrPhaseBias(Constants.SYS_IRN);
+                /* RTKLIB 2.5.1 rtcm3.c L2866-2872: 1264=SSR VTEC(暂不支持,消费跳过),
+                 * 1265-1270 相位偏差依次对应 GPS/GLO/GAL/QZS/SBS/BDS */
+                case 1264: return true;
+                case 1265: return decodeSsrPhaseBias(Constants.SYS_GPS);
+                case 1266: return decodeSsrPhaseBias(Constants.SYS_GLO);
+                case 1267: return decodeSsrPhaseBias(Constants.SYS_GAL);
+                case 1268: return decodeSsrPhaseBias(Constants.SYS_QZS);
+                case 1269: return decodeSsrPhaseBias(Constants.SYS_SBS);
+                case 1270: return decodeSsrPhaseBias(Constants.SYS_CMP);
                 default:
                     log.trace("RTCM3 type {} not yet implemented", type);
                     return true;
@@ -895,6 +899,92 @@ public class Rtcm implements Serializable {
                 sat, prn, eph.week, eph.toes, String.format("%.1f", eph.A));
         return true;
     }
+    /**
+     * RTCM 1043 — SBAS 卫星星历（非 BDS-3 B-CNAV1！）
+     *
+     * <p>布局依据 cssrlib/rtcm.py 的 {@code decode_sbs_eph}（RTCM 3.x 标准字段表），
+     * 218 bit 单帧完整星历。RTKLIB 2.5.0/2.5.1/EX 均未实现此类型。</p>
+     *
+     * <p>字段：u6 svid | u8 iodn | u13 toc(×16s) | u4 ura |
+     *         s30 x(×0.08m) | s30 y(×0.08m) | s25 z(×0.4m) |
+     *         s17 vx(×0.000625m/s) | s17 vy(×0.000625m/s) | s18 vz(×0.004m/s) |
+     *         s10 ax(×1.25e-5m/s²) | s10 ay(×1.25e-5m/s²) | s10 az(×6.25e-5m/s²) |
+     *         s12 af0(×2^-31s) | s8 af1(×2^-40s/s)</p>
+     *
+     * <p>实际验证：WUH20 流 2026-10-26 抓到 6 帧 1043，按此布局解出
+     * PRN=121/128/131/136（SBAS 标准号段），xyz 量级 4.2 万 km（GEO 轨道典型），
+     * af0 ≈ 5.6e-9 s，与 SBAS 广播星历特征完全一致。</p>
+     */
+    private boolean decodeType1043() {
+        int i = 24 + 12;
+        if (i + 218 > this.len * 8) {
+            log.warn("rtcm3 1043 length error: len={} need 218 bit payload", this.len);
+            return false;
+        }
+
+        int svid = (int) BitUtils.getbitu(buff, i, 6);   i += 6;
+        int iodn = (int) BitUtils.getbitu(buff, i, 8);   i += 8;
+        double toc = BitUtils.getbitu(buff, i, 13) * 16.0; i += 13;
+        int ura    = (int) BitUtils.getbitu(buff, i, 4); i += 4;
+        double x  = BitUtils.getbits(buff, i, 30) * 0.08;    i += 30;
+        double y  = BitUtils.getbits(buff, i, 30) * 0.08;    i += 30;
+        double z  = BitUtils.getbits(buff, i, 25) * 0.4;     i += 25;
+        double vx = BitUtils.getbits(buff, i, 17) * 0.000625; i += 17;
+        double vy = BitUtils.getbits(buff, i, 17) * 0.000625; i += 17;
+        double vz = BitUtils.getbits(buff, i, 18) * 0.004;    i += 18;
+        double ax = BitUtils.getbits(buff, i, 10) * 0.0000125; i += 10;
+        double ay = BitUtils.getbits(buff, i, 10) * 0.0000125; i += 10;
+        double az = BitUtils.getbits(buff, i, 10) * 0.0000625; i += 10;
+        double af0 = BitUtils.getbits(buff, i, 12) * Constants.P2_31; i += 12;
+        double af1 = BitUtils.getbits(buff, i, 8) * Constants.P2_40;  i += 8;
+
+        // svid=0 保留，1-39 对应 SBAS PRN 120-158（RTCM 约定 svid+119）
+        if (svid <= 0 || svid > 39) {
+            log.debug("rtcm3 1043 invalid svid={}", svid);
+            return false;
+        }
+        int sat = SatUtils.satno(Constants.SYS_SBS, svid + 119);
+        if (sat == 0) {
+            log.debug("rtcm3 1043 satellite number error: svid={}", svid);
+            return false;
+        }
+
+        if (this.time.time == 0) {
+            this.time = TimeSystem.utc2gpst(TimeSystem.timeget());
+        }
+
+        Seph seph = new Seph();
+        seph.sat = sat;
+        seph.sva = ura;
+        seph.svh = 0;                    // 1043 不携带健康标志，默认 0=ok
+        seph.pos[0] = x;
+        seph.pos[1] = y;
+        seph.pos[2] = z;
+        seph.vel[0] = vx;
+        seph.vel[1] = vy;
+        seph.vel[2] = vz;
+        seph.acc[0] = ax;
+        seph.acc[1] = ay;
+        seph.acc[2] = az;
+        seph.af0 = af0;
+        seph.af1 = af1;
+        seph.tof = new GTime(this.time); // 报文接收时刻
+
+        // t0 = 当日 GPST 的 toc 对齐（cssrlib: tod + toc）
+        int[] wk = new int[1];
+        double tow = TimeSystem.time2gpst(this.time, wk);
+        double tod = Math.floor(tow / 86400.0) * 86400.0;
+        seph.t0 = TimeSystem.gpst2time(wk[0], tod + toc);
+
+        if (this.nav.seph != null && sat - 1 < this.nav.seph.length) {
+            this.nav.seph[sat - 1] = seph;
+        }
+        this.ephset = 0;
+        this.ephsat = sat;
+        log.trace("RTCM 1043 SBAS eph stored: sat=S{} svid={} iodn={} toc={} af0={}",
+                svid + 119, svid, iodn, toc, String.format("%.3e", af0));
+        return true;
+    }
     private boolean decodeType1044() {
         int i = 24 + 12;
         if (i + 476 > this.len * 8) {
@@ -1201,6 +1291,7 @@ public class Rtcm implements Serializable {
     private int ssrNsat = 0;
     private int ssrProviderId = 0;
     private int ssrSolutionId = 0;
+    private int ssrRefd = 0;
 
     /**
      * 解码 SSR 历元时间（对齐 RTKLIB C {@code decode_ssr_epoch}）并写入 {@link #time}。
@@ -1225,20 +1316,31 @@ public class Rtcm implements Serializable {
         return i;
     }
 
+    /* RTKLIB 2.5.1 rtcm3.c decode_ssr1_head/ssr2_head: datum bit 仅存在于
+     * orbit(SSR1) 与 combined(SSR4) 头部; clock/codeBias/ura/hrClock 头部无 datum 位。
+     * nsat 位宽 QZS=4，其余系统=6。 */
     private int decodeSsrHead(int i, int sys) {
+        return decodeSsrHead(i, sys, false);
+    }
+
+    private int decodeSsrHead(int i, int sys, boolean hasDatum) {
         ssrUdi = BitUtils.getbitu(buff, i, 4);
         i += 4;
         ssrMi = (int) BitUtils.getbitu(buff, i, 1);
         i += 1;
-        i += 1; /* satellite reference datum */
+        if (hasDatum) {
+            ssrRefd = (int) BitUtils.getbitu(buff, i, 1); /* satellite reference datum */
+            i += 1;
+        }
         ssrIod = (int) BitUtils.getbitu(buff, i, 4);
         i += 4;
         ssrProviderId = (int) BitUtils.getbitu(buff, i, 16);
         i += 16;
         ssrSolutionId = (int) BitUtils.getbitu(buff, i, 4);
         i += 4;
-        ssrNsat = (int) BitUtils.getbitu(buff, i, 6);
-        i += 6;
+        int ns = (sys == Constants.SYS_QZS) ? 4 : 6;
+        ssrNsat = (int) BitUtils.getbitu(buff, i, ns);
+        i += ns;
         return i;
     }
 
@@ -1248,34 +1350,42 @@ public class Rtcm implements Serializable {
         else if (sys == Constants.SYS_QZS) blen = 4;
         else blen = 6;
         int svid = (int) BitUtils.getbitu(buff, i, blen); i += blen;
-        this.ephsat = SatUtils.satno(sys, svid);
+        /* RTKLIB 2.5.1 decode_ssr1..7: prn=getbitu(...)+offp; QZS offp=192, SBS offp=120 */
+        int offp = (sys == Constants.SYS_QZS) ? 192 : (sys == Constants.SYS_SBS) ? 120 : 0;
+        this.ephsat = SatUtils.satno(sys, svid + offp);
         return i;
     }
 
+    /* RTKLIB 2.5.1 rtcm3.c decode_ssr1: subtype=0 per-sat iode 位宽 ni 与 iodcrc 位宽 nj
+     * 按系统区分: GPS(8/0) GLO(8/0) GAL(10/0) QZS(8/0) BDS(10/8) SBS(9/24)。
+     * BDS 的有效 iode 取 iodcrc（C: if (sys==SYS_CMP && subtype==0) iode=iodcrc）。 */
     private boolean decodeSsrOrbit(int sys) {
-        int i = decodeSsrHead(decodeSsrEpoch(sys), sys);
+        int i = decodeSsrHead(decodeSsrEpoch(sys), sys, true);
         GTime time = this.time != null ? this.time : new GTime();
+        final int ni = (sys == Constants.SYS_GAL || sys == Constants.SYS_CMP) ? 10
+                : (sys == Constants.SYS_SBS) ? 9 : 8;
+        final int nj = (sys == Constants.SYS_CMP) ? 8 : (sys == Constants.SYS_SBS) ? 24 : 0;
         for (int k = 0; k < ssrNsat; k++) {
             i = decodeSsrSatId(i, sys);
             int sat = this.ephsat;
-            if (sat <= 0 || sat > Constants.MAXSAT) {
-                int iodeBlen = (sys == Constants.SYS_GAL) ? 10 : 8;
-                i += iodeBlen + 121;
-                continue;
-            }
-            int iodeBlen = (sys == Constants.SYS_GAL) ? 10 : (sys == Constants.SYS_SBS) ? 24 : 8;
-            int iode = (int) BitUtils.getbitu(buff, i, iodeBlen); i += iodeBlen;
+            int iode = (int) BitUtils.getbitu(buff, i, ni); i += ni;
+            int iodcrc = (int) BitUtils.getbitu(buff, i, nj); i += nj;
             int dx = BitUtils.getbits(buff, i, 22); i += 22;
             int dy = BitUtils.getbits(buff, i, 20); i += 20;
             int dz = BitUtils.getbits(buff, i, 20); i += 20;
             int ddx = BitUtils.getbits(buff, i, 21); i += 21;
             int ddy = BitUtils.getbits(buff, i, 19); i += 19;
             int ddz = BitUtils.getbits(buff, i, 19); i += 19;
+            if (sat <= 0 || sat > Constants.MAXSAT) {
+                continue;
+            }
             Ssr ssr = getOrCreateSsr(sat);
             ssr.t0[0] = new GTime(time);
             ssr.iod[0] = ssrIod;
             ssr.udi[0] = ssrUdi;
-            ssr.iode = iode;
+            ssr.iode = (sys == Constants.SYS_CMP) ? iodcrc : iode;
+            ssr.iodcrc = iodcrc;
+            ssr.refd = ssrRefd;
             ssr.deph[0] = ssrSigned(dx, 22, 0.1e-3);
             ssr.deph[1] = ssrSigned(dy, 20, 0.4e-3);
             ssr.deph[2] = ssrSigned(dz, 20, 0.4e-3);
@@ -1349,6 +1459,7 @@ public class Rtcm implements Serializable {
     private boolean decodeSsrCodeBias(int sys) {
         int i = decodeSsrHead(decodeSsrEpoch(sys), sys);
         GTime time = this.time != null ? this.time : new GTime();
+        int[] sigs = ssrSigTable(sys);
         for (int k = 0; k < ssrNsat; k++) {
             i = decodeSsrSatId(i, sys);
             int sat = this.ephsat;
@@ -1363,10 +1474,12 @@ public class Rtcm implements Serializable {
             ssr.iod[4] = ssrIod;
             ssr.udi[4] = ssrUdi;
             for (int j = 0; j < nsig; j++) {
-                int sig = (int) BitUtils.getbitu(buff, i, 5); i += 5;
+                int mode = (int) BitUtils.getbitu(buff, i, 5); i += 5;
                 int cb = BitUtils.getbits(buff, i, 14); i += 14;
-                if (sig > 0 && sig <= Constants.MAXCODE) {
-                    ssr.cbias[sig - 1] = (float) ssrSigned(cb, 14, 0.02e-3);
+                /* RTKLIB 2.5.1 decode_ssr3: cbias[sigs[mode]-1] = bias*0.01 (m) */
+                int code = (mode < sigs.length) ? sigs[mode] : 0;
+                if (code > 0 && code <= Constants.MAXCODE) {
+                    ssr.cbias[code - 1] = (float) (cb * 0.01);
                 }
             }
             ssr.update = 1;
@@ -1374,15 +1487,89 @@ public class Rtcm implements Serializable {
         return true;
     }
 
+    /* RTKLIB 2.5.1 rtcm3.c ssr_sig_* 表: SSR 5bit 信号/跟踪模式 ID -> CODE_* 索引(1-based, 0=无效) */
+    private static final int[] SSR_SIG_GPS = {
+        Constants.CODE_L1C, Constants.CODE_L1P, Constants.CODE_L1W, Constants.CODE_L1S,
+        Constants.CODE_L1L, Constants.CODE_L2C, Constants.CODE_L2D, Constants.CODE_L2S,
+        Constants.CODE_L2L, Constants.CODE_L2X, Constants.CODE_L2P, Constants.CODE_L2W,
+        Constants.CODE_L2Y, Constants.CODE_L2M, Constants.CODE_L5I, Constants.CODE_L5Q,
+        Constants.CODE_L5X, Constants.CODE_L1S, Constants.CODE_L1L, Constants.CODE_L1X
+    };
+    private static final int[] SSR_SIG_GLO = {
+        Constants.CODE_L1C, Constants.CODE_L1P, Constants.CODE_L2C, Constants.CODE_L2P,
+        Constants.CODE_L4A, Constants.CODE_L4B, Constants.CODE_L4X, Constants.CODE_L6A,
+        Constants.CODE_L6B, Constants.CODE_L6X, Constants.CODE_L3I, Constants.CODE_L3Q,
+        Constants.CODE_L3X
+    };
+    private static final int[] SSR_SIG_GAL = {
+        Constants.CODE_L1A, Constants.CODE_L1B, Constants.CODE_L1C, Constants.CODE_L1X,
+        Constants.CODE_L1Z, Constants.CODE_L5I, Constants.CODE_L5Q, Constants.CODE_L5X,
+        Constants.CODE_L7I, Constants.CODE_L7Q, Constants.CODE_L7X, Constants.CODE_L8I,
+        Constants.CODE_L8Q, Constants.CODE_L8X, Constants.CODE_L6A, Constants.CODE_L6B,
+        Constants.CODE_L6C, Constants.CODE_L6X, Constants.CODE_L6Z
+    };
+    private static final int[] SSR_SIG_QZS = {
+        Constants.CODE_L1C, Constants.CODE_L1S, Constants.CODE_L1L, Constants.CODE_L2S,
+        Constants.CODE_L2L, Constants.CODE_L2X, Constants.CODE_L5I, Constants.CODE_L5Q,
+        Constants.CODE_L5X, Constants.CODE_L6S, Constants.CODE_L6L, Constants.CODE_L6X,
+        Constants.CODE_L1X, Constants.CODE_L1Z, Constants.CODE_L5D, Constants.CODE_L5P,
+        Constants.CODE_L5Z, Constants.CODE_L6E, Constants.CODE_L6Z
+    };
+    /* RTKLIB 2.5.1 ssr_sig_bds: mode 16/17 原版为 0 (标注"不支持")。
+     * 实测 CAS 每颗 BDS 卫星固定播发 mode=16 码偏差（B1I, 1561.098GHz, 与 GPS L1 同频），
+     * 硬缺陷：mode=16 被过滤导致 BDS osbL1/osbP1 全为 0，MW WL 组合 sig 放大。
+     * JAVA-ONLY 增强：mode 16/17 均映射到 CODE_L1C（频率一致，硬件延迟改正可直接复用）。 */
+    private static final int[] SSR_SIG_BDS = {
+        Constants.CODE_L2I, Constants.CODE_L2Q, Constants.CODE_L2X, Constants.CODE_L6I,
+        Constants.CODE_L6Q, Constants.CODE_L6X, Constants.CODE_L7I, Constants.CODE_L7Q,
+        Constants.CODE_L7X, Constants.CODE_L1D, Constants.CODE_L1P, Constants.CODE_L1X,
+        Constants.CODE_L5D, Constants.CODE_L5P, Constants.CODE_L5X, Constants.CODE_L1A,
+        Constants.CODE_L1C, Constants.CODE_L1C, Constants.CODE_L6A
+    };
+    private static final int[] SSR_SIG_SBS = {
+        Constants.CODE_L1C, Constants.CODE_L5I, Constants.CODE_L5Q
+    };
+
+    private static int[] ssrSigTable(int sys) {
+        switch (sys) {
+            case Constants.SYS_GPS: return SSR_SIG_GPS;
+            case Constants.SYS_GLO: return SSR_SIG_GLO;
+            case Constants.SYS_GAL: return SSR_SIG_GAL;
+            case Constants.SYS_QZS: return SSR_SIG_QZS;
+            case Constants.SYS_CMP: return SSR_SIG_BDS;
+            case Constants.SYS_SBS: return SSR_SIG_SBS;
+            default: return SSR_SIG_GPS;
+        }
+    }
+
+    /* RTKLIB 2.5.1 rtcm3.c decode_ssr7(subtype=0) + decode_ssr7_head 对齐:
+     * head(无 datum 位): epoch + udi(4) + sync(1) + iod(4) + provid(16) + solid(4)
+     *                    + dispe(1) + mw(1) + nsat(QZS=4, 其他=6)
+     * per-sat: prn(GLO=5/QZS=4/其他=6, offp: QZS+192/SBS+120) + nbias(5)
+     *          + yaw_ang(u9) + yaw_rate(s8)
+     * per-bias(32bit): mode(5) + sii(1) + swl(2) + sdc(4) + bias(s20 × 0.0001 m) */
     private boolean decodeSsrPhaseBias(int sys) {
-        int i = decodeSsrHead(decodeSsrEpoch(sys), sys);
+        int i = decodeSsrEpoch(sys);
+        ssrUdi = (int) BitUtils.getbitu(buff, i, 4); i += 4;
+        ssrMi = (int) BitUtils.getbitu(buff, i, 1); i += 1;
+        ssrIod = (int) BitUtils.getbitu(buff, i, 4); i += 4;
+        ssrProviderId = (int) BitUtils.getbitu(buff, i, 16); i += 16;
+        ssrSolutionId = (int) BitUtils.getbitu(buff, i, 4); i += 4;
+        i += 1; /* dispe: dispersive bias consistency indicator */
+        i += 1; /* mw: MW consistency indicator */
+        int ns = (sys == Constants.SYS_QZS) ? 4 : 6;
+        ssrNsat = (int) BitUtils.getbitu(buff, i, ns); i += ns;
+        int np = (sys == Constants.SYS_GLO) ? 5 : (sys == Constants.SYS_QZS) ? 4 : 6;
+        int offp = (sys == Constants.SYS_QZS) ? 192 : (sys == Constants.SYS_SBS) ? 120 : 0;
+        int[] sigs = ssrSigTable(sys);
         GTime time = this.time != null ? this.time : new GTime();
         for (int k = 0; k < ssrNsat; k++) {
-            i = decodeSsrSatId(i, sys);
-            int sat = this.ephsat;
+            int prn = (int) BitUtils.getbitu(buff, i, np) + offp; i += np;
+            int sat = SatUtils.satno(sys, prn);
+            this.ephsat = sat;
             if (sat <= 0 || sat > Constants.MAXSAT) {
                 int nsig = (int) BitUtils.getbitu(buff, i, 5); i += 5;
-                i += 17 + nsig * 30;
+                i += 17 + nsig * 32;
                 continue;
             }
             int nsig = (int) BitUtils.getbitu(buff, i, 5); i += 5;
@@ -1392,20 +1579,22 @@ public class Rtcm implements Serializable {
             ssr.udi[5] = ssrUdi;
             int yaw = (int) BitUtils.getbitu(buff, i, 9); i += 9;
             int dyaw = BitUtils.getbits(buff, i, 8); i += 8;
-            ssr.yaw_ang = yaw / 256.0;
-            ssr.yaw_rate = ssrSigned(dyaw, 8, 1.0 / 8192.0);
+            ssr.yaw_ang = yaw / 256.0 * 180.0;    /* (deg)  对齐 RTKLIB 2.5.1 */
+            ssr.yaw_rate = dyaw / 8192.0 * 180.0; /* (deg/s) */
             for (int j = 0; j < nsig; j++) {
-                int sig = (int) BitUtils.getbitu(buff, i, 5); i += 5;
-                int wl = (int) BitUtils.getbitu(buff, i, 2); i += 2;
+                int mode = (int) BitUtils.getbitu(buff, i, 5); i += 5;
+                i += 1; /* sii: signal integer indicator */
+                i += 2; /* swl: signal wide-lane integer indicator */
                 int di = (int) BitUtils.getbitu(buff, i, 4); i += 4;
                 int pb = BitUtils.getbits(buff, i, 20); i += 20;
-                if (sig > 0 && sig <= Constants.MAXCODE) {
-                    ssr.pbias[sig - 1] = ssrSigned(pb, 20, 0.1e-3);
-                    ssr.dispInd[sig - 1] = di;
+                int code = (mode < sigs.length) ? sigs[mode] : 0;
+                if (code > 0 && code <= Constants.MAXCODE) {
+                    ssr.pbias[code - 1] = pb * 0.0001;
+                    ssr.dispInd[code - 1] = di;
                     if (di != 0) {
-                        ssr.dispBias[sig - 1] = ssr.pbias[sig - 1];
+                        ssr.dispBias[code - 1] = ssr.pbias[code - 1];
                     } else {
-                        ssr.dispBias[sig - 1] = 0.0;
+                        ssr.dispBias[code - 1] = 0.0;
                     }
                 }
             }
@@ -1414,19 +1603,20 @@ public class Rtcm implements Serializable {
         return true;
     }
 
+    /* RTKLIB 2.5.1 decode_ssr4 (combined orbit+clock): per-sat iode 位宽 ni 与 iodcrc 位宽 nj
+     * 与 decode_ssr1 相同；每星总码元位 = np + ni + nj + 191（轨道 121 + 钟差 70）。
+     * BDS subtype=0 时 ssr.iode = iodcrc（同 decode_ssr1）。 */
     private boolean decodeSsrCombOrbClk(int sys) {
-        int i = decodeSsrHead(decodeSsrEpoch(sys), sys);
+        int i = decodeSsrHead(decodeSsrEpoch(sys), sys, true);
         GTime time = this.time != null ? this.time : new GTime();
+        final int ni = (sys == Constants.SYS_GAL || sys == Constants.SYS_CMP) ? 10
+                : (sys == Constants.SYS_SBS) ? 9 : 8;
+        final int nj = (sys == Constants.SYS_CMP) ? 8 : (sys == Constants.SYS_SBS) ? 24 : 0;
         for (int k = 0; k < ssrNsat; k++) {
             i = decodeSsrSatId(i, sys);
             int sat = this.ephsat;
-            if (sat <= 0 || sat > Constants.MAXSAT) {
-                int iodeBlen = (sys == Constants.SYS_GAL) ? 10 : 8;
-                i += iodeBlen + 121 + 70;
-                continue;
-            }
-            int iodeBlen = (sys == Constants.SYS_GAL) ? 10 : 8;
-            int iode = (int) BitUtils.getbitu(buff, i, iodeBlen); i += iodeBlen;
+            int iode = (int) BitUtils.getbitu(buff, i, ni); i += ni;
+            int iodcrc = (int) BitUtils.getbitu(buff, i, nj); i += nj;
             int dx = BitUtils.getbits(buff, i, 22); i += 22;
             int dy = BitUtils.getbits(buff, i, 20); i += 20;
             int dz = BitUtils.getbits(buff, i, 20); i += 20;
@@ -1436,6 +1626,9 @@ public class Rtcm implements Serializable {
             int dclk0 = BitUtils.getbits(buff, i, 22); i += 22;
             int dclk1 = BitUtils.getbits(buff, i, 21); i += 21;
             int dclk2 = BitUtils.getbits(buff, i, 27); i += 27;
+            if (sat <= 0 || sat > Constants.MAXSAT) {
+                continue;
+            }
             Ssr ssr = getOrCreateSsr(sat);
             ssr.t0[0] = new GTime(time);
             ssr.t0[1] = new GTime(time);
@@ -1443,7 +1636,9 @@ public class Rtcm implements Serializable {
             ssr.iod[1] = ssrIod;
             ssr.udi[0] = ssrUdi;
             ssr.udi[1] = ssrUdi;
-            ssr.iode = iode;
+            ssr.iode = (sys == Constants.SYS_CMP) ? iodcrc : iode;
+            ssr.iodcrc = iodcrc;
+            ssr.refd = ssrRefd;
             ssr.deph[0] = ssrSigned(dx, 22, 0.1e-3);
             ssr.deph[1] = ssrSigned(dy, 20, 0.4e-3);
             ssr.deph[2] = ssrSigned(dz, 20, 0.4e-3);
@@ -1983,12 +2178,12 @@ public class Rtcm implements Serializable {
 
         ObsCode.sigindex(sys, code, h.nsig, idx);
 
-        if (sys == Constants.SYS_CMP && log.isDebugEnabled()) {
+        if (sys == Constants.SYS_CMP && log.isInfoEnabled()) {
             StringBuilder sbBds = new StringBuilder("[MSM-BDS-SIG] type=" + type + " nsig=" + h.nsig + " ");
             for (int si = 0; si < h.nsig; si++) {
                 sbBds.append(String.format("[%d]sig=%s code=%d idx=%d ", si, sig[si], code[si], idx[si]));
             }
-            log.debug(sbBds.toString());
+            log.info(sbBds.toString());
         }
 
         for (i = j = 0; i < h.nsat; i++) {
@@ -2049,6 +2244,15 @@ public class Rtcm implements Serializable {
             }
             if (sat != 0 && index >= 0) {
                 promoteExtSig(this.obs.data[index], sys);
+                /* TEMP-DIAG: print BDS obs.code after saveMsmObs */
+                if (sys == Constants.SYS_CMP && log.isInfoEnabled()) {
+                    StringBuilder sb = new StringBuilder("[BDS-OBS] prn=" + prn + " sat=" + sat + " code=[");
+                    for (int fc = 0; fc < Constants.NFREQ; fc++) {
+                        sb.append(this.obs.data[index].code[fc]).append(fc < Constants.NFREQ - 1 ? "," : "");
+                    }
+                    sb.append("]");
+                    log.info(sb.toString());
+                }
             }
         }
     }

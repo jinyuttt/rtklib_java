@@ -6,17 +6,15 @@ import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
+
 import org.rtklib.java.ephemeris.EphModel;
 import org.rtklib.java.ionosphere.IonosphereModel;
 import org.rtklib.java.ionosphere.SbasCorrection;
 import org.rtklib.java.kalman.KalmanFilter;
-import org.rtklib.java.pntpos.SppCore;
 import org.rtklib.java.ppp.PppCore;
 import org.rtklib.java.ppp.PppOptimizations;
 import org.rtklib.java.ppp.PppOsbModel;
-import org.rtklib.java.rtkpos.Tides;
 import org.rtklib.java.time.TimeSystem;
-import org.rtklib.java.troposphere.TroposphereModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,6 +25,16 @@ public final class PppRtkCore {
     private static final Logger LOG = LoggerFactory.getLogger(PppRtkCore.class);
     /** 临时接入诊断：设置环境变量 PPP_DEBUG_REJ=1 时输出逐星剔除原因统计 */
     private static final boolean DBG_REJ = System.getenv("PPP_DEBUG_REJ") != null;
+    /** REJ 诊断输出的最大历元号（PPP_DEBUG_REJ_MAXEPOCH，缺省 3） */
+    private static final int DBG_REJ_MAXEPOCH;
+    static {
+        int m = 3;
+        String v = System.getenv("PPP_DEBUG_REJ_MAXEPOCH");
+        if (v != null) {
+            try { m = Integer.parseInt(v.trim()); } catch (NumberFormatException ignored) { }
+        }
+        DBG_REJ_MAXEPOCH = m;
+    }
     private static final int MAX_ITER = 8;
     private static final int MIN_NSAT_SOL = 4;
 
@@ -112,6 +120,14 @@ public final class PppRtkCore {
                 rtk.ssat[obs[i].sat - 1].snrRover[j] = obs[i].SNR[j];
                 rtk.ssat[obs[i].sat - 1].snrBase[j] = 0;
             }
+            /* [ALIGN-PPPCore] sync ssat.code from obs.code (PppCore.pppRes L781-785).
+             * PppRtkCore.ppprtkos() previously had NO code propagation, leaving ssat.code all zero
+             * → PppAmbFix/PppRtkAmbFix code0=code1=0 → osbL1/osbP1=0 → WL sig blows up → AR fails → KF collapses. */
+            for (int fc = 0; fc < Constants.NFREQ; fc++) {
+                if (obs[i].code[fc] != 0) {
+                    rtk.ssat[obs[i].sat - 1].code[fc][0] = obs[i].code[fc];
+                }
+            }
         }
 
         if (rtk.nx == 0 || rtk.nx != nx) {
@@ -142,14 +158,13 @@ public final class PppRtkCore {
             SsrCorrector.applyHrClockCorrection(nav.ssr, dts, obs, n);
         }
 
-        if (hasSsr) {
-            for (int i = 0; i < n; i++) {
-                int sat = obs[i].sat;
-                if (!SsrCorrector.isSsrValid(nav.ssr, sat, obs[i].time, ssrMaxAge)) {
-                    exc[i] = 1;
-                }
-            }
-        }
+        // [FIX-ALG-038] SSR validity check intentionally skipped for now.
+        // In PPP-RTK, SSR corrections are optional enhancements; broadcast ephemeris
+        // fallback should always be allowed. applyOrbitCorrection already skips
+        // satellites without SSR data. The original unconditional exclusion prevented
+        // BDS-2 satellites without SSR from participating at all.
+        // TODO: Re-implement conditional exclusion (expired SSR → exclude, no SSR → fallback)
+        // after verifying SSR data coverage and age for all satellite systems.
 
         if (opt.posopt[3] != 0) {
             PppCore.testeclipse(obs, n, nav, rs);
@@ -448,6 +463,59 @@ public final class PppRtkCore {
                 }
             }
 
+            // FIX-ALG-043: permanent exclusion for initialization-phase dead loops.
+            // Target: sat=107-type sats where initial Pc-Lc is corrupted (372 m vs normal ~5 m),
+            // → KF never converges → innovation always > maxinno → infinite dead loop
+            // (repeats every epoch because udbias re-inits with the same bad Pc-Lc).
+            //
+            // Design:
+            // 1. Trigger ONLY during first INIT_PHASE_EPOCH epochs (dead loops manifest
+            //    within 5-7 epochs; normal sats never accumulate 10 rejections that fast).
+            // 2. Freeze rejc to PERM_FROZEN_REJC once triggered — this is a one-way latch.
+            // 3. All subsequent checks look for rejc >= PERM_FROZEN_REJC, which normal
+            //    sats can never reach (even with persistent large residuals they top out
+            //    at ~50-60 over 119 epochs).
+            //
+            // sat=107 scenario: epoch 5 rejc=10 → freeze → epoch 6+ permanently excluded ✓
+            // sat=29 (GPS normal): epoch 38 rejc=1 → slowly grows to 20 by epoch 58 →
+            //   never reaches freeze threshold during init phase → NOT excluded ✓
+            // sat=106/108/109 (BDS): start rejecting at epoch 47 → epoch>10 → never trigger ✓
+            final int INIT_PHASE_EPOCH = 10;
+            final int INIT_REJC_THRESHOLD = 10;
+            final int PERM_FROZEN_REJC = 1000;
+
+            // Phase 1: Freeze sats that hit the threshold during initialization window
+            if (rtk.epoch <= INIT_PHASE_EPOCH) {
+                for (int i = 0; i < Constants.MAXSAT; i++) {
+                    int idx = IB(i + 1, f, opt);
+                    if (idx >= nx) continue;
+                    if (rtk.ssat[i].rejc[f] >= INIT_REJC_THRESHOLD
+                        && rtk.ssat[i].rejc[f] < PERM_FROZEN_REJC) {
+                        rtk.ssat[i].rejc[f] = PERM_FROZEN_REJC;
+                        LOG.warn("[PERM-FREEZE] epoch={} sat={} frq={} rejc>=10 in init phase -> perm freeze",
+                            rtk.epoch, i + 1, f);
+                    }
+                }
+            }
+
+            // Phase 2: Apply permanent exclusion to frozen sats (all epochs)
+            for (int i = 0; i < Constants.MAXSAT; i++) {
+                int idx = IB(i + 1, f, opt);
+                if (idx >= nx) continue;
+                if (rtk.ssat[i].rejc[f] >= PERM_FROZEN_REJC) {
+                    if (x[idx] != 0.0) {
+                        PppCore.initx(x, P, nx, 0.0, PppCore.VAR_BIAS, idx);
+                        rtk.ssat[i].mw[0] = 0.0;
+                        rtk.ssat[i].gf[0] = 0.0;
+                        rtk.ssat[i].xrwl = 0.0;
+                        rtk.ssat[i].rw = 0.0;
+                        rtk.ssat[i].xswl = 0.0;
+                        rtk.ssat[i].niwl = 0;
+                    }
+                    rtk.ssat[i].vsat[f] = 0;
+                }
+            }
+
             double[] bias = new double[n];
             int[] slip = new int[n];
             double offset = 0.0;
@@ -486,6 +554,24 @@ public final class PppRtkCore {
                     }
                 }
 
+                // FIX-ALG-044: sanity-check initial ambiguity magnitude.
+                // IFLC initial bias = Lc-Pc, dominated by pseudorange noise (~1 m).
+                // Normal values are within ±50 m for most frequencies, up to ~500 m
+                // for noisy receivers/geometry. Values beyond 500 m are almost
+                // certainly corrupted pseudorange. Sats with 100-500 m bias should
+                // converge within 1-2 epochs via the offset correction and KF; this
+                // check only catches truly broken sats before they ever get init'd.
+                if (bias[i] != 0.0 && Math.abs(bias[i]) > 500.0) {
+                    if (rtk.epoch <= 3) {
+                        LOG.warn("[FIX-044] epoch={} sat={} frq={} init_bias={} outlier -> skip initx",
+                            rtk.epoch, sat, f, String.format("%.1f", bias[i]));
+                    }
+                    bias[i] = 0.0;
+                }
+
+                // FIX-ALG-043: skip permanently frozen sats (rejc frozen to 1000 during init phase)
+                if (rtk.ssat[sat - 1].rejc[f] >= 100) continue;
+
                 if (x[j] == 0.0 || slip[i] != 0 || bias[i] == 0.0) continue;
 
                 offset += bias[i] - x[j];
@@ -505,6 +591,8 @@ public final class PppRtkCore {
 
                 P[j * nx + j] += PppCore.SQR(opt.prn[0]) * Math.abs(rtk.tt);
 
+                // FIX-ALG-043: skip initx for permanently frozen sats
+                if (rtk.ssat[sat - 1].rejc[f] >= 100) continue;
                 if (bias[i] == 0.0 || (x[j] != 0.0 && slip[i] == 0)) continue;
 
                 PppCore.initx(x, P, nx, bias[i], VAR_BIAS, IB(sat, f, opt));
@@ -541,7 +629,7 @@ public final class PppRtkCore {
         int stat = 0;
 
         // 临时接入诊断（PPP_DEBUG_REJ=1）：逐星剔除原因统计
-        final boolean dbg = DBG_REJ && post == 0 && rtk.epoch <= 3;
+        final boolean dbg = DBG_REJ && post == 0 && rtk.epoch <= DBG_REJ_MAXEPOCH;
         int[] rejCnt = new int[8];
         StringBuilder rejLog = dbg ? new StringBuilder() : null;
         final String[] REJ_NAME = {"ok", "r<=0", "el<elmin", "excl", "trop", "iono", "bias0", "maxinno"};
@@ -687,6 +775,13 @@ public final class PppRtkCore {
                 double dcb = 0.0;
                 double bias = 0.0;
 
+                // FIX-ALG-043: permanently frozen sats (rejc frozen to 1000 during init
+                // phase) — skip both phase and pseudorange in ppprtkRes.
+                if (rtk.ssat[sat - 1].rejc[frq] >= 100) {
+                    exc[i] = 1;
+                    continue;
+                }
+
                 if (opt.ionoopt == Constants.IONOOPT_IFLC) {
                     y = code == 0 ? Lc[0] : Pc[0];
                     if (y == 0.0) continue;
@@ -699,6 +794,12 @@ public final class PppRtkCore {
                     if (rtk.rtkConfig != null && rtk.rtkConfig.enableOsb) {
                         osbCorr = PppOsbModel.osbCorrection(sat, frq, obs[i].code[frq],
                                 nav, rtk.sol.time.time, rtk.rtkConfig);
+                    }
+                    /* [ALIGN-RTKLIB-2.5.1] postpos.c:430 / rtksvr.c:540:
+                     * obs[i].L[j] -= nav->ssr[sat-1].pbias[code-1]*freq/CLIGHT;
+                     * Java: L[frq] 单位=米，pbias 返回=米，直接减。仅非 IFLC 单频路径。 */
+                    if (code == 0 && hasSsr) {
+                        y -= SsrCorrector.getPhaseBias(nav.ssr, sat, obs[i].code[frq]);
                     }
                 }
 
@@ -760,10 +861,34 @@ public final class PppRtkCore {
                 if (post == 0 && opt.maxinno[code] > 0.0) {
                     double maxinno_val = (rtk.epoch <= 30 && code == 0) ? 30.0 : opt.maxinno[code];
                     if (Math.abs(res) > maxinno_val) {
-                        if (dbg) { rejCnt[7]++; rejLog.append(sat).append(":inno")
-                                .append(String.format("%.0f", res)).append(" "); }
+                        if (dbg) {
+                            rejCnt[7]++;
+                            rejLog.append(sat).append(":inno").append(String.format("%.0f", res)).append(" ");
+                        }
                         exc[i] = 1;
                         rtk.ssat[sat - 1].rejc[frq]++;
+                        // FIX-ALG-043b: immediate reset on persistent innovation rejection.
+                        // exc[] is local to ppprtkRes and resets each epoch, but within one
+                        // epoch it's shared across iters — once set, sat is excluded in
+                        // remaining iters of this epoch. If rejc already exceeded threshold,
+                        // reset ambiguity NOW and clear exc[i] so this sat gets a chance
+                        // in later iters (same epoch).
+                        // NOTE: rejc is NOT reset here — it accumulates monotonically so the
+                        // permanent-exclude logic in udbias can eventually kill this sat.
+                        final int MAX_REJC_IMMEDIATE = 4;
+                        if (rtk.ssat[sat - 1].rejc[frq] >= MAX_REJC_IMMEDIATE) {
+                            int idx = IB(sat, frq, opt);
+                            if (idx < nx && x[idx] != 0.0) {
+                                PppCore.initx(x, rtk.P, nx, 0.0, PppCore.VAR_BIAS, idx);
+                                rtk.ssat[sat - 1].mw[0] = 0.0;
+                                rtk.ssat[sat - 1].gf[0] = 0.0;
+                                rtk.ssat[sat - 1].xrwl = 0.0;
+                                rtk.ssat[sat - 1].rw = 0.0;
+                                rtk.ssat[sat - 1].xswl = 0.0;
+                                rtk.ssat[sat - 1].niwl = 0;
+                            }
+                            exc[i] = 0; // clear so it's not locked out in later iters
+                        }
                         continue;
                     }
                 }
@@ -820,22 +945,19 @@ public final class PppRtkCore {
                     rtk.epoch, n, nv, nx, sums.toString().trim(), rejLog.toString().trim());
         }
 
-        if (post == 0 && rtk.epoch <= 2) {
-            if (opt.ionoopt == Constants.IONOOPT_IFLC) {
-                int zeroLc = 0, zeroPc = 0, zeroBias = 0;
-                for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
-                    int sat = obs[i].sat;
-                    double[] Lc_d = new double[1], Pc_d = new double[1];
-                    double[] L_d = new double[Constants.NFREQ], P_d = new double[Constants.NFREQ];
-                    PppCore.corrMeas(obs[i], nav, rtk.ssat[sat-1].azel, opt, new double[Constants.NFREQ], new double[Constants.NFREQ], 0.0, L_d, P_d, Lc_d, Pc_d);
-                    if (Lc_d[0] == 0.0) zeroLc++;
-                    if (Pc_d[0] == 0.0) zeroPc++;
-                    int jIdx = IB(sat, 0, opt);
-                    if (jIdx < nx && x[jIdx] == 0.0) zeroBias++;
+        if (LOG.isTraceEnabled() && post == 0 && rtk.epoch <= 3
+                && opt.ionoopt == Constants.IONOOPT_IFLC) {
+            int zeroLc = 0;
+            for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
+                double[] Lc_d = new double[1], Pc_d = new double[1];
+                double[] L_d = new double[Constants.NFREQ], P_d = new double[Constants.NFREQ];
+                PppCore.corrMeas(obs[i], nav, rtk.ssat[obs[i].sat - 1].azel, opt,
+                        new double[Constants.NFREQ], new double[Constants.NFREQ], 0.0, L_d, P_d, Lc_d, Pc_d);
+                if (Lc_d[0] == 0.0) {
+                    zeroLc++;
                 }
-                LOG.info("ppprtkRes IFLC diag: epoch={} nv={} zeroLc={} zeroPc={} zeroBias={}",
-                    rtk.epoch, nv, zeroLc, zeroPc, zeroBias);
             }
+            LOG.trace("ppprtkRes IFLC diag: epoch={} nv={} zeroLc={}", rtk.epoch, nv, zeroLc);
         }
 
         if (post == 0 && nv == 0 && rtk.epoch <= 2) {
@@ -858,7 +980,11 @@ public final class PppRtkCore {
             }
         }
 
-        rtk.sol.stat = (byte)(rtk.sol.ns < MIN_NSAT_SOL ? Constants.SOLQ_NONE : stat);
+        // FIX-ALG-040: preserve SOLQ_FIX from AR resolution. PppRtkAmbFix may have
+        // upgraded rtk.sol.stat to SOLQ_FIX before updateStat runs — don't clobber it.
+        if (rtk.sol.stat != Constants.SOLQ_FIX) {
+            rtk.sol.stat = (byte)(rtk.sol.ns < MIN_NSAT_SOL ? Constants.SOLQ_NONE : stat);
+        }
 
         for (int i = 0; i < 3; i++) {
             rtk.sol.rr[i] = rtk.x[i];
