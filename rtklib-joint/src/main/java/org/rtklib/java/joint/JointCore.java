@@ -293,26 +293,34 @@ public final class JointCore {
                 break;
             }
             if (jrtk.epoch == 0 && iter == 0) {
-                int nrPerBl = RtkCore.NR(jrtk.toState());
-                log.debug("epoch=0 P diag: P[0]={} P[1]={} P[2]={} P[5]={} P[6]={}",
-                        Pp[0], Pp[1*nx+1], Pp[2*nx+2],
-                        (nx > 5 ? Pp[5*nx+5] : -1), (nx > 6 ? Pp[6*nx+6] : -1));
-                int ib0 = jrtk.IB(0, blObs[0].sat[0], 0);
-                if (ib0 >= 0) {
-                    log.debug("epoch=0 P[ib0,ib0]={} ib0={} H[0,0]={} H[0,1]={} H[0,2]={} H[0,ib0]={}",
-                            Pp[ib0*nx+ib0], ib0, H[0*nx+0], H[0*nx+1], H[0*nx+2], H[0*nx+ib0]);
-                }
-                double hph0 = 0;
-                for (int i = 0; i < nx; i++) {
-                    double hi = H[0*nx+i];
-                    if (hi == 0) continue;
-                    for (int j = 0; j < nx; j++) {
-                        double hj = H[0*nx+j];
-                        if (hj == 0) continue;
-                        hph0 += hi * Pp[i*nx+j] * hj;
+                double minAmbVar = Double.MAX_VALUE, maxAmbVar = 0, sumAmbVar = 0;
+                int ambCnt = 0, unchangedCnt = 0;
+                StringBuilder unchangedSats = new StringBuilder();
+                for (int b = 0; b < blObs.length; b++) {
+                    if (blObs[b] == null) continue;
+                    for (int i = 0; i < blObs[b].ns; i++) {
+                        for (int f = 0; f < nf; f++) {
+                            int idx = jrtk.IB(b, blObs[b].sat[i], f);
+                            if (idx >= 0 && idx < nx && Pp[idx*nx+idx] > 0) {
+                                double var = Pp[idx*nx+idx];
+                                minAmbVar = Math.min(minAmbVar, var);
+                                maxAmbVar = Math.max(maxAmbVar, var);
+                                sumAmbVar += var;
+                                ambCnt++;
+                                if (var > 899.0) {
+                                    unchangedCnt++;
+                                    if (unchangedCnt <= 5) unchangedSats.append(String.format("b%d_s%d_f%d ", b, blObs[b].sat[i], f));
+                                }
+                            }
+                        }
                     }
                 }
-                log.debug("epoch=0 HPHt[0]={} (manual calc)", String.format("%.6f", hph0));
+                log.debug("epoch=0 AFTER Kalman: ambVar min={} max={} avg={} cnt={} unchanged={} sats={}",
+                        String.format("%.4f", minAmbVar), String.format("%.4f", maxAmbVar),
+                        ambCnt > 0 ? String.format("%.4f", sumAmbVar/ambCnt) : "N/A", ambCnt,
+                        unchangedCnt, unchangedSats);
+                double posVar = (Pp[0] + Pp[1*nx+1] + Pp[2*nx+2]) / 3.0;
+                log.debug("epoch=0 AFTER Kalman: posVar={}", String.format("%.6f", posVar));
             }
             if ((jrtk.epoch == 0 || jrtk.epoch == 5) && iter == 0) {
                 int nrPerBl = RtkCore.NR(jrtk.toState());
