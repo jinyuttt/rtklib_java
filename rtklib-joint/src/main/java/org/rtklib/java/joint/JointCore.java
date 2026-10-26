@@ -298,6 +298,7 @@ public final class JointCore {
                 StringBuilder unchangedSats = new StringBuilder();
                 for (int b = 0; b < blObs.length; b++) {
                     if (blObs[b] == null) continue;
+                    int[] fUpdated = new int[nf], fUnchanged = new int[nf];
                     for (int i = 0; i < blObs[b].ns; i++) {
                         for (int f = 0; f < nf; f++) {
                             int idx = jrtk.IB(b, blObs[b].sat[i], f);
@@ -309,16 +310,37 @@ public final class JointCore {
                                 ambCnt++;
                                 if (var > 899.0) {
                                     unchangedCnt++;
-                                    if (unchangedCnt <= 5) unchangedSats.append(String.format("b%d_s%d_f%d ", b, blObs[b].sat[i], f));
+                                    fUnchanged[f]++;
+                                    if (unchangedCnt <= 3) unchangedSats.append(String.format("b%d_s%d_f%d ", b, blObs[b].sat[i], f));
+                                } else {
+                                    fUpdated[f]++;
                                 }
                             }
                         }
                     }
+                    log.debug("epoch=0 b[{}] f_updated={} f_unchanged={}", b, java.util.Arrays.toString(fUpdated), java.util.Arrays.toString(fUnchanged));
                 }
                 log.debug("epoch=0 AFTER Kalman: ambVar min={} max={} avg={} cnt={} unchanged={} sats={}",
                         String.format("%.4f", minAmbVar), String.format("%.4f", maxAmbVar),
                         ambCnt > 0 ? String.format("%.4f", sumAmbVar/ambCnt) : "N/A", ambCnt,
                         unchangedCnt, unchangedSats);
+                double[] fAvgVar = new double[nf];
+                int[] fCnt = new int[nf];
+                for (int b = 0; b < blObs.length; b++) {
+                    if (blObs[b] == null) continue;
+                    for (int i = 0; i < blObs[b].ns; i++) {
+                        for (int f = 0; f < nf; f++) {
+                            int idx = jrtk.IB(b, blObs[b].sat[i], f);
+                            if (idx >= 0 && idx < nx && Pp[idx*nx+idx] > 0 && Pp[idx*nx+idx] < 899.0) {
+                                fAvgVar[f] += Pp[idx*nx+idx];
+                                fCnt[f]++;
+                            }
+                        }
+                    }
+                }
+                StringBuilder fSb = new StringBuilder();
+                for (int f = 0; f < nf; f++) fSb.append(String.format("f%d:avg=%.1f/cnt=%d ", f, fCnt[f] > 0 ? fAvgVar[f]/fCnt[f] : 0, fCnt[f]));
+                log.debug("epoch=0 AFTER Kalman per-freq: {}", fSb);
                 double posVar = (Pp[0] + Pp[1*nx+1] + Pp[2*nx+2]) / 3.0;
                 log.debug("epoch=0 AFTER Kalman: posVar={}", String.format("%.6f", posVar));
             }
