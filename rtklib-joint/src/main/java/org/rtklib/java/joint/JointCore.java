@@ -246,10 +246,7 @@ public final class JointCore {
             double ambVarBefore = 0;
             int ib0Diag = jrtk.IB(0, blObs[0].sat[0], 0);
             if (ib0Diag >= 0 && ib0Diag < nx) ambVarBefore = Pp[ib0Diag * nx + ib0Diag];
-            if (jrtk.epoch == 0 && iter == 0) {
-                log.debug("epoch=0 BEFORE Kalman: P[0]={} P[1]={} P[2]={} P[ib0]={} xp[0]={} xp[1]={} xp[2]={}",
-                        Pp[0], Pp[1*nx+1], Pp[2*nx+2], (ib0Diag >= 0 ? Pp[ib0Diag*nx+ib0Diag] : -1),
-                        xp[0], xp[1], xp[2]);
+            if ((jrtk.epoch == 0 || jrtk.epoch == 1 || jrtk.epoch == 5) && iter == 0) {
                 double hph0 = 0;
                 for (int i = 0; i < nx; i++) {
                     double hi = H[0*nx+i];
@@ -260,8 +257,10 @@ public final class JointCore {
                         hph0 += hi * Pp[i*nx+j] * hj;
                     }
                 }
-                log.debug("epoch=0 BEFORE Kalman: HPHt[0]={} H[0,0]={} H[0,ib0]={}", 
-                        String.format("%.4f", hph0), H[0], (ib0Diag >= 0 ? H[0*nx+ib0Diag] : -1));
+                log.debug("epoch={} BEFORE Kalman: HPHt[0]={} P[0]={} P[ib0]={} posVar={}", jrtk.epoch,
+                        String.format("%.4f", hph0), String.format("%.4f", Pp[0]),
+                        (ib0Diag >= 0 ? String.format("%.4f", Pp[ib0Diag*nx+ib0Diag]) : "N/A"),
+                        String.format("%.6f", (Pp[0]+Pp[1*nx+1]+Pp[2*nx+2])/3.0));
             }
             int info = KalmanFilter.update(xp, Pp, H, v, R, nx, nv);
             if (jrtk.epoch <= 5 && iter == 0 && ib0Diag >= 0) {
