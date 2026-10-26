@@ -89,6 +89,12 @@ public final class SsrCorrector {
         return s.pbias[code - 1];
     }
 
+    public static boolean hasSsrData(Ssr[] ssr, int sat) {
+        if (sat <= 0 || sat > Constants.MAXSAT) return false;
+        Ssr s = ssr[sat - 1];
+        return s != null && s.update != 0;
+    }
+
     public static boolean isSsrValid(Ssr[] ssr, int sat, GTime time, double maxAge) {
         if (sat <= 0 || sat > Constants.MAXSAT) return false;
         Ssr s = ssr[sat - 1];

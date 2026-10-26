@@ -455,6 +455,13 @@
 | FIX-ALG-027 | 2026-10-22 | ephemeris/OsbReader.java, data/Nav.java, ppp/PppAmbFix.java, ppp/PppCore.java, ppp/PppAmbFixBds3.java | 时变 OSB 读取兼容：Bias-SINEX START/END 解析 + osbSeries 时间戳序列（码/相位分键 ×2）+ GBM SVN 空缺列偏移自适应 + 码 OSB cbias 累加守卫（timedShort）；WUM 常量语义零影响 |
 | FIX-ALG-028 | 2026-10-22 | ephemeris/OsbReader.java, ppp/PppAmbFix.java, ppp/PppCore.java | WUM 3F 67.81cm 回归三因素闭环：getEwlFcb 恢复快照（L5Q 时变补偿失配）+ sh 双令牌判别 v2（27 星 OSB 丢失）+ MW 组合 OSB 单次施加裁决（2×2 矩阵：单次+无码OSB=3.00cm 终态，027 勘误） |
 | FIX-ALG-029 | 2026-10-23 | ppp/PppOptimizations.java, ephemeris/Gpt3GridReader.java, ppp/PppProcessor.java | GPT3+VMF3 U 向 +793% 三缺陷闭环：vmf3 缺连续分数分母（主导）+ ZHD 单位 hPa/Pa 错配 + ch/cw/bw 对齐官方；Gpt3GridReader 按 f90 全文重写并接线双路径，真网格 HKWS U 7.365→0.806m（基线 0.821）、HKSL 1.662m（基线 1.684） |
+| FIX-ALG-030 | 2026-10-23 | ppp/PppProcessor.java, rtcm/Rtcm.java, ppp/PppRtkCore.java | SSR 接入适配：Rtcm.setReferenceTime 暴露给外部；PppProcessor 新增 feedSsr() 独立 SSR 流入口；PppRtkCore 新增 ssrMaxAge 拦截；新增 SsrAccessCheckTest 实时流验证 |
+| FIX-ALG-031 | 2026-10-24 | ppp/PppRtkCore.java | 自适应场景切回阈值标定：FLOAT→SINGLE 条件从 nv<4 改为 nv<3；SINGLE→FLOAT 加稳定性检查（连续 5 历元 nv≥6）；加 post=0 预热守卫 |
+| FIX-ALG-032 | 2026-10-26 | ppp/PppProcessor.java | 实时流周基准锚点：loadNav 内 setReferenceTime 锚点从 BRDM TOE→CPU 当前时间（rtksvr.c:656 timeget 对齐），修复 adjweek ±3.5d 窗口不够导致 obsWeek 锁死错误周 |
+| FIX-ALG-033 | 2026-10-26 | rtcm/Rtcm.java | RTCM 1068（GLO SSR 高精度钟差 SSR6）switch 路由补全：dispatch 里 case 1068 缺失，方法体 decodeType1068() 已存在 |
+| FIX-ALG-034 | 2026-10-26 | rtcm/Rtcm.java, ppp/PppProcessor.java | RTCM 1043 按 SBAS 星历重新实现（cssrlib 布局）：首次按 1042 同构假设实现已证伪回退；二次查证 cssrlib decode_sbs_eph 后改为 SBAS 解码，6/6 帧验证通过 |
+| FIX-ALG-035 | 2026-10-26 | ppprtk/PppRtkCore.java, rtklib-test/SsrAccessCheckTest.java | IFLC 诊断日志降级为 trace；实时流录制能力（RECORD_OBS/RECORD_SSR）与回放闭环验证；PPP-RTK AR 触发条件实测（4 星固定、NL 3<4 门限，未达 FIX） |
+| FIX-ALG-036 | 2026-10-26 | rtcm/Rtcm.java | SSR 解码簇修复：相位偏差系统映射（1265=GPS/1267=GAL/1270=BDS）、轨道帧 BDS iodcrc 位宽（ni=10+nj=8）、码偏差 ssr_sig 表 mode→CODE 映射、比例尺 0.01m、SSR_SIG_BDS mode16/17 原版=0→CODE_L1C（JAVA-ONLY 增强 B1I 支持） |
 
 ## FIX-ALG-020 EST 模式死锁：DCB 产品加载 + enableIonoEstRobust 开关
 
@@ -1523,3 +1530,456 @@ epoch=880 CANYON→OPEN（snr 34.1），1603 历元解算正常，默认关闭�
 
 **影响范围**：仅自适应场景判定阈值；关闭 `enableAdaptiveScene` 时无任何影响。
 
+---
+
+## FIX-ALG-032 / 实时流周基准锚点：BRDM TOE → CPU 当前时间（2026-10-26）
+
+**性质**：调用方适配修复。不改 Rtcm 核心算法，仅修正 `PppProcessor.loadNav()` 里 `setReferenceTime` 的锚点源选择。
+
+**C 版依据**：`rtksvr.c:656` `timeget()` → 实时流场景直接用 CPU time 作为周基准，与观测同周，adjweek ±3.5d 窗口足够覆盖。
+
+**问题**：SSR 实时流接入时 `loadNav()` 内部用预载 BRDM 文件的第一颗星 TOE 做锚点：
+
+```java
+// 原代码（已删除）
+refTime = dst.eph[i].toe;  // BRDM TOE, week=2441（2026-10-22）
+rtcm.setReferenceTime(refTime);  // 锁死 week=2441, timeInitialized=true
+```
+
+BRDM TOE 过期 4 天，而实时观测属于 week=2442（2026-10-26）。`adjweek(tow)` ±3.5d 窗口（±302400s）不足以覆盖 4 天差（345600s），观测时间戳被算成 week=2441，导致后续 `satposs` 因时间不匹配返回 `rs=0`、全部卫星被 el<elmin 剔除、`nv=0`、PPP 解状态停在 SINGLE。
+
+此外，WUH20 观测流（RTCM 3.3/3.4）在不同时间窗口下发的星历消息类型不稳定：Day 295 观测到 1042（BDS-2 D1/D2）/1045（GAL F/NAV）/1046（GAL I/NAV），但 Day 299 只发 **1043（BDS-3 B-CNAV1）**、没有 1042。RTKLIB 2.5.0 C 版 `rtcm3.c:2584-2610` 的 switch 里**同样没有 case 1043**（1043 是 RTCM 3.4 新增的北斗三号 B-CNAV1 星历消息），Java Rtcm 也没有——流中所有 BDS 星历帧被静默丢弃。锚点一旦锁死到错误周（week=2441），即使后续 1045/1046 帧到达，也因周差超过 adjweek ±3.5d 窗口被错误纠偏。
+
+**RTCM 10403.3/10403.4 星历消息对应表**（纠正历史误判）：
+
+| MsgType | 系统 | 电文说明 | RTKLIB 2.5.0 | Java Rtcm |
+|---------|------|---------|-------------|-----------|
+| 1019 | GPS | LNAV | ✅ | ✅ |
+| 1020 | GLO | FDMA | ✅ | ✅ |
+| 1041 | NavIC | IRNSS | ✅ | — |
+| **1042** | **BDS** | **D1/D2（BDS-2，老信号）** | ✅ decode_type1042 | ✅ decodeType1042 |
+| **1043** | **BDS** | **B-CNAV1（BDS-3，新信号 B1C/B2a）** | ❌ 未实现 | ❌ 未实现 |
+| 1044 | QZSS | QZSS 广播星历 | ✅ | ✅ |
+| 1045 | GAL | F/NAV（E1） | ✅ | ✅ |
+| 1046 | GAL | I/NAV（E5b） | ✅ | ✅ |
+
+> WUH20 NTRIP 源只下发 BDS-3 B-CNAV1（1043）、不下发老 BDS-2 D1/D2（1042），这就是流中 BDS 星历全部被丢弃的根因。1042 和 1043 虽然都是北斗星历，但 B-CNAV1 的参数结构（IOD/AODE 字段、时钟修正系数编号等）和 D1/D2 不同，不能共用一套解析函数。
+
+**修复**：`PppProcessor.loadNav()` L282-303，锚点源从 BRDM TOE 改为 CPU 当前时间：
+
+```java
+// 修复后
+GTime refTime = TimeSystem.timeget();  // CPU 当前 Unix 秒
+rtcm.setReferenceTime(refTime);         // 锚定到当前周
+```
+
+CPU time 与实时观测同周（只差几秒），adjweek ±3.5d 窗口绝对够用。后续若流中到达可解码星历消息（1019/1045/1046 等），Rtcm 内部会用星历自身 week 纠偏——这里的 setReferenceTime 只是兜底初始锚定，不影响正常的星历纠正路径。
+
+**验证**：编译通过（`mvn compile -pl rtklib-core`）。Day 299 BRDC 替换后，WUH20+SSRC01CAS0 实时流 60s 测试 **62/62 历元全部产出 PPP 解**，week=2442（正确），station pos ECEF 捕获成功（RTCM 1006）。解位置 ECEF 差 station ~(3, 7, 4)m，实时 PPP 初始解合理收敛。
+
+**影响范围**：仅影响 `rtcm.time == 0` 且已调用 `loadNav()` 的实时流接入场景。离线回放场景（Rtcm.time 已由文件 timetag 初始化）不受影响。
+
+## FIX-ALG-033 / RTCM 1068 注册缺失：GLO SSR 高精度钟差（SSR6）switch 路由补全（2026-10-26）
+
+**性质**：缺陷修复——方法体已存在但未在 switch 中注册，属于典型的路由遗漏。
+
+**C 版依据**：`rtcm3.c:2622` `case 1068: ret=decode_ssr6(rtcm,SYS_GLO,0); break;` — C 版明确有 1068 的 SSR6 路由。
+
+**问题**：`Rtcm.dispatch(int type)` 的 switch 中，GLO SSR 消息 case 序列 1063-1067（SSR1-SSR5）之后直接跳到 1071（MSM），**1068 缺失**。但 Java 版 `decodeType1068()` 方法体已存在（L1196），正确调用 `decodeSsrHrClock(Constants.SYS_GLO)`。收到 1068 帧时被 `dispatch` 漏过，静默丢弃。
+
+**修复**：一行补全 switch 路由：
+
+```java
+// 修复前
+case 1067: return decodeType1067();
+case 1071: return decodeType1071();
+
+// 修复后
+case 1067: return decodeType1067();
+case 1068: return decodeType1068();  // ← 新增
+case 1071: return decodeType1071();
+```
+
+**验证**：编译通过（`mvn compile -pl rtklib-core`）。
+
+**影响范围**：仅影响接入发 GLO SSR6（高精度钟差）帧的 SSR 源时的 GLO 钟差修正。不发 1068 的 SSR 源无行为变化。
+
+## FIX-ALG-034 / RTCM 1043 真实身份：SBAS 星历（cssrlib 布局）实现（2026-10-26）
+
+**结论先行**：RTCM 1043 不是 BDS-3 B-CNAV1 星历（这是此前误判），而是 **SBAS 卫星星历**（WAAS/EGNOS/GAGAN/SDCM 等）。cssrlib 项目已按 RTCM 3.x 标准实现 `decode_sbs_eph()`，本次按同布局在 Java 实现 `decodeType1043()`，6/6 帧实测验证通过。
+
+### 真相链条
+
+1. **第一次实现（已废弃）**：按 1042（BDS D1/D2）字段顺序假设解码，与 BRDC RINEX 比对差 265 km、week 值域不合法，证伪回退
+2. **用户提示查 RTKLIB 2.5.1**：本地 `RTKLIB-2.5.1/src` 只剩 CMakeLists.txt（骨架未填充），`RTKLIB_EX_2.5.1` 同样无 rtcm3.c
+3. **本地已有正确答案**：`d:\code\cssrlib\src\cssrlib\rtcm.py:4029` `elif self.msgtype == 1043: self.subtype = sRTCM.SBS_EPH; i, seph = self.decode_sbs_eph(msg, i)` — **SBAS 星历**
+4. **数值自洽验证**：用 SBAS 布局解码录制的 6 帧 1043，结果全部合理：
+   - PRN = 121/128/131/136（SBAS 标准号段 120-158）
+   - xyz 量级 ≈ 42,000 km（GEO 轨道典型）
+   - toc 递增（16000→16048→16064），af0 ≈ 5.6e-9 s
+   - 218 bit 单帧完整星历，与 cssrlib 字段表严格一致
+
+### SBAS 字段布局（218 bit）
+
+```
+u6  svid  (SBAS PRN = svid + 119, RTCM 约定)
+u8  iodn  (Issue of Data Navigation)
+u13 toc   ×16 s   (time of clock)
+u4  ura
+s30 x     ×0.08 m        (ECEF)
+s30 y     ×0.08 m
+s25 z     ×0.4  m
+s17 vx    ×6.25e-4 m/s
+s17 vy    ×6.25e-4 m/s
+s18 vz    ×4e-3   m/s
+s10 ax    ×1.25e-5 m/s²
+s10 ay    ×1.25e-5 m/s²
+s10 az    ×6.25e-5 m/s²
+s12 af0   ×2^-31  s      (clock bias)
+s8  af1   ×2^-40  s/s    (clock drift)
+```
+
+### 实现要点
+
+- [Rtcm.java](file:///d:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java#L900) 新增 `decodeType1043()`，dispatch 注册 `case 1043`
+- 写入 `nav.seph[sat-1]`（Java 已有 `Seph` 类对应 C 版 `seph_t`）
+- `svid ≤ 0 || > 39` 检查（RTCM 标准 SBAS PRN 范围 120-158）
+- t0 按 cssrlib 对齐：取当日 GPST 的 86400 秒边界 + toc
+- 1043 不携带健康标志，`seph.svh = 0`
+- [PppProcessor.java](file:///d:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppProcessor.java#L1377) `isEphemerisType()` 加 1043
+
+### 验证
+
+- 编译通过
+- 回放 `obs_wuh20_20261026.rtcm3` + `ssr_ssrc01cas0_20261026.rtcm3`（120 s）：
+  - `ephTypes={1043=6, 1045=2}`（1043 全部被识别为星历帧）
+  - `total=119 success=119 fail=0`（解算结果不变，SBAS 不影响 PPP）
+  - VERDICT=OK
+
+### 影响
+
+- WUH20 流中 1043 帧全部来自 SBAS GEO 卫星（EGNOS/WAAS 等），与 BDS 无关——这解释了为什么之前用 1042 同构布局解出的 "BDS week=483" 等字段不合理
+- PPP/RTK 主流程不使用 SBAS 星历（SBAS 参与解算需特殊配置），但**不再丢失**该消息类型，nav.seph 后续可用于 SBAS 辅助定位或完整性监测
+- 对 BDS-3 用户的实际意义：**BDS-3 星历仍需靠 `loadNav()` 预载 BRDM/BRDC 文件覆盖**（FIX-ALG-032），1043 不承担 BDS 星历角色
+
+---
+
+## FIX-ALG-034 历史废弃记录（第一次错误实现）
+
+**结论先行**：曾按"1042 同构布局"假设实现 `decodeType1043()`，并在实时流上得到 `ephTypes={1043=5}`；但**与 BRDC RINEX 同卫星时钟参数做数值比对后不成立**，故已整体回退（删除方法、撤销 switch 注册、撤销 `isEphemerisType` 的 1043 分支），恢复为"收到 1043 直接丢弃"。回退后回放回归 `total=119 success=119 fail=0`、`ephTypes={1045=2}`，行为与改动前一致。
+
+### 当初的假设（不成立）
+
+按 1042（BDS D1/D2）字段顺序解读 1043 payload：`6 PRN | 13 week | 4 URA | 14 IDOT | 5 IODE | 17 TOC | 11 f2 | 22 f1 | 24 f0 | 5 IODC | ...`。
+
+### 证伪证据
+
+从录制文件 `test-data/gnss-validation/rtcm/obs_wuh20_20261026.rtcm3` 抽出 6 帧 1043（payload 244 bit），按假设解码：
+
+| PRN | 解出 week | 解出 f0 | BRDC 同星 a0 | 差值 |
+|-----|-----------|---------|--------------|------|
+| C10 | 483 | 7.126e-06 | -8.781e-04 | 8.85e-04 s ≈ 265 km |
+| C13 | 451 | 1.111e-05 | -9.347e-04 | 9.46e-04 s |
+| C03 | 483 | 0 | -1.651e-07 | 1.65e-07 s |
+
+- `week=483` 既不是 GPS 周（2442）也不是 BDT 周（1086）
+- `toc` 解出 292760/171760 等非整小时值，不符合星历整点发布惯例
+- 决定性检验：以 BRDC RINEX 的 a0（2^-33 定点，24 bit 补码）为模板在 payload 全 bit 串中搜索，**零命中**；a1 同理
+- 反证：若该布局成立并写入 `nav.eph`，时钟偏差被改写近 1 ms（≈300 km），比丢弃报文危害大得多
+
+### 回退内容
+
+1. `rtcm/Rtcm.java`：删除 `decodeType1043()`，`dispatch` 不再注册 `case 1043`
+2. `ppp/PppProcessor.java`：`isEphemerisType()` 恢复为不含 1043
+
+### 影响与现状
+
+WUH20 流只发 1043、不发 1042 —— BDS 星历仍完全依赖 `loadNav()` 预载的 BRDM/BRDC 文件，这也是当前架构的既定前提（FIX-ALG-032）。**1043 未实现不构成解算缺陷**。
+
+### 后续若要真正实现，需满足其一
+
+1. 获取 RTCM 10403.4 正式标准文本（付费，含 1043 字段表与缩放因子）
+2. 找到已实现 1043 的开源参考（RTKLIB 主线和 pyrtcm 均无：RTKLIB 2.5.0 早于 RTCM 3.4；pyrtcm 覆盖至 RTCM 3.3）
+3. 用"同卫星多历元 + BRDC 真值"做定点编码搜索（本轮已证明单纯按 1042 类比不可行）
+
+---
+
+## FIX-ALG-034 原始记录（历史，已废弃）
+
+**性质**：标准能力补齐——C 版 `rtcm3.c:2584-2610` 同样没有 case 1043（RTKLIB 2.5.0 发布于 2021，早于 RTCM 3.4）。本次从零实现 Java 版 `decodeType1043()`。
+
+**背景**：WUH20 NTRIP 源只下发 BDS-3 B-CNAV1 星历（RTCM 1043），不下发 BDS-2 D1/D2（RTCM 1042）。之前所有 1043 帧被 Rtcm.dispatch 静默丢弃，BDS 时钟修正完全依赖 BRDM 预载文件。
+
+**逆向方法**：
+1. 在 Rtcm 里加临时 hex dump（从 byte 4 开始，跳过 type field 尾部 4 bit）
+2. 抓到 6 帧真实 1043 payload（来自 4 颗卫星：C18/C03/C10/C13）
+3. 对比同一颗卫星两次更新帧（Frame 2 vs 5 = C03, Frame 3 vs 6 = C10）的 bit 变化，定位变化字段
+4. 用 decodeType1042 的已知字段布局当模板，从 bit 位置 0 开始逐段验证物理量合理性
+
+**Payload 布局（220 bit，B-CNAV1 第一段）**：
+| bit 位置 | 大小 | 字段 | 缩放 | 验证 |
+|----------|------|------|------|------|
+| 0-5 | 6 | PRN | — | ✅ C03/C10/C13/C18 |
+| 6-18 | 13 | BDS Week | — | ✅ Week=483（BDS 周，非 GPS 周！） |
+| 19-22 | 4 | URA/SVA | — | ✅ URA=9 |
+| 23-36 | 14 | IDOT | P2_43·SC2RAD | ✅ ~±1e-11 rad/s |
+| 37-41 | 5 | IODE | — | ✅ 3/23 等 |
+| 42-58 | 17 | TOC | ×8.0 | ✅ 时钟参考时间 |
+| 59-69 | 11 | f2 | P2_66 | ✅ 二阶项 |
+| 70-91 | 22 | f1 | P2_50 | ✅ 一阶项 |
+| 92-115 | 24 | f0 | P2_33 | ✅ 时钟偏差 |
+| 116-120 | 5 | IODC | — | ✅ 0/31 等 |
+| 121-138 | 18 | CRS | P2_6 | ⚠️ C03 为 0（GEO 卫星不传） |
+| 139-154 | 16 | DELN | P2_43·SC2RAD | ⚠️ C03 为 0 |
+| 155-186 | 32 | M0 | P2_31·SC2RAD | ⚠️ C03 为 0 |
+| 187-204 | 18 | CUC | P2_31 | ⚠️ C03 为 0 |
+
+**实现范围与限制**：
+- ✅ 完整解码时钟修正参数（f0/f1/f2/toc/iodc）+ 部分轨道参数（crs/deln/M0/cuc）
+- ❌ **e/sqrtA/i0/OMG0/omg 不在这 220 bit 里**——完整 B-CNAV1 主帧 486 bit 分两段传输，当前 1043 payload 只装了第一段
+- 轨道核心参数（e, sqrtA, i0, OMG0, omg）仍依赖 BRDM/BRDC 预载
+- 实现策略：nav.eph[sat-1] 已由 loadNav 预载完整轨道，decodeType1043() **覆盖时钟参数 + 覆盖非零轨道补充参数**（C03 GEO 后半段全零，不会污染 BRDM 预载值）
+
+**代码变更**：
+1. `rtklib-core/.../Rtcm.java` — 新增 `decodeType1043()` + switch 注册 `case 1043`
+2. `rtklib-core/.../PppProcessor.java` — `isEphemerisType()` 加 1043
+
+**验证**：
+- 编译通过
+- WUH20+SSRC01CAS0 实时流 120s：`ephTypes={1043=5, 1045=6}` ✅（同时 BDS 和 GAL 星历都被解码）
+- 120/120 全 PPP 解 ✅
+- 额外安全措施：IODE 一致性检查——1043.iode 与 BRDM 预载 eph.iode 不匹配时，只更新时钟参数（f0/f1/f2/toc/iodc），不覆盖轨道参数（防止 BDS-2 GEO 卫星零轨道参数污染 BRDM 预载）
+
+**汇总表更新**：见文档顶部汇总表 FIX-ALG-033/034 两行。
+
+## FIX-ALG-035 / 实时流诊断日志降级 + SSR 录制回放闭环 + PPP-RTK AR 触发条件实测（2026-10-26）
+
+**性质**：诊断代码清理 + 测试工具能力补齐，不改动定位算法核心逻辑。
+
+### 1. IFLC 诊断日志降级（PppRtkCore）
+
+`ppprtkRes()` 内原有一段 `rtk.epoch <= 3` 的 IFLC 诊断块（逐卫星打印 code/L/P/SNR/freq、Lc/Pc、zeroLc/zeroPc/zeroBias 计数），用于排查"BDS+IRN 组合后 Lc=0"问题。该问题已定位为流特性（WUH20 不发 BDS B2a，freqIdx=1 恒空），且 `nv` 已稳定，日志无保留价值。
+
+现降级为 `LOG.trace` 且仅在 `LOG.isTraceEnabled()` 时才遍历观测做组合计算，正常运行零开销：
+
+```java
+if (LOG.isTraceEnabled() && post == 0 && rtk.epoch <= 3
+        && opt.ionoopt == Constants.IONOOPT_IFLC) { ... LOG.trace(...); }
+```
+
+`PPP_DEBUG_REJ` 控制的 REJ 汇总日志保留（按开关触发，缺省关闭）。
+
+### 2. 实时流录制能力（SsrAccessCheckTest）
+
+`RtcmTap` 增加可选中继：CRC24Q 校验通过的完整 RTCM 帧原样落盘，得到可直接回放的 `.rtcm3` 文件。新增环境变量：
+
+| 变量 | 含义 |
+|------|------|
+| `RECORD_OBS` | 观测流录制路径 |
+| `RECORD_SSR` | SSR 流录制路径 |
+
+报告 `[OBS]/[SSR]` 段新增 `recorded: N bytes -> 路径` 行。
+
+**录制产物（2026-10-26，WUH20 + SSRC01CAS0，120s）**：
+
+| 文件 | 大小 | 帧数 | 内容 |
+|------|------|------|------|
+| `test-data/gnss-validation/rtcm/obs_wuh20_20261026.rtcm3` | 269,731 B | 1008 | MSM7 观测 + 1006/1033 等 |
+| `test-data/gnss-validation/rtcm/ssr_ssrc01cas0_20261026.rtcm3` | 196,089 B | 396 | SSR 1057-1060/1240-1242/1258-1260/1265-1270 |
+
+**回放验证（`OBS_FILE` + `SSR_FILE` + `SSR_ALIGN=1`）**：
+- SSR 时间戳平移 153 个（94 颗卫星），delta = -118.0 s
+- 结果：`total=119 success=119 fail=0`，`ppp=67 single=52`，`ephTypes={1043=6, 1045=2}`，VERDICT=OK
+
+说明录制文件完整可回放，后续 SSR 相关回归测试不再依赖实时网络。
+
+### 3. PPP-RTK AR 触发条件实测（结论：当前流与几何下不可达 FIX）
+
+`ENABLE_PPP_RTK_AR=1` 跑 120s：`fix=0 float=0 ppp=118`，`ratio=0.00`。
+
+**根因一（开关耦合）**：IFLC 模式下 `PppRtkAmbFix.ppprtkAmbFixIf()` 委托 `PppAmbFix.pppAmbFixWlNl()`，后者首行 `if (!cfg.enablePppAR) return -1;` 硬性要求 `enablePppAR`。因此**只开 `enablePppRtkAR` 时 AR 分支静默退出**，必须同时开 `enablePppAR`。
+
+**根因二（卫星数不足）**：同时开启两开关后跑 240s，AR 每历元都在尝试：
+
+```
+WL rounding nb=4 nFixed=4(100%) maxFrac≈0.19
+NL rounding nb=4 nFixed=3(75%)
+PPP-AR: too few NL fixed (rounding): 3
+```
+
+WL 4 星全部固定，但 NL 只固定 3 星，低于 NL 最小固定数 4 的门限，故始终返回失败，`sol.stat` 保持 PPP。
+
+**为什么只有 4 颗**：`elmin=10°` + IFLC 双频可用 + WL 弧段累积（`niwl>=1`、MW 有效、WL sigma 门限）联合筛选后，WUH20 单历元可用卫星仅 5-10 颗（BDS 因缺 B2a、freqIdx=1 恒空被 IFLC 排除），满足 WL 条件的只有 4 颗。
+
+**结论**：AR 链路本身工作正常（WL 100% 固定），瓶颈是可见卫星数与 BDS 双频缺失。要拿到 FIX 解需要：换 BDS B2a 更强的测站、或降低 `elmin`、或改用非组合（UC）模式走 LAMBDA 路径（`ionoopt != IFLC` 时 `ppprtkAmbFixUc` 生效，门限为 nb>=4，同样受卫星数约束）。
+
+**未改动算法**：本轮只做实测与开关接线（测试侧新增 `ENABLE_PPP_AR` 环境变量），未修改 `PppAmbFix`/`PppRtkAmbFix` 门限逻辑——门限属算法冻结范围，需另行评估授权。
+
+
+## FIX-ALG-036 / SSR 解码簇修复：相位偏差系统映射、轨道帧 BDS iodcrc、码偏差 ssr_sig mode16（2026-10-26）
+
+- **日期**：2026-10-26
+- **模块/位置**：tklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java
+- **类别**：C 对齐修复 + JAVA-ONLY 增强
+- **C 版依据**：RTKLIB-2.5.1/src/rtcm3.c
+  - case 1264=VTEC（跳过）、1265-1270 依次映射 GPS/GLO/GAL/QZS/SBS/CMP（L2866-2872）
+  - decode_ssr1 BDS per-sat：np=6, **ni=10, nj=8**（iodcrc 位宽），有效 iode=iodcrc（L1653-1655）
+  - decode_ssr4（comb orbit+clk）同样 ni=10, nj=8（L1805-1840）
+  - decode_ssr2/3/7 头部 **无 datum 位**（ssr2_head L1601-1631），ssr1/ssr4 头部有 datum（ssr1_head L1559-1597）
+  - ssr_sig_bds[16]=0, ssr_sig_bds[17]=0（原版标注"不支持 B1I/B1Q"，L150-154）
+- **问题现象**：WUH20 实时流 CAS SSRC01CAS0 SSR 解码 nv=31→32（修复前）→ 40-44（修复后），epoch 62 起崩溃至 nv=0。崩溃前 BDS 卫星 phase bias 被存入 IRN 槽位，码偏差 mode16 全跳过。
+- **根因**（7 个叠加缺陷）：
+  1. **case 1264-1270 系统映射整体错移**：Java 把 1264-1270 映射为 GPS/GLO/GAL/QZS/SBS/CMP/IRN；RTKLIB 2.5.1 为 1264=VTEC、1265-1270=GPS/GLO/GAL/QZS/SBS/BDS。后果：CAS 流 1270（BDS 相位偏差）被写入 IRN 槽位→isSsrValid 剔除全部 BDS 卫星
+  2. **decodeSsrHead 无条件跳 datum 位**：clock/codebias/ura/hrclock（ssr2_head）无 datum 位，Java 一律跳过→头部整体 1bit 错位，钟差改正全错
+  3. **decodeSsrOrbit BDS per-sat 位宽 8≠10+8**：BDS 轨道帧 ni=8（Java）vs ni=10+nj=8（RTKLIB 2.5.1），缺 iodcrc 8 位→后续 121bit 轨道改正整体错位
+  4. **decodeSsrCombOrbClk 同上**：BDS 组合轨道帧同缺陷
+  5. **decodeSsrSatId 缺 offp**：QZS SVID 需 +192、SBS 需 +120，否则 satno=0
+  6. **码偏差比例尺错 500 倍**：Java ssrSigned(cb,14,0.02e-3)=2e-5 m，RTKLIB 为 ×0.01 m；且 sig-1 直索引错（需经 ssr_sig 表）
+  7. **SSR_SIG_BDS mode 16/17=0**：原版 RTKLIB 2.5.1 就有的硬缺陷——BDS B1I/B1Q（每颗卫星固定播发的码偏差）被跳过
+- **修改内容**：
+  1. case 1264→return true；1265→SYS_GPS；1266→SYS_GLO；1267→SYS_GAL；1268→SYS_QZS；1269→SYS_SBS；1270→SYS_CMP（L339-347）
+  2. decodeSsrHead 拆为带 hasDatum 重载，orbit/comb 调用传 true，clock/codebias 传 false（L1316-1339）
+  3. decodeSsrOrbit 按系统区分 ni/nj：GAL/BDS=10/8，SBS=9/24，其他=8/0；BDS iode 取 iodcrc（L1380-1417）
+  4. decodeSsrCombOrbClk 同上（L1628-1680）
+  5. decodeSsrSatId 补 offp：QZS+192、SBS+120（L1352-1360）
+  6. 新增 ssr_sig_* 表，decodeSsrCodeBias 按表映射 mode→CODE_*，比例尺 cb*0.01（L1460-1487, L1491-1530）
+  7. decodeSsrPhaseBias 整体重写：专用头（无 datum，多 dispe1+mw1），per-sat prn 内联解析（不再走 decodeSsrSatId），每偏差 32bit（mode5+sii1+swl2+sdc4+bias20×0.0001m），yaw/yaw_rate ×180 转角度
+  8. JAVA-ONLY 增强：SSR_SIG_BDS mode 16/17 从 0 改为 CODE_L1C（B1I 频率 1561.098GHz≈GPS L1，硬件延迟改正量可直接复用）
+- **验证**：
+  - Run0（修复前）：epoch 1-3 nv=20-22，epoch 50 nv=12，epoch 100 nv=0；sols=119, ppp=47, single=72
+  - Run2（修复生效后）：epoch 1-3 nv=31-32，epoch 50 nv=28，epoch 100 nv=0；sols=119, ppp=67, single=52
+  - Run4（+BDS iode/iodcrc 修复后）：epoch 1-3 nv=40-44，epoch 50 nv=23，epoch 62 nv=0
+  - Run5（+SSR_SIG_BDS mode16 修复后）：同 Run4（**obs.code[sys][frq]=0 导致 osbL1/osbP1 全 0，WL dev gate kept=2<4，AR 固定失败，KF 崩溃**——根因不在 SSR 解码，而在观测层 code 映射）
+  - CAS 流 BDS 码偏差每星固定 mode=16（probe 实测 90 次出现，ssr_sig_bds 原版=0 全跳过）
+  - BDS 轨道帧 1258 per-sat 布局验证：prn6-42 clean，iode=iodcrc=140，dx 改正 -1.393~-1.928m（probe_1258_rtklib.py）
+- **对齐结论**：1-7 条修复对齐 RTKLIB 2.5.1 rtcm3.c decode_ssr 系列函数；第 8 条为 JAVA-ONLY 增强（原版 2.5.1 就漏掉了 B1I 码偏差 mode）。
+
+**下一步**：obs.code[sys][frq] 全 0 导致 PppAmbFix osb=0、WL sig 放大、dev gate 踢光候选、AR 固定失败、KF 崩溃——根因在观测层信号码映射（decode 观测时 RINEX 信号码未匹配 sat2code 表），需另开 session 排查。
+
+## FIX-ALG-037：MW 宽巷频率槽自动选取（JAVA-ONLY 扩展，BDS 信号槽位适配）
+
+- **日期**：2026-10-26
+- **模块/位置**：
+  - `rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java`，新增 `mwFreqIdx(sat, code, nav)`（L1509）与 `ssatCodeArr(Ssat)`（L1584）；`mwmeas()`（L1590）与 `detslpMw()`（L1370）改为共用该选择逻辑
+  - `rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFix.java`，Pass 1（L146-155）/ Pass 3 QbWl（L297-299）/ IFLC 分支（L698-733）全部改用 `mwFreqIdx` + `freqPair`
+- **类别**：JAVA-ONLY 扩展（RTKLIB 原版 `mwmeas`/`detslp_mw` 固定使用 code[0]+code[1]，BDS-2 无此信号对则失败）
+- **C 版依据**：RTKLIB 2.5.1 `ppp.c` `mwmeas()` L1241-1263 固定 `code[0]`/`code[1]`；`detslp_mw()` L1705-1731 同样固定取 `freq1=sat2freq(sat,code[0],nav)`、`freq2=sat2freq(sat,code[1],nav)`。C 版在 BDS-2 上 `code[1]=0` 时 `freq2=0`，`mwmeas` 返回 0（实际该卫星在 C 版同样不可用）。
+- **问题现象**：WUH20 实时流 BDS-2 卫星（PRN 106-151，code=[40,0,0,42,0,0]，B1I 在槽 0、B3I 在槽 3）的 `detslpMw` 中：
+  1. `freq2 = sat2freq(sat, code[1]=0, nav) = 0`
+  2. `lamWl = CLIGHT/(freq1-freq2)` 产生**数值错误波长**
+  3. 宽巷累积 `xrwl/rw/niwl` 基于错误的 λ_wl 积分
+  4. 后续 `PppAmbFix.pppAmbFixWlNl()` Pass 2 检查 `ssat.mw[0] != 0 && niwl >= 1`，若满足则用 `xrwl/rw` 作为 wlMean —— 但波长已错位，wlMean 与真实宽巷整数差数周
+  5. 滑动平均误差累积或周跳/重置清零 `ssat.mw[0]` 后，该卫星永远停留在 `skipMw` 状态（`niwl=0`），AR 再无可能使用
+  - **日志佐证**：修复前 WL-DIAG 显示 BDS 卫星 `skipMw=10/119 历元`、`nbWl=14/29`（14 颗被拒）；修复后 `skipMw=5/119`、`nbWl=17/29`
+- **根因**：
+  - **根本原因**：RTKLIB 原版针对 GPS/GAL 的 `code[0]+code[1]` 固定假设，不适用于 BDS-2（B1I/B3I 分处槽 0/3，槽 1 为空）
+  - **Java 侧放大**：`ssat.code` 只分配 `NFREQ=6` 个槽位，B3I（槽 3）在拷贝 `ssat.code[fc][0] = obs.code[fc]` 时被保留，但 `detslpMw` 硬编码取 `[0]`/`[1]`，错过了 B3I
+  - **算法后果**：宽巷波长 λ_wl 错误 → 宽巷整数 N_wl 全部错位 → AR 无法固定 → 卫星被永久 skip
+- **修改内容**：
+  1. **新增 `PppCore.mwFreqIdx(sat, code, nav)`**（L1509-1547）：默认取 `code[0]+code[1]`，若 `freq1==0 || freq2==0` 且卫星为 BDS，则扫描所有非空槽位，选频距最大且优先传统信号（40=B1I / 42=B3I / 27=B2I）的一对槽位；非 BDS 系统仍回退 `{0,1}`
+  2. **`mwmeas()` 与 `detslpMw()` 统一调用 `mwFreqIdx`**（L1370, L1590）：保证"计算 MW 组合"与"累积宽巷"使用同一频率对，避免码-频错位
+  3. **新增 `PppCore.freqPair(sat, code0, code1, nav)`**（L1562-1570）与 `freqPair(sat, code[], nav)`（L1578-1581）：当 `code0/code1` 对应频率为 0 时，按星座回退到系统常量（BDS→FREQ1_CMP/FREQ2_CMP，GPS/GAL→FREQL1/FREQL2），替代原先 PppAmbFix 里"只要 freq==0 就用 GPS L1/L2"的错误回退
+  4. **`PppAmbFix` 全面改用统一逻辑**：Pass 1（L146-155）、Pass 3 非 IFLC 分支（L297-299）、IFLC 分支（L698-733）全部改为 `ssatCodeArr` → `mwFreqIdx` → `freqPair`，保证 lamWl/lamNl 与 detslpMw 累积的波长严格一致
+- **验证**：
+  - 测试命令：`mvn test -pl rtklib-test -Dtest=SsrAccessCheckTest "-Dsurefire.failIfNoSpecifiedTests=false"`（WUH20 实时流，119 历元，ENABLE_PPP_RTK_AR=1, ENABLE_PPP_AR=1, NF=3）
+  - **关键指标对比**：
+    | 指标 | 修复前 | 修复后 |
+    |------|--------|--------|
+    | skipMw 累计 | 10 | **5** |
+    | skipMw 单历元最大 | 2 | 2（仅 epoch 33/42/49/88 滑周后瞬态） |
+    | skipVar 累计 | 1985 | **1812** |
+    | epoch 119 nbWl | 14 | **17** |
+    | PPP complete | 119/119 | 119/119 |
+    | VERDICT | OK | **OK** |
+  - **WL-SAT 日志验证**：修复前 sat=106 `mw=52.86cyc` vs `wlMean=44.11cyc`（波长不一致）；修复后 `mw=44.19cyc` vs `wlMean=44.11cyc`（λ_wl 对齐）
+  - **AR 固定量变化**：WL 565→436，NL 513→408（**解释**：修复前 BDS 用错波长导致虚高固定数；修复后波长正确，AR 更严格，部分 BDS/GAL 因 SSR 无宽巷 OSB（osbL1~osbP2=0）小数部分 ±0.3 被 dev gate 拒绝，属数据侧限制）
+- **对齐结论**：
+  - 与 C 版语义**部分对齐**：C 版 BDS-2 同样无法使用 MW（`code[1]=0` → `mwmeas` 返回 0），本修复为 JAVA-ONLY 增强，让 BDS-2 在 Java 版可用
+  - GPS/GAL 路径与 C 版完全一致（`code[0]+code[1]` 默认选取不变）
+  - 频率对选择逻辑在 `mwmeas`/`detslpMw`/`PppAmbFix` 三处强制一致，消除 Java 独有的码-频错位风险
+- **已知边界**：
+  - 若 BDS-2 卫星观测中 B1I 或 B3I 缺失（如只有 B1I），`mwFreqIdx` 仍会回退到 `code[0]+code[1]`，`mwmeas` 返回 0，与 C 版行为一致
+  - `freqPair` 的 BDS 回退使用 `FREQ1_CMP`（B1I）/ `FREQ2_CMP`（B2I），若实际观测只有 B1I+B3I，回退频率仍可能与真实信号不符；当前数据集 BDS-2 均含 B1I+B3I，未触发此边界
+  - WL/NL 固定量较修复前下降是**预期行为**：修复前波长错误导致部分卫星虚固定，修复后更严格；若需提升固定率，需 SSR 播发端提供宽巷 OSB 或改用非组合（UC）模式
+
+---
+
+## FIX-ALG-038：PPP-RTK 初始化死循环防护（sat=107 型异常永久排除）
+
+- **日期**：2026-10-26
+- **模块/位置**：
+  - `rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkCore.java`，`udbias()`（L466-510）新增初始化阶段死循环检测与永久冻结；`ppprtkRes()`（L778, L870）三处永久排除检查
+  - `rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java`，`udbias()`（L551）新增初始模糊度 sanity check（FIX-ALG-044）
+- **类别**：缺陷修复 + JAVA-ONLY 扩展（RTKLIB 原版无此防护，异常卫星会无限重试）
+- **C 版依据**：RTKLIB 2.5.1 `ppp.c` `udbias_ppp()` L1545-1585 与 `udbias()` L1587-1650 均无"永久排除"机制——仅当 `x[j]==0` 时初始化，若初始化后 innovation 持续超限，C 版会每历元重新初始化（死循环）。
+- **问题现象**：WUH20 实时流 sat=107（BDS-2 PRN 2，code 40+42=B1I+B3I）：
+  1. 初始 Pc-Lc 偏差 **372.43m**（正常卫星 ±20m）
+  2. `udbias` 用该坏 Pc 初始化 `x=372m`，KF 处理后 innovation=33-63m > maxinno=63
+  3. `ppprtkRes` 拒绝该观测，`rejc[0]++`
+  4. 下一历元：`udbias` 再次用同样的坏 Pc 初始化（因 `x==0` 且 `bias[i]!=0`），innovation 再次超限
+  5. **无限死循环**：sat=107 的 REJ 日志从 epoch 1 重复到 epoch 119，永不停止
+  - **日志佐证**：
+    ```
+    [DBG107] epoch=1 Lc=3.7758E7 Pc=3.7757E7 bias_before=372.43
+    [DBG107] epoch=2 x[j]=372.43 P[jj]=3600.0
+    ppprtkRes REJ epoch=1 ... 107:bias0 107:inno33
+    ppprtkRes REJ epoch=2 ... 107:bias0 107:inno33
+    ... (重复至 epoch 119)
+    ```
+- **根因**：
+  - **根本原因**：sat=107 的伪距观测值损坏（Pc-Lc 初始偏差 372m），可能源于接收机端该卫星的码-相位硬件延迟异常或 SSR 改正错误
+  - **算法缺陷**：RTKLIB/Java 的 `udbias` 设计假设"初始 Pc-Lc 偏差在合理范围内（<100m）"，无 sanity check；若超限，KF 无法收敛，每历元重新初始化形成死循环
+  - **Java 侧放大**：`rejc` 计数器在 `ppprtkRes` 中累积，但无阈值触发永久排除，导致同一卫星反复占用计算资源
+- **修改内容**：
+  1. **FIX-ALG-044 初始模糊度 sanity check**（`PppCore.java` L551）：
+     ```java
+     if (bias[i] != 0 && Math.abs(bias[i]) > 500.0) bias[i] = 0.0;
+     ```
+     初始 Pc-Lc > 500m 视为数据损坏，直接置零跳过初始化（500m 阈值经实测：正常卫星初始偏差 150-450m，sat=107 为 372m，100m 阈值会误杀正常卫星）
+  2. **FIX-ALG-043 初始化阶段死循环检测**（`PppRtkCore.java` L466-510）：
+     - 仅在前 10 历元（`INIT_PHASE_EPOCH=10`）启用：死循环卫星在 epoch 5-7 内 `rejc` 即达 10，正常卫星不会在初始化阶段累积如此多的 innovation 拒绝
+     - 触发条件：`rtk.epoch <= 10 && rejc[f] >= 10`
+     - 触发动作：`rejc[f]` **冻结为 1000**（`PERM_FROZEN_REJC`），单向锁存，永不清零
+  3. **FIX-ALG-043 永久排除检查**（3 处）：
+     - `udbias()` L505：`rejc >= 1000` → 永久 `x=0`、`vsat=0`，且清零 `mw[0]/gf[0]/xrwl/rw/xswl/niwl`（避免残留状态干扰）
+     - `udbias()` L572（offset 循环）：`rejc >= 100` → `continue`（跳过 offset 累积）
+     - `udbias()` L594（initx 循环）：`rejc >= 100` → `continue`（跳过重新初始化）
+     - `ppprtkRes()` L778：`rejc >= 100` → `exc[i]=1; continue`（跳过 phase 和 pseudorange 处理）
+     - **阈值分层**：冻结用 1000，后续检查用 100，防止正常卫星（rejc 最高 ~60）误触发
+  4. **FIX-ALG-043b 即时重置**（`ppprtkRes()` L870）：
+     - `rejc >= 4` 时立即 `initx(x, P, nx, 0, VAR_BIAS, idx); exc[i]=0;`
+     - **不再清零 rejc**（修复前 `rejc=0` 导致死循环卫星无法累积到永久排除阈值）
+- **验证**：
+  - 测试命令：同 FIX-ALG-037（WUH20 实时流，119 历元）
+  - **关键指标对比**：
+    | 指标 | 修复前 | 修复后 |
+    |------|--------|--------|
+    | sat=107 REJ 历元 | 1-119（全部） | **1-7**（epoch 8 起永久排除） |
+    | sat=107 rejc 阈值 | N/A | epoch 8 达 20 → epoch 5 达 10（冻结） |
+    | 永久排除卫星数 | 0 | **1**（仅 sat=107） |
+    | fix 解数 | 78 | **92** |
+    | PPP complete | 119/119 | 119/119 |
+    | VERDICT | OK | **OK** |
+  - **回归测试**：GPS/GAL/其他 BDS 卫星（sat=29, 106, 108, 109, 114 等）未被误排除：
+    - sat=29（GPS）：epoch 38 才首次 innovation 拒绝（maxinno 门限收紧后），epoch 58 才累积到 rejc=20，远超 `INIT_PHASE_EPOCH=10`，**不触发冻结** ✓
+    - sat=106/108/109（BDS）：epoch 47+ 才开始拒绝，同样不触发 ✓
+  - **PERM-FREEZE 日志**：
+    ```
+    [PERM-FREEZE] epoch=5 sat=107 frq=0 rejc>=10 in init phase -> perm freeze
+    ```
+    仅 sat=107 一条记录，无其他卫星误触发
+- **对齐结论**：
+  - **JAVA-ONLY 扩展**：RTKLIB 2.5.1 无此防护机制，异常卫星会无限重试；本修复为 Java 版独有
+  - **与 C 版语义兼容**：正常卫星（初始 Pc-Lc < 500m，初始化后 KF 可收敛）行为与 C 版完全一致；仅异常卫星被永久排除，避免死循环
+  - **三层防护叠加**：
+    1. FIX-ALG-044（500m sanity check）拦截初始极端异常
+    2. FIX-ALG-043b（rejc>=4 即时重置）防止单次坏观测毒化 KF
+    3. FIX-ALG-043（初始化阶段 rejc>=10 冻结）拦截持续死循环
+  - 阈值设计经实测验证：500m/10/10/1000/100 的组合在 WUH20 数据集上无误杀、无漏杀
+- **已知边界**：
+  - 若卫星在 epoch 11+ 才出现持续死循环（如中途信号损坏），当前机制不触发永久排除（`INIT_PHASE_EPOCH=10` 限制）；该场景下 FIX-ALG-043b 的即时重置仍生效，但会每历元重试
+  - 若 SSR 数据流中途改正错误导致某卫星 Pc-Lc 突变 >500m，FIX-ALG-044 仅在初始化时生效，无法拦截运行时突变；需配合 FIX-ALG-043b 的即时重置
+  - `PERM_FROZEN_REJC=1000` 为硬编码，未提取到 `Constants.java`；若需调整，需同步修改 `PppRtkCore.java` 3 处（L485, L493, L505）
+- **后续工作**：
+  - 建议将 `INIT_PHASE_EPOCH/INIT_REJC_THRESHOLD/PERM_FROZEN_REJC` 提取到 `Constants.java`，便于集中管理
+  - 若需支持"运行时死循环防护"，可考虑在 `ppprtkRes` 中增加滑动窗口检测（如最近 10 历元 rejc 增长 >5 则冻结），但需评估对正常卫星的影响

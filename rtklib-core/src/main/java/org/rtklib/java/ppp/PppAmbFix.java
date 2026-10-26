@@ -143,14 +143,12 @@ public class PppAmbFix {
             satAll[i] = sat;
             freqAll[i] = freqList[i];
 
-            int code0 = rtk.ssat[sat - 1].code[0][0];
-            int code1 = rtk.ssat[sat - 1].code[1][0];
-            double freq1 = SatUtils.sat2freq(sat, code0, nav);
-            double freq2 = SatUtils.sat2freq(sat, code1, nav);
-            if (freq1 == 0.0 || freq2 == 0.0) {
-                freq1 = Constants.FREQL1;
-                freq2 = Constants.FREQL2;
-            }
+            int[] mwCodes = PppCore.ssatCodeArr(rtk.ssat[sat - 1]);
+            int[] mwPair = PppCore.mwFreqIdx(sat, mwCodes, nav);
+            int code0 = mwCodes[mwPair[0]];
+            int code1 = mwCodes[mwPair[1]];
+            double[] fp = PppCore.freqPair(sat, mwCodes, nav);
+            double freq1 = fp[0], freq2 = fp[1];
 
             double lam1 = Constants.CLIGHT / freq1;
             double lam2 = Constants.CLIGHT / freq2;
@@ -192,14 +190,30 @@ public class PppAmbFix {
         // under the integer-clock datum, so the deviation is measured against the epoch
         // median — the undifferenced counterpart of PRIDE's single-difference rwl, where
         // the receiver offset cancels between the two satellites of the pair.
+        //
+        // 中位数必须按星座分别求：不同系统宽巷落在各自信号对上（GPS L1/L2、GAL E1/E5a、
+        // BDS B1I/B3I），接收机端宽巷 UPD 各不相同。混在一起求一个中位数，会把系统间的
+        // 基准差当成离群偏差，反而把本来可用的卫星整批判掉。
         double[] fracs = new double[nbWl];
+        int[] sysArr = new int[nbWl];
         for (int i = 0; i < nbWl; i++) {
             fracs[i] = yWlAll[i] - Math.round(yWlAll[i]);
+            sysArr[i] = SatUtils.satsys(satAll[i], null);
         }
-        double[] sortedFracs = fracs.clone();
-        Arrays.sort(sortedFracs);
-        double medFrac = (nbWl % 2 == 1) ? sortedFracs[nbWl / 2]
-            : 0.5 * (sortedFracs[nbWl / 2 - 1] + sortedFracs[nbWl / 2]);
+        double[] medFracOf = new double[nbWl];
+        java.util.TreeMap<Integer, java.util.ArrayList<Integer>> bySys = new java.util.TreeMap<>();
+        for (int i = 0; i < nbWl; i++) {
+            bySys.computeIfAbsent(sysArr[i], k -> new java.util.ArrayList<>()).add(i);
+        }
+        for (java.util.Map.Entry<Integer, java.util.ArrayList<Integer>> en : bySys.entrySet()) {
+            java.util.ArrayList<Integer> lst = en.getValue();
+            double[] s = new double[lst.size()];
+            for (int k = 0; k < s.length; k++) s[k] = fracs[lst.get(k)];
+            Arrays.sort(s);
+            int m = s.length;
+            double med = (m % 2 == 1) ? s[m / 2] : 0.5 * (s[m / 2 - 1] + s[m / 2]);
+            for (int k = 0; k < m; k++) medFracOf[lst.get(k)] = med;
+        }
 
         int nSkipDev = 0;
         int nbKeep = 0;
@@ -207,7 +221,7 @@ public class PppAmbFix {
         int[] satKeep = new int[nbWl];
         int[] freqKeep = new int[nbWl];
         for (int i = 0; i < nbWl; i++) {
-            double dev = fracs[i] - medFrac;
+            double dev = fracs[i] - medFracOf[i];
             dev -= Math.round(dev);
             if (Math.abs(dev) >= cfg.pppArWlMaxdev) {
                 nSkipDev++;
@@ -215,17 +229,22 @@ public class PppAmbFix {
             }
             // Align to the integer datum before LAMBDA: undifferenced WL values carry a
             // common receiver WL UPD offset (PRIDE cancels it via single-difference rwl);
-            // subtracting the epoch median maps the WL values onto the true N_wl grid so
-            // the fixed integers and the subsequent NL construction share a consistent datum.
-            yWl[nbKeep] = yWlAll[i] - medFrac;
+            // subtracting the per-system median maps the WL values onto the true N_wl grid
+            // so the fixed integers and the subsequent NL construction share a consistent datum.
+            yWl[nbKeep] = yWlAll[i] - medFracOf[i];
             satKeep[nbKeep] = satAll[i];
             freqKeep[nbKeep] = freqAll[i];
             nbKeep++;
         }
         if (nSkipDev > 0) {
+            StringBuilder medTxt = new StringBuilder();
+            for (java.util.Map.Entry<Integer, java.util.ArrayList<Integer>> en : bySys.entrySet()) {
+                medTxt.append(String.format(Locale.US, " sys0x%02X=%+.3f(n=%d)",
+                    en.getKey(), medFracOf[en.getValue().get(0)], en.getValue().size()));
+            }
             LOG.info(String.format(Locale.US,
-                "PPP-AR: WL dev gate: medFrac=%+.3f maxdev=%.2f rejected=%d",
-                medFrac, cfg.pppArWlMaxdev, nSkipDev));
+                "PPP-AR: WL dev gate: maxdev=%.2f rejected=%d med:%s",
+                cfg.pppArWlMaxdev, nSkipDev, medTxt));
         }
         if (nbKeep < 4) {
             LOG.info(String.format(Locale.US,
@@ -275,14 +294,8 @@ public class PppAmbFix {
             for (int i = 0; i < nbWl; i++) {
                 int sat = satList[i];
                 int idx = PppCore.IB(sat, 0, opt);
-                int codeI = rtk.ssat[sat - 1].code[0][0];
-                int codeJ = rtk.ssat[sat - 1].code[1][0];
-                double f1 = SatUtils.sat2freq(sat, codeI, nav);
-                double f2 = SatUtils.sat2freq(sat, codeJ, nav);
-                if (f1 == 0.0 || f2 == 0.0) {
-                    f1 = Constants.FREQL1;
-                    f2 = Constants.FREQL2;
-                }
+                double[] fpair = PppCore.freqPair(sat, PppCore.ssatCodeArr(rtk.ssat[sat - 1]), nav);
+                double f1 = fpair[0], f2 = fpair[1];
                 double lamWl = Constants.CLIGHT / (f1 - f2);
                 for (int j = 0; j < nbWl; j++) {
                     int satJ = satList[j];
@@ -671,14 +684,12 @@ public class PppAmbFix {
         double[] wlVals = new double[nb];
         for (int i = 0; i < nb; i++) {
             int sat = satList[i];
-            int code0 = rtk.ssat[sat - 1].code[0][0];
-            int code1 = rtk.ssat[sat - 1].code[1][0];
-            double freq1 = SatUtils.sat2freq(sat, code0, nav);
-            double freq2 = SatUtils.sat2freq(sat, code1, nav);
-            if (freq1 == 0.0 || freq2 == 0.0) {
-                freq1 = Constants.FREQL1;
-                freq2 = Constants.FREQL2;
-            }
+            int[] mwCodes = PppCore.ssatCodeArr(rtk.ssat[sat - 1]);
+            int[] mwPair = PppCore.mwFreqIdx(sat, mwCodes, nav);
+            int code0 = mwCodes[mwPair[0]];
+            int code1 = mwCodes[mwPair[1]];
+            double[] fp = PppCore.freqPair(sat, mwCodes, nav);
+            double freq1 = fp[0], freq2 = fp[1];
             double lamWl = Constants.CLIGHT / (freq1 - freq2);
             double wlVal = rtk.ssat[sat - 1].rw > 0
                 ? rtk.ssat[sat - 1].xrwl / rtk.ssat[sat - 1].rw
@@ -702,14 +713,12 @@ public class PppAmbFix {
         double[] frNl = new double[nb];
         for (int i = 0; i < nb; i++) {
             int sat = satList[i];
-            int code0 = rtk.ssat[sat - 1].code[0][0];
-            int code1 = rtk.ssat[sat - 1].code[1][0];
-            double freq1 = SatUtils.sat2freq(sat, code0, nav);
-            double freq2 = SatUtils.sat2freq(sat, code1, nav);
-            if (freq1 == 0.0 || freq2 == 0.0) {
-                freq1 = Constants.FREQL1;
-                freq2 = Constants.FREQL2;
-            }
+            int[] mwCodes = PppCore.ssatCodeArr(rtk.ssat[sat - 1]);
+            int[] mwPair = PppCore.mwFreqIdx(sat, mwCodes, nav);
+            int code0 = mwCodes[mwPair[0]];
+            int code1 = mwCodes[mwPair[1]];
+            double[] fp = PppCore.freqPair(sat, mwCodes, nav);
+            double freq1 = fp[0], freq2 = fp[1];
             double lamNl = Constants.CLIGHT / (freq1 + freq2);
             int wlProv = (int) Math.round(wlVals[i] - medCand);
             double fcbNl = getNlFcb(nav, sat, code0, lamNl, rtk.sol.time.time);
