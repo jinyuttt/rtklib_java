@@ -1,0 +1,26 @@
+# Joint RTK Test Data Configuration (LOCAL - not committed to git)
+# Copy this file to joint-test-data.properties and fill in your paths.
+# The file joint-test-data.properties is in .gitignore and will NOT be committed.
+
+# Data root directory (device RTCM binary storage)
+data.root=D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage
+
+# Base station IDs (comma-separated)
+base.group=GS2025090017,GS2025090020
+
+# Rover station ID (single for 2-base-1-rover test)
+rover.id=GS2025090003
+
+# All rover station IDs (for multi-rover tests)
+rover.group=GS2025090003,GS2025090004,GS2025090005,GS2025090006,GS2025090007,GS2025090008,GS2025090009
+
+# Date (used for path construction: data.root/station/date/)
+date=2026-10-26
+
+# Hour range for testing
+start.hour=0
+end.hour=17
+
+# === Path Rule ===
+# RTCM files: {data.root}/{station}/{date}/{hour}.rtcm3
+# Example: D:\tdengine-jetlinks\jetlinks-data\device_rtcmbin_storage\GS2025090017\2026-10-26\0.rtcm3

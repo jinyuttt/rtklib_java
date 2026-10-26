@@ -1,0 +1,14 @@
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    <logger name="org.rtklib.java.joint" level="DEBUG"/>
+    <logger name="org.rtklib.java.rtkpos.RtkCore" level="INFO"/>
+    <logger name="org.rtklib.java.rtcm" level="WARN"/>
+    <logger name="org.rtklib.java.ephemeris" level="WARN"/>
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>
