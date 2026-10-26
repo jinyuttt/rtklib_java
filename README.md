@@ -6,19 +6,20 @@ RTKLIB 的 Java 移植版本，基于 [RTKLIB 2.5.0](https://github.com/tomojita
 
 > **当前版本 v3.2.0（2026-10-24）**：算法能力已冻结，自适应引擎框架已实现。29 项算法修复的闭环索引与精度实测见 [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md)，版本级变更见 [CHANGELOG](docs/CHANGELOG.md)。
 
-> **功能边界**：Java版专注核心定位算法（SPP/RTK/PPP/PPP-RTK），数据流通讯由 `rtklib-stream` 模块提供（NTRIP客户端+串口），不包含C版的TCP/UDP服务端、NTRIP Caster、接收机原始协议（u-blox/NovAtel等）、NMEA输出等功能。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
+> **功能边界**：Java版专注核心定位算法（SPP/RTK/PPP/PPP-AR/PPP-RTK），数据流通讯由 `rtklib-stream` 模块提供（NTRIP客户端+串口），不包含C版的TCP/UDP服务端、NTRIP Caster、接收机原始协议（u-blox/NovAtel等）、NMEA输出等功能。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
 ## 模块
 
 ### rtklib-core — 核心定位算法
 
-支持 SPP（米级）、RTK（厘米~毫米）、PPP（分米~厘米）、PPP-RTK（厘米级快速收敛）四种定位模式，数据入口支持 RTCM3 实时流与 RINEX 2.x/3.x 事后文件。
+支持 SPP（米级）、RTK（厘米~毫米）、PPP（分米~厘米）、PPP-AR（厘米级）、PPP-RTK（厘米级快速收敛）五种定位模式，数据入口支持 RTCM3 实时流与 RINEX 2.x/3.x 事后文件。
 
 | 定位模式 | 常量 | 精度 | 数据入口 |
 |----------|------|------|----------|
 | SPP | `PMODE_SINGLE` | 米级 | RTCM3 / RINEX |
 | RTK | `PMODE_KINEMA` / `PMODE_STATIC` / `PMODE_MOVEB` | 厘米~毫米 | RTCM3 / RINEX |
 | PPP | `PMODE_PPP_KINEMA` / `PMODE_PPP_STATIC` | 分米~厘米 | RTCM3 / RINEX |
+| PPP-AR | `PMODE_PPP_KINEMA` + FCB/OSB | 厘米级（模糊度固定） | RINEX + SP3/CLK/FCB |
 | PPP-RTK | `PMODE_PPP_KINEMA` + SSR | 厘米级（快速收敛） | RTCM3 (SSR) |
 
 核心包结构：
