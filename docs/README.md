@@ -2,7 +2,7 @@
 
 本文件是 `docs/` 的唯一入口，用于回答三个问题：**某件事该看哪份文档**、**这份文档现在还算不算数**、**哪些地方文档已经和代码不一致**。
 
-- 盘点基准：2026-10-23（依据各文件实际内容与最后修改时间，非猜测）
+- 盘点基准：2026-10-27（依据各文件实际内容与最后修改时间，非猜测）
 - 本文只做导航与状态标注，**不改写任何文档正文**
 
 ## 状态图例
@@ -48,8 +48,10 @@
 |------|------|------|----------|
 | [RTKLIB_JAVA_TECHNICAL_REFERENCE.md](RTKLIB_JAVA_TECHNICAL_REFERENCE.md) | 状态向量布局、关键常量、矩阵约定、函数调用链、配置模板 | 🟡 待复核（含 "已完成的修复清单/待完善项"，可能滞后于 FIX-ALG-020~029） | 2026-10-14 |
 | [MATRIX_DIMENSION_REFERENCE.md](MATRIX_DIMENSION_REFERENCE.md) | H 矩阵构建、filter 压缩、ddcov、varerr 的维度与存储约定 | ✅ 活跃 | 2026-07-13 |
-| [ADJUST_TECHNICAL_REFERENCE.md](ADJUST_TECHNICAL_REFERENCE.md) | rtklib-adjust 多基线间接平差：数学模型、协方差构造、理论局限 | ✅ 活跃 | 2026-10-10 |
-| [ADJUST_USAGE.md](ADJUST_USAGE.md) | rtklib-adjust 使用说明、加权与诊断配置 | ✅ 活跃 | 2026-09-19 |
+| [ADJUST_TECHNICAL_REFERENCE.md](ADJUST_TECHNICAL_REFERENCE.md) | rtklib-adjust 多基线间接平差：数学模型、协方差构造、理论局限、模块边界（SBS+平差） | ✅ 活跃 | 2026-10-27 |
+| [ADJUST_USAGE.md](ADJUST_USAGE.md) | rtklib-adjust 使用说明、加权与诊断配置 | ✅ 活跃 | 2026-10-27 |
+| [JOINT_RTK_DESIGN.md](JOINT_RTK_DESIGN.md) | rtklib-joint 多基线联合 RTK（MBS）：与 core 同层的独立引擎、状态向量、大气共享 | 🟡 设计中（P0 索引 bug 待修） | 2026-10-27 |
+| [VRS_MODULE_DESIGN.md](VRS_MODULE_DESIGN.md) | rtklib-vrs 虚拟参考站生成：实现状态、单基站改正算法、RTCM3 编码器（含 MSM 信号裁剪与锁相指示）、四层验证策略、实测结果、已踩过的坑与已知限制 | ✅ 活跃 | 2026-10-27 |
 | [ORBIT_MODULE_REFERENCE.md](ORBIT_MODULE_REFERENCE.md) | TLE 解析、SGP4/SDP4、六根数转换 | ✅ 活跃 | 2026-10-08 |
 | [OTL_MODULE_REFERENCE.md](OTL_MODULE_REFERENCE.md) | 海潮负荷：分潮、BLQ 提取、位移序列、命令行 | ✅ 活跃 | 2026-09-24 |
 | [PRODUCT_MODULE_REFERENCE.md](PRODUCT_MODULE_REFERENCE.md) | 精密产品下载：产品类型、镜像优先级、缓存、协议 | ✅ 活跃 | 2026-09-24 |

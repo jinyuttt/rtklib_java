@@ -462,6 +462,9 @@
 | FIX-ALG-034 | 2026-10-26 | rtcm/Rtcm.java, ppp/PppProcessor.java | RTCM 1043 按 SBAS 星历重新实现（cssrlib 布局）：首次按 1042 同构假设实现已证伪回退；二次查证 cssrlib decode_sbs_eph 后改为 SBAS 解码，6/6 帧验证通过 |
 | FIX-ALG-035 | 2026-10-26 | ppprtk/PppRtkCore.java, rtklib-test/SsrAccessCheckTest.java | IFLC 诊断日志降级为 trace；实时流录制能力（RECORD_OBS/RECORD_SSR）与回放闭环验证；PPP-RTK AR 触发条件实测（4 星固定、NL 3<4 门限，未达 FIX） |
 | FIX-ALG-036 | 2026-10-26 | rtcm/Rtcm.java | SSR 解码簇修复：相位偏差系统映射（1265=GPS/1267=GAL/1270=BDS）、轨道帧 BDS iodcrc 位宽（ni=10+nj=8）、码偏差 ssr_sig 表 mode→CODE 映射、比例尺 0.01m、SSR_SIG_BDS mode16/17 原版=0→CODE_L1C（JAVA-ONLY 增强 B1I 支持） |
+| FIX-ALG-039 | 2026-10-27 | data/SolData.java、adjust/CovAssembler.java、adjust/GnssBaselineAdjust.java、adjust/MultiBaselineAdjust.java、adjust/DisplacementSeries.java | adjust 平差链路闭环：完整 ECEF 协方差暴露（保留符号）+ R 改块对角独立性模型（删除 ρ=1/k 的融合结果误用）+ dXyz 数据源修正 + 配置项接线 + 时间序列/网平差/白度检验（JAVA-ONLY） |
+| FIX-ALG-040 | 2026-10-27 | adjust/NetworkAdjustment.java、adjust/MultiBaselineAdjust.java、adjust/model/MultiBaselineConfig.java、rtklib-adjust/pom.xml、rtklib-core/pom.xml | 自由网平差 O(m²) 内存爆炸 + 残差计算错误双修复；网平差观测时间窗（默认 1h）；manual 测试命令行覆盖修复（JAVA-ONLY） |
+| FIX-ALG-041 | 2026-10-27 | adjust/GnssBaselineAdjust.java、adjust/MultiBaselineAdjust.java、adjust/ResidualWhiteness.java | 白度检验失效修复：adjustSingle 残差向量未随结果返回（恒 null）+ SUSPECT 剔除后 entries 与 v 长度错配 + df=0 历元改喂交叉检核残差（JAVA-ONLY） |
 
 ## FIX-ALG-020 EST 模式死锁：DCB 产品加载 + enableIonoEstRobust 开关
 
@@ -1983,3 +1986,271 @@ WL 4 星全部固定，但 NL 只固定 3 星，低于 NL 最小固定数 4 的�
 - **后续工作**：
   - 建议将 `INIT_PHASE_EPOCH/INIT_REJC_THRESHOLD/PERM_FROZEN_REJC` 提取到 `Constants.java`，便于集中管理
   - 若需支持"运行时死循环防护"，可考虑在 `ppprtkRes` 中增加滑动窗口检测（如最近 10 历元 rejc 增长 >5 则冻结），但需评估对正常卫星的影响
+
+## FIX-ALG-039：adjust 平差链路闭环（协方差符号 / 独立性模型 / 数据源 / 成果层）
+
+- **日期**：2026-10-27
+- **模块/位置**：
+  - `rtklib-core/src/main/java/org/rtklib/java/data/SolData.java`：新增 `covEcef[9]`
+  - `rtklib-adjust/src/main/java/org/rtklib/java/adjust/covariance/CovAssembler.java`：`extractCovariance3x3()`、`assembleGlobalR(...)`
+  - `rtklib-adjust/src/main/java/org/rtklib/java/adjust/engine/GnssBaselineAdjust.java`：新增 `Policy` record 与 `fromConfig()`
+  - `rtklib-adjust/src/main/java/org/rtklib/java/adjust/engine/MultiBaselineAdjust.java`：dXyz 数据源、网平差累积、一致性告警、白度检验接入
+  - `rtklib-adjust/src/main/java/org/rtklib/java/adjust/engine/DisplacementSeries.java`、`ResidualWhiteness.java`（新增）
+- **类别**：JAVA-ONLY 扩展（adjust 模块在 C 版 RTKLIB 中无对应实现）
+- **C 版依据**：无。C 版 `rtkpos()` 为单基线引擎，不存在多基线平差层；本条目仅改变 Java 侧 adjust 模块的数值行为，core 定位主链路不受影响。唯一涉及 core 的变更是 `SolData` 新增字段（纯新增，`Accuracy` 路径原样保留）
+- **问题现象**：
+  1. adjust 使用的协方差来自 `Accuracy`（`sqrt(|c_ij|)`），非对角符号在构造时已丢失，导致协方差矩阵可能非正定或角度关系错误
+  2. `assembleGlobalR` 把 `(ΣP⁻¹)⁻¹` 当作基线间互协方差块，隐含"基线完全相关"且相关系数 `1/k` 随基站数增大而减小——真实共模误差不会因增加基站而减弱，模型物理上不成立
+  3. 基线向量取自 `hPos[0..2]`（设计矩阵灵敏度），不是 ECEF 位置
+  4. `CrossValidationConfig` 中 `verifiedThreshold / suspectThreshold / plK* / crossCheckedCovInflate` 等字段从未被读取（死配置），阈值硬编码在代码里
+  5. 缺少整时段成果层：既无速率/显著性输出，也无自由网基站位移与残差白度检验
+- **根因**：
+  - 协方差链路在 `Sol → SolData(Accuracy)` 转换处做了 `sqrt(abs)` 与格式适配，信息不可逆丢失
+  - 互协方差块误用了"融合结果协方差"，把结果量当观测量
+  - adjust 早期按"假设三条基线共享同一 rover 观测"设计，与 core 实际的"逐基站独立调用"架构不一致
+- **修改内容**：
+  1. `SolData` 增加 `covEcef`：由 `Sol.qr` 上三角 6 值对称展开 9 元，保留符号；`qr[0]==0` 置 null
+  2. `CovAssembler.extractCovariance3x3()` 优先用 `covEcef`，`Accuracy` 仅作回退并在 javadoc 注明符号丢失
+  3. `assembleGlobalR(epoch, qualityWeight, rho)`：默认 `rho=0` ⇒ R 为块对角；`rho>0` 时按 `rho·sqrt(C_ii⊙C_jj)` 填互块；javadoc 明确 `fuseRoverCovariance()` 为结果量
+  4. dXyz 改用 `CovAssembler.extractBaselineDxyz()`；删除硬编码 `SUSPECT_THRESHOLD` 分支
+  5. 新增 `GnssBaselineAdjust.Policy`（`fromConfig` 映射 8 个配置字段），`plK(grade)` 统一保护级系数
+  6. 新增 `DisplacementSeries`（WLS 速率 + σ 旋转到 ENU + 显著性 + 残差 RMS + 异常历元）、`MultiBaselineAdjust` 网平差接线与 `ConsistencyListener`、`ResidualWhiteness`（lag-1 + 游程检验）、`baseCoordinateSigma`（σ²·I₃ 加到观测块）
+- **验证**：
+  - `mvn test -pl rtklib-adjust`（全量）
+  - 新增测试：`CovAssemblerCovEcefTest`、`CovAssemblerRTest`、`DisplacementSeriesTest`、`MultiBaselineAdjustNetworkTest`、`ResidualWhitenessTest`
+  - `IflcPairNegotiationTest` 修复后 8/8 通过；core 全量测试见本次验证输出
+- **对齐结论**：
+  - core 主链路数值行为不变（仅新增 `covEcef` 字段，原 `Accuracy` 路径保留）
+  - adjust 由"伪多基线"修正为与 core 架构一致的"独立基线 + 块对角 R"
+- **已知边界**：
+  - `baseCoordinateSigma` 默认 0，基站坐标系统偏差默认不建模；同一基站的偏差跨历元相关，当前按历元独立处理，会略微低估整时段平均值的不确定度
+  - `rho` 为经验旋钮，当前无实测相关系数标定方法
+
+
+## FIX-ALG-040 / 自由网平差 O(m²) 内存爆炸 + 残差计算错误（2026-10-27）
+
+**日期**: 2026-10-27
+**类别**: adjust / 算法错误 + 可扩展性（JAVA-ONLY）
+**触发**: 用 rtklib-joint 同源真实数据（2 基站 + 1 测站 RTCM3 录制流，0~17 时共 18 小时）实测 adjust 全链路，发现整时段自由网平差 OOM（Java heap space）；约束平差虽通过但自由网 sigma0 异常（1.4e8 / 4.7e8 量级）。
+
+### 问题现象与根因（三个独立 bug）
+
+1. **O(m²) 权矩阵物化**：`NetworkAdjustment.freeNetwork()` 把全部累积观测合成一次整体平差，
+   `SimpleMatrix R = new SimpleMatrix(m, m)` 直接物化观测权矩阵。18 小时实测 7766 条基线观测
+   （m=23298 标量方程）→ 23298² × 8B ≈ 4.3 GB → OOM。单元测试仅 4 条观测（36×36），从未暴露。
+   而 R 严格块对角（core 逐基站独立解算 ⇒ 观测互不相关，FIX-ALG-039 已确立该模型），
+   第 i 个观测的权重就是其自身 3×3 协方差的逆，根本不需要 m×m 矩阵。
+2. **残差混入绝对坐标**：重写为逐观测累积时，残差误写为 `v = rover − delta − l`（rover 为绝对
+   ECEF 坐标，10⁶ m 量级），而正确公式为 `v = H·x − l = δr₀ − δb − l`（x 为位移未知数）。
+   近似基准 r0 未消去，v ≈ Rover 绝对坐标，sigma0 达 1e8 量级。
+3. **u = R⁻¹l 下标错位**：`rlr += ri[r][c] * lr`（内层循环乘了 `l[r]` 而非 `l[c]`）。
+   对角协方差下 `ri[r][c]` 仅 c=r 非零，两者相等——故对角协方差的单元测试全部通过；
+   真实 ECEF 协方差强非对角（轴间相关 0.5+），立即现形。
+
+### 修改内容
+
+1. `freeNetwork` 重写为逐观测块累积法方程：N = HᵀR⁻¹H、u = HᵀR⁻¹l 以 3×3 块累加
+   （内存 O(n²)，n = 3 + 3×基站数；时间 O(m·n²)）；残差平方和 vRv 与解算后逐观测计算，
+   残差公式修正为 `v = δr₀ − δb − l`。重心基准约束 N += w·CᵀC 保持逐元素等价实现。
+2. `BaselineObs` 增加 `gpsTime` 字段（观测历元 GPS 周内秒，0=未知不参与淘汰）。
+3. `MultiBaselineConfig` 新增 `networkWindowSeconds`（默认 3600，`<=0` 关闭）：
+   `MultiBaselineAdjust.trimNetworkObsWindow()` 按观测 GPS 时间从队头淘汰过期观测——
+   基站位移监测关注近期状态，避免跨小时数据无限累积（与用户确认：整时段平差 1 小时窗口足够）。
+4. `MultiBaselineAdjustRealDataTest` 配置改用独立文件名 `mb-adjust-real-data.properties`：
+   `TestDataConfig`（`AdjustRealDataTest`/`BaseStationMonitorTest` 共用）读取同名
+   `adjust-test-data.properties` 且期望数字基站 ID（`Integer.parseInt`），本地字符串设备名
+   会使这些休眠测试误激活并抛 NumberFormatException。
+5. manual 测试可运行性修复：pom 显式 `<excludedGroups>manual</excludedGroups>` 优先于命令行
+   `-Dgroups=manual`（0 个测试执行），改为 `<excludedGroups>${surefire.excludedGroups}</excludedGroups>`
+   （默认 manual），手动运行：`mvn test -pl rtklib-adjust -Dgroups=manual -Dsurefire.excludedGroups=`
+   （rtklib-core 同步修正）。
+
+### 验证
+
+- `mvn test -pl rtklib-adjust`：68 tests，0 failures（含新增回归
+  `NetworkAdjustmentTest.testFreeNetworkWithCorrelatedCovariance`：强非对角协方差下
+  Rover 恢复 + sigma0 量级守卫）
+- 新旧实现对拍（显式 H/R vs 块累积，同数据同种子）：rover 与基站位移解完全一致（<1e-4 m）
+- 整时段真实数据（18 h，双基线 4338 FIX 历元）：66.75 s 完成，无 OOM；
+  网观测收敛到 452 条（1 小时窗口）；自由网 sigma0 = 0.658（正常量级）
+
+### 已知边界
+
+- 跨 GPS 周边界时周内秒回卷，`newest - oldest <= window` 判断失效（不淘汰，仅受 20000 条硬上限保护）
+- gpsTime 未知（0）的观测不参与时间淘汰
+- `DATUM_WEIGHT = 1e4` 与观测权重（R⁻¹ ~ 1e4，协方差 mm 级时）同量级，重心基准为"软"约束；
+  若观测协方差声明远小于实际误差（如本数据 sigma0≈57），基准约束相对变弱
+
+## FIX-ALG-041 / 白度检验失效：残差向量恒 null + entries 错配（2026-10-27）
+
+**日期**: 2026-10-27
+**类别**: adjust / QA 功能失效（JAVA-ONLY）
+**触发**: 用 joint 同源真实数据（双基站 + 测站，单小时 228 个成功平差历元）验证 adjust 全链路时，
+`getResidualWhitenessReport()` 返回序列数 = 0——228 个成功历元全部喂入了残差，却没有产生任何检验序列。
+
+### 问题现象与根因（三个叠加问题）
+
+1. **`GnssBaselineAdjust.adjustSingle` 残差向量未随结果返回**：L141-142 已正确计算 `v`
+   （用于 sigma0 与 Baarda 检验），但 L163 的 `AdjustResult.success(...)` 硬编码传 `null`——
+   所有 UNVERIFIED（单基线 k=1）路径的残差永久丢失。
+2. **SUSPECT 剔除后 entries 与 v 长度错配**：`adjustSuspect` 把嫌疑基线剔除后重新平差，
+   返回的 `v` 只含剩余基线（k−1 条）的残差；`MultiBaselineAdjust.processEpoch` 却把
+   全量 `entries`（k 条）与该 `v` 一起喂给 `ResidualWhiteness.feed`，长度守卫
+   `v.length < 3 * entries.size()` 静默拦截。
+3. **本数据集下 df 恒为 0**：双基线互差 4.77 m（基站坐标系统差，见 FIX-ALG-039 验证数据）
+   使 k=2 历元全部判 SUSPECT → 剔除成 k=1（df=0，残差恒为 0 无信息）；k=1 历元本身 df=0。
+   即使修掉 1、2，该数据集仍没有任何"有冗余度的平差残差"可喂。
+
+### 修改内容
+
+1. `adjustSingle`：`v` 声明提升到 df 分支之外，df>0 时随 `AdjustResult.success` 返回
+   （df=0 时残差数学上恒为 0，仍返回 null）。
+2. `MultiBaselineAdjust.processEpoch`：喂白度前按 `result.suspectBaseId` +
+   `usedBaselineCount < entries.size()` 同步剔除被剔除基线的条目，保证 entries 与 v 一一对应。
+3. `ResidualWhiteness` 新增 `feedSingle(baseId, v3)`；df=0 且嫌疑基线被剔除的历元改喂
+   该基线相对融合解的**交叉检核残差**（预测残差，数据探测的标准 QA 序列）——
+   这是此类历元唯一有信息量的残差来源，系统差存在时白度检验应报"非白"。
+
+### 验证
+
+- `mvn test -pl rtklib-adjust`：68 tests，0 failures
+- 单小时真实数据重跑：白度序列 0 → 3 条（GS2025090017 轴 0/1/2，各 209 样本），
+  lag1 = +0.859 ~ +0.889、runsZ = -9.85 ~ -12.76，全部判**非白**——
+  与"基站坐标存在 4.77 m 恒定系统差"的物理事实一致（白度检验恢复了对系统误差的检出能力）
+
+### 已知边界
+
+- 序列只覆盖被判嫌疑且被剔除的基站（本数据固定为 GS2025090017，ratio×numSat 启发式稳定选它）；
+  正常基站（保持 VERIFIED/CROSS_CHECKED 双基线平差）的平差残差序列需有冗余度的历元才产生
+- 交叉检核残差含基站坐标系统差本身（米级），会主导白度判定——这是预期行为：
+  白度检验的目的就是发现未被函数模型吸收的系统性误差
+
+## FIX-ALG-042 / joint 双基线 FIX=0%：模糊度零初值 + 缺 holdamb（2026-10-27）
+
+**日期**: 2026-10-27
+**类别**: rtklib-joint / AR 通道功能失效（JAVA-ONLY）
+**触发**: 接手前一会话交接：joint 双基线模式 4219 历元全部 FLOAT（FIX=0%），单基线 SBS 参考 91.2%/91.6%。
+
+### 根因与修复（五处叠加）
+
+1. **[P2] 模糊度初始化缺浮点初值**：`JointCore.udstate` 用 `initx(x,P,nx, offset, SQR(std[0]), idx)`，
+   offset 通常为 0；`KalmanFilter.update` 的状态压缩条件 `if (x[i]!=0.0 && P[i*nxi]>0)` 跳过零状态
+   → 模糊度方差恒 900 不收敛，LAMBDA 永无法固定。
+   修复：新增 `carrierBiasInit`（载波-伪距组合，对齐 RtkCore.udbias 的 bias 语义；zdres 输出 y 为米，
+   bias 周 = (SD载波 - SD伪距)·freq/c，IFLC 时为米），初始化 `initx(bias, SQR(std[0]))`，bias==0 时不初始化。
+2. **[P2 前置] udstate 时 rover 侧 zdres 未计算**：rtkpos 主流程 L110 只做基站侧初始 zdres，
+   rover 段 y 全零 → carrierBiasInit 恒返回 0。修复：udstate 前补 rover 侧 zdres（rr=rb+x[0:3]）。
+3. **[P2.5] 缺 FIXHOLD holdamb**：FIX 后模糊度协方差未收缩（xa/Pa 只修正 na×na 位置块），
+   模糊度自由漂移，ratio 从上万退化到 ~1（搜索面平坦）。
+   修复：resolveAmbiguity 记录固定约束对 (refIdx, jIdx, bias)，FIX 且 nfix>=minfix 时以
+   R=1e-6 周² 强约束喂回 KalmanFilter.update（对齐 C 版 holdamb）。
+4. **[P3] 模糊度过程噪声缺失**：补 `P[idx*nx+idx] += SQR(opt.prn[0])*tt`（对齐 RtkCore.udbias）。
+5. **[双基线 P4] KF 跨基线污染位置**（Joint 独有）：`KalmanFilter.update` 状态压缩只判
+   `x[i]!=0 && P[i*i]>0`，不检查 H 列是否全零。bl=1 的 update 虽在 H 中 bl=0 模糊度列全零，
+   但这些状态仍被选中，通过 P 的位置-模糊度交叉协方差把 bl=1 的新息"泄漏"到共享位置。
+   实测 epoch=0 bl=1 update 把共享位置 y 从 +39.8m 拉到 -31.5m（跳 71m），导致双基线发散。
+   修复：`KalmanFilter.update` 状态选择增加 H 列非零检查（`Math.abs(H[j*nx+i])>0`），
+   跳过与当前观测无关的状态。
+6. **[双基线 P5] holdamb minfix 门槛过高**：原代码 `jrtk.nfix >= opt.minfix(20)` 才触发 holdamb，
+   导致 epoch=20 第一次 FIX（ratio=51/77）后模糊度方差未被压缩，epoch=21 起 ratio 骤降至 ~1。
+   修复：去掉 minfix 门槛，每次 FIX 成功即执行 holdamb（对齐 RtkCore.holdamb 行为），
+   保留 `nHold >= opt.minholdsats` 检查。
+7. **[双基线 P6] FIX 后模糊度 P 完全未修正**（核心根因）：`resolveAmbiguity` 中 LAMBDA 成功后
+   只修正了 xa[0:na] 和 Pa[0:na,0:na]（位置部分，Schur 补），模糊度 xa[na:nx] 只硬改了值
+   （`xa[jIdx] = xa[refIdx] - bias[i]`），但 Pa 中模糊度对应的行/列完全未修正。
+   结果 x 和 P 不匹配：模糊度数值跳了几周，方差仍为 69（浮点水平），后续 KF update 中
+   模糊度自由漂移。
+   修复：FIX 成功写回 jrtk.P 前，手动把 Pa 中所有模糊度（i>=na）的对角设为 1E-6、
+   与其他状态的交叉协方差清零。
+
+### 验证（单小时 236 历元，2026-10-26 数据）
+
+| 配置 | 修复前 | 修复后 |
+|---|---|---|
+| joint 单基线 (GS2025090017) | FIX=0 | **FIX=216 (91.5%)**，与 SBS 参考 91.2% 持平 |
+| joint 双基线 (0017+0020) | FIX=0 | **FIX=216 (91.5%)**，与单基线一致 |
+
+### 关键数值证据
+
+- epoch=0 bl=1 update 前后位置：y 分量 +39.83m → -31.48m（跳 71m，P4 修复后跳变消除）
+- epoch=20 ratio：bl=0=51.28, bl=1=77.54（LAMBDA 二义性分离完美）
+- epoch=21 起 ratio 稳定在 21000/17000（P5+P6 修复后无退化）
+- ambVar0 从 FIX 前 69.5 → FIX 后 1E-6（P6 手动压缩生效）
+- 单/双基线 FIX 率完全一致 = 216/236 = 91.5%
+
+### 修改文件
+
+- `rtklib-core/.../kalman/KalmanFilter.java`：状态选择加 H 列非零检查（P4）
+- `rtklib-joint/.../joint/JointCore.java`：
+  - udstate: carrierBiasInit + rover 侧 zdres 前置（P2）
+  - resolveAmbiguity: holdamb 去掉 minfix 门槛 + FIX 后模糊度 P 压缩（P5/P6）
+  - udstate: 模糊度过程噪声（P3）
+
+---
+
+## FIX-ALG-045 / VRS 输出 FIX=0%：cellInd 编号顺序错位 + LLI 失锁恒置位 + 超容量分批（2026-10-27 修，2026-10-28 更正）
+
+**日期**: 2026-10-27
+**类别**: rtklib-vrs / RTCM3 MSM 编码（JAVA-ONLY）
+**触发**: VRS 反向验证测试（`VrsRealDataTest#testVrsReverseValidation`）：原始基站+测站 RTK FIX≈77%，
+VRS+测站 RTK FIX=0%，ratio 恒 ~1.0。
+
+> ⚠️ 本条目早前版本的验证结论（"LLI 修复后 FIX=91.2%"）**无法复现，系误记**
+> （91.2% 是 10-26 数据原始基站的成绩，张冠李戴）。当时的闭环测试只查了 L[0]/L[1]，
+> 漏检了下述根因 4 的槽位交叉。以下为 2026-10-28 重新定位后的修正结论。
+
+### 根因与修复（四处）
+
+1. **[核心] MSM 编码 lock 计数恒为 0 → 解码端 LLI_SLIP 全置位**：
+   `Rtcm3MsmEncoder.genMsmSig` 里锁计数恒写 `lock[ci]=0`，解码端 `lossoflock` 判
+   `lock==0 && prev==0` → 返回 LLI=1。RTK 端 `udbias` 遇 LLI_SLIP 把 `lock[f]` 重置为
+   `-opt.minlock(-20)`，需连续无失锁才能爬回 0；每历元都重置 → AR 永不启动 → ratio 恒 0。
+   修复：`Rtcm3Encoder` 新增 `lockCnt/lockEpoch/msmEpochSeq` 跨历元状态；`updateLock`
+   在真实失锁（LLI&1）或上历元缺失时归零，否则递增并饱和（MSM4=15 / MSM5=1023）；
+   `VrsGenerator` 每历元递增 `msmEpochSeq`。
+   验证：LLI_SLIP 计数 3240（每历元每观测都置 1）→ 6（仅首历元初始失锁，物理正确）。
+2. **[cellmask bug] 超容量裁剪时给空 cell 编号**：`nsat*nsig>64` 裁剪路径中，
+   cellmask 编号未排除"该 (sat,sig) 无观测"的空 cell，ncell 虚高超 64。
+   修复：只给真实存在观测的 cell 连续编号，受 64 上限约束；顺带修 `genMsmSig`
+   边界 `cellIdx>=64`→`>64`（编号值域 1..64，原条件误丢编号恰为 64 的合法 cell）。
+3. **[功能] 超容量按卫星分批 + sync 累积**（对齐 MSM 协议 sync 语义）：
+   原实现 `nsat*nsig>64`（如 BDS 13 星×6 信号=78）只能砍信号（6→4，丢 B1C/7D）。
+   新增 `encodeMsmBatch`：sigmask 跨批保持全局一致（6 信号全列出），satmask 按
+   `floor(64/nsig)` 颗分批，非末批 sync=1、末批 sync=0，解码端 obsflag 累积为完整历元。
+   `genMsmSat/genMsmSig` 跳过 `satInd==0` 的非本批卫星。`nsat*nsig<=64` 时走原路径，零行为变化。
+4. **[真正导致 FIX=0% 的根因，2026-10-28 定位] cellInd 编号顺序 bug**：
+   分批重建路径与超容量兜底路径中，cellInd 按 **obs 数组访问顺序**（即接收机 slot 顺序，
+   如 2I,7I,5P,6I,1P,7D）连续编号；而 MSM 协议规定 cell 数据按 **cellmask 扫描顺序**
+   （sat 外循环 × sig 内循环，即 sigmask 顺序 2I,6I,7I,5P,7D,1P）排列，解码端
+   `Rtcm.saveMsmObs` 严格按此顺序读取。顺序不一致 → 各信号值整体交叉错位。
+   实测证据（VRS 设在基站位置、改正量=0 的二分诊断）：max|dP|=28.57m、max|dL|=478.7 周；
+   sat106 的 slot1(7D) 与 slot3(6I) 的 P/L 值精确互换（原始 slot1 P == VRS slot3 P，反之亦然）。
+   修复：两条重建路径改为"先标记真实存在的 (sat,sig) cell，再按 cell 位置顺序连续编号"。
+   注：非分批路径 `genMsmIndex` 的编号本来就是按位置扫描，无此 bug；
+   旧 roundtrip 测试只查 L[0]/L[1]（2I 恒在 cell 位置 0，不受影响）→ 漏检。
+
+### 验证（2026-10-27 数据，base=GS2025090017，rover=GS2025090003，239 历元，2026-10-28 重测）
+
+| 配置 | 修复前 | 修复后 |
+|---|---|---|
+| 原始基站+测站（基线 115m） | FIX=77.0%，3D-RMS=5.4639m | 同左（基准） |
+| VRS@基站位置（编解码无损验证） | max\|dP\|=28.57m, max\|dL\|=478.7 周 | **max\|dP\|=0, max\|dL\|=0 逐位一致**，FIX=76.6% ≈ 77.0% |
+| VRS@测站附近（基线 11m） | FIX=0.0% | **FIX=76.6%**，3D-RMS=5.4651m（与长基线一致） |
+
+- 二分诊断法（`VrsRealDataTest#testVrsAtBaseStreamDiagnosis`）：星历 19 颗全参数差=0、
+  code[] 槽位映射一致、观测流全 8 槽位逐项对比 → 问题 100% 定位在编码器 cellInd 编号，
+  与 VRS 改正算法无关（改正量=0 时虚拟文件与原始文件逐位一致）
+- 分批日志：`sys=32 nsat=13 nsig=6 -> 2 batches of <=10 sats`，解码端 10+3=13 颗累积正确，
+  13 星×6 信号=78 cell 完整恢复
+- rtklib-vrs 全量回归：17 个测试全部通过（MSM 编码器 5 + VrsGenerator 6 + VrsRealData 6）
+- 补充观察：base 与 VRS 的 FIX 偏差同为 N=1.37/E=2.55/U=4.64m，属测试中硬编码 ROVER
+  坐标与天线相位中心不一致的系统性偏移，非 VRS 改正误差
+- 教训：编解码对比测试必须覆盖全部信号槽位；只查 L[0]/L[1] 会漏掉 slot2+ 的交叉错位
+
+### 修改文件
+
+- `rtklib-vrs/.../rtcm/Rtcm3MsmEncoder.java`：updateLock 真实锁计数、cellmask 编号修复、
+  encodeMsmBatch 分批编码、countSatSig 公开统计
+- `rtklib-vrs/.../rtcm/Rtcm3Encoder.java`：lockCnt/lockEpoch/msmEpochSeq 状态、
+  encodeMsmBatch 公开入口
+- `rtklib-vrs/.../VrsGenerator.java`：msmEpochSeq 每历元递增、encodeSystemBatched 分批驱动

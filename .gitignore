@@ -63,6 +63,8 @@ test_output*
 # Local test data config (contains device IDs, not for open source)
 **/test-data.properties
 **/adjust-test-data.properties
+**/joint-test-data.properties
+**/mb-adjust-real-data.properties
 
 # Reference source code (not part of Java project)
 orekit_src/

@@ -4,6 +4,8 @@
 
 单历元GNSS多基线间接平差模块。基于高斯-马尔可夫最小二乘模型，对同一历元多条独立RTK基线进行融合平差，输出流动站P01最优坐标及精度评定。
 
+**架构定位**：`adjust = SBS（来自 rtklib-core）+ 平差（本模块）`。核心逐基站独立解算给出多条 FIX 基线，本模块只做结果空间网平差，属事后处理；`rtklib-joint` 是与之无关的独立 MBS 实时引擎（与 core 同层），不接入本模块。详见 `ADJUST_TECHNICAL_REFERENCE.md` §1.2。
+
 ## 依赖
 
 - rtklib-core（RTK解算核心）

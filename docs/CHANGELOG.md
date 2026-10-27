@@ -6,6 +6,56 @@
 
 ---
 
+## [3.2.2] - 2026-10-27
+
+### Added
+
+- **rtklib-vrs 模块**：基于真实基站 RTCM3 生成 VRS 虚拟参考站数据。单基站差分改正（几何距离 + 对流层 Saastamoinen/GMF + 电离层 Klobuchar）+ RTCM3 编码器（1005/1006、1019/1020/1042/1045、MSM4/MSM5 1074-1125），翻译自 RTKLIB 2.5.1 `rtcm3e.c`。离线文件输入输出，仅依赖 `rtklib-core`
+- **VRS 星历池与逐历元选择**：`VrsProcessor` 先预加载全文件星历到 `List<Eph>`，生成阶段每历元按 `|toe − t|` 最小者写入 `nav.eph[sat-1]`。修复了原「按到达顺序覆盖单槽位」导致首历元使用末条星历、卫星位置严重偏离的问题（239 历元约 1 小时文件，VRS 与原始基站载波相位差回到 0.0000 m）
+- **adjust 时间序列成果层**：新增 `DisplacementSeries`，把逐历元坐标序列拟合为位移速率（mm/yr）并给出 1σ 不确定度、显著性判据（|v|/σ > 1.96）、三维拟合残差 RMS 与 3σ 异常历元计数。速率 σ 随 ENU 方向正确旋转（ECEF 逐轴方差经旋转矩阵变换到 ENU），不再出现"速率在 ENU、σ 在 ECEF"的错配
+- **adjust 整时段网平差接线**：`MultiBaselineAdjust` 新增 `registerBasePosition()`（注册基站 ECEF）、`computeNetworkAdjustment(boolean free)`（约束/自由网）、`getNetworkObsCount()`、`resetNetworkObservations()`；逐历元累积"Rover − 基站"真基线向量及协方差（上限 20000 条，超限滚动淘汰）
+- **adjust 一致性告警通道**：新增 `ConsistencyListener` / `onConsistency()`，由 `BaselineConsistencyChecker` 的基站间漂移与异步环闭合差驱动；同一基站首次判异常时回调一次，整网恢复一致后自动清除告警状态
+- **adjust 残差白度检验**：新增 `ResidualWhiteness`，对逐基站逐坐标轴的平差残差做 lag-1 自相关（95% 置信带 2/√n）与游程检验（|z| ≤ 1.96），样本 < 30 时不下结论；经 `getResidualWhitenessReport()` / `resetResidualWhiteness()` 接入
+- **adjust 基站坐标误差口径**：`MultiBaselineConfig` 新增 `baseCoordinateSigma`（默认 0，即不建模）。启用时按 `σ²·I₃` 加到每条基线观测的协方差块——core 逐基站独立解算，各基线基站坐标误差互不相关，符合独立性假设
+- **adjust 网平差观测时间窗**：`MultiBaselineConfig` 新增 `networkWindowSeconds`（默认 3600，`<=0` 关闭）。整时段网平差只累积最近该时长内的基线观测（按观测 GPS 周内秒从队头淘汰），基站位移监测关注近期状态，避免跨小时数据无限累积
+- **adjust 真实数据链路测试**：新增 `MultiBaselineAdjustRealDataTest`，与 `JointRtkRealDataTest` 同源数据（2 基站 + 1 测站 RTCM3 录制流）：core 逐基线独立 SBS 解算 → 按历元配对喂入 `MultiBaselineAdjust` → 一致性/白度检核 → 约束/自由网平差。配置文件 `mb-adjust-real-data.properties`（gitignore，不与 `TestDataConfig` 用的 `adjust-test-data.properties` 冲突——后者期望数字基站 ID，本地字符串设备名会使其数据相关测试误激活）
+
+### Fixed
+
+- **VRS 输出 MSM `lock` 恒为 0 导致 RTK FIX 率 0%**：编码器未维护锁相指示，`lock` 恒写 0；解码端 `lossoflock` 判 `lock==0 && prev==0` 得 `LLI=1`，RTK 的 `udbias` 每历元把 `ssat.lock[f]` 重置为 `-minlock`（-20），永远达不到模糊度固定门槛，ratio 恒 0。修复：`Rtcm3Encoder` 增加 `lockCnt[65][33]`/`lockEpoch[65][33]`/`msmEpochSeq` 跨历元状态，`Rtcm3MsmEncoder.updateLock()` 按「源数据失锁 || 上历元缺失」归零、否则递增（MSM4 饱和 15、MSM5 饱和 1023）。实测 239 历元 LLI_SLIP 计数由 3240 降至 6（仅首历元初始失锁），FIX 率 0% → 91.2%，与原始基站完全一致
+- **VRS 观测值全为 0**：`code2obs` 映射缺失（BDS `CODE_L2I=40`、`CODE_L7I=27`、`CODE_L6I=42` 等无对应 RINEX 字符），`toSigid` 返回 0 使信号被静默跳过。已补齐全部 `CODE_*` → RINEX 观测字符映射
+- **VRS 信号裁剪退化为单频**：`nsat×nsig > 64` 时原逻辑按索引从高位删信号，恰好删掉 B2I(7I)。改为「频点覆盖最大化」贪心选择 `selectSignals`（fi∈{0,1} 权重 1000、fi∈[2,NFREQ) 权重 100）。BDS 13 星场景（`maxSig=64/13=4`）实测保留 2I/7D/7I/6I，覆盖 B1I+B2I+B3I 三个频点，双频 RTK 不受影响
+- **core 暴露完整 ECEF 协方差**：`SolData` 新增 `covEcef[9]`（由 `Sol.qr` 上三角 6 值对称展开，保留非对角符号）；`qr[0]==0` 哨兵时置 null。原 `Accuracy` 路径（c12/c23/c31 为绝对值开方）保留作回退
+- **adjust 协方差符号丢失**：`CovAssembler.extractCovariance3x3()` 优先使用 `covEcef`，修正回退路径无法还原非对角符号的问题
+- **adjust 基线间互协方差模型错误**：`assembleGlobalR` 默认 `rho=0`，R 为块对角阵（core 为单基线引擎、逐基站独立调用）。原实现把信息矩阵融合结果 `(ΣP⁻¹)⁻¹` 当作观测互协方差块，等价于假设基线完全相关且相关系数随基站数增大而减小，物理上不成立；现改为可选 `rho` 旋钮，并明确 `fuseRoverCovariance()` 返回的是融合结果的协方差，不能作为观测量互协方差使用
+- **adjust dXyz 数据源错误**：`MultiBaselineAdjust` 的基线向量提取由 `hPos[0..2]` 改为 `CovAssembler.extractBaselineDxyz()`（`SolData` 的 ECEF 位置）
+- **adjust 失效配置项接线**：新增 `GnssBaselineAdjust.Policy`（record）并由 `MultiBaselineConfig.CrossValidationConfig` 映射，使 `verifiedThreshold / crossCheckedThreshold / suspectThreshold / plK* / crossCheckedCovInflate` 真正生效；同时删除硬编码的 `SUSPECT_THRESHOLD` 死分支
+- **DisplacementSeries 显著性失真**：原实现只把速率旋转到 ENU、σ 仍取 ECEF 轴，导致 |v|/σ 的方向与不确定度不匹配；现按 `Σ_enu = G·Σ_ecef·Gᵗ` 旋转后再判显著性
+- **core 测试重构后编译失败**：`IflcPairNegotiationTest` 仍以 `Rtk` 传入 `RtkCore.negotiateIflcPairs/iflcSlots`（签名已改为 `RtkState`），改为 `rtk.toState()` 后恢复
+- **adjust 自由网平差 O(m²) 内存爆炸**：`freeNetwork` 逐历元累积的观测在最后一次性整体平差时物化了 m×m 权矩阵 R（18 小时实测数据 m=23298 → 4.3 GB，直接 OOM）。R 严格块对角（各基线独立解算⇒互不相关），改为逐观测 3×3 块累积法方程 N/u，内存 O(n²)（n=3+3×基站数）；残差平方和同样逐观测计算。18 小时数据整时段平差从 OOM 降到 67 s 内完成
+- **adjust 自由网平差残差计算错误**：重写过程中残差误用绝对坐标（`rover − delta − l`，未消去近似基准 r0），导致 v ≈ Rover 绝对坐标（10⁶ m 量级）、sigma0 达 1e8；正确公式为 `v = δr₀ − δb − l`（未知数为位移量）。另修复 `u = R⁻¹l` 累加时 l 向量下标错位（内层循环乘了 `l[r]` 而非 `l[c]`）——对角协方差下两者相等，故单元测试未暴露，真实 ECEF 强相关协方差立即现形；新增非对角协方差回归测试 `NetworkAdjustmentTest.testFreeNetworkWithCorrelatedCovariance` 覆盖
+- **manual 测试无法手动运行**：pom 显式 `<excludedGroups>manual</excludedGroups>` 优先于命令行 `-Dgroups=manual`，导致 `-Dgroups=manual` 实际 0 个测试执行。改为属性引用 `<excludedGroups>${surefire.excludedGroups}</excludedGroups>`（默认 manual），手动运行命令为 `mvn test -pl rtklib-core -Dgroups=manual -Dsurefire.excludedGroups=`
+
+### Tests
+
+- 新增 `Rtcm3MsmEncoderTest`（5 例）：MSM4/MSM5 编码 → 解码闭环，GPS/BDS 双频，P/L/SNR/lock 逐项比对
+- 新增 `VrsGeneratorTest`（6 例）：输出 RTCM 消息顺序、端到端流程、双差模糊度自洽（改正后模糊度应保持不变）
+- 新增 `VrsRealDataTest`（6 例）：真实双站 RTCM3（基站 `GS2025090017` / 测站 `GS2025090003`，2026-10-27 08 时，239 历元 15 s）——VRS 改正、端到端输出、RTK 反向验证、VRS 设在基站位置时逐位一致性、原始信号集分析、VRS@基站分流诊断。数据缺失时自动跳过
+- 新增 `CovAssemblerCovEcefTest`（3 例）：协方差符号保留、`qr[0]==0` 哨兵回退、`extractBaselineDxyz` 返回绝对位置
+- 新增 `CovAssemblerRTest`（4 例）：rho=0 块对角、rho=0.5 互块、rho 截断到 [0, 0.99]、k=3 正定
+- 新增 `DisplacementSeriesTest`（3 例）：2 mm/yr 速率恢复且显著、无趋势不显著、样本不足/零跨度失败
+- 新增 `MultiBaselineAdjustNetworkTest`（4 例）：未注册基站不累积、约束平差恢复 Rover、自由网给出基站位移、基站漂移触发告警
+- 新增 `ResidualWhitenessTest`（3 例）：白噪声通过、AR(1) 残差被判失败、样本不足不作判定
+- 新增 `BaselineConsistencyCheckerTest`（4 例）：基站间漂移、异步环闭合差、告警单次回调与恢复清除
+- 新增 `BaseStationDiagnoserResidualTest`（5 例）：基站残差诊断的阈值判定与统计量回归
+- 新增 `MultiBaselineAdjustRealDataTest`（2 例）：单小时快速链路验证（默认执行，数据缺失自动跳过）；整时段（0~17 时）网平差（`@Tag("manual")`，67 s）
+- 新增 `NetworkAdjustmentTest.testFreeNetworkWithCorrelatedCovariance`：非对角协方差下自由网 Rover 恢复与 sigma0 量级回归（覆盖 R⁻¹l 下标错位与残差混入绝对坐标两类 bug）
+- 测试执行治理：surefire 增加 `<excludedGroups>manual</excludedGroups>`（经 `${surefire.excludedGroups}` 属性引用），把小时级数据集/基准类打上 `@Tag("manual")`（`JmhRunnerTest`、`RtkBenchmarkTest`、`GreatPvtPositioningTest`、`RinexRtkProcessorTest`、`PppIndividualOptTest`、`UrbanCanyonDataCheckTest`、`UrbanCanyonRtkDiagTest`、`UrbanCanyonSppOptTest`、`DynamicRtkOptTest`、`CascadeArBehaviorTest`）；默认 `mvn test` 只跑快速集，手动执行用 `mvn test -pl rtklib-core -Dgroups=manual -Dsurefire.excludedGroups=`
+- 测试数据输出目录：新增 `src/test/resources/test-data.properties`（`result.dir=rtklib-core/target/test-results`），替代默认写入 `~/rtklib_java_results` 被沙箱拒绝导致的批量 FileNotFound
+- `RtkProcessorTest` / `RtkTraceTest`：为依赖私有 RTCM3 数据的方法补齐 `skipIfNoData()` / `assumeTrue(dataAvailable)`，数据缺失时按跳过处理而非 NPE
+- `RinexObsWriterTest`：观测类型断言由硬编码 BDS `C2I/L2I/D2I/S2I` 改为按类别（C/L/D/S + 频点数字）判定，兼容 GPS 数据实际输出的 `C1C/C2P/L2C/L2P`
+- `RinexSppTest`：`navsys` 按测试数据实际覆盖设为 GPS（原声明 5 系统使 `nx()=8`，nv 不足必然失败）；`testDualStationRinex` 的 base 单点定位在 base 流无广播星历时按 `assumeTrue` 跳过
+
 ## [3.2.1] - 2026-10-26
 
 ### Fixed
