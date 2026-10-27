@@ -27,7 +27,13 @@ public class BaselineEpoch {
         public final String baseId;
         /** 原始SolData */
         public final SolData solData;
-        /** ECEF基线增量 [dX, dY, dZ] (m) */
+        /**
+         * 该基线独立解出的 Rover ECEF 位置 [X, Y, Z] (m)。
+         *
+         * <p>注意是<b>绝对位置</b>而非「Rover − 基站」增量：本模块的观测模型
+         * （H = I，观测值即 Rover 坐标）依赖这一点。两两求差时与增量约定等价，
+         * 但不可用于需要真基线向量的场合（如 {@code NetworkAdjustment}）。</p>
+         */
         public final double[] dXyz;
         /** 基线自身3x3协方差 (m^2)，行优先存储 */
         public final double[][] cBaseline;

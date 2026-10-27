@@ -13,6 +13,11 @@
     <artifactId>rtklib-adjust</artifactId>
     <packaging>jar</packaging>
 
+    <properties>
+        <!-- 手动运行 manual 标签测试：mvn test -pl rtklib-adjust -Dgroups=manual -Dsurefire.excludedGroups= -->
+        <surefire.excludedGroups>manual</surefire.excludedGroups>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.rtklib</groupId>
@@ -29,4 +34,18 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- 长时段真实数据测试默认不跑（经属性引用，命令行可覆盖） -->
+                    <excludedGroups>${surefire.excludedGroups}</excludedGroups>
+                    <argLine>-Xmx2g</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
