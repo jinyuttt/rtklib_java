@@ -1,6 +1,7 @@
 package org.rtklib.java.vrs.rtcm;
 
 import org.rtklib.java.common.BitUtils;
+import org.rtklib.java.common.ObsCode;
 import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.Geph;
@@ -47,6 +48,20 @@ public class Rtcm3MsmEncoder {
     }
 
     public static boolean encodeMsm(Rtcm3Encoder enc, int type, int sync) {
+        return encodeMsmBatch(enc, type, sync, -1, -1, -1);
+    }
+
+    /**
+     * 编码一条 MSM4/5 消息，支持按卫星分批。
+     *
+     * @param sync     MSM sync 标志（由调用方根据批次位置传入）
+     * @param batchStart 本批起始卫星序号（nsat 维度，含），-1 表示不分批
+     * @param batchSize  本批卫星数，-1 表示不分批
+     * @param fullNsig   全局信号数（不分批时等于 nsig；分批时 sigmask 需保持一致）
+     * @return 是否成功
+     */
+    public static boolean encodeMsmBatch(Rtcm3Encoder enc, int type, int sync,
+                                          int batchStart, int batchSize, int fullNsig) {
         int sys = msmSys(type);
         if (sys == 0) return false;
 
@@ -69,22 +84,55 @@ public class Rtcm3MsmEncoder {
         genMsmIndex(enc, sys, sigIdx, nsatArr, nsigArr, ncellArr, satInd, sigInd, cellInd);
         int nsat = nsatArr[0];
         int nsig = nsigArr[0];
-        int ncell = ncellArr[0];
         if (nsat == 0) return false;
 
-        if (nsat * nsig > 64) {
-            int maxSig = 64 / nsat;
-            if (maxSig < 1) maxSig = 1;
-            int removed = 0;
-            for (int s = 31; s >= 0 && nsig - removed > maxSig; s--) {
-                if (sigInd[s] != 0) {
-                    sigInd[s] = 0;
-                    removed++;
+        // 分批：sigmask 保持全局一致（fullNsig），satmask 仅保留本批卫星。
+        // satInd[] 值域是 1..nsat（全局序号），本批保留 [batchStart, batchStart+batchSize)。
+        boolean batched = batchStart >= 0 && batchSize > 0;
+        if (batched) {
+            if (fullNsig > 0) nsig = fullNsig;   // sigmask 宽度按全局信号数
+            int batchNsat = 0;
+            for (int s = 0; s < 64; s++) {
+                if (satInd[s] == 0) continue;
+                int g = satInd[s];               // 全局序号 1..nsat
+                if (g >= batchStart && g < batchStart + batchSize) {
+                    satInd[s] = ++batchNsat;     // 重新编号为批内 1..batchNsat
+                } else {
+                    satInd[s] = 0;               // 本批不包含
                 }
             }
-            nsig -= removed;
-            nsigArr[0] = nsig;
-            ncell = 0;
+            nsat = batchNsat;
+            if (nsat == 0) return false;
+
+            // 重建 cellInd：先标记本批真实存在的 (sat,sig) cell，
+            // 再按 cellmask 扫描顺序（sat外×sig内，即 cell 位置顺序）连续编号。
+            // 注意：必须按位置顺序编号，解码端按此顺序读取 cell 数据；
+            // 若按 obs 数组访问顺序编号，信号值会整体交叉错位。
+            for (int ci = 0; ci < 64 * 32; ci++) cellInd[ci] = 0;
+            for (int ii = 0; ii < enc.obs.n; ii++) {
+                int sat = toSatid(sys, enc.obs.data[ii].sat);
+                if (sat == 0 || satInd[sat - 1] == 0) continue;   // 非本批
+                for (int jj = 0; jj < Constants.NFREQ + Constants.NEXOBS; jj++) {
+                    int sig = toSigid(sys, sigIdx, enc.obs.data[ii].code[jj]);
+                    if (sig == 0 || sigInd[sig - 1] == 0) continue;
+                    int cell = sigInd[sig - 1] - 1 + (satInd[sat - 1] - 1) * nsig;
+                    if (cell >= 0 && cell < 64 * 32) cellInd[cell] = 1;
+                }
+            }
+            int ncell = 0;
+            for (int ci = 0; ci < nsat * nsig && ci < 64; ci++) {
+                if (cellInd[ci] != 0 && ncell < 64) cellInd[ci] = ++ncell;
+            }
+            ncellArr[0] = ncell;
+        } else if (nsat * nsig > 64) {
+            // 未分批但超容量：按信号裁剪（旧路径，仅在调用方未分批时兜底）
+            int maxSig = 64 / nsat;
+            if (maxSig < 1) maxSig = 1;
+            int[] selected = selectSignals(enc, sys, sigIdx, satInd, sigInd, maxSig);
+            int[] newInd = new int[32];
+            for (int k = 0; k < selected.length; k++) newInd[selected[k] - 1] = k + 1;
+            System.arraycopy(newInd, 0, sigInd, 0, 32);
+            nsig = selected.length;
             for (int ci = 0; ci < 64 * 32; ci++) cellInd[ci] = 0;
             for (int ii = 0; ii < enc.obs.n; ii++) {
                 int sat = toSatid(sys, enc.obs.data[ii].sat);
@@ -93,16 +141,19 @@ public class Rtcm3MsmEncoder {
                     int sig = toSigid(sys, sigIdx, enc.obs.data[ii].code[jj]);
                     if (sig == 0 || sigInd[sig - 1] == 0) continue;
                     int cell = sigInd[sig - 1] - 1 + (satInd[sat - 1] - 1) * nsig;
-                    if (cell < 64 * 32) cellInd[cell] = 1;
+                    // bug 修复：只有真实存在该 (sat,sig) 观测的 cell 才标记
+                    if (cell >= 0 && cell < 64 * 32) cellInd[cell] = 1;
                 }
             }
-            ncell = 0;
-            for (int ci = 0; ci < nsat * nsig && ci < 64 * 32; ci++) {
+            // 按 cellmask 扫描顺序（cell 位置顺序）编号，与解码端读取顺序一致
+            int ncell = 0;
+            for (int ci = 0; ci < nsat * nsig && ci < 64; ci++) {
                 if (cellInd[ci] != 0 && ncell < 64) cellInd[ci] = ++ncell;
             }
             ncellArr[0] = ncell;
-            log.debug("MSM nsat*nsig>64: reduced nsig from {} to {} for sys={}", nsig + removed, nsig, sys);
+            log.debug("MSM nsat*nsig>64: trimmed nsig to {} for sys={}", nsig, sys);
         }
+        int ncell = ncellArr[0];
 
         double[] rrng = new double[64];
         double[] rrate = new double[64];
@@ -115,7 +166,8 @@ public class Rtcm3MsmEncoder {
         int[] half = new int[64];
         float[] cnr = new float[64];
         genMsmSig(enc, sys, sigIdx, satInd, sigInd, cellInd, nsig,
-                  rrng, rrate, psrng, phrng, rate, lock, half, cnr);
+                  rrng, rrate, psrng, phrng, rate, lock, half, cnr,
+                  msmType == 4 ? 15 : 1023);
 
         int i = encodeMsmHead(enc, type, sys, sync, nsat, nsig, ncell,
                               satInd, sigInd, cellInd);
@@ -145,6 +197,32 @@ public class Rtcm3MsmEncoder {
 
         enc.nbit = i;
         return true;
+    }
+
+    /**
+     * 统计指定系统在当前 obs 中的 MSM 卫星数与信号数（与编码器内部口径一致）。
+     *
+     * @param enc 编码器（使用其 obs）
+     * @param sys 卫星系统（SYS_GPS/SYS_CMP 等）
+     * @return int[2]，[0]=nsat，[1]=nsig
+     */
+    public static int[] countSatSig(Rtcm3Encoder enc, int sys) {
+        int sigIdx = sysToSigIdx(sys);
+        boolean[] satSeen = new boolean[64];
+        boolean[] sigSeen = new boolean[32];
+        for (int i = 0; i < enc.obs.n; i++) {
+            int sat = toSatid(sys, enc.obs.data[i].sat);
+            if (sat == 0) continue;
+            satSeen[sat - 1] = true;
+            for (int j = 0; j < Constants.NFREQ + Constants.NEXOBS; j++) {
+                int sig = toSigid(sys, sigIdx, enc.obs.data[i].code[j]);
+                if (sig != 0) sigSeen[sig - 1] = true;
+            }
+        }
+        int nsat = 0, nsig = 0;
+        for (boolean b : satSeen) if (b) nsat++;
+        for (boolean b : sigSeen) if (b) nsig++;
+        return new int[]{nsat, nsig};
     }
 
     private static int msmSys(int type) {
@@ -273,6 +351,70 @@ public class Rtcm3MsmEncoder {
         return -1;
     }
 
+    private static int[] selectSignals(Rtcm3Encoder enc, int sys, int sigIdx,
+                                       int[] satInd, int[] sigInd, int maxSig) {
+        int nsat = 0;
+        for (int i = 0; i < 64; i++) {
+            if (satInd[i] != 0 && satInd[i] > nsat) nsat = satInd[i];
+        }
+
+        boolean[][] present = new boolean[33][64];
+        int[] freqIdx = new int[33];
+        for (int s = 0; s < 32; s++) {
+            if (sigInd[s] == 0) continue;
+            String obs = MSM_SIG[sigIdx][s];
+            int code = ObsCode.obs2code(obs);
+            freqIdx[s + 1] = code > 0 ? ObsCode.code2idx(sys, code) : -1;
+        }
+        for (int ii = 0; ii < enc.obs.n; ii++) {
+            int sat = toSatid(sys, enc.obs.data[ii].sat);
+            if (sat <= 0 || sat > 64 || satInd[sat - 1] == 0) continue;
+            int k = satInd[sat - 1] - 1;
+            for (int jj = 0; jj < Constants.NFREQ + Constants.NEXOBS; jj++) {
+                int sig = toSigid(sys, sigIdx, enc.obs.data[ii].code[jj]);
+                if (sig != 0) present[sig][k] = true;
+            }
+        }
+
+        java.util.List<Integer> selected = new java.util.ArrayList<>();
+        boolean[] used = new boolean[33];
+        boolean[][] covered = new boolean[64][8];
+        while (selected.size() < maxSig) {
+            int best = 0;
+            int bestBucket = 7;
+            long bestGain = 0;
+            for (int sig = 1; sig <= 32; sig++) {
+                if (sigInd[sig - 1] == 0 || used[sig]) continue;
+                int fi = freqIdx[sig];
+                int bucket = fi >= 0 && fi < 8 ? fi : 7;
+                long w;
+                if (fi == 0 || fi == 1) w = 1000L;
+                else if (fi >= 2 && fi < Constants.NFREQ) w = 100L;
+                else w = 1L;
+                long gain = 0;
+                for (int k = 0; k < nsat; k++) {
+                    if (present[sig][k] && !covered[k][bucket]) gain += w;
+                }
+                if (gain > bestGain) {
+                    bestGain = gain;
+                    best = sig;
+                    bestBucket = bucket;
+                }
+            }
+            if (best == 0) break;
+            used[best] = true;
+            selected.add(best);
+            for (int k = 0; k < nsat; k++) {
+                if (present[best][k]) covered[k][bestBucket] = true;
+            }
+        }
+
+        int[] out = new int[selected.size()];
+        for (int i = 0; i < out.length; i++) out[i] = selected.get(i);
+        java.util.Arrays.sort(out);
+        return out;
+    }
+
     private static void genMsmIndex(Rtcm3Encoder enc, int sys, int sigIdx,
                                      int[] nsatArr, int[] nsigArr, int[] ncellArr,
                                      int[] satInd, int[] sigInd, int[] cellInd) {
@@ -320,6 +462,7 @@ public class Rtcm3MsmEncoder {
             Obsd data = enc.obs.data[i];
             int sat = toSatid(sys, data.sat);
             if (sat == 0) continue;
+            if (satInd[sat - 1] == 0) continue;   // 分批时跳过非本批卫星
 
             for (int j = 0; j < Constants.NFREQ + Constants.NEXOBS; j++) {
                 int sig = toSigid(sys, sigIdx, data.code[j]);
@@ -341,11 +484,12 @@ public class Rtcm3MsmEncoder {
                                    int[] satInd, int[] sigInd, int[] cellInd, int nsig,
                                    double[] rrng, double[] rrate,
                                    double[] psrng, double[] phrng, double[] rate,
-                                   double[] lock, int[] half, float[] cnr) {
+                                   double[] lock, int[] half, float[] cnr, int maxLock) {
         for (int i = 0; i < enc.obs.n; i++) {
             Obsd data = enc.obs.data[i];
             int sat = toSatid(sys, data.sat);
             if (sat == 0) continue;
+            if (satInd[sat - 1] == 0) continue;   // 分批时跳过非本批卫星
 
             for (int j = 0; j < Constants.NFREQ + Constants.NEXOBS; j++) {
                 int sig = toSigid(sys, sigIdx, data.code[j]);
@@ -353,7 +497,7 @@ public class Rtcm3MsmEncoder {
 
                 int k = satInd[sat - 1] - 1;
                 int cellIdx = cellInd[sigInd[sig - 1] - 1 + k * nsig];
-                if (cellIdx == 0 || cellIdx >= 64) continue;
+                if (cellIdx == 0 || cellIdx > 64) continue;
 
                 double freq = SatUtils.sat2freq(data.sat, data.code[j], enc.nav);
                 double lambda = freq == 0.0 ? 0.0 : Constants.CLIGHT / freq;
@@ -366,11 +510,24 @@ public class Rtcm3MsmEncoder {
                 if (psrngS != 0.0) psrng[ci] = psrngS;
                 if (phrngS != 0.0) phrng[ci] = phrngS;
                 if (rateS  != 0.0) rate[ci]  = rateS;
-                lock[ci] = 0.0;
+                lock[ci] = updateLock(enc, sat, sig, data.LLI[j], maxLock);
                 half[ci] = (data.LLI[j] & 2) != 0 ? 1 : 0;
                 cnr[ci]  = data.SNR[j];
             }
         }
+    }
+
+    private static int updateLock(Rtcm3Encoder enc, int sat, int sig, int lli, int maxLock) {
+        int si = sat - 1;
+        int sj = sig - 1;
+        boolean lost = (lli & 1) != 0 || enc.lockEpoch[si][sj] != enc.msmEpochSeq - 1;
+        if (lost) {
+            enc.lockCnt[si][sj] = 0;
+        } else if (enc.lockCnt[si][sj] < maxLock) {
+            enc.lockCnt[si][sj]++;
+        }
+        enc.lockEpoch[si][sj] = enc.msmEpochSeq;
+        return enc.lockCnt[si][sj];
     }
 
     private static int encodeMsmHead(Rtcm3Encoder enc, int type, int sys, int sync,

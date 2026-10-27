@@ -13,10 +13,12 @@
         <module>rtklib-core</module>
         <module>rtklib-stream</module>
         <module>rtklib-adjust</module>
+        <module>rtklib-joint</module>
         <module>rtklib-product</module>
         <module>rtklib-test</module>
         <module>rtklib-otl</module>
         <module>rtklib-research</module>
+        <module>rtklib-vrs</module>
     </modules>
 
     <properties>

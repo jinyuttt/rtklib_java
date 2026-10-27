@@ -1,6 +1,5 @@
 package org.rtklib.java.vrs;
 
-import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.Eph;
@@ -18,6 +17,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 public class VrsProcessor {
     private static final Logger log = LoggerFactory.getLogger(VrsProcessor.class);
@@ -41,15 +42,19 @@ public class VrsProcessor {
         byte[] fileBytes = Files.readAllBytes(Paths.get(required.inputRtcmPath));
         log.info("Read {} bytes from input RTCM file", fileBytes.length);
 
-        Nav nav = preloadEphemeris(fileBytes);
-        log.info("Ephemeris preloaded: {} satellites with ephemeris", countEphemeris(nav));
+        List<Eph> ephPool = new ArrayList<>();
+        List<Geph> gephPool = new ArrayList<>();
+        preloadEphemeris(fileBytes, ephPool, gephPool);
+        Nav nav = new Nav();
+        log.info("Ephemeris preloaded: {} broadcast, {} GLONASS", ephPool.size(), gephPool.size());
 
         Rtcm3Encoder encoder = new Rtcm3Encoder();
         encoder.stationId = optional.rtcmStationId;
         encoder.seqNo = optional.seqNo;
 
         VrsGenerator generator = new VrsGenerator(
-            vrsPos, required.stationId, optional, encoder, required.outputRtcmPath, nav
+            vrsPos, required.stationId, optional, encoder, required.outputRtcmPath,
+            nav, ephPool, gephPool
         );
 
         RtcmCallbackDecoder decoder = new RtcmCallbackDecoder(generator);
@@ -61,24 +66,15 @@ public class VrsProcessor {
         log.info("VRS processing complete");
     }
 
-    private Nav preloadEphemeris(byte[] data) {
-        Nav nav = new Nav();
+    private void preloadEphemeris(byte[] data, List<Eph> ephPool, List<Geph> gephPool) {
         RtcmDataHandler ephCollector = new RtcmDataHandler() {
             @Override public void onRtcmMessageType(int type, int length) {}
             @Override public void onStation(Sta sta) {}
             @Override public void onEph(Eph eph) {
-                if (eph.sat > 0 && eph.sat <= nav.nmax) {
-                    nav.eph[eph.sat - 1] = eph;
-                    if (eph.sat > nav.n) nav.n = eph.sat;
-                }
+                if (eph != null && eph.sat > 0) ephPool.add(eph);
             }
             @Override public void onGeph(Geph geph) {
-                int[] prn = new int[1];
-                int sys = SatUtils.satsys(geph.sat, prn);
-                if (sys == Constants.SYS_GLO && prn[0] > 0 && prn[0] <= nav.ngmax) {
-                    nav.geph[prn[0] - 1] = geph;
-                    if (prn[0] > nav.ng) nav.ng = prn[0];
-                }
+                if (geph != null) gephPool.add(geph);
             }
             @Override public void onObservationEpoch(ObservationEpoch epoch) {}
             @Override public void onSsr(Ssr ssr) {}
@@ -88,14 +84,5 @@ public class VrsProcessor {
         RtcmCallbackDecoder decoder = new RtcmCallbackDecoder(ephCollector);
         decoder.feed(data, 0, data.length);
         decoder.finish();
-        return nav;
-    }
-
-    private int countEphemeris(Nav nav) {
-        int cnt = 0;
-        for (int i = 0; i < nav.nmax; i++) {
-            if (nav.eph[i] != null && nav.eph[i].sat > 0) cnt++;
-        }
-        return cnt;
     }
 }

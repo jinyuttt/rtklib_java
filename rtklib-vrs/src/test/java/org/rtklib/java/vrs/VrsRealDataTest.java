@@ -35,7 +35,7 @@ public class VrsRealDataTest {
 
     private static final String DATA_ROOT = "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage";
     private static final String BASE_STATION = "GS2025090017";
-    private static final String DATE = "2026-10-27";
+    private static final String DATE = System.getProperty("vrs.date", "2026-10-27");
     private static final int TEST_HOUR = 8;
 
     private static final double BASE_LAT = 28.910469588;
@@ -366,6 +366,17 @@ public class VrsRealDataTest {
         printRtkStats("VRS-测站RTK", stats2, vrsRoverDist);
 
         System.out.println();
+        System.out.println("--- 逐历元对比 (ns/ratio) ---");
+        System.out.println("  idx   baseRun(ns,ratio,status)      vrsRun(ns,ratio,status)");
+        int nCmp = Math.min(60, Math.min(res1.solutions.size(), res2.solutions.size()));
+        for (int i = 15; i < nCmp; i++) {
+            SolData s1 = res1.solutions.get(i);
+            SolData s2 = res2.solutions.get(i);
+            System.out.printf("  %3d   %2d / %7.3f / %-6s   %2d / %7.3f / %-6s%n",
+                    i, s1.numSat, s1.ratio, s1.status, s2.numSat, s2.ratio, s2.status);
+        }
+
+        System.out.println();
         System.out.println("========================================");
         System.out.println("  对比总结");
         System.out.println("========================================");
@@ -383,6 +394,476 @@ public class VrsRealDataTest {
         }
 
         assertTrue(res2.totalEpochs > 0, "VRS RTK应有历元数据");
+    }
+
+    @Test
+    @DisplayName("VRS编解码闭环：VRS设在基站位置时输出应与原始基站观测值一致")
+    void testVrsRoundTripMatchesBase() throws IOException {
+        if (!dataAvailable) {
+            System.out.println("跳过：数据不可用");
+            return;
+        }
+
+        Path basePath = Paths.get(DATA_ROOT, BASE_STATION, DATE, TEST_HOUR + ".rtcm3");
+        byte[] baseData = Files.readAllBytes(basePath);
+        Map<String, List<Obsd>> baseEpochs = decodeEpochs(baseData);
+
+        Path outPath = Paths.get("target", "vrs-roundtrip-base.rtcm3");
+        Files.createDirectories(outPath.getParent());
+        if (Files.exists(outPath)) Files.delete(outPath);
+
+        VrsRequiredConfig req = new VrsRequiredConfig();
+        req.vrsLat = BASE_LAT;
+        req.vrsLon = BASE_LON;
+        req.vrsHeight = BASE_HGT;
+        req.stationId = "VRS_RT";
+        req.inputRtcmPath = basePath.toString();
+        req.outputRtcmPath = outPath.toString();
+
+        VrsOptionalConfig opt = new VrsOptionalConfig();
+        opt.navsys = Constants.SYS_GPS | Constants.SYS_CMP | Constants.SYS_GAL;
+        opt.msmType = 4;
+
+        new VrsProcessor().process(req, opt);
+
+        byte[] outData = Files.readAllBytes(outPath);
+        Map<String, List<Obsd>> vrsEpochs = decodeEpochs(outData);
+
+        System.out.printf("原始历元数=%d  VRS历元数=%d%n", baseEpochs.size(), vrsEpochs.size());
+        List<String> baseKeys = new ArrayList<>(baseEpochs.keySet());
+        List<String> vrsKeys = new ArrayList<>(vrsEpochs.keySet());
+        System.out.println("原始历元时间(前3): " + baseKeys.subList(0, Math.min(3, baseKeys.size())));
+        System.out.println("VRS历元时间(前3): " + vrsKeys.subList(0, Math.min(3, vrsKeys.size())));
+
+        String key = baseKeys.get(0);
+        List<Obsd> baseObs = baseEpochs.get(key);
+        List<Obsd> vrsObs = vrsEpochs.get(key);
+        if (vrsObs == null) {
+            System.out.println("!! VRS中不存在该历元时间: " + key);
+            return;
+        }
+
+        System.out.println();
+        System.out.println("=== 全部历元载波相位跳变扫描 (VRS@基站位置，理论应全为0) ===");
+        double maxDL = 0.0;
+        int badEpochs = 0;
+        String firstBad = null;
+        for (String k : baseKeys) {
+            List<Obsd> bl = baseEpochs.get(k);
+            List<Obsd> vl = vrsEpochs.get(k);
+            if (vl == null) continue;
+            double epochMax = 0.0;
+            for (Obsd b : bl) {
+                int[] prn = new int[1];
+                if (org.rtklib.java.common.SatUtils.satsys(b.sat, prn) != Constants.SYS_CMP) continue;
+                Obsd v = null;
+                for (Obsd x : vl) if (x.sat == b.sat) { v = x; break; }
+                if (v == null) continue;
+                if (b.L[0] != 0.0 && v.L[0] != 0.0) {
+                    epochMax = Math.max(epochMax, Math.abs((v.L[0] - b.L[0]) * 0.19));
+                }
+            }
+            if (epochMax > 0.001) {
+                badEpochs++;
+                if (firstBad == null) {
+                    firstBad = String.format("%s maxDL0=%.4fm", k, epochMax);
+                    System.out.println("  首个跳变历元: " + firstBad);
+                }
+            }
+            maxDL = Math.max(maxDL, epochMax);
+        }
+        System.out.printf("  扫描历元=%d  含跳变历元=%d  max|dL0|=%.4fm%n",
+                baseKeys.size(), badEpochs, maxDL);
+
+        System.out.println();
+        System.out.println("=== 历元 " + key + " 原始基站 vs VRS输出(基站位置) ===");
+        System.out.println("  sat   dP0(m)      dL0(m)      dP1(m)      dL1(m)   baseLLI  vrsLLI");
+        for (Obsd b : baseObs) {
+            int[] prn = new int[1];
+            if (org.rtklib.java.common.SatUtils.satsys(b.sat, prn) != Constants.SYS_CMP) continue;
+            Obsd v = null;
+            for (Obsd x : vrsObs) if (x.sat == b.sat) { v = x; break; }
+            if (v == null) {
+                System.out.printf("  %3d   --- 缺失 ---%n", b.sat);
+                continue;
+            }
+            double dP0 = (b.P[0] != 0.0 && v.P[0] != 0.0) ? v.P[0] - b.P[0] : Double.NaN;
+            double dL0 = (b.L[0] != 0.0 && v.L[0] != 0.0) ? (v.L[0] - b.L[0]) * 0.19 : Double.NaN;
+            double dP1 = (b.P[1] != 0.0 && v.P[1] != 0.0) ? v.P[1] - b.P[1] : Double.NaN;
+            double dL1 = (b.L[1] != 0.0 && v.L[1] != 0.0) ? (v.L[1] - b.L[1]) * 0.24 : Double.NaN;
+            System.out.printf("  %3d  %9.4f  %9.4f  %9.4f  %9.4f    [%d,%d]   [%d,%d]%n",
+                    b.sat, dP0, dL0, dP1, dL1, b.LLI[0], b.LLI[1], v.LLI[0], v.LLI[1]);
+        }
+
+        int baseSlip = 0, vrsSlip = 0;
+        for (String k : baseKeys) {
+            List<Obsd> bl = baseEpochs.get(k);
+            List<Obsd> vl = vrsEpochs.get(k);
+            if (vl == null) continue;
+            for (Obsd b : bl) {
+                int[] prn = new int[1];
+                if (org.rtklib.java.common.SatUtils.satsys(b.sat, prn) != Constants.SYS_CMP) continue;
+                if (b.L[0] != 0.0 && (b.LLI[0] & 1) != 0) baseSlip++;
+                for (Obsd x : vl) {
+                    if (x.sat != b.sat) continue;
+                    if (x.L[0] != 0.0 && (x.LLI[0] & 1) != 0) vrsSlip++;
+                    break;
+                }
+            }
+        }
+        System.out.printf("  全历元 LLI_SLIP 计数: 原始基站=%d  VRS输出=%d%n", baseSlip, vrsSlip);
+    }
+
+    @Test
+    @DisplayName("VRS@基站位置：流级逐项对比 + RTK二分诊断（改正量=0，理论上流应等价）")
+    void testVrsAtBaseStreamDiagnosis() throws IOException {
+        if (!dataAvailable) {
+            System.out.println("跳过：数据不可用");
+            return;
+        }
+
+        Path basePath = Paths.get(DATA_ROOT, BASE_STATION, DATE, TEST_HOUR + ".rtcm3");
+        Path roverPath = Paths.get(DATA_ROOT, ROVER_STATION, DATE, TEST_HOUR + ".rtcm3");
+        byte[] baseData = Files.readAllBytes(basePath);
+        byte[] roverData = Files.readAllBytes(roverPath);
+
+        // --- A. 生成 VRS@基站位置（改正量≈0） ---
+        Path outPath = Paths.get("target", "vrs-atbase-diag.rtcm3");
+        Files.createDirectories(outPath.getParent());
+        if (Files.exists(outPath)) Files.delete(outPath);
+
+        VrsRequiredConfig req = new VrsRequiredConfig();
+        req.vrsLat = BASE_LAT;
+        req.vrsLon = BASE_LON;
+        req.vrsHeight = BASE_HGT;
+        req.stationId = "VRS_ATBASE";
+        req.inputRtcmPath = basePath.toString();
+        req.outputRtcmPath = outPath.toString();
+
+        VrsOptionalConfig vopt = new VrsOptionalConfig();
+        vopt.navsys = Constants.SYS_GPS | Constants.SYS_CMP | Constants.SYS_GAL;
+        vopt.msmType = 4;
+        vopt.stationMsgType = 1005;
+
+        new VrsProcessor().process(req, vopt);
+        byte[] vrsData = Files.readAllBytes(outPath);
+        System.out.printf("原始基站: %d bytes,  VRS@基站输出: %d bytes%n", baseData.length, vrsData.length);
+
+        // --- B. 消息类型直方图（内部 Rtcm，与 RTK 同路径） ---
+        System.out.println();
+        System.out.println("=== B. 消息类型直方图 ===");
+        Map<Integer, Integer> histBase = msgTypeHist(baseData);
+        Map<Integer, Integer> histVrs = msgTypeHist(vrsData);
+        Set<Integer> allTypes = new TreeSet<>();
+        allTypes.addAll(histBase.keySet());
+        allTypes.addAll(histVrs.keySet());
+        for (int t : allTypes) {
+            System.out.printf("  type=%d  原始=%d  VRS=%d%n",
+                    t, histBase.getOrDefault(t, 0), histVrs.getOrDefault(t, 0));
+        }
+
+        // --- C. 观测流对比（parseRtcmBatch 方式：obsflag==1 才提交） ---
+        System.out.println();
+        System.out.println("=== C. 观测流逐项对比 ===");
+        List<Obsd[]> baseEp = decodeRawEpochs(baseData);
+        List<Obsd[]> vrsEp = decodeRawEpochs(vrsData);
+        System.out.printf("  历元数: 原始=%d  VRS=%d%n", baseEp.size(), vrsEp.size());
+
+        int nCmp = Math.min(baseEp.size(), vrsEp.size());
+        int epochSatDiff = 0, cellCnt = 0, codeDiff = 0, lliDiff = 0;
+        double maxDP = 0, maxDL = 0, maxDD = 0, maxDSNR = 0;
+        String firstDiff = null;
+        List<String> topDiffs = new ArrayList<>();
+        for (int e = 0; e < nCmp; e++) {
+            Obsd[] be = baseEp.get(e);
+            Obsd[] ve = vrsEp.get(e);
+            double dt = org.rtklib.java.time.TimeSystem.timediff(be[0].time, ve[0].time);
+            if (Math.abs(dt) > 1e-6 && firstDiff == null) {
+                firstDiff = String.format("历元%d时间差 %.6fs", e, dt);
+            }
+            if (be.length != ve.length) {
+                epochSatDiff++;
+                if (firstDiff == null) firstDiff = String.format("历元%d卫星数: 原始=%d VRS=%d", e, be.length, ve.length);
+            }
+            for (Obsd b : be) {
+                Obsd v = null;
+                for (Obsd x : ve) if (x.sat == b.sat) { v = x; break; }
+                if (v == null) {
+                    if (firstDiff == null) firstDiff = String.format("历元%d sat=%d VRS缺失", e, b.sat);
+                    continue;
+                }
+                for (int j = 0; j < Constants.NFREQ + Constants.NEXOBS; j++) {
+                    if (b.code[j] == 0 && v.code[j] == 0) continue;
+                    cellCnt++;
+                    if (b.code[j] != v.code[j]) {
+                        codeDiff++;
+                        if (firstDiff == null) firstDiff = String.format(
+                                "历元%d sat=%d slot%d code: 原始=%d VRS=%d", e, b.sat, j, b.code[j], v.code[j]);
+                    }
+                    double dP = (b.P[j] != 0 && v.P[j] != 0) ? Math.abs(v.P[j] - b.P[j]) : 0;
+                    double dL = (b.L[j] != 0 && v.L[j] != 0) ? Math.abs(v.L[j] - b.L[j]) : 0;
+                    if (dP > maxDP) maxDP = dP;
+                    if (dL > maxDL) maxDL = dL;
+                    if ((dP > 0.05 || dL > 0.5) && topDiffs.size() < 12) {
+                        topDiffs.add(String.format("    e=%d sat=%d slot%d code=%d dP=%.4fm dL=%.4f周  P: %.4f vs %.4f  L: %.4f vs %.4f",
+                                e, b.sat, j, b.code[j], dP, dL, b.P[j], v.P[j], b.L[j], v.L[j]));
+                    }
+                    if (b.D[j] != 0 && v.D[j] != 0) maxDD = Math.max(maxDD, Math.abs(v.D[j] - b.D[j]));
+                    if (b.SNR[j] != 0 && v.SNR[j] != 0) maxDSNR = Math.max(maxDSNR, Math.abs(v.SNR[j] - b.SNR[j]));
+                    if (b.LLI[j] != v.LLI[j]) lliDiff++;
+                }
+            }
+        }
+        System.out.printf("  对比历元=%d  卫星数不同历元=%d  cell=%d  code不同=%d  LLI不同=%d%n",
+                nCmp, epochSatDiff, cellCnt, codeDiff, lliDiff);
+        System.out.printf("  max|dP|=%.6fm  max|dL|=%.6f周  max|dD|=%.4fHz  max|dSNR|=%.4f%n",
+                maxDP, maxDL, maxDD, maxDSNR);
+        if (!topDiffs.isEmpty()) {
+            System.out.println("  --- 前12个超阈差异cell ---");
+            for (String s : topDiffs) System.out.println(s);
+        }
+        if (firstDiff != null) System.out.println("  首个差异: " + firstDiff);
+        else System.out.println("  观测流完全一致（除LLI计数差异外）");
+
+        // --- C2. epoch0 全槽位 code[] 对比（定位槽位交叉） ---
+        if (!baseEp.isEmpty() && !vrsEp.isEmpty()) {
+            System.out.println("  --- epoch0 code[]槽位对比 (sat: 原始code[0..7] | VRS code[0..7]) ---");
+            for (Obsd b : baseEp.get(0)) {
+                Obsd v = null;
+                for (Obsd x : vrsEp.get(0)) if (x.sat == b.sat) { v = x; break; }
+                StringBuilder sbB = new StringBuilder(), sbV = new StringBuilder();
+                for (int j = 0; j < Constants.NFREQ + Constants.NEXOBS; j++) sbB.append(b.code[j]).append(',');
+                if (v != null) for (int j = 0; j < Constants.NFREQ + Constants.NEXOBS; j++) sbV.append(v.code[j]).append(',');
+                System.out.printf("    sat=%d  [%s] | [%s]%n", b.sat, sbB, sbV);
+            }
+        }
+
+        // --- D. 星历对比 ---
+        System.out.println();
+        System.out.println("=== D. 星历对比 ===");
+        Nav navB = preloadEphemeris(baseData);
+        Nav navV = preloadEphemeris(vrsData);
+        int ephB = countEphemeris(navB), ephV = countEphemeris(navV);
+        System.out.printf("  星历数: 原始=%d  VRS=%d%n", ephB, ephV);
+        int ephCompared = 0;
+        double maxDA = 0, maxDM0 = 0, maxDf0 = 0, maxDtgd = 0, maxDtoe = 0;
+        String firstEphDiff = null;
+        for (int s = 0; s < navB.nmax; s++) {
+            Eph eb = navB.eph[s];
+            Eph ev = navV.eph[s];
+            if (eb == null || eb.sat <= 0 || ev == null || ev.sat <= 0) continue;
+            ephCompared++;
+            maxDA = Math.max(maxDA, Math.abs(eb.A - ev.A));
+            maxDM0 = Math.max(maxDM0, Math.abs(eb.M0 - ev.M0));
+            maxDf0 = Math.max(maxDf0, Math.abs(eb.f0 - ev.f0));
+            if (eb.tgd != null && ev.tgd != null) {
+                for (int k = 0; k < Math.min(eb.tgd.length, ev.tgd.length); k++) {
+                    maxDtgd = Math.max(maxDtgd, Math.abs(eb.tgd[k] - ev.tgd[k]));
+                }
+            }
+            double dtoe = Math.abs(org.rtklib.java.time.TimeSystem.timediff(eb.toe, ev.toe));
+            maxDtoe = Math.max(maxDtoe, dtoe);
+            if (firstEphDiff == null) {
+                if (eb.week != ev.week) firstEphDiff = String.format("sat=%d week: %d vs %d", eb.sat, eb.week, ev.week);
+                else if (eb.iode != ev.iode) firstEphDiff = String.format("sat=%d iode: %d vs %d", eb.sat, eb.iode, ev.iode);
+                else if (eb.svh != ev.svh) firstEphDiff = String.format("sat=%d svh: %d vs %d", eb.sat, eb.svh, ev.svh);
+                else if (eb.flag != ev.flag) firstEphDiff = String.format("sat=%d flag: %d vs %d", eb.sat, eb.flag, ev.flag);
+                else if (Math.abs(eb.A - ev.A) > 1e-4) firstEphDiff = String.format("sat=%d A: %.10f vs %.10f", eb.sat, eb.A, ev.A);
+                else if (dtoe > 0.5) firstEphDiff = String.format("sat=%d toe差 %.3fs", eb.sat, dtoe);
+            }
+        }
+        System.out.printf("  共同卫星=%d  max|dA|=%.6e  max|dM0|=%.6e  max|df0|=%.6e  max|dtgd|=%.6e  max|dtoe|=%.3fs%n",
+                ephCompared, maxDA, maxDM0, maxDf0, maxDtgd, maxDtoe);
+        if (firstEphDiff != null) System.out.println("  首个星历差异: " + firstEphDiff);
+
+        // --- E. RTK 对比（同配置） ---
+        double[] roverEcef = new double[3];
+        CoordTransform.pos2ecef(new double[]{ROVER_LAT * Constants.D2R, ROVER_LON * Constants.D2R, ROVER_HGT}, roverEcef);
+
+        System.out.println();
+        System.out.println("=== E1. RTK: rover + 原始基站 ===");
+        RtkProcessor rtk1 = new RtkProcessor(createRtkOpt());
+        RtkProcessor.RtkResult res1 = rtk1.process(roverData, baseData);
+        printRtkStats("原始基站", analyzeRtkResult(res1, roverEcef), 105.0);
+
+        System.out.println();
+        System.out.println("=== E2. RTK: rover + VRS@基站（改正量=0） ===");
+        RtkProcessor rtk2 = new RtkProcessor(createRtkOpt());
+        RtkProcessor.RtkResult res2 = rtk2.process(roverData, vrsData);
+        RtkStats st2 = analyzeRtkResult(res2, roverEcef);
+        printRtkStats("VRS@基站", st2, 105.0);
+
+        System.out.println();
+        System.out.println("=== 二分判定 ===");
+        RtkStats st1 = analyzeRtkResult(res1, roverEcef);
+        System.out.printf("  原始基站FIX=%.1f%%   VRS@基站FIX=%.1f%%%n", st1.fixRatio, st2.fixRatio);
+        if (st2.fixRatio > 0.5 * st1.fixRatio) {
+            System.out.println("  → VRS@基站能固定：流层(编码/星历/锁)正常，问题在【改正路径】(105m位移)");
+        } else {
+            System.out.println("  → VRS@基站仍无法固定：问题在【流层面】(编码/星历/锁/消息结构)，与改正无关");
+        }
+
+        assertTrue(res2.totalEpochs > 0, "VRS@基站 RTK应有历元数据");
+    }
+
+    private static Map<Integer, Integer> msgTypeHist(byte[] data) {
+        Map<Integer, Integer> hist = new TreeMap<>();
+        org.rtklib.java.rtcm.Rtcm rtcm = new org.rtklib.java.rtcm.Rtcm();
+        int offset = 0;
+        while (offset < data.length) {
+            int consumed = rtcm.input(data, offset, data.length - offset);
+            if (consumed <= 0) { offset++; continue; }
+            offset += consumed;
+            hist.merge(rtcm.type, 1, Integer::sum);
+        }
+        return hist;
+    }
+
+    /** 与 RtkProcessor.parseRtcmBatch 完全同方式解码（内部 Rtcm，obsflag==1 提交） */
+    private static List<Obsd[]> decodeRawEpochs(byte[] data) {
+        List<Obsd[]> out = new ArrayList<>();
+        org.rtklib.java.rtcm.Rtcm rtcm = new org.rtklib.java.rtcm.Rtcm();
+        int offset = 0;
+        while (offset < data.length) {
+            int consumed = rtcm.input(data, offset, data.length - offset);
+            if (consumed <= 0) { offset++; continue; }
+            offset += consumed;
+            int type = rtcm.type;
+            boolean isObs = (type >= 1001 && type <= 1004)
+                    || (type >= 1074 && type <= 1077) || (type >= 1084 && type <= 1087)
+                    || (type >= 1094 && type <= 1097) || (type >= 1104 && type <= 1107)
+                    || (type >= 1114 && type <= 1117) || (type >= 1124 && type <= 1127)
+                    || (type >= 1134 && type <= 1137);
+            if (isObs && rtcm.obs.n > 0 && rtcm.obsflag == 1) {
+                Obsd[] arr = new Obsd[rtcm.obs.n];
+                for (int i = 0; i < rtcm.obs.n; i++) arr[i] = new Obsd(rtcm.obs.data[i]);
+                out.add(arr);
+            }
+        }
+        return out;
+    }
+
+    @Test
+    @DisplayName("原始基站RTCM信号集分析：每系统实际输出多少个频点/信号")
+    void testAnalyzeBaseSignalSet() throws IOException {
+        if (!dataAvailable) {
+            System.out.println("跳过：数据不可用");
+            return;
+        }
+
+        Path basePath = Paths.get(DATA_ROOT, BASE_STATION, DATE, TEST_HOUR + ".rtcm3");
+        byte[] baseData = Files.readAllBytes(basePath);
+        Map<String, List<Obsd>> baseEpochs = decodeEpochs(baseData);
+
+        String[] sysNames = {"GPS", "GLO", "GAL", "QZS", "SBS", "BDS", "IRN"};
+        int[] sysKeys = {Constants.SYS_GPS, Constants.SYS_GLO, Constants.SYS_GAL,
+                         Constants.SYS_QZS, Constants.SYS_SBS, Constants.SYS_CMP, Constants.SYS_IRN};
+
+        System.out.println("=== 原始基站 RTCM 信号集分析 ===");
+        System.out.printf("历元数: %d%n%n", baseEpochs.size());
+
+        for (int si = 0; si < sysKeys.length; si++) {
+            Map<Integer, Set<String>> slotSig = new TreeMap<>();
+            Map<Integer, Integer> freqCount = new TreeMap<>();
+            Map<String, Integer> sigEpochCount = new TreeMap<>();
+            int satSeen = 0;
+            int maxFreq = 0;
+
+            for (List<Obsd> list : baseEpochs.values()) {
+                for (Obsd o : list) {
+                    int[] prn = new int[1];
+                    if (org.rtklib.java.common.SatUtils.satsys(o.sat, prn) != sysKeys[si]) continue;
+                    satSeen++;
+                    Set<Integer> freqs = new TreeSet<>();
+                    for (int j = 0; j < Constants.NFREQ + Constants.NEXOBS; j++) {
+                        if (o.code[j] == 0) continue;
+                        String obs = org.rtklib.java.common.ObsCode.code2obs(o.code[j]);
+                        int fi = org.rtklib.java.common.ObsCode.code2idx(sysKeys[si], o.code[j]);
+                        slotSig.computeIfAbsent(j, k -> new TreeSet<>()).add(obs + "(fi=" + fi + ")");
+                        freqs.add(fi);
+                        sigEpochCount.merge(obs, 1, Integer::sum);
+                    }
+                    int nf = freqs.size();
+                    freqCount.merge(nf, 1, Integer::sum);
+                    if (nf > maxFreq) maxFreq = nf;
+                }
+            }
+
+            if (satSeen == 0) continue;
+            System.out.printf("--- %s ---%n", sysNames[si]);
+            System.out.printf("  观测样本: %d  最多频点数/卫星: %d%n", satSeen, maxFreq);
+            System.out.print("  每频点数分布: ");
+            for (Map.Entry<Integer, Integer> e : freqCount.entrySet()) {
+                System.out.printf("%d频点=%d次  ", e.getKey(), e.getValue());
+            }
+            System.out.println();
+            System.out.print("  信号集合: ");
+            for (Map.Entry<String, Integer> e : sigEpochCount.entrySet()) {
+                System.out.printf("%s(%d)  ", e.getKey(), e.getValue());
+            }
+            System.out.println();
+            System.out.print("  槽位分布: ");
+            for (Map.Entry<Integer, Set<String>> e : slotSig.entrySet()) {
+                System.out.printf("slot%d=%s  ", e.getKey(), e.getValue());
+            }
+            System.out.println();
+            System.out.println();
+        }
+
+        System.out.println("=== 逐历元 BDS nsat / 信号数 / nsat*ncode (MSM4 上限64) ===");
+        System.out.println("  idx  nsat  ncode  nsat*ncode   signalList");
+        int idx = 0;
+        Map<String, Integer> comboCount = new TreeMap<>();
+        for (List<Obsd> list : baseEpochs.values()) {
+            Set<Integer> sats = new TreeSet<>();
+            Set<Integer> codes = new TreeSet<>();
+            for (Obsd o : list) {
+                int[] prn = new int[1];
+                if (org.rtklib.java.common.SatUtils.satsys(o.sat, prn) != Constants.SYS_CMP) continue;
+                sats.add(o.sat);
+                for (int j = 0; j < Constants.NFREQ + Constants.NEXOBS; j++) {
+                    if (o.code[j] != 0) codes.add(o.code[j]);
+                }
+            }
+            if (sats.isEmpty()) continue;
+            int nsat = sats.size();
+            int ncode = codes.size();
+            comboCount.merge(nsat + "x" + ncode, 1, Integer::sum);
+            if (idx < 8) {
+                StringBuilder sb = new StringBuilder();
+                for (int c : codes) sb.append(org.rtklib.java.common.ObsCode.code2obs(c)).append(" ");
+                System.out.printf("  %3d  %4d  %5d  %10d   %s%n", idx, nsat, ncode, nsat * ncode, sb);
+            }
+            idx++;
+        }
+        System.out.println("  (nsat x ncode) 组合分布: " + comboCount);
+    }
+
+    private static String epochKey(org.rtklib.java.data.GTime t) {
+        int[] wk = new int[1];
+        double tow = org.rtklib.java.time.TimeSystem.time2gpst(t, wk);
+        return String.format("W%d_%.3f", wk[0], tow);
+    }
+
+    private static Map<String, List<Obsd>> decodeEpochs(byte[] data) {
+        Map<String, List<Obsd>> out = new LinkedHashMap<>();
+        RtcmDataHandler h = new RtcmDataHandler() {
+            @Override public void onRtcmMessageType(int type, int length) {}
+            @Override public void onStation(Sta sta) {}
+            @Override public void onEph(Eph eph) {}
+            @Override public void onGeph(Geph geph) {}
+            @Override public void onObservationEpoch(ObservationEpoch epoch) {
+                out.computeIfAbsent(epochKey(epoch.time), k -> new ArrayList<>())
+                   .addAll(epoch.getObservations());
+            }
+            @Override public void onSsr(Ssr ssr) {}
+            @Override public void onAuxData(AuxData aux) {}
+            @Override public void onFinish() {}
+        };
+        RtcmCallbackDecoder decoder = new RtcmCallbackDecoder(h);
+        decoder.feed(data, 0, data.length);
+        decoder.finish();
+        return out;
     }
 
     private PrcOpt createRtkOpt() {

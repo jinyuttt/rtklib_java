@@ -24,6 +24,10 @@ public class Rtcm3Encoder {
     public double[][] cp;
     public double[][] lltime;
 
+    public int[][] lockCnt;
+    public int[][] lockEpoch;
+    public int msmEpochSeq;
+
     public Rtcm3Encoder() {
         this.buff = new byte[2048];
         this.stationId = 1;
@@ -34,6 +38,9 @@ public class Rtcm3Encoder {
         this.ephsat = 0;
         this.cp = new double[1][1];
         this.lltime = new double[1][1];
+        this.lockCnt = new int[65][33];
+        this.lockEpoch = new int[65][33];
+        this.msmEpochSeq = 0;
     }
 
     public byte[] encode(int type, int subtype, int sync) {
@@ -54,6 +61,24 @@ public class Rtcm3Encoder {
                 }
                 break;
         }
+        if (!ok) return null;
+        return frameBuffer();
+    }
+
+    /**
+     * 编码一条 MSM 消息的一个卫星批次（用于 nsat*nsig > 64 时的分批输出）。
+     *
+     * @param type       MSM 消息类型（1071..1137）
+     * @param sync       sync 标志：同一历元的非末批传 1，末批传 0
+     * @param batchStart 本批起始卫星序号（1-based，全局 nsat 维度，含）
+     * @param batchSize  本批卫星数
+     * @param fullNsig   全局信号数（sigmask 需在所有批次间保持一致）
+     * @return 编码后的 RTCM 帧；本批无卫星时返回 null
+     */
+    public byte[] encodeMsmBatch(int type, int sync, int batchStart, int batchSize, int fullNsig) {
+        for (int i = 0; i < buff.length; i++) buff[i] = 0;
+        nbit = 24;
+        boolean ok = Rtcm3MsmEncoder.encodeMsmBatch(this, type, sync, batchStart, batchSize, fullNsig);
         if (!ok) return null;
         return frameBuffer();
     }
