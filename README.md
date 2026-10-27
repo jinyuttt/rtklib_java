@@ -179,6 +179,18 @@ org.rtklib.java.otl
 └── LoveNumberLoader  Farrell Love数加载
 ```
 
+### rtklib-vrs — 虚拟参考站生成
+
+基于真实基站 RTCM3 数据生成 VRS（Virtual Reference Station）虚拟参考站数据。单基站差分改正 + RTCM3 编码，输出可被标准 NTRIP Client 解码的 RTCM3 文件。
+
+- **VRS 改正**：几何距离 + 对流层（Saastamoinen/GMF）+ 电离层（Klobuchar）差分改正
+- **RTCM3 编码**：1005/1006 站坐标、1019/1020/1042/1045 星历、MSM4/MSM5 观测值（1074-1125）
+- **星历池管理**：逐历元按 `|toe − t|` 最近选择星历，避免长文件首历元用错星历
+- **MSM 信号裁剪**：`nsat×nsig > 64` 时按「频点覆盖最大化」贪心选择，保住双频不退化
+- **锁相指示**：跨历元维护 `lock` 计数，确保输出 LLI 正确（否则下游 RTK 永远无法 FIX）
+
+验证：真实双站 RTCM3（239 历元 / 15 s）——VRS+测站 RTK 与原始基站+测站 FIX 率均为 91.2%，VRS 设在基站位置时 P/L 逐位一致（max|dL|=0.0000 m）。详见 [VRS 模块设计文档](docs/VRS_MODULE_DESIGN.md)。
+
 ## 文档
 
 > 全部文档的索引、状态标注（活跃/待复核/归档）与已知不一致清单见 [文档地图](docs/README.md)。
@@ -235,6 +247,12 @@ org.rtklib.java.otl
 |------|------|
 | [使用说明](docs/ADJUST_USAGE.md) | API 示例、输出字段含义 |
 | [技术参考](docs/ADJUST_TECHNICAL_REFERENCE.md) | 数学模型、协方差构造、理论局限性、联合解算可行性评估 |
+
+### rtklib-vrs
+
+| 文档 | 说明 |
+|------|------|
+| [模块设计文档](docs/VRS_MODULE_DESIGN.md) | 实现状态、VRS 改正算法、RTCM3 编码器设计、MSM 信号裁剪与锁相指示、测试策略与实测结果、已踩过的坑 |
 
 ## 使用建议
 
