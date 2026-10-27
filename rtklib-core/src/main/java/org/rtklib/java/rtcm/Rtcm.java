@@ -2179,7 +2179,7 @@ public class Rtcm implements Serializable {
         ObsCode.sigindex(sys, code, h.nsig, idx);
 
         if (sys == Constants.SYS_CMP && log.isInfoEnabled()) {
-            StringBuilder sbBds = new StringBuilder("[MSM-BDS-SIG] type=" + type + " nsig=" + h.nsig + " ");
+            StringBuilder sbBds = new StringBuilder("[MSM-BDS-SIG] type=" + type + " nsat=" + h.nsat + " nsig=" + h.nsig + " ");
             for (int si = 0; si < h.nsig; si++) {
                 sbBds.append(String.format("[%d]sig=%s code=%d idx=%d ", si, sig[si], code[si], idx[si]));
             }

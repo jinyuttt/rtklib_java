@@ -594,20 +594,26 @@ public class VrsGeneratorTest {
                 epochArr[0]++;
                 if (epochArr[0] == 1) {
                     System.out.printf("VRS输出历元#1: 卫星数=%d%n", epoch.getObservations().size());
-                    for (int i = 0; i < Math.min(5, epoch.getObservations().size()); i++) {
-                        Obsd o = epoch.getObservations().get(i);
+                    int dualCnt = 0;
+                    for (Obsd o : epoch.getObservations()) {
                         int[] prn = new int[1];
                         int sys = org.rtklib.java.common.SatUtils.satsys(o.sat, prn);
                         String sysStr = sys == Constants.SYS_CMP ? "C" : sys == Constants.SYS_GPS ? "G" : "?";
+                        int nfreq = 0;
+                        for (int f = 0; f < Constants.NFREQ; f++) {
+                            if (o.code[f] != 0 && o.P[f] != 0.0 && o.L[f] != 0.0) nfreq++;
+                        }
+                        if (nfreq >= 2) dualCnt++;
                         StringBuilder codeStr = new StringBuilder("[");
                         for (int f = 0; f < 6; f++) {
                             if (f > 0) codeStr.append(",");
                             codeStr.append(o.code[f]);
                         }
                         codeStr.append("]");
-                        System.out.printf("  %s%02d: P=[%.4f,%.4f,%.4f] L=[%.4f,%.4f,%.4f] code=%s%n",
-                                sysStr, prn[0], o.P[0], o.P[1], o.P[2], o.L[0], o.L[1], o.L[2], codeStr);
+                        System.out.printf("  %s%02d: nfreq=%d P=[%.3f,%.3f,%.3f] L=[%.3f,%.3f,%.3f] code=%s%n",
+                                sysStr, prn[0], nfreq, o.P[0], o.P[1], o.P[2], o.L[0], o.L[1], o.L[2], codeStr);
                     }
+                    System.out.printf("  >>> 双频(主频点)卫星数=%d / %d%n", dualCnt, epoch.getObservations().size());
                 }
             }
             @Override public void onSsr(Ssr ssr) {}
@@ -621,6 +627,155 @@ public class VrsGeneratorTest {
 
         System.out.printf("VRS输出总历元数: %d%n", epochArr[0]);
         assertTrue(epochArr[0] > 0, "VRS输出应有观测历元");
+    }
+
+    @Test
+    @DisplayName("VRS改正几何自洽性：双差模糊度小数部分应接近整数")
+    void testVrsIntegerAmbiguityPreservation() throws Exception {
+        if (!dataAvailable) {
+            System.out.println("跳过：数据不可用");
+            return;
+        }
+
+        Path inputPath = Paths.get(DATA_ROOT, BASE_STATION, DATE, TEST_HOUR + ".rtcm3");
+        byte[] inputData = Files.readAllBytes(inputPath);
+
+        double vrsLat = BASE_LAT + 0.0001;
+        double vrsLon = BASE_LON;
+        double vrsHgt = BASE_HGT;
+        double[] vrsPosRad = {vrsLat * Constants.D2R, vrsLon * Constants.D2R, vrsHgt};
+
+        VrsOptionalConfig opt = new VrsOptionalConfig();
+        opt.navsys = Constants.SYS_GPS | Constants.SYS_CMP | Constants.SYS_GAL;
+
+        Nav preNav = preloadEphemeris(inputData);
+        List<Eph> ephPool = collectEphPool(inputData);
+        System.out.printf("星历池: %d 条%n", ephPool.size());
+
+        double[] vrsEcef = new double[3];
+        CoordTransform.pos2ecef(vrsPosRad, vrsEcef);
+
+        RtcmDataHandler handler = new RtcmDataHandler() {
+            final Nav nav = preNav;
+            Sta baseSta;
+            int epochCnt = 0;
+            @Override public void onRtcmMessageType(int type, int length) {}
+            @Override public void onStation(Sta sta) { this.baseSta = sta; }
+            @Override public void onEph(Eph eph) {}
+            @Override public void onGeph(Geph geph) {}
+            @Override public void onObservationEpoch(ObservationEpoch epoch) {
+                epochCnt++;
+                if (epochCnt != 1 || baseSta == null) return;
+
+                for (Eph e : ephPool) {
+                    if (e.sat <= 0) continue;
+                    Eph cur = nav.eph[e.sat - 1];
+                    if (cur == null || Math.abs(org.rtklib.java.time.TimeSystem.timediff(epoch.time, e.toe))
+                            < Math.abs(org.rtklib.java.time.TimeSystem.timediff(epoch.time, cur.toe))) {
+                        nav.eph[e.sat - 1] = e;
+                    }
+                }
+                System.out.printf("历元时间: toe选中示例%n");
+
+                Obs vrsObs = VrsCorrection.correct(epoch, nav, baseSta, vrsPosRad, opt);
+                System.out.printf("=== 历元#1 双差模糊度整数性检验 (baseSta.pos=[%.3f,%.3f,%.3f]) ===%n",
+                        baseSta.pos[0], baseSta.pos[1], baseSta.pos[2]);
+
+                int refIdx = -1;
+                double refBasePh = 0, refVrsPh = 0, refLam = 0;
+                for (int i = 0; i < vrsObs.n; i++) {
+                    Obsd o = vrsObs.data[i];
+                    if (o.code[0] != 0 && o.P[0] != 0.0 && o.L[0] != 0.0) {
+                        double[] rs = new double[6];
+                        double[] dts = new double[2];
+                        double[] vare = new double[1];
+                        org.rtklib.java.ephemeris.EphModel.satpos(o.time, nav, o.sat, rs, dts, vare);
+                        if (rs[0] == 0.0) continue;
+                        double[] e = new double[3];
+                        double rVrs = org.rtklib.java.common.RtklibCommon.geodist(rs, vrsEcef, e);
+                        double freq = org.rtklib.java.common.SatUtils.sat2freq(o.sat, o.code[0], nav);
+                        if (freq <= 0) continue;
+                        refLam = Constants.CLIGHT / freq;
+                        refVrsPh = o.L[0] * refLam - rVrs + Constants.CLIGHT * dts[0];
+                        refBasePh = 0.0;
+                        for (Obsd bb : epoch.getObservations()) {
+                            if (bb.sat == o.sat) {
+                                refBasePh = bb.L[0] * refLam
+                                        - org.rtklib.java.common.RtklibCommon.geodist(rs, baseSta.pos, new double[3])
+                                        + Constants.CLIGHT * dts[0];
+                                break;
+                            }
+                        }
+                        refIdx = i;
+                        break;
+                    }
+                }
+                if (refIdx < 0) { System.out.println("无有效参考星"); return; }
+
+                System.out.printf("参考星: sat=%d%n", vrsObs.data[refIdx].sat);
+                System.out.println("  sat    baseResid(m)  vrsResid(m)   dResid(m)   baseDDamb   vrsDDamb  (应为整数)");
+                for (int i = 0; i < vrsObs.n; i++) {
+                    Obsd o = vrsObs.data[i];
+                    if (o.code[0] == 0 || o.P[0] == 0.0 || o.L[0] == 0.0) continue;
+                    if (i == refIdx) continue;
+
+                    double[] rs = new double[6];
+                    double[] dts = new double[2];
+                    double[] vare = new double[1];
+                    org.rtklib.java.ephemeris.EphModel.satpos(o.time, nav, o.sat, rs, dts, vare);
+                    if (rs[0] == 0.0) continue;
+
+                    double[] e = new double[3];
+                    double rVrs = org.rtklib.java.common.RtklibCommon.geodist(rs, vrsEcef, e);
+                    double rBase = org.rtklib.java.common.RtklibCommon.geodist(rs, baseSta.pos, e);
+                    double freq = org.rtklib.java.common.SatUtils.sat2freq(o.sat, o.code[0], nav);
+                    if (freq <= 0) continue;
+                    double lam = Constants.CLIGHT / freq;
+
+                    Obsd b = null;
+                    for (Obsd x : epoch.getObservations()) if (x.sat == o.sat) { b = x; break; }
+                    if (b == null || b.P[0] == 0.0 || b.L[0] == 0.0) continue;
+
+                    double baseResid = b.P[0] - rBase + Constants.CLIGHT * dts[0];
+                    double vrsResid = o.P[0] - rVrs + Constants.CLIGHT * dts[0];
+                    double dResid = vrsResid - baseResid;
+
+                    double basePh = b.L[0] * lam - rBase + Constants.CLIGHT * dts[0];
+                    double vrsPh = o.L[0] * lam - rVrs + Constants.CLIGHT * dts[0];
+                    double baseDD = (basePh - refBasePh) / lam;
+                    double vrsDD = (vrsPh - refVrsPh) / lam;
+                    double frac = vrsDD - Math.round(vrsDD);
+
+                    System.out.printf("  %3d  %12.4f  %12.4f  %10.4f   %9.3f   %9.3f  frac=%7.4f%n",
+                            o.sat, baseResid, vrsResid, dResid, baseDD, vrsDD, frac);
+                }
+            }
+            @Override public void onSsr(Ssr ssr) {}
+            @Override public void onAuxData(AuxData aux) {}
+            @Override public void onFinish() {}
+        };
+
+        RtcmCallbackDecoder decoder = new RtcmCallbackDecoder(handler);
+        decoder.feed(inputData, 0, inputData.length);
+        decoder.finish();
+    }
+
+    private static List<Eph> collectEphPool(byte[] data) {
+        List<Eph> pool = new ArrayList<>();
+        RtcmDataHandler c = new RtcmDataHandler() {
+            @Override public void onRtcmMessageType(int type, int length) {}
+            @Override public void onStation(Sta sta) {}
+            @Override public void onEph(Eph eph) { if (eph != null && eph.sat > 0) pool.add(eph); }
+            @Override public void onGeph(Geph geph) {}
+            @Override public void onObservationEpoch(ObservationEpoch epoch) {}
+            @Override public void onSsr(Ssr ssr) {}
+            @Override public void onAuxData(AuxData aux) {}
+            @Override public void onFinish() {}
+        };
+        RtcmCallbackDecoder d = new RtcmCallbackDecoder(c);
+        d.feed(data, 0, data.length);
+        d.finish();
+        return pool;
     }
 
     private static Nav preloadEphemeris(byte[] data) {

@@ -5,11 +5,13 @@ import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.rtcm.AuxData;
 import org.rtklib.java.data.Eph;
+import org.rtklib.java.data.GTime;
 import org.rtklib.java.data.Geph;
 import org.rtklib.java.data.Nav;
 import org.rtklib.java.data.Obs;
 import org.rtklib.java.data.Ssr;
 import org.rtklib.java.data.Sta;
+import org.rtklib.java.time.TimeSystem;
 import org.rtklib.java.rtcm.ObservationEpoch;
 import org.rtklib.java.rtcm.RtcmDataHandler;
 import org.rtklib.java.vrs.config.VrsOptionalConfig;
@@ -21,6 +23,7 @@ import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.List;
 
 public class VrsGenerator implements RtcmDataHandler {
     private static final Logger log = LoggerFactory.getLogger(VrsGenerator.class);
@@ -32,6 +35,8 @@ public class VrsGenerator implements RtcmDataHandler {
     private final OutputStream outputStream;
 
     private final Nav nav;
+    private final List<Eph> ephPool;
+    private final List<Geph> gephPool;
     private Sta baseSta;
     private boolean staWritten = false;
     private int epochCount = 0;
@@ -45,11 +50,20 @@ public class VrsGenerator implements RtcmDataHandler {
     public VrsGenerator(double[] vrsPos, String stationId,
                         VrsOptionalConfig opt, Rtcm3Encoder encoder,
                         String outputRtcmPath, Nav nav) throws IOException {
+        this(vrsPos, stationId, opt, encoder, outputRtcmPath, nav, null, null);
+    }
+
+    public VrsGenerator(double[] vrsPos, String stationId,
+                        VrsOptionalConfig opt, Rtcm3Encoder encoder,
+                        String outputRtcmPath, Nav nav,
+                        List<Eph> ephPool, List<Geph> gephPool) throws IOException {
         this.vrsPos = vrsPos;
         this.stationId = stationId;
         this.opt = opt;
         this.encoder = encoder;
         this.nav = nav;
+        this.ephPool = ephPool;
+        this.gephPool = gephPool;
         this.outputStream = new BufferedOutputStream(new FileOutputStream(outputRtcmPath));
     }
 
@@ -105,21 +119,22 @@ public class VrsGenerator implements RtcmDataHandler {
             staWritten = true;
         }
 
+        selectEphemerisForEpoch(epoch.time);
+
         Obs vrsObs = VrsCorrection.correct(epoch, nav, baseSta, vrsPos, opt);
         if (vrsObs.n == 0) return;
 
         encoder.obs = vrsObs;
         encoder.sta = makeVrsSta();
         encoder.nav = nav;
+        encoder.msmEpochSeq++;
 
         int[] systems = {Constants.SYS_GPS, Constants.SYS_GLO, Constants.SYS_GAL, Constants.SYS_CMP};
         for (int sys : systems) {
             if ((opt.navsys & sys) == 0) continue;
             int msgBase = msmMsgBase(sys, opt.msmType);
-            if (msgBase > 0) {
-                byte[] msg = encoder.encode(msgBase, 0, 0);
-                if (msg != null) writeMsg(msg);
-            }
+            if (msgBase <= 0) continue;
+            encodeSystemBatched(sys, msgBase);
         }
 
         epochCount++;
@@ -149,6 +164,32 @@ public class VrsGenerator implements RtcmDataHandler {
         }
     }
 
+    private void selectEphemerisForEpoch(GTime time) {
+        if (ephPool != null && !ephPool.isEmpty()) {
+            for (Eph e : ephPool) {
+                if (e == null || e.sat <= 0 || e.sat > nav.nmax) continue;
+                Eph cur = nav.eph[e.sat - 1];
+                if (cur == null || Math.abs(TimeSystem.timediff(time, e.toe))
+                        < Math.abs(TimeSystem.timediff(time, cur.toe))) {
+                    nav.eph[e.sat - 1] = e;
+                }
+            }
+        }
+        if (gephPool != null && !gephPool.isEmpty()) {
+            for (Geph g : gephPool) {
+                if (g == null) continue;
+                int[] prn = new int[1];
+                int sys = SatUtils.satsys(g.sat, prn);
+                if (sys != Constants.SYS_GLO || prn[0] <= 0 || prn[0] > nav.ngmax) continue;
+                Geph cur = nav.geph[prn[0] - 1];
+                if (cur == null || Math.abs(TimeSystem.timediff(g.toe, time))
+                        < Math.abs(TimeSystem.timediff(cur.toe, time))) {
+                    nav.geph[prn[0] - 1] = g;
+                }
+            }
+        }
+    }
+
     private void writeVrsStation() {
         Sta vrsSta = makeVrsSta();
         encoder.sta = vrsSta;
@@ -173,6 +214,34 @@ public class VrsGenerator implements RtcmDataHandler {
             outputStream.write(msg);
         } catch (IOException e) {
             log.error("Error writing RTCM message", e);
+        }
+    }
+
+    /**
+     * 编码一个系统的 MSM 消息；当 nsat*nsig > 64 时按卫星分批，
+     * 各批 sigmask 保持一致，除末批外 sync=1 让解码端累积。
+     */
+    private void encodeSystemBatched(int sys, int msgBase) {
+        int[] cnt = org.rtklib.java.vrs.rtcm.Rtcm3MsmEncoder.countSatSig(encoder, sys);
+        int nsat = cnt[0];
+        int nsig = cnt[1];
+        if (nsat == 0 || nsig == 0) return;
+
+        if (nsat * nsig <= 64) {
+            byte[] msg = encoder.encode(msgBase, 0, 0);
+            if (msg != null) writeMsg(msg);
+            return;
+        }
+
+        // 分批：每批最多 floor(64/nsig) 颗卫星，sigmask 跨批保持一致
+        int batchSize = Math.max(1, 64 / nsig);
+        int nBatches = (nsat + batchSize - 1) / batchSize;
+        log.debug("sys={} nsat={} nsig={} -> {} batches of <={} sats", sys, nsat, nsig, nBatches, batchSize);
+        for (int b = 0; b < nBatches; b++) {
+            int batchStart = b * batchSize + 1;             // 1-based 全局序号
+            int sync = (b < nBatches - 1) ? 1 : 0;
+            byte[] msg = encoder.encodeMsmBatch(msgBase, sync, batchStart, batchSize, nsig);
+            if (msg != null) writeMsg(msg);
         }
     }
 
