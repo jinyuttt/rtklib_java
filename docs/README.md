@@ -2,7 +2,7 @@
 
 本文件是 `docs/` 的唯一入口，用于回答三个问题：**某件事该看哪份文档**、**这份文档现在还算不算数**、**哪些地方文档已经和代码不一致**。
 
-- 盘点基准：2026-10-27（依据各文件实际内容与最后修改时间，非猜测）
+- 盘点基准：2026-10-28（依据各文件实际内容与最后修改时间，非猜测）
 - 本文只做导航与状态标注，**不改写任何文档正文**
 
 ## 状态图例
@@ -51,6 +51,7 @@
 | [ADJUST_TECHNICAL_REFERENCE.md](ADJUST_TECHNICAL_REFERENCE.md) | rtklib-adjust 多基线间接平差：数学模型、协方差构造、理论局限、模块边界（SBS+平差） | ✅ 活跃 | 2026-10-27 |
 | [ADJUST_USAGE.md](ADJUST_USAGE.md) | rtklib-adjust 使用说明、加权与诊断配置 | ✅ 活跃 | 2026-10-27 |
 | [JOINT_RTK_DESIGN.md](JOINT_RTK_DESIGN.md) | rtklib-joint 多基线联合 RTK（MBS）：与 core 同层的独立引擎、状态向量、大气共享 | 🟡 设计中（P0 索引 bug 待修） | 2026-10-27 |
+| [JOINT_VS_ADJUST_ANALYSIS.md](JOINT_VS_ADJUST_ANALYSIS.md) | joint（观测层联合）vs adjust（结果层平差）对比：融合层级、故障隔离、FIX 后精度等价性、选型结论 | ✅ 活跃（v1.2 定稿） | 2026-10-27 |
 | [VRS_MODULE_DESIGN.md](VRS_MODULE_DESIGN.md) | rtklib-vrs 虚拟参考站生成：实现状态、单基站改正算法、RTCM3 编码器（含 MSM 信号裁剪与锁相指示）、四层验证策略、实测结果、已踩过的坑与已知限制 | ✅ 活跃 | 2026-10-27 |
 | [ORBIT_MODULE_REFERENCE.md](ORBIT_MODULE_REFERENCE.md) | TLE 解析、SGP4/SDP4、六根数转换 | ✅ 活跃 | 2026-10-08 |
 | [OTL_MODULE_REFERENCE.md](OTL_MODULE_REFERENCE.md) | 海潮负荷：分潮、BLQ 提取、位移序列、命令行 | ✅ 活跃 | 2026-09-24 |
@@ -90,6 +91,8 @@
 | [ROADMAP.md](ROADMAP.md) | 模块状态总览与阶段路线图（Phase 1/2、梯队 0~3） | ✅ 活跃 | 2026-10-19 |
 | [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) | **终期技术摘要**：一句话定位 + 精度实测 + 001~029 闭环索引 + HAS/IMU/CLAS 扩展路线 | ✅ 活跃 | 2026-10-23 |
 | [TraceLog_V2_Design.md](TraceLog_V2_Design.md) | 追踪日志 V2 设计与实现（取代 archive 中的 V1 设计） | ✅ 活跃 | 2026-10-08 |
+| [RTKCONFIG_REFACTOR_DESIGN.md](RTKCONFIG_REFACTOR_DESIGN.md) | RtkConfig 组合模式重构：487 行扁平类按模式拆分子配置（Common/Rtk/Spp/Ppp）、向后兼容迁移路径 | 🟡 设计稿（v1.0 定稿，未执行；`RtkConfig` 仍为扁平类） | 2026-10-26 |
+| [SOL_AGGREGATOR_DESIGN.md](SOL_AGGREGATOR_DESIGN.md) | SolAggregator 历元聚合工具：鲁棒加权 / 卡尔曼 RTS 两模式、与 solstatic 及 PosFileRtsSmoother 的分工、协方差与降级策略 | 🟡 设计稿（v1.2 待评审；`aggregate` 包已实现，未接入主流程、无测试） | 2026-10-27 |
 
 ---
 
