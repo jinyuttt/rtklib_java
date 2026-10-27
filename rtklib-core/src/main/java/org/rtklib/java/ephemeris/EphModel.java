@@ -337,6 +337,8 @@ public final class EphModel {
         }
     }
 
+    private static final double EPHEMERIS_MAX_AGE_S = 604800.0; // 7 days: covers BRDM validity while excluding stale ephs
+
     /**
      * Search ephemeris for GPS/GAL/QZS/CMP/IRN satellite.
      */
@@ -349,7 +351,7 @@ public final class EphModel {
         for (Eph eph : nav.eph) {
             if (eph.sat == sat) {
                 double dt = Math.abs(TimeSystem.timediff(time, eph.toe));
-                if (dt < minT && dt < 7200.0) {
+                if (dt < minT && dt < EPHEMERIS_MAX_AGE_S) {
                     minT = dt;
                     best = eph;
                 }
@@ -369,7 +371,7 @@ public final class EphModel {
     private static Geph searchGloEphemeris(Nav nav, int prn, GTime time) {
         if (nav.geph == null || prn < 1) return null;
         int sat = SatUtils.satno(Constants.SYS_GLO, prn);
-        double tmax = 7200.0;
+        double tmax = EPHEMERIS_MAX_AGE_S;
         double tmin = tmax + 1.0;
         Geph best = null;
         for (int i = 0; i < nav.ng; i++) {

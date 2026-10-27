@@ -21,6 +21,14 @@ public final class JointDdRes {
                             BaselineObs[] blObs, Nav nav,
                             double dt, double[] x, double[] P,
                             double[] v, double[] H, double[] R, int[] vflg) {
+        return ddres(rtk, group, blObs, nav, dt, x, P, v, H, R, vflg, -1);
+    }
+
+    public static int ddres(JointRtk rtk, BaselineGroup group,
+                            BaselineObs[] blObs, Nav nav,
+                            double dt, double[] x, double[] P,
+                            double[] v, double[] H, double[] R, int[] vflg,
+                            int singleBaseline) {
         if (rtk.opt == null || group.roverObs == null) return 0;
 
         int nx = rtk.nx;
@@ -44,7 +52,9 @@ public final class JointDdRes {
         };
 
         int maxNv = 0;
-        for (int b = 0; b < group.nBaseline; b++) {
+        int bStart = (singleBaseline >= 0) ? singleBaseline : 0;
+        int bEnd = (singleBaseline >= 0) ? singleBaseline + 1 : group.nBaseline;
+        for (int b = bStart; b < bEnd; b++) {
             if (blObs[b] != null) maxNv += blObs[b].ns * nf * 2;
         }
         if (maxNv == 0) return 0;
@@ -54,14 +64,16 @@ public final class JointDdRes {
         int[] nb = new int[maxNv + 2];
         int bCnt = 0;
 
-        for (int i = 0; i < Constants.MAXSAT; i++) {
-            for (int j = 0; j < Constants.NFREQ; j++) {
-                rtk.ssat[i].resp[j] = 0.0;
-                rtk.ssat[i].resc[j] = 0.0;
+        if (singleBaseline < 0) {
+            for (int i = 0; i < Constants.MAXSAT; i++) {
+                for (int j = 0; j < Constants.NFREQ; j++) {
+                    rtk.ssat[i].resp[j] = 0.0;
+                    rtk.ssat[i].resc[j] = 0.0;
+                }
             }
         }
 
-        for (int b = 0; b < group.nBaseline; b++) {
+        for (int b = bStart; b < bEnd; b++) {
             BaselineObs bo = blObs[b];
             if (bo == null || bo.ns <= 0) continue;
 
@@ -166,7 +178,11 @@ public final class JointDdRes {
                             double Pii = P[ii * nx + ii];
                             double Pjj = P[jj * nx + jj];
                             double std0sq = rtk.opt.std[0] * rtk.opt.std[0];
-                            if (Pii == std0sq || Pjj == std0sq) {
+                            // [FIX-ALG-042 P4] 对齐 C 版：方差未收敛（>= 初值）即放宽新息门限。
+                            // 原实现用 == 精确比较，udstate 的过程噪声在第二历元即破坏相等，
+                            // 导致初始化偏差大的基线（如基站伪距偏差）载波新息被 maxinno 永久剔除，
+                            // 模糊度方差停滞、AR 无解（双基线 FIX=0 根因）。
+                            if (Pii >= std0sq || Pjj >= std0sq) {
                                 threshadj = 10.0;
                             }
                         }

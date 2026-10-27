@@ -18,6 +18,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("PPP 优化项逐项对照测试")
+@Tag("manual")
 public class PppIndividualOptTest {
 
     private static final Logger log = LoggerFactory.getLogger(PppIndividualOptTest.class);

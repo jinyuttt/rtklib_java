@@ -1,6 +1,7 @@
 package org.rtklib.java.benchmarks;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +19,7 @@ import org.slf4j.LoggerFactory;
  * <pre>mvn test -pl rtklib-core "-Dtest=JmhRunnerTest#runKalmanFilterBenchmark" -DfailIfNoTests=false</pre>
  */
 @DisplayName("JMH Benchmark Runner")
+@Tag("manual")
 public class JmhRunnerTest {
 
     private static final Logger log = LoggerFactory.getLogger(JmhRunnerTest.class);

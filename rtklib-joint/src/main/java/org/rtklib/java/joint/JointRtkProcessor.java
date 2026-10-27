@@ -252,18 +252,37 @@ public class JointRtkProcessor {
         }
     }
 
+    /**
+     * 统一基站坐标设置入口（所有 RTCM 1005 来源路径）。
+     * 坐标模式对齐 RtkProcessor：POSOPT_RTCM 用 1005 播发坐标；
+     * POSOPT_POS_XYZ/LLH 用外部注入坐标（baseCoordOverride，多基站逐站配置）。
+     */
+    private void setBasePosFromRtcm(String baseId, double[] rtcmPos, int msgType, String source) {
+        BaseStation bs = findBase(baseId);
+        if (bs == null) return;
+        double[] override = (jointConfig != null && jointConfig.baseCoordOverride != null)
+                ? jointConfig.baseCoordOverride.get(baseId) : null;
+        boolean useRtcm = (opt == null || opt.refpos == Constants.POSOPT_RTCM)
+                || override == null || override.length < 3;
+        if (!useRtcm) {
+            System.arraycopy(override, 0, bs.rb, 0, 3);
+            log.info("Base {} pos OVERRIDE via {} (refpos=POS_XYZ, external calibration): ({}, {}, {})",
+                    baseId, source, bs.rb[0], bs.rb[1], bs.rb[2]);
+        } else {
+            System.arraycopy(rtcmPos, 0, bs.rb, 0, 3);
+            log.info("Base {} pos from {} RTCM {} (refpos={}): ({}, {}, {})",
+                    baseId, source, msgType, opt != null ? opt.refpos : -1,
+                    bs.rb[0], bs.rb[1], bs.rb[2]);
+        }
+    }
+
     private void onRtcmBaseMessage(String baseId, Rtcm rtcmBase) {
         int type = rtcmBase.type;
         if (isEphemerisType(type) && rtcmBase.ephsat != 0) {
             ephReady = true;
         }
         if ((type == 1005 || type == 1006) && rtcmBase.sta != null) {
-            BaseStation bs = findBase(baseId);
-            if (bs != null) {
-                System.arraycopy(rtcmBase.sta.pos, 0, bs.rb, 0, 3);
-                log.info("Base {} pos from RTCM {}: ({}, {}, {})",
-                        baseId, type, bs.rb[0], bs.rb[1], bs.rb[2]);
-            }
+            setBasePosFromRtcm(baseId, rtcmBase.sta.pos, type, "onRtcmBase");
         }
         if (isObsType(type) && rtcmBase.obs.n > 0 && rtcmBase.obsflag == 1) {
             int n = rtcmBase.obs.n;
@@ -445,11 +464,7 @@ public class JointRtkProcessor {
 
                 if (batchRtcmBase.sta != null &&
                         (batchRtcmBase.sta.pos[0] != 0 || batchRtcmBase.sta.pos[1] != 0 || batchRtcmBase.sta.pos[2] != 0)) {
-                    BaseStation bs = findBase(baseId);
-                    if (bs != null) {
-                        System.arraycopy(batchRtcmBase.sta.pos, 0, bs.rb, 0, 3);
-                        log.info("Base {} pos from batch RTCM: ({}, {}, {})", baseId, bs.rb[0], bs.rb[1], bs.rb[2]);
-                    }
+                    setBasePosFromRtcm(baseId, batchRtcmBase.sta.pos, 1005, "batch");
                 }
             }
         }
@@ -552,7 +567,7 @@ public class JointRtkProcessor {
                 if (baseParser.sta != null && baseParser.sta.pos != null) {
                     BaseStation bs = findBase(baseId);
                     if (bs != null && (bs.rb[0] == 0 && bs.rb[1] == 0 && bs.rb[2] == 0)) {
-                        System.arraycopy(baseParser.sta.pos, 0, bs.rb, 0, 3);
+                        setBasePosFromRtcm(baseId, baseParser.sta.pos, 0, "rinex");
                     }
                 }
             }

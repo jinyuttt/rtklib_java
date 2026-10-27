@@ -180,4 +180,8 @@ public class Rtk implements Serializable {
         this.cascadeArFixLevel = new int[Constants.MAXSAT * Constants.NFREQ];
         this.cascadeArLastRatio = new double[3];
     }
+
+    public RtkState toState() {
+        return new RtkState(opt, ssat, rtkConfig, snrMedian, sol, x, tt);
+    }
 }

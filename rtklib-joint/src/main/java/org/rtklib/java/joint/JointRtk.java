@@ -34,6 +34,7 @@ public class JointRtk implements Serializable {
 
     public int nfix;
     public int epoch;
+    public double tt;
 
     public JointRtk() {
         sol = new Sol();

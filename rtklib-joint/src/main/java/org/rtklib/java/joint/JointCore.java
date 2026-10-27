@@ -1,6 +1,8 @@
 package org.rtklib.java.joint;
 
+import org.ejml.simple.SimpleMatrix;
 import org.rtklib.java.ambiguity.Lambda;
+import org.rtklib.java.common.MatrixUtil;
 import org.rtklib.java.common.RtklibCommon;
 import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.config.RtkConfig;
@@ -67,6 +69,7 @@ public final class JointCore {
                 log.info("Joint SPP rover pos: ({}, {}, {})", jrtk.sol.rr[0], jrtk.sol.rr[1], jrtk.sol.rr[2]);
             }
         } else {
+            jrtk.tt = TimeSystem.timediff(roverObs[0].time, jrtk.sol.time);
             jrtk.sol.time = roverObs[0].time;
         }
 
@@ -114,7 +117,9 @@ public final class JointCore {
 
             blObs[b].ns = RtkCore.selsat(merged, blObs[b].azel, nu, nr, opt,
                     blObs[b].sat, blObs[b].iu, blObs[b].ir);
-            log.info("baseline[{}] ns={}, nu={}, nr={}, rb=({},{},{})", b, blObs[b].ns, nu, nr, bs.rb[0], bs.rb[1], bs.rb[2]);
+            double dtBase = TimeSystem.timediff(roverObs[0].time, merged[nu].time);
+            log.info("baseline[{}] ns={}, nu={}, nr={}, dtBase={}s, rb=({},{},{})",
+                    b, blObs[b].ns, nu, nr, String.format("%.3f", dtBase), bs.rb[0], bs.rb[1], bs.rb[2]);
         }
 
         BaselineGroup group = new BaselineGroup(nBaseline);
@@ -137,10 +142,13 @@ public final class JointCore {
             return 0;
         }
 
-        int nrPerBaseline = RtkCore.NR(jrtk.toState());
+        int npPerBaseline = RtkCore.NP(jrtk.toState());
+        int niPerBaseline = RtkCore.NI(jrtk.toState());
+        int ntPerBaseline = RtkCore.NT(jrtk.toState());
         int nbPerBaseline = RtkCore.NB(jrtk.toState());
-        int nxNew = nrPerBaseline + nbPerBaseline * nBaseline;
-        jrtk.na = nrPerBaseline;
+        int nrPerBaseline = npPerBaseline + niPerBaseline + ntPerBaseline;
+        int nxNew = npPerBaseline + nBaseline * (niPerBaseline + ntPerBaseline + nbPerBaseline);
+        jrtk.na = npPerBaseline + nBaseline * (niPerBaseline + ntPerBaseline);
 
         if (jrtk.nx != nxNew) {
             jrtk.nx = nxNew;
@@ -160,7 +168,7 @@ public final class JointCore {
 
             jrtk.baselineOffset = new int[nBaseline];
             for (int b = 0; b < nBaseline; b++) {
-                jrtk.baselineOffset[b] = nrPerBaseline + b * nbPerBaseline;
+                jrtk.baselineOffset[b] = npPerBaseline + nBaseline * (niPerBaseline + ntPerBaseline) + b * nbPerBaseline;
             }
         }
         int nx = jrtk.nx;
@@ -176,7 +184,25 @@ public final class JointCore {
             }
         }
 
-        udstate(jrtk, roverObs, roverN, bases, nBaseline, nav, blObs);
+        // [FIX-ALG-042 P2] rover 侧初始 zdres：udstate 的载波-伪距模糊度初始化需要完整 y。
+        // 此前仅基站侧 zdres 已完成（rover 段 y 全零），载波-伪距组合恒 0，模糊度永远无法初始化。
+        for (int b = 0; b < nBaseline; b++) {
+            BaselineObs bo = blObs[b];
+            if (bo == null || bo.ns <= 0) continue;
+            BaseStation bs = bases[b];
+            int nu = bo.nu, nr = bo.nr;
+            Obsd[] mergedInit = new Obsd[nu + nr];
+            System.arraycopy(roverObs, 0, mergedInit, 0, nu);
+            System.arraycopy(bs.obsBuf, 0, mergedInit, nu, nr);
+            double[] rr_rover0 = new double[3];
+            for (int j = 0; j < 3; j++) rr_rover0[j] = jrtk.rb[j] + jrtk.x[j];
+            RtkCore.zdres(jrtk.toState(), 0, mergedInit, nu, nr,
+                    bo.rs, bo.dts, bo.vare, bo.svh,
+                    nav, rr_rover0, opt,
+                    bo.y, bo.e, bo.azel, bo.freq, jrtk.epoch);
+        }
+
+        udstate(jrtk, roverObs, roverN, bases, nBaseline, nav, blObs, group);
 
         double[] xp = new double[nx];
         double[] Pp = new double[nx * nx];
@@ -187,12 +213,6 @@ public final class JointCore {
         if (nBaseline > 0 && bases[0] != null && bases[0].obsTime != null) {
             dt = TimeSystem.timediff(roverObs[0].time, bases[0].obsTime);
         }
-
-        int ny = totalNs * nf * 2 + 2;
-        double[] v = new double[ny];
-        double[] H = new double[nx * ny];
-        double[] R = new double[ny * ny];
-        int[] vflg = new int[ny];
 
         int stat = Constants.SOLQ_FLOAT;
         int nv = 0;
@@ -222,82 +242,46 @@ public final class JointCore {
                         bo.y, bo.e, bo.azel, bo.freq, jrtk.epoch);
             }
 
-            nv = JointDdRes.ddres(jrtk, group, blObs, nav, dt, xp, Pp, v, H, R, vflg);
-            if (jrtk.epoch == 0 && iter == 0) {
-                int ib0 = jrtk.IB(0, blObs[0].sat[0], 0);
-                int ib1 = jrtk.IB(0, blObs[0].sat[1], 0);
-                if (ib0 >= 0 && ib1 >= 0) {
-                    log.debug("epoch=0 xp[ib0]={} xp[ib1]={} ib0={} ib1={}", xp[ib0], xp[ib1], ib0, ib1);
+            for (int i = 0; i < Constants.MAXSAT; i++) {
+                for (int j = 0; j < Constants.NFREQ; j++) {
+                    jrtk.ssat[i].resp[j] = 0.0;
+                    jrtk.ssat[i].resc[j] = 0.0;
                 }
-                log.debug("epoch=0 rover pos offset: dx={} dy={} dz={} rb=({},{},{})",
-                        String.format("%.4f", xp[0]), String.format("%.4f", xp[1]), String.format("%.4f", xp[2]),
-                        String.format("%.4f", jrtk.rb[0]), String.format("%.4f", jrtk.rb[1]), String.format("%.4f", jrtk.rb[2]));
-                double[] rr_rover_now = new double[3];
-                for (int j = 0; j < 3; j++) rr_rover_now[j] = jrtk.rb[j] + xp[j];
-                log.debug("epoch=0 rover ECEF: ({},{},{})", 
-                        String.format("%.4f", rr_rover_now[0]), String.format("%.4f", rr_rover_now[1]), String.format("%.4f", rr_rover_now[2]));
+            }
+            nv = 0;
+            int totalInfo = 0;
+            for (int b = 0; b < nBaseline; b++) {
+                if (blObs[b] == null || blObs[b].ns <= 0) continue;
+                int maxNvB = blObs[b].ns * nf * 2;
+                double[] vB = new double[maxNvB];
+                double[] HB = new double[nx * maxNvB];
+                double[] RB = new double[maxNvB * maxNvB];
+                int[] vflgB = new int[maxNvB];
+                int nvB = JointDdRes.ddres(jrtk, group, blObs, nav, dt, xp, Pp, vB, HB, RB, vflgB, b);
+                if (nvB <= 0) continue;
+                int infoB = KalmanFilter.update(xp, Pp, HB, vB, RB, nx, nvB);
+                nv += nvB;
+                if (infoB != 0) {
+                    totalInfo = infoB;
+                    log.warn("iter={} baseline={} Kalman update failed info={} nx={} nvB={}", iter, b, infoB, nx, nvB);
+                }
             }
             if (nv < 4) {
                 log.warn("iter={} ddres nv={} < 4, insufficient observations", iter, nv);
                 stat = Constants.SOLQ_NONE;
                 break;
             }
-
-            double ambVarBefore = 0;
-            int ib0Diag = jrtk.IB(0, blObs[0].sat[0], 0);
-            if (ib0Diag >= 0 && ib0Diag < nx) ambVarBefore = Pp[ib0Diag * nx + ib0Diag];
-            if ((jrtk.epoch == 0 || jrtk.epoch == 1 || jrtk.epoch == 5) && iter == 0) {
-                double hph0 = 0;
-                for (int i = 0; i < nx; i++) {
-                    double hi = H[0*nx+i];
-                    if (hi == 0) continue;
-                    for (int j = 0; j < nx; j++) {
-                        double hj = H[0*nx+j];
-                        if (hj == 0) continue;
-                        hph0 += hi * Pp[i*nx+j] * hj;
-                    }
-                }
-                log.debug("epoch={} BEFORE Kalman: HPHt[0]={} P[0]={} P[ib0]={} posVar={}", jrtk.epoch,
-                        String.format("%.4f", hph0), String.format("%.4f", Pp[0]),
-                        (ib0Diag >= 0 ? String.format("%.4f", Pp[ib0Diag*nx+ib0Diag]) : "N/A"),
-                        String.format("%.6f", (Pp[0]+Pp[1*nx+1]+Pp[2*nx+2])/3.0));
-            }
-            int info = KalmanFilter.update(xp, Pp, H, v, R, nx, nv);
-            if (jrtk.epoch <= 5 && iter == 0 && ib0Diag >= 0) {
-                double ambVarAfter = Pp[ib0Diag * nx + ib0Diag];
-                double maxR = 0, minR = Double.MAX_VALUE;
-                for (int iv = 0; iv < nv; iv++) { maxR = Math.max(maxR, R[iv*nv+iv]); minR = Math.min(minR, R[iv*nv+iv]); }
-                double ambXBefore = 0, ambXAfter = 0;
-                if (ib0Diag >= 0) { ambXBefore = jrtk.x[ib0Diag]; ambXAfter = xp[ib0Diag]; }
-                int zeroAmbCount = 0;
-                for (int b = 0; b < blObs.length; b++) {
-                    if (blObs[b] == null) continue;
-                    for (int i = 0; i < blObs[b].ns; i++) {
-                        for (int f = 0; f < nf; f++) {
-                            int idx = jrtk.IB(b, blObs[b].sat[i], f);
-                            if (idx >= 0 && idx < nx && xp[idx] == 0.0 && Pp[idx*nx+idx] > 0) zeroAmbCount++;
-                        }
-                    }
-                }
-                log.debug("epoch={} Kalman: ambVar {} -> {} (delta={}) ambX {} -> {} zeroAmbCount={} R_diag: min={} max={}", jrtk.epoch,
-                        String.format("%.4f", ambVarBefore), String.format("%.4f", ambVarAfter),
-                        String.format("%.4f", ambVarAfter - ambVarBefore),
-                        String.format("%.4f", ambXBefore), String.format("%.4f", ambXAfter),
-                        zeroAmbCount,
-                        String.format("%.6f", minR), String.format("%.6f", maxR));
-            }
-            if (info != 0) {
-                log.warn("iter={} Kalman update failed info={} nx={} nv={}", iter, info, nx, nv);
+            if (totalInfo != 0) {
+                log.warn("iter={} Kalman update failed for some baseline(s) totalInfo={} nx={} nv={}", iter, totalInfo, nx, nv);
                 stat = Constants.SOLQ_NONE;
                 break;
             }
+
             if (jrtk.epoch == 0 && iter == 0) {
                 double minAmbVar = Double.MAX_VALUE, maxAmbVar = 0, sumAmbVar = 0;
-                int ambCnt = 0, unchangedCnt = 0;
-                StringBuilder unchangedSats = new StringBuilder();
+                int ambCnt = 0;
                 for (int b = 0; b < blObs.length; b++) {
                     if (blObs[b] == null) continue;
-                    int[] fUpdated = new int[nf], fUnchanged = new int[nf];
                     for (int i = 0; i < blObs[b].ns; i++) {
                         for (int f = 0; f < nf; f++) {
                             int idx = jrtk.IB(b, blObs[b].sat[i], f);
@@ -307,118 +291,14 @@ public final class JointCore {
                                 maxAmbVar = Math.max(maxAmbVar, var);
                                 sumAmbVar += var;
                                 ambCnt++;
-                                if (var > 899.0) {
-                                    unchangedCnt++;
-                                    fUnchanged[f]++;
-                                    if (unchangedCnt <= 3) unchangedSats.append(String.format("b%d_s%d_f%d ", b, blObs[b].sat[i], f));
-                                } else {
-                                    fUpdated[f]++;
-                                }
                             }
                         }
                     }
-                    log.debug("epoch=0 b[{}] f_updated={} f_unchanged={}", b, java.util.Arrays.toString(fUpdated), java.util.Arrays.toString(fUnchanged));
                 }
-                log.debug("epoch=0 AFTER Kalman: ambVar min={} max={} avg={} cnt={} unchanged={} sats={}",
+                double posVar = (Pp[0] + Pp[1*nx+1] + Pp[2*nx+2]) / 3.0;
+                log.debug("epoch=0 AFTER Kalman: posVar={} ambVar min={} max={} avg={}", String.format("%.6f", posVar),
                         String.format("%.4f", minAmbVar), String.format("%.4f", maxAmbVar),
-                        ambCnt > 0 ? String.format("%.4f", sumAmbVar/ambCnt) : "N/A", ambCnt,
-                        unchangedCnt, unchangedSats);
-                double[] fAvgVar = new double[nf];
-                int[] fCnt = new int[nf];
-                for (int b = 0; b < blObs.length; b++) {
-                    if (blObs[b] == null) continue;
-                    for (int i = 0; i < blObs[b].ns; i++) {
-                        for (int f = 0; f < nf; f++) {
-                            int idx = jrtk.IB(b, blObs[b].sat[i], f);
-                            if (idx >= 0 && idx < nx && Pp[idx*nx+idx] > 0 && Pp[idx*nx+idx] < 899.0) {
-                                fAvgVar[f] += Pp[idx*nx+idx];
-                                fCnt[f]++;
-                            }
-                        }
-                    }
-                }
-                StringBuilder fSb = new StringBuilder();
-                for (int f = 0; f < nf; f++) fSb.append(String.format("f%d:avg=%.1f/cnt=%d ", f, fCnt[f] > 0 ? fAvgVar[f]/fCnt[f] : 0, fCnt[f]));
-                log.debug("epoch=0 AFTER Kalman per-freq: {}", fSb);
-                double posVar = (Pp[0] + Pp[1*nx+1] + Pp[2*nx+2]) / 3.0;
-                log.debug("epoch=0 AFTER Kalman: posVar={}", String.format("%.6f", posVar));
-            }
-            if ((jrtk.epoch == 0 || jrtk.epoch == 5) && iter == 0) {
-                int nrPerBl = RtkCore.NR(jrtk.toState());
-                int carrierNv = 0, codeNv = 0;
-                for (int iv = 0; iv < nv; iv++) {
-                    boolean hasAmb = false;
-                    for (int k = nrPerBl; k < nx; k++) { if (H[iv*nx+k] != 0) { hasAmb = true; break; } }
-                    if (hasAmb) carrierNv++; else codeNv++;
-                }
-                int activeStates = 0;
-                for (int i = 0; i < nx; i++) { if (xp[i] != 0.0 && Pp[i*nx+i] > 0.0) activeStates++; }
-                double sumAmbVar = 0;
-                int ambCount = 0;
-                for (int b = 0; b < blObs.length; b++) {
-                    if (blObs[b] == null) continue;
-                    for (int i = 0; i < blObs[b].ns; i++) {
-                        for (int f = 0; f < nf; f++) {
-                            int idx = jrtk.IB(b, blObs[b].sat[i], f);
-                            if (idx >= 0 && idx < nx && Pp[idx*nx+idx] > 0) {
-                                sumAmbVar += Pp[idx*nx+idx];
-                                ambCount++;
-                            }
-                        }
-                    }
-                }
-                double sumPosVar = (Pp[0] + Pp[1*nx+1] + Pp[2*nx+2]);
-                log.debug("epoch={} before Kalman: nv={} (carrier={} code={}) active={} ambCount={} avgAmbVar={} posVar={}",
-                        jrtk.epoch, nv, carrierNv, codeNv, activeStates, ambCount,
-                        ambCount > 0 ? String.format("%.4f", sumAmbVar/ambCount) : "N/A",
-                        String.format("%.6f", sumPosVar));
-            }
-            if (jrtk.epoch == 10 && iter == 0) {
-                int ib0_b0 = jrtk.IB(0, blObs[0].sat[0], 0);
-                int ib0_b1 = jrtk.IB(1, blObs[1].sat[0], 0);
-                if (ib0_b0 >= 0 && ib0_b1 >= 0) {
-                    double crossCov = Pp[ib0_b0 * nx + ib0_b1];
-                    double crossCovPos = Pp[0 * nx + ib0_b1];
-                    log.debug("epoch=10: crossCov(amb_b0, amb_b1)={} crossCov(pos, amb_b1)={}",
-                            String.format("%.6f", crossCov), String.format("%.6f", crossCovPos));
-                }
-            }
-            if (jrtk.epoch == 50 && iter == 0) {
-                double posVar = (Pp[0] + Pp[1*nx+1] + Pp[2*nx+2]) / 3.0;
-                int ib0 = jrtk.IB(0, blObs[0].sat[0], 0);
-                log.debug("epoch=50: posVar={} ambVar={} xp[0]={} xp[1]={} xp[2]={}",
-                        String.format("%.4f", posVar), (ib0 >= 0 ? String.format("%.4f", Pp[ib0*nx+ib0]) : "N/A"),
-                        String.format("%.4f", xp[0]), String.format("%.4f", xp[1]), String.format("%.4f", xp[2]));
-                double maxHpos = 0, maxHamb = 0, maxV = 0;
-                for (int iv = 0; iv < nv; iv++) {
-                    for (int k = 0; k < 3; k++) maxHpos = Math.max(maxHpos, Math.abs(H[iv*nx+k]));
-                    if (ib0 >= 0) maxHamb = Math.max(maxHamb, Math.abs(H[iv*nx+ib0]));
-                    maxV = Math.max(maxV, Math.abs(v[iv]));
-                }
-                log.debug("epoch=50 H stats: maxHpos={} maxHamb={} maxV={}", 
-                        String.format("%.6f", maxHpos), String.format("%.6f", maxHamb), String.format("%.6f", maxV));
-                int activeCount = 0;
-                int zeroX = 0, zeroP = 0;
-                for (int i = 0; i < nx; i++) {
-                    if (xp[i] != 0.0 && Pp[i*nx+i] > 0.0) activeCount++;
-                    if (xp[i] == 0.0 && Pp[i*nx+i] > 0.0) zeroX++;
-                    if (Pp[i*nx+i] == 0.0 && i >= 3) zeroP++;
-                }
-                log.debug("epoch=50: nx={} active={} zeroX_nonzeroP={} zeroP={}", nx, activeCount, zeroX, zeroP);
-            }
-            if (jrtk.epoch <= 25 && iter == 0) {
-                int ib0 = jrtk.IB(0, blObs[0].sat[0], 0);
-                if (ib0 >= 0 && ib0 < nx) {
-                    log.debug("epoch={} iter={} nv={} xp[ib0]={} Pp[ib0,ib0]={} ib0={}",
-                            jrtk.epoch, iter, nv, xp[ib0], Pp[ib0 * nx + ib0], ib0);
-                }
-                int vsatCount = 0;
-                for (int si = 0; si < Constants.MAXSAT; si++) {
-                    for (int fi = 0; fi < nf; fi++) {
-                        if (jrtk.ssat[si].vsat[fi] != 0) vsatCount++;
-                    }
-                }
-                log.debug("epoch={} vsatCount={}/{}", jrtk.epoch, vsatCount, Constants.MAXSAT * nf);
+                        ambCnt > 0 ? String.format("%.4f", sumAmbVar/ambCnt) : "N/A");
             }
         }
 
@@ -444,7 +324,7 @@ public final class JointCore {
             jrtk.sol.stat = Constants.SOLQ_FLOAT;
 
             if (opt.modear != Constants.ARMODE_OFF && opt.thresar[0] >= 1.0) {
-                stat = resolveAmbiguity(jrtk, blObs, nf, nav);
+                stat = resolveAmbiguity(jrtk, blObs, nf, nav, group.globalRefSat);
                 if (stat == Constants.SOLQ_FIX) {
                     jrtk.sol.stat = Constants.SOLQ_FIX;
                     for (int i = 0; i < 3; i++) {
@@ -468,9 +348,11 @@ public final class JointCore {
         return stat != Constants.SOLQ_NONE ? 1 : 0;
     }
 
-    private static int resolveAmbiguity(JointRtk jrtk, BaselineObs[] blObs, int nf, Nav nav) {
+    private static int resolveAmbiguity(JointRtk jrtk, BaselineObs[] blObs, int nf, Nav nav, int globalRefSat) {
         PrcOpt opt = jrtk.opt;
         int nx = jrtk.nx;
+        int na = jrtk.na;
+        int nAmb = nx - na;
         double thresAR = opt.thresar[0];
 
         double posvar = 0.0;
@@ -482,56 +364,129 @@ public final class JointCore {
             return Constants.SOLQ_FLOAT;
         }
 
-        double minRatio = Double.POSITIVE_INFINITY;
         double[] xa = Arrays.copyOf(jrtk.x, nx);
-        int[] allAmbIdx = new int[Constants.MAXSAT * nf * jrtk.nBaseline];
+        double[] Pa = new double[nx * nx];
+        for (int i = 0; i < nx * nx; i++) Pa[i] = jrtk.P[i];
+        double minRatio = Double.POSITIVE_INFINITY;
         int nbTotal = 0;
+        // [FIX-ALG-042 P2.5] holdamb 约束记录：(refIdx, jIdx, 固定双差整数差 bias)
+        java.util.List<int[]> holdPairs = new java.util.ArrayList<>();
+        java.util.List<Double> holdBiases = new java.util.ArrayList<>();
 
         for (int b = 0; b < jrtk.nBaseline; b++) {
             BaselineObs bo = blObs[b];
             if (bo == null || bo.ns <= 0) continue;
 
-            int[] ambIdx = new int[bo.ns * nf];
+            int[] ix = new int[bo.ns * nf * 2];
             int nb = 0;
-            int nbSkipLock = 0;
-            int nbSkipVsat = 0;
-            for (int j = 0; j < bo.ns; j++) {
-                int sat = bo.sat[j];
-                for (int f = 0; f < nf; f++) {
+
+            for (int f = 0; f < nf; f++) {
+                int refI = -1;
+                double maxEl = -1.0;
+                for (int j = 0; j < bo.ns; j++) {
+                    int sat = bo.sat[j];
                     int idx = jrtk.IB(b, sat, f);
                     if (idx < 0 || idx >= nx) continue;
-                    if (jrtk.ssat[sat - 1].vsat[f] == 0) { nbSkipVsat++; continue; }
-                    if (jrtk.ssat[sat - 1].lock[f] < 0) { nbSkipLock++; continue; }
-                    ambIdx[nb++] = idx;
+                    if (xa[idx] == 0.0) continue;
+                    if (jrtk.ssat[sat - 1].vsat[f] == 0) continue;
+                    if (jrtk.ssat[sat - 1].lock[f] < 0) continue;
+                    if ((jrtk.ssat[sat - 1].slip[f] & Constants.LLI_HALFC) != 0) continue;
+                    if (jrtk.ssat[sat - 1].azel[1] < opt.elmaskar) continue;
+                    if (jrtk.ssat[sat - 1].azel[1] > maxEl) {
+                        maxEl = jrtk.ssat[sat - 1].azel[1];
+                        refI = idx;
+                    }
+                }
+                if (refI < 0) continue;
+
+                for (int j = 0; j < bo.ns; j++) {
+                    int sat = bo.sat[j];
+                    int idx = jrtk.IB(b, sat, f);
+                    if (idx < 0 || idx >= nx) continue;
+                    if (idx == refI) continue;
+                    if (xa[idx] == 0.0) continue;
+                    if (jrtk.ssat[sat - 1].vsat[f] == 0) continue;
+                    if (jrtk.ssat[sat - 1].lock[f] < 0) continue;
+                    if ((jrtk.ssat[sat - 1].slip[f] & Constants.LLI_HALFC) != 0) continue;
+                    if (jrtk.ssat[sat - 1].azel[1] < opt.elmaskar) continue;
+                    ix[nb * 2] = refI;
+                    ix[nb * 2 + 1] = idx;
+                    nb++;
                 }
             }
+
             if (nb < 2) {
-                if (jrtk.epoch % 50 == 0) {
-                    log.debug("AR baseline[{}]: nb={} skipLock={} skipVsat={} minlock={}",
-                            b, nb, nbSkipLock, nbSkipVsat, opt.minlock);
-                }
                 minRatio = 0.0;
                 continue;
             }
 
-            double[] a = new double[nb];
-            double[] Q = new double[nb * nb];
+            double[] y = new double[nb];
             for (int i = 0; i < nb; i++) {
-                a[i] = jrtk.x[ambIdx[i]];
+                y[i] = xa[ix[i * 2]] - xa[ix[i * 2 + 1]];
+            }
+
+            SimpleMatrix QbMat = new SimpleMatrix(nb, nb);
+            for (int i = 0; i < nb; i++) {
                 for (int j = 0; j < nb; j++) {
-                    Q[i * nb + j] = jrtk.P[ambIdx[i] * nx + ambIdx[j]];
+                    int ri = ix[i * 2], rj = ix[j * 2];
+                    int si = ix[i * 2 + 1], sj = ix[j * 2 + 1];
+                    QbMat.set(i, j, Pa[ri * nx + rj] - Pa[ri * nx + sj] - Pa[si * nx + rj] + Pa[si * nx + sj]);
+                }
+            }
+
+            SimpleMatrix QabMat = new SimpleMatrix(na, nb);
+            for (int i = 0; i < na; i++) {
+                for (int j = 0; j < nb; j++) {
+                    int rj = ix[j * 2], sj = ix[j * 2 + 1];
+                    QabMat.set(i, j, Pa[i * nx + rj] - Pa[i * nx + sj]);
+                }
+            }
+
+            double[] Qb = new double[nb * nb];
+            for (int i = 0; i < nb; i++) {
+                for (int j = 0; j < nb; j++) {
+                    Qb[i * nb + j] = QbMat.get(i, j);
+                }
+            }
+            for (int i = 0; i < nb; i++) {
+                for (int j = i + 1; j < nb; j++) {
+                    double avg = 0.5 * (Qb[i * nb + j] + Qb[j * nb + i]);
+                    Qb[i * nb + j] = avg;
+                    Qb[j * nb + i] = avg;
+                }
+            }
+
+            if (jrtk.epoch == 80) {
+                double maxFrac = 0;
+                for (int ii = 0; ii < Math.min(nb, 5); ii++) {
+                    double frac = Math.abs(y[ii] - Math.round(y[ii]));
+                    maxFrac = Math.max(maxFrac, frac);
+                    log.info("[AR-Y] epoch={} bl={} i={} y={}" + " frac={}", jrtk.epoch, b, ii,
+                            String.format("%.4f", y[ii]), String.format("%.4f", frac));
+                }
+                SimpleMatrix QbCheck = MatrixUtil.createMatrix(Qb, nb, nb);
+                java.util.Optional<SimpleMatrix> QbInvCheck = MatrixUtil.invertSafe(QbCheck);
+                if (QbInvCheck.isPresent()) {
+                    double condNum = QbCheck.normF() * QbInvCheck.get().normF();
+                    log.info("[AR-QB] epoch={} bl={} nb={} condNum={}", jrtk.epoch, b, nb, String.format("%.1f", condNum));
+                }
+            }
+
+            double[] Qab = new double[na * nb];
+            for (int i = 0; i < na; i++) {
+                for (int j = 0; j < nb; j++) {
+                    Qab[i * nb + j] = QabMat.get(i, j);
                 }
             }
 
             double[] F = new double[nb * 2];
             double[] s = new double[2];
-            int info = Lambda.lambda(nb, 2, a, Q, F, s);
+            int info = Lambda.lambda(nb, 2, y, Qb, F, s);
+
             if (info != 0 || s[0] <= 0.0) {
                 minRatio = 0.0;
                 if (jrtk.epoch % 50 == 0) {
-                    double maxA = 0, maxQ = 0;
-                    for (int ii = 0; ii < nb; ii++) { maxA = Math.max(maxA, Math.abs(a[ii])); maxQ = Math.max(maxQ, Q[ii*nb+ii]); }
-                    log.debug("AR baseline[{}]: LAMBDA failed info={} s0={} nb={} maxA={} maxQdiag={}", b, info, s[0], nb, maxA, maxQ);
+                    log.debug("AR baseline[{}]: LAMBDA failed info={} s0={} nb={}", b, info, s[0], nb);
                 }
                 continue;
             }
@@ -539,104 +494,210 @@ public final class JointCore {
             double ratio = s[1] / s[0];
             if (ratio < minRatio) minRatio = ratio;
 
-            if (jrtk.epoch % 50 == 0 || ratio >= thresAR) {
+            if (jrtk.epoch % 20 == 0 || ratio >= thresAR) {
                 double maxVar = 0, minVar = Double.MAX_VALUE;
-                for (int ii = 0; ii < nb; ii++) { maxVar = Math.max(maxVar, Q[ii*nb+ii]); minVar = Math.min(minVar, Q[ii*nb+ii]); }
-                log.debug("AR baseline[{}]: nb={} ratio={} thres={} maxVar={} minVar={}", b, nb, String.format("%.2f", ratio), thresAR, String.format("%.4f", maxVar), String.format("%.4f", minVar));
+                for (int ii = 0; ii < nb; ii++) { maxVar = Math.max(maxVar, Qb[ii*nb+ii]); minVar = Math.min(minVar, Qb[ii*nb+ii]); }
+                log.info("[AR-RESULT] epoch={} bl={} nb={} ratio={} thres={} maxVar={} minVar={}", jrtk.epoch, b, nb, String.format("%.4f", ratio), thresAR, String.format("%.6f", maxVar), String.format("%.6f", minVar));
             }
 
             if (ratio >= thresAR) {
+                double[] bias = new double[nb];
+                double[] db = new double[nb];
                 for (int i = 0; i < nb; i++) {
-                    xa[ambIdx[i]] = F[i * 2];
-                    allAmbIdx[nbTotal++] = ambIdx[i];
+                    bias[i] = F[i * 2];
+                    db[i] = y[i] - bias[i];
                 }
+
+                SimpleMatrix QbInvMat = MatrixUtil.createMatrix(Qb, nb, nb);
+                java.util.Optional<SimpleMatrix> QbInvOpt = MatrixUtil.invertSafe(QbInvMat);
+                if (!QbInvOpt.isPresent()) {
+                    minRatio = 0.0;
+                    continue;
+                }
+                SimpleMatrix QbInv = QbInvOpt.get();
+
+                SimpleMatrix dbMat = MatrixUtil.createMatrix(db, nb, 1);
+                SimpleMatrix QabMatDense = MatrixUtil.createMatrix(Qab, na, nb);
+
+                SimpleMatrix dxa = MatrixUtil.multiply(QabMatDense, MatrixUtil.multiply(QbInv, dbMat));
+                for (int i = 0; i < na; i++) xa[i] -= dxa.get(i, 0);
+
+                SimpleMatrix QQ = MatrixUtil.multiply(QabMatDense, QbInv);
+                SimpleMatrix dPa = MatrixUtil.multiply(QQ, MatrixUtil.transpose(QabMatDense));
+                for (int i = 0; i < na; i++) {
+                    for (int j = 0; j < na; j++) {
+                        Pa[i * nx + j] -= dPa.get(i, j);
+                    }
+                }
+
+                for (int i = 0; i < nb; i++) {
+                    int refIdx = ix[i * 2];
+                    int jIdx = ix[i * 2 + 1];
+                    xa[refIdx] = jrtk.x[refIdx];
+                    xa[jIdx] = xa[refIdx] - bias[i];
+                    holdPairs.add(new int[]{refIdx, jIdx});
+                    holdBiases.add(bias[i]);
+                }
+                nbTotal += nb;
             }
         }
 
         jrtk.sol.ratio = (float) minRatio;
-        if (minRatio >= thresAR && nbTotal >= 2) {
-            int na = jrtk.na;
-            for (int i = 0; i < na; i++) {
-                for (int k = 0; k < nbTotal; k++) {
-                    xa[i] -= jrtk.P[i * nx + allAmbIdx[k]] * (jrtk.x[allAmbIdx[k]] - xa[allAmbIdx[k]]);
+        if (minRatio >= thresAR) {
+            // [FIX-ALG-042 P2.5] FIX 后必须正确压缩小度协方差：resolveAmbiguity
+            // 修正了位置 xa[0:na] 和 Pa[0:na,0:na]，但模糊度 xa[na:nx] 只被硬改了值
+            // （L632-639），Pa 中模糊度部分完全未修正。若不此处手动把模糊度 P
+            // 对角压到极小、交叉协方差清零，模糊度在后续 KF 中自由漂移，epoch=21
+            // 起 ratio 骤退化为 ~1，再也无法 FIX。
+            for (int i = na; i < nx; i++) {
+                Pa[i * nx + i] = 1E-6;
+                for (int j = 0; j < i; j++) {
+                    Pa[i * nx + j] = 0.0;
+                    Pa[j * nx + i] = 0.0;
                 }
             }
             System.arraycopy(xa, 0, jrtk.x, 0, nx);
+            for (int i = 0; i < nx * nx; i++) jrtk.P[i] = Pa[i];
+            jrtk.nfix++;
+
+            // [FIX-ALG-042 P2.5] holdamb（对齐 C 版 FIXHOLD）：把固定双差整数差作为强约束
+            // 观测喂回滤波器，收缩模糊度方差（R=varholdamb=0.1 周^2，与 RtkCore 对齐）。
+            // 缺失此步时模糊度协方差保持浮点水平，后续历元自由漂移，ratio 退化为 ~1。
+            // 注意：不设 minfix 门槛——每次 FIX 成功即执行，与 RtkCore.holdamb 行为一致。
+            if (opt.modear == Constants.ARMODE_FIXHOLD && !holdPairs.isEmpty()) {
+                int nHold = holdPairs.size();
+                if (nHold >= opt.minholdsats) {
+                    double[] v = new double[nHold];
+                    double[] H = new double[nHold * nx];
+                    double[] Rh = new double[nHold * nHold];
+                    for (int i = 0; i < nHold; i++) {
+                        int[] pair = holdPairs.get(i);
+                        H[i * nx + pair[0]] = 1.0;
+                        H[i * nx + pair[1]] = -1.0;
+                        v[i] = holdBiases.get(i) - (jrtk.x[pair[0]] - jrtk.x[pair[1]]);
+                        Rh[i * nHold + i] = 1E-6;
+                    }
+                    int infoHold = KalmanFilter.update(jrtk.x, jrtk.P, H, v, Rh, nx, nHold);
+                    if (infoHold != 0) {
+                        log.debug("holdamb filter failed info={} nHold={}", infoHold, nHold);
+                    }
+                }
+            }
+
+            for (int b = 0; b < jrtk.nBaseline; b++) {
+                if (blObs[b] == null) continue;
+                for (int i = 0; i < blObs[b].ns; i++) {
+                    for (int f = 0; f < nf; f++) {
+                        int idx = jrtk.IB(b, blObs[b].sat[i], f);
+                        if (idx >= 0 && idx < nx) jrtk.ssat[blObs[b].sat[i] - 1].fix[f] = 2;
+                    }
+                }
+            }
             return Constants.SOLQ_FIX;
         }
         return Constants.SOLQ_FLOAT;
     }
 
     private static void udstate(JointRtk jrtk, Obsd[] roverObs, int roverN,
-                                BaseStation[] bases, int nBaseline, Nav nav,
-                                BaselineObs[] blObs) {
+                                BaseStation[] bases, int nBaseline, Nav nav, BaselineObs[] blObs,
+                                BaselineGroup group) {
         PrcOpt opt = jrtk.opt;
         int nx = jrtk.nx;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
 
-        if (opt.tropopt == Constants.TROPOPT_EST || opt.tropopt == Constants.TROPOPT_ESTG) {
-            for (int b = 0; b < nBaseline; b++) {
-                for (int r = 0; r < 2; r++) {
-                    int it = jrtk.IT(b, r);
-                    if (it < 0 || it >= nx) continue;
-                    if (jrtk.P[it * nx + it] == 0.0) {
-                        double varTrop = JointDdRes.SQR(opt.std[2]);
-                        JointDdRes.initx(jrtk.x, jrtk.P, nx, Constants.INIT_ZWD, varTrop, it);
-                    }
+        double tt = Math.abs(jrtk.tt);
+        if (tt == 0.0) tt = 1.0;
+
+        if (opt.dynamics != 0) {
+            double F[] = new double[nx * nx];
+            for (int i = 0; i < nx; i++) F[i * nx + i] = 1.0;
+            for (int i = 0; i < 3; i++) F[i * nx + (i + 3)] = tt;
+            double Q[] = new double[nx * nx];
+            for (int i = 0; i < 3; i++) Q[i * nx + i] = RtkCore.SQR(elmaska(jrtk, blObs, i)) * tt;
+            for (int i = 3; i < 6; i++) Q[i * nx + i] = RtkCore.SQR(opt.thresar[1]) * tt;
+            for (int i = 0; i < nx; i++) {
+                for (int j = 0; j < nx; j++) {
+                    double FiP = 0.0;
+                    for (int k = 0; k < nx; k++) FiP += F[i * nx + k] * jrtk.P[k * nx + j];
+                    double FiPFt = 0.0;
+                    for (int k = 0; k < nx; k++) FiPFt += FiP * F[j * nx + k];
+                    jrtk.P[i * nx + j] = FiPFt + Q[i * nx + j];
                 }
             }
         }
 
-        if (opt.ionoopt == Constants.IONOOPT_EST) {
-            for (int b = 0; b < nBaseline; b++) {
-                BaselineObs bo = blObs[b];
-                if (bo == null) continue;
-                double bl = 0.0;
-                for (int i = 0; i < 3; i++) bl += jrtk.x[i] * jrtk.x[i];
-                bl = Math.sqrt(bl);
-                for (int i = 0; i < bo.ns; i++) {
-                    int ii = jrtk.II(b, bo.sat[i]);
-                    if (ii < 0 || ii >= nx) continue;
-                    if (jrtk.P[ii * nx + ii] == 0.0) {
-                        double varIono = JointDdRes.SQR(opt.std[1] * bl / 1E4);
-                        JointDdRes.initx(jrtk.x, jrtk.P, nx, 1E-6, varIono, ii);
-                    }
-                }
-            }
-        }
+        for (int b = 0; b < nBaseline; b++) {
+            BaselineObs bo = blObs[b];
+            if (bo == null || bo.ns <= 0) continue;
 
-        if (opt.mode > Constants.PMODE_DGPS) {
-            for (int b = 0; b < nBaseline; b++) {
-                BaselineObs bo = blObs[b];
-                if (bo == null) continue;
-                BaseStation bs = bases[b];
-                for (int i = 0; i < bo.ns; i++) {
-                    for (int f = 0; f < nf; f++) {
-                        int idx = jrtk.IB(b, bo.sat[i], f);
-                        if (idx < 0 || idx >= nx) continue;
-                        if (jrtk.P[idx * nx + idx] == 0.0) {
-                            double biasVal = 0.0;
-                            Obsd obsR = roverObs[bo.iu[i]];
-                            Obsd obsB = bs.obsBuf[bo.ir[i] - bo.nu];
-                            if (obsR != null && obsB != null && f < opt.nf) {
-                                if (obsR.P[f] != 0.0 && obsB.P[f] != 0.0 &&
-                                    obsR.L[f] != 0.0 && obsB.L[f] != 0.0) {
-                                    double freqi = SatUtils.sat2freq(bo.sat[i], obsR.code[f], nav);
-                                    if (freqi > 0.0) {
-                                        double cp = obsR.L[f] - obsB.L[f];
-                                        double pr = obsR.P[f] - obsB.P[f];
-                                        biasVal = cp - pr * freqi / Constants.CLIGHT;
-                                    }
-                                }
-                            }
-                            if (biasVal == 0.0) biasVal = 1E-10;
-                            double varAmb = JointDdRes.SQR(opt.std[0]);
-                            JointDdRes.initx(jrtk.x, jrtk.P, nx, biasVal, varAmb, idx);
-                            jrtk.ssat[bo.sat[i] - 1].lock[f] = -opt.minlock;
+            for (int i = 0; i < bo.ns; i++) {
+                int sat = bo.sat[i];
+                for (int f = 0; f < nf; f++) {
+                    int idx = jrtk.IB(b, sat, f);
+                    if (idx < 0 || idx >= nx) continue;
+
+                    // [FIX-ALG-042 P3] 模糊度过程噪声（对齐 RtkCore.udbias）
+                    jrtk.P[idx * nx + idx] += RtkCore.SQR(opt.prn[0]) * tt;
+
+                    // 周跳 → 状态归零，等待载波-伪距组合重新初始化（对齐 C 版 udbias）
+                    if (jrtk.ssat[sat - 1].slip[f] != 0 && jrtk.x[idx] != 0.0) {
+                        jrtk.x[idx] = 0.0;
+                        jrtk.P[idx * nx + idx] = 0.0;
+                        jrtk.ssat[sat - 1].lock[f] = -opt.minlock;
+                    }
+
+                    // [FIX-ALG-042 P2] 浮点模糊度初值：载波-伪距组合。
+                    // 必须非零：KalmanFilter.update 对 x==0 的状态跳过更新（if x[i]!=0.0），
+                    // 初始化为 0 则模糊度方差恒为 std[0]^2 不收敛，LAMBDA 无法固定。
+                    if (jrtk.x[idx] == 0.0) {
+                        double bias = carrierBiasInit(bo, i, f, opt);
+                        if (bias != 0.0) {
+                            JointDdRes.initx(jrtk.x, jrtk.P, nx, bias, RtkCore.SQR(opt.std[0]), idx);
+                            jrtk.ssat[sat - 1].lock[f] = -opt.minlock;
                         }
                     }
                 }
             }
         }
+    }
+
+    /**
+     * [FIX-ALG-042 P2] 载波-伪距组合浮点单差模糊度初值（单位：周；IFLC 时为米）。
+     * 对齐 RtkCore.udbias 的 bias 计算：zdres 输出的 y 已扣除迭代点几何距离，
+     * 故 SD(载波) - SD(伪距) ≈ N_sd + 伪距噪声/多路径残差，非零且偏差由 Kalman 吸收。
+     */
+    private static double carrierBiasInit(BaselineObs bo, int i, int f, PrcOpt opt) {
+        int iu = bo.iu[i];
+        int ir = bo.ir[i];
+        int ph = f + iu * opt.nf * 2;
+        int phb = f + ir * opt.nf * 2;
+        int cp = f + opt.nf + iu * opt.nf * 2;
+        int cpb = f + opt.nf + ir * opt.nf * 2;
+        if (ph >= bo.y.length || phb >= bo.y.length || cp >= bo.y.length || cpb >= bo.y.length) {
+            return 0.0;
+        }
+        if (bo.y[ph] == 0.0 || bo.y[phb] == 0.0 || bo.y[cp] == 0.0 || bo.y[cpb] == 0.0) {
+            return 0.0;
+        }
+        double sdPhase = bo.y[ph] - bo.y[phb];
+        double sdCode = bo.y[cp] - bo.y[cpb];
+        if (opt.ionoopt == Constants.IONOOPT_IFLC) {
+            return sdPhase - sdCode; // IF 模糊度状态单位为米（ddres 中 v -= x[ii]-x[jj]）
+        }
+        double freq = bo.freq[f + iu * opt.nf];
+        if (freq <= 0.0) return 0.0;
+        return (sdPhase - sdCode) * freq / Constants.CLIGHT;
+    }
+
+    private static double elmaska(JointRtk jrtk, BaselineObs[] blObs, int posIdx) {
+        double minEl = Math.PI / 2.0;
+        for (int b = 0; b < jrtk.nBaseline; b++) {
+            if (blObs[b] == null) continue;
+            for (int i = 0; i < blObs[b].ns; i++) {
+                double el = blObs[b].azel[(blObs[b].iu[i]) * 2 + 1];
+                if (el > 0 && el < minEl) minEl = el;
+            }
+        }
+        return minEl;
     }
 }

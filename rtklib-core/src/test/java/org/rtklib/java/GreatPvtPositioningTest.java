@@ -1,6 +1,7 @@
 package org.rtklib.java;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Assumptions;
@@ -32,6 +33,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("Multi-GNSS positioning with GREAT-PVT data (G+E+C+R)")
+@Tag("manual")
 public class GreatPvtPositioningTest {
 
     private static final Logger log = LoggerFactory.getLogger(GreatPvtPositioningTest.class);

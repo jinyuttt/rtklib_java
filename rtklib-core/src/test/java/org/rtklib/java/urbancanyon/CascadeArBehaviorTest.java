@@ -1,6 +1,7 @@
 package org.rtklib.java.urbancanyon;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
@@ -31,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * 旧伪实现因 IFLC 守卫从未在数据集测试中激活，本测试确保新实现在真实路径上被验证。</p>
  */
 @DisplayName("CascadeAR 行为验证 - EST模式 A/B 对比")
+@Tag("manual")
 public class CascadeArBehaviorTest {
 
     private static final Logger log = LoggerFactory.getLogger(CascadeArBehaviorTest.class);

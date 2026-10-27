@@ -45,7 +45,20 @@ public final class KalmanFilter {
         int k = 0;
         for (int i = 0; i < nx; i++) {
             if (x[i] != 0.0 && P[i * nx + i] > 0.0) {
-                ix[k++] = i;
+                // [FIX-JOINT] 跳过 H 中全零列对应的状态：这些状态与当前观测完全无关，
+                // 若保留会通过交叉协方差 Pc 错误地"泄漏"观测信息到无关状态（如 bl=1
+                // update 时错误更新 bl=0 的模糊度），同时 Pc 的零列块不影响 HPHt 但
+                // 会增大条件数，降低数值稳定性。
+                boolean hasNonZero = false;
+                for (int j = 0; j < nv; j++) {
+                    if (Math.abs(H[j * nx + i]) > 0.0) {
+                        hasNonZero = true;
+                        break;
+                    }
+                }
+                if (hasNonZero) {
+                    ix[k++] = i;
+                }
             }
         }
         if (k == 0) return 0;

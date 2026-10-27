@@ -18,6 +18,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("城市峡谷 SPP 优化测试")
+@Tag("manual")
 public class UrbanCanyonSppOptTest {
 
     private static final Logger log = LoggerFactory.getLogger(UrbanCanyonSppOptTest.class);

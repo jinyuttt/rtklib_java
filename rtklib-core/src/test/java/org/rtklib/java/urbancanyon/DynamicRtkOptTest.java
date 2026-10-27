@@ -19,6 +19,7 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("动态RTK优化测试 - 8组城市峡谷数据")
+@Tag("manual")
 public class DynamicRtkOptTest {
 
     private static final Logger log = LoggerFactory.getLogger(DynamicRtkOptTest.class);

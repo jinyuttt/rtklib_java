@@ -330,6 +330,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("9. Trace with CONTENT_H_MATRIX flag")
     void testTraceWithHMatrix() {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
@@ -364,6 +365,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("10. Trace with CONTENT_SUMMARY_ONLY flag")
     void testTraceWithSummaryOnly() {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         List<String> traceLinesFull = Collections.synchronizedList(new ArrayList<>());
         List<String> traceLinesSummary = Collections.synchronizedList(new ArrayList<>());
 
@@ -404,6 +406,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("11. Trace async with BlockingQueue")
     void testTraceAsyncWithBlockingQueue() throws Exception {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         BlockingQueue<String> queue = new LinkedBlockingQueue<>(10000);
 
         TraceControl ctrl = new TraceControl();
@@ -437,6 +440,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("12. Trace write to file")
     void testTraceWriteToFile() throws Exception {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         String traceFile = RESULT_DIR + "\\rtk_trace_output.log";
 
         TraceControl ctrl = new TraceControl();
@@ -483,6 +487,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("13. Trace STAGE0 satellite detail lines")
     void testTraceStage0SatelliteDetails() {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
 
         TraceControl ctrl = new TraceControl();
@@ -519,6 +524,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("14. Trace callback exception safety")
     void testTraceCallbackExceptionSafety() {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         TraceControl ctrl = new TraceControl();
         ctrl.enabled = true;
         ctrl.stages = 0x7F;
@@ -543,6 +549,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("15. Trace combined with RtkProcessor callback and OutputStream")
     void testTraceWithCallbackAndStream() throws Exception {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         String posFile = RESULT_DIR + "\\rtk_trace_combined.pos";
         List<String> traceLines = Collections.synchronizedList(new ArrayList<>());
         List<Sol> solutions = new ArrayList<>();
@@ -579,6 +586,7 @@ public class RtkTraceTest {
     @Test
     @DisplayName("16. TraceLog V2 output to console and file")
     void testTraceV2Output() throws Exception {
+        assumeTrue(dataAvailable, "RTCM3 local data not available");
         List<String> v2Lines = Collections.synchronizedList(new ArrayList<>());
         String v2File = RESULT_DIR + "\\rtk_trace_v2.log";
         PrintWriter v2Writer = new PrintWriter(new BufferedWriter(new FileWriter(v2File)));
