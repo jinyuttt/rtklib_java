@@ -3,6 +3,7 @@ package org.rtklib.java;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Tag;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
 import org.rtklib.java.rinex.RinexParser;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("Urban Canyon Data Check - RINEX数据检查 + SPP分析")
+@Tag("manual")
 public class UrbanCanyonDataCheckTest {
 
     private static final Logger log = LoggerFactory.getLogger(UrbanCanyonDataCheckTest.class);

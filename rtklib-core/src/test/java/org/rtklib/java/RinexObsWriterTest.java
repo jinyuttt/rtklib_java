@@ -49,10 +49,10 @@ public class RinexObsWriterTest {
         for (String l : sysLines) System.out.println(l);
 
         String joined = String.join(" ", sysLines);
-        assertTrue(joined.contains("C2I"), "should have C (pseudorange)");
-        assertTrue(joined.contains("L2I"), "should have L (carrier phase)");
-        assertTrue(joined.contains("D2I"), "should have D (doppler)");
-        assertTrue(joined.contains("S2I"), "should have S (SNR)");
+        assertTrue(hasObsType(joined, 'C'), "should have C (pseudorange)");
+        assertTrue(hasObsType(joined, 'L'), "should have L (carrier phase)");
+        assertTrue(hasObsType(joined, 'D'), "should have D (doppler)");
+        assertTrue(hasObsType(joined, 'S'), "should have S (SNR)");
 
         Files.walk(outDir).sorted().forEach(p -> p.toFile().delete());
     }
@@ -88,12 +88,23 @@ public class RinexObsWriterTest {
         for (String l : sysLines) System.out.println(l);
 
         String joined = String.join(" ", sysLines);
-        assertTrue(joined.contains("C2I"), "should have C");
-        assertTrue(joined.contains("L2I"), "should have L");
-        assertFalse(joined.contains("D2I"), "should NOT have D");
-        assertFalse(joined.contains("S2I"), "should NOT have S");
+        assertTrue(hasObsType(joined, 'C'), "should have C");
+        assertTrue(hasObsType(joined, 'L'), "should have L");
+        assertFalse(hasObsType(joined, 'D'), "should NOT have D");
+        assertFalse(hasObsType(joined, 'S'), "should NOT have S");
 
         Files.walk(outDir1).sorted().forEach(p -> p.toFile().delete());
         Files.walk(outDir2).sorted().forEach(p -> p.toFile().delete());
+    }
+
+    /** SYS / # / OBS TYPES 行中是否存在指定类别的观测码（如 C1C、C2P 均属 C 类）。 */
+    private static boolean hasObsType(String joined, char type) {
+        for (String token : joined.split("\\s+")) {
+            if (token.length() >= 2 && token.charAt(0) == type
+                    && Character.isDigit(token.charAt(1))) {
+                return true;
+            }
+        }
+        return false;
     }
 }

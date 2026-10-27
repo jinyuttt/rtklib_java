@@ -1,6 +1,7 @@
 package org.rtklib.java;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Assumptions;
@@ -18,6 +19,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("RTK Benchmark Test with Public Urban Canyon Datasets")
+@Tag("manual")
 public class RtkBenchmarkTest {
 
     private static final Logger log = LoggerFactory.getLogger(RtkBenchmarkTest.class);

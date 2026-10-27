@@ -13,6 +13,11 @@
     <artifactId>rtklib-core</artifactId>
     <packaging>jar</packaging>
 
+    <properties>
+        <!-- 手动运行 manual 标签测试：mvn test -pl rtklib-core -Dgroups=manual -Dsurefire.excludedGroups= -->
+        <surefire.excludedGroups>manual</surefire.excludedGroups>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.ejml</groupId>
@@ -49,6 +54,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                    <!-- 大数据集诊断与 JMH 基准默认不跑（单类耗时 10 分钟~数小时）。
+                         手动运行：mvn test -pl rtklib-core -Dgroups=manual -Dsurefire.excludedGroups= -->
+                    <excludedGroups>${surefire.excludedGroups}</excludedGroups>
                     <systemPropertyVariables>
                         <org.slf4j.simpleLogger.defaultLogLevel>warn</org.slf4j.simpleLogger.defaultLogLevel>
                     </systemPropertyVariables>

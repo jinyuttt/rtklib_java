@@ -110,6 +110,17 @@ public class SolData implements Serializable {
     /** [Java扩展] 双差观测数，0=未启用 */
     public final int ddObsCount;
 
+    /**
+     * [Java扩展] ECEF 三维完整协方差（m²，行优先，含符号）。
+     *
+     * <p>由 {@link Sol#qr} 解包而来（上三角 6 值对称展开），是网平差等后处理
+     * 使用的真值来源。{@link Accuracy} 中的 c12/c23/c31 只保留了绝对值开方
+     * （源自 .pos 输出格式约定），仅供显示，不能用于还原协方差。</p>
+     *
+     * <p>null 表示该历元无有效协方差（RTKLIB 约定 qr[0]==0 为哨兵）。</p>
+     */
+    public final double[] covEcef;
+
     public SolData(Sol sol, int posMask) {this(null, sol, posMask, null, null, 0);
     }
 
@@ -168,6 +179,17 @@ public class SolData implements Serializable {
         this.innovRms = sol.innovRms;
         this.innovMax = sol.innovMax;
         this.ddObsCount = sol.ddObsCount;
+        this.covEcef = buildCovEcef(sol.qr);
+    }
+
+    /**
+     * 解包 {@link Sol#qr} 为 ECEF 完整 3x3 协方差（行优先，含符号）。
+     *
+     * @return 9 元素协方差；无有效协方差时返回 null
+     */
+    private static double[] buildCovEcef(float[] qr) {
+        if (qr == null || qr.length < 6 || qr[0] == 0.0f) return null;
+        return soltocov(qr);
     }
 
     private static List<Position> buildPositions(Sol sol, int posMask,

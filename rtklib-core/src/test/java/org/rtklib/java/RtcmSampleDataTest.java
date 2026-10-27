@@ -212,8 +212,8 @@ public class RtcmSampleDataTest {
     void testTleGpsAvailable() throws IOException {
         String path = TestDataConfig.getTestDataFile(TLE_GPS_PATH);
         String content = Files.readString(Paths.get(path));
-        assertTrue(content.contains("1 N"), "Should contain TLE line 1");
-        assertTrue(content.contains("2 N"), "Should contain TLE line 2");
+        assertTrue(content.lines().anyMatch(l -> l.startsWith("1 ")), "Should contain TLE line 1");
+        assertTrue(content.lines().anyMatch(l -> l.startsWith("2 ")), "Should contain TLE line 2");
         log.info("GPS TLE loaded: {} chars from {}", content.length(), path);
     }
 
@@ -223,8 +223,8 @@ public class RtcmSampleDataTest {
     void testTleBdsAvailable() throws IOException {
         String path = TestDataConfig.getTestDataFile(TLE_BDS_PATH);
         String content = Files.readString(Paths.get(path));
-        assertTrue(content.contains("1 N"), "Should contain TLE line 1");
-        assertTrue(content.contains("2 N"), "Should contain TLE line 2");
+        assertTrue(content.lines().anyMatch(l -> l.startsWith("1 ")), "Should contain TLE line 1");
+        assertTrue(content.lines().anyMatch(l -> l.startsWith("2 ")), "Should contain TLE line 2");
         log.info("BDS TLE loaded: {} chars from {}", content.length(), path);
     }
 }

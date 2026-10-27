@@ -7,6 +7,7 @@ import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.Obsd;
 import org.rtklib.java.data.Rtk;
+import org.rtklib.java.data.RtkState;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -68,7 +69,7 @@ public class IflcPairNegotiationTest {
         Obsd oB = obs(sat, 2, 0, 1, 2);
         Obsd[] obsArr = {oR, oB};
 
-        RtkCore.negotiateIflcPairs(rtk, obsArr, 1, 1);
+        RtkCore.negotiateIflcPairs(rtk.toState(), obsArr, 1, 1);
 
         assertArrayEquals(new int[]{0, 2}, rtk.ssat[sat - 1].iflcSlot,
                 "应协商到两站公共频段对 B1I+B2a={0,2}（{0,1}因流动站slot1缺失不可用）");
@@ -85,7 +86,7 @@ public class IflcPairNegotiationTest {
         // 两站 slot0/1/2 全可用：{0,1}优先级高于{0,2}，但 sticky 不切换
         Obsd[] obsArr = {obs(sat, 1, 0, 1, 2), obs(sat, 2, 0, 1, 2)};
 
-        RtkCore.negotiateIflcPairs(rtk, obsArr, 1, 1);
+        RtkCore.negotiateIflcPairs(rtk.toState(), obsArr, 1, 1);
 
         assertArrayEquals(new int[]{0, 2}, rtk.ssat[sat - 1].iflcSlot, "sticky应保持{0,2}");
         assertFalse(rtk.ssat[sat - 1].iflcPairSwitch);
@@ -101,7 +102,7 @@ public class IflcPairNegotiationTest {
         // 流动站 slot2 消失、slot1 出现
         Obsd[] obsArr = {obs(sat, 1, 0, 1), obs(sat, 2, 0, 1, 2)};
 
-        RtkCore.negotiateIflcPairs(rtk, obsArr, 1, 1);
+        RtkCore.negotiateIflcPairs(rtk.toState(), obsArr, 1, 1);
 
         assertArrayEquals(new int[]{0, 1}, rtk.ssat[sat - 1].iflcSlot, "应重选到公共对{0,1}");
         assertTrue(rtk.ssat[sat - 1].iflcPairSwitch, "配对切换必须按周跳处理（重置模糊度/清lock）");
@@ -117,11 +118,11 @@ public class IflcPairNegotiationTest {
         // 两站 slot2 都消失，无任何公共频段对
         Obsd[] obsArr = {obs(sat, 1, 0), obs(sat, 2, 0, 1)};
 
-        RtkCore.negotiateIflcPairs(rtk, obsArr, 1, 1);
+        RtkCore.negotiateIflcPairs(rtk.toState(), obsArr, 1, 1);
 
         assertArrayEquals(new int[]{0, 0}, rtk.ssat[sat - 1].iflcSlot, "无公共对应清零");
         assertTrue(rtk.ssat[sat - 1].iflcPairSwitch);
-        assertArrayEquals(new int[]{0, 1}, RtkCore.iflcSlots(rtk, sat),
+        assertArrayEquals(new int[]{0, 1}, RtkCore.iflcSlots(rtk.toState(), sat),
                 "清零后 iflcSlots 应回退固定槽位 {0, seliflc(nf=2,CMP)=1}");
     }
 
@@ -133,11 +134,11 @@ public class IflcPairNegotiationTest {
         int sat = bdsSat(6);
         Obsd[] obsArr = {obs(sat, 1, 0, 2), obs(sat, 2, 0, 1, 2)};
 
-        RtkCore.negotiateIflcPairs(rtk, obsArr, 1, 1);
+        RtkCore.negotiateIflcPairs(rtk.toState(), obsArr, 1, 1);
 
         assertArrayEquals(new int[]{0, 0}, rtk.ssat[sat - 1].iflcSlot);
         assertFalse(rtk.ssat[sat - 1].iflcPairSwitch);
-        assertArrayEquals(new int[]{0, 1}, RtkCore.iflcSlots(rtk, sat),
+        assertArrayEquals(new int[]{0, 1}, RtkCore.iflcSlots(rtk.toState(), sat),
                 "未协商时回退固定槽位 {0, seliflc(nf=2,CMP)=1}，与C版seliflc一致");
     }
 
@@ -149,12 +150,12 @@ public class IflcPairNegotiationTest {
         // mode=PMODE_DGPS（mode <= PMODE_DGPS 不协商）
         Rtk rtkDgps = rtk(2);
         rtkDgps.opt.mode = Constants.PMODE_DGPS;
-        RtkCore.negotiateIflcPairs(rtkDgps, new Obsd[]{obs(sat, 1, 0, 2), obs(sat, 2, 0, 1, 2)}, 1, 1);
+        RtkCore.negotiateIflcPairs(rtkDgps.toState(), new Obsd[]{obs(sat, 1, 0, 2), obs(sat, 2, 0, 1, 2)}, 1, 1);
         assertArrayEquals(new int[]{0, 0}, rtkDgps.ssat[sat - 1].iflcSlot);
 
         // nr=0（无基准站观测）
         Rtk rtkNoBase = rtk(2);
-        RtkCore.negotiateIflcPairs(rtkNoBase, new Obsd[]{obs(sat, 1, 0, 2)}, 1, 0);
+        RtkCore.negotiateIflcPairs(rtkNoBase.toState(), new Obsd[]{obs(sat, 1, 0, 2)}, 1, 0);
         assertArrayEquals(new int[]{0, 0}, rtkNoBase.ssat[sat - 1].iflcSlot);
     }
 
@@ -173,7 +174,7 @@ public class IflcPairNegotiationTest {
                 obs(gal, 2, 0, 1)
         };
 
-        RtkCore.negotiateIflcPairs(rtk, obsArr, 2, 2);
+        RtkCore.negotiateIflcPairs(rtk.toState(), obsArr, 2, 2);
 
         assertArrayEquals(new int[]{0, 2}, rtk.ssat[bds - 1].iflcSlot);
         assertArrayEquals(new int[]{0, 0}, rtk.ssat[gps - 1].iflcSlot, "仅单站可见不协商");
@@ -187,11 +188,11 @@ public class IflcPairNegotiationTest {
         Obsd[] obsArr = {obs(gal, 1, 0, 1, 2), obs(gal, 2, 0, 1, 2)};
 
         Rtk rtk2 = rtk(2);
-        RtkCore.negotiateIflcPairs(rtk2, obsArr, 1, 1);
+        RtkCore.negotiateIflcPairs(rtk2.toState(), obsArr, 1, 1);
         assertArrayEquals(new int[]{0, 1}, rtk2.ssat[gal - 1].iflcSlot, "nf=2: E1+E5b优先");
 
         Rtk rtk3 = rtk(3);
-        RtkCore.negotiateIflcPairs(rtk3, obsArr, 1, 1);
+        RtkCore.negotiateIflcPairs(rtk3.toState(), obsArr, 1, 1);
         assertArrayEquals(new int[]{0, 2}, rtk3.ssat[gal - 1].iflcSlot, "nf>=3: E1+E5a优先（对齐seliflc(nf>=3,GAL)=2）");
     }
 }

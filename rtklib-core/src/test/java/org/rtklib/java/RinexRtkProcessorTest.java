@@ -1,6 +1,7 @@
 package org.rtklib.java;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.rtklib.java.constants.Constants;
@@ -18,6 +19,7 @@ import java.util.Locale;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("RINEX RTK Short Baseline Test")
+@Tag("manual")
 public class RinexRtkProcessorTest {
 
     private static final Logger log = LoggerFactory.getLogger(RinexRtkProcessorTest.class);

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Assumptions;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("Urban Canyon RTK Diagnostic Test - 三组城市峡谷数据深度诊断")
+@Tag("manual")
 public class UrbanCanyonRtkDiagTest {
 
     private static final Logger log = LoggerFactory.getLogger(UrbanCanyonRtkDiagTest.class);

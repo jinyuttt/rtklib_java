@@ -132,6 +132,7 @@ public class RtkProcessorTest {
     @Test
     @DisplayName("3. RTK from file path")
     void testRtkFromFilePath() throws Exception {
+        skipIfNoData();
         PrcOpt opt = RtkProcessor.createDefaultOpt();
         RtkProcessor rtk = new RtkProcessor(opt);
         RtkProcessor.RtkResult result = rtk.process(ROVER_PATH, BASE_PATH);
@@ -157,6 +158,7 @@ public class RtkProcessorTest {
     @Test
     @DisplayName("5. Write .pos file")
     void testWritePosFile() throws Exception {
+        skipIfNoData();
         String posFile = RESULT_DIR + "\\rtk_processor_output.pos";
 
         PrcOpt opt = RtkProcessor.createDefaultOpt();
@@ -195,6 +197,7 @@ public class RtkProcessorTest {
     @Test
     @DisplayName("6. RTK with OutputStream")
     void testRtkWithOutputStream() throws Exception {
+        skipIfNoData();
         String posFile = RESULT_DIR + "\\rtk_processor_stream.pos";
         PrcOpt opt = RtkProcessor.createDefaultOpt();
 
