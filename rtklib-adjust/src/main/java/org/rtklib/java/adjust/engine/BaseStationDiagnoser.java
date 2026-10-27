@@ -20,6 +20,28 @@ public class BaseStationDiagnoser {
     private final Map<String, BaseStationDiagnosis> diagnosedCache = new LinkedHashMap<>();
     private final Set<String> notifiedBases = new LinkedHashSet<>();
 
+    /** 各基线的 Baarda 检验量统计，用于 k ≥ 3 时按残差定位异常基站。 */
+    private final Map<String, ResidualStat> residualStats = new LinkedHashMap<>();
+
+    /** Baarda w-test 临界值（α = 0.001，双侧）。 */
+    private static final double BAARDA_CRITICAL = 3.29;
+
+    private static final class ResidualStat {
+        int samples;
+        double sumMaxBaarda;
+        double maxBaarda;
+
+        void add(double w) {
+            samples++;
+            sumMaxBaarda += w;
+            if (w > maxBaarda) maxBaarda = w;
+        }
+
+        double meanMaxBaarda() {
+            return samples > 0 ? sumMaxBaarda / samples : 0.0;
+        }
+    }
+
     private final Deque<Double> sigma0Window = new ArrayDeque<>();
     private int highSigma0Count = 0;
     private double sigma0Sum = 0;
@@ -44,11 +66,13 @@ public class BaseStationDiagnoser {
     public void clearDiagnosis(String baseId) {
         diagnosedCache.remove(baseId);
         notifiedBases.remove(baseId);
+        residualStats.remove(baseId);
     }
 
     public void clearAllDiagnosis() {
         diagnosedCache.clear();
         notifiedBases.clear();
+        residualStats.clear();
         sigma0Window.clear();
         highSigma0Count = 0;
         sigma0Sum = 0;
@@ -61,6 +85,32 @@ public class BaseStationDiagnoser {
 
     public boolean isDiagnosed(String baseId) {
         return diagnosedCache.containsKey(baseId);
+    }
+
+    /**
+     * 喂入平差结果，并附带与 {@code v} / {@code baardaT} 顺序一致的基站标识。
+     * 用于 k ≥ 3 时按残差定位异常基站（{@link #identifyByResidual()}）。
+     */
+    public void feedAdjustResult(AdjustResult result, String[] baseIds) {
+        accumulateResiduals(result, baseIds);
+        feedAdjustResult(result);
+    }
+
+    private void accumulateResiduals(AdjustResult result, String[] baseIds) {
+        if (result == null || !result.success || baseIds == null) return;
+        double[] w = result.baardaT;
+        if (w == null) return;
+
+        int k = Math.min(baseIds.length, result.usedBaselineCount);
+        for (int i = 0; i < k; i++) {
+            int idx = 3 * i;
+            if (idx + 2 >= w.length) break;
+            String id = baseIds[i];
+            if (id == null) continue;
+            double maxT = Math.max(Math.abs(w[idx]),
+                    Math.max(Math.abs(w[idx + 1]), Math.abs(w[idx + 2])));
+            residualStats.computeIfAbsent(id, x -> new ResidualStat()).add(maxT);
+        }
     }
 
     public void feedAdjustResult(AdjustResult result) {
@@ -175,8 +225,51 @@ public class BaseStationDiagnoser {
         return results;
     }
 
-    private List<String> identifyByResidual() {
-        return List.of();
+    /**
+     * 按残差定位异常基站（k ≥ 3 场景）。
+     *
+     * <p>判据：统计各基线三维分量中最大的 Baarda 检验量的历元均值。若某基站
+     * 的均值超过 w-test 临界值，且显著高于其余基站的中位数（2 倍以上），
+     * 则判为异常。后者可避免"整个网都差"时误判单站。
+     */
+    List<String> identifyByResidual() {
+        Map<String, Double> meanBaarda = new LinkedHashMap<>();
+        for (Map.Entry<String, ResidualStat> e : residualStats.entrySet()) {
+            if (e.getValue().samples > 0) {
+                meanBaarda.put(e.getKey(), e.getValue().meanMaxBaarda());
+            }
+        }
+        if (meanBaarda.size() < 3) {
+            return List.of();
+        }
+
+        String worstId = null;
+        double worstVal = -1.0;
+        for (Map.Entry<String, Double> e : meanBaarda.entrySet()) {
+            if (e.getValue() > worstVal) {
+                worstVal = e.getValue();
+                worstId = e.getKey();
+            }
+        }
+        if (worstId == null || worstVal <= BAARDA_CRITICAL) {
+            return List.of();
+        }
+
+        final String worst = worstId;
+        double[] others = meanBaarda.entrySet().stream()
+                .filter(e -> !e.getKey().equals(worst))
+                .mapToDouble(Map.Entry::getValue)
+                .sorted()
+                .toArray();
+        double medianOthers = (others.length % 2 == 1)
+                ? others[others.length / 2]
+                : 0.5 * (others[others.length / 2 - 1] + others[others.length / 2]);
+
+        List<String> anomalous = new ArrayList<>();
+        if (worstVal > Math.max(BAARDA_CRITICAL, 2.0 * medianOthers)) {
+            anomalous.add(worstId);
+        }
+        return anomalous;
     }
 
     private List<String> identifyBySpp() {

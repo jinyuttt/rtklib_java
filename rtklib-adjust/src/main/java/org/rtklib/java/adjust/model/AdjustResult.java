@@ -34,6 +34,15 @@ public class AdjustResult {
 
     public final double protectionLevel;
 
+    /**
+     * 假固定嫌疑基站标识（仅当 {@link #reliabilityGrade} == SUSPECT 时非 null）。
+     *
+     * <p>由基线间较差超过阈值、再按 {@code ratio × numSat} 取弱者得到，
+     * <b>只表示该基线的模糊度固定结果可疑</b>，不代表该基站发生了位移。</p>
+     *
+     * <p>基站位移的判定在独立通道：{@code BaselineConsistencyChecker.Report#baseDrifts}，
+     * 由跨历元漂移反算，与本字段不可混用。</p>
+     */
     public final String suspectBaseId;
 
     private AdjustResult(String epochTag, double[] dx, double[][] Dx, double[] v,

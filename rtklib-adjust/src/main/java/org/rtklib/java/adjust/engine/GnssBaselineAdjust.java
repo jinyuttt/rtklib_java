@@ -6,46 +6,89 @@ import org.ejml.simple.SimpleMatrix;
 import org.rtklib.java.adjust.covariance.CovAssembler;
 import org.rtklib.java.adjust.model.AdjustResult;
 import org.rtklib.java.adjust.model.BaselineEpoch;
+import org.rtklib.java.adjust.model.MultiBaselineConfig;
 import org.rtklib.java.adjust.model.ReliabilityGrade;
 import org.rtklib.java.data.CoordType;
 import org.rtklib.java.data.Position;
 
 public class GnssBaselineAdjust {
 
-    private static final double VERIFIED_THRESHOLD = 0.02;
-    private static final double CROSS_CHECKED_THRESHOLD = 0.05;
-    private static final double SUSPECT_THRESHOLD = 0.05;
-    private static final double PL_K_VERIFIED = 2.0;
-    private static final double PL_K_CROSS_CHECKED = 3.0;
-    private static final double PL_K_UNVERIFIED = 6.0;
-    private static final double PL_K_SUSPECT = 10.0;
-    private static final double CROSS_CHECKED_COV_INFLATE = 4.0;
+    /**
+     * 交叉验证与保护级策略。
+     *
+     * <p>所有阈值与系数均来自 {@link MultiBaselineConfig.CrossValidationConfig}，
+     * 不再硬编码，使配置项真正生效。</p>
+     *
+     * @param verifiedThreshold        基线间较差低于此值判为一致 (m)
+     * @param crossCheckedThreshold    低于此值判为可交叉验证 (m)
+     * @param suspectThreshold         达到此值判为可疑 (m)
+     * @param plKVerified              一致时的保护级系数
+     * @param plKCrossChecked          可交叉验证时的保护级系数
+     * @param plKUnverified            未验证时的保护级系数
+     * @param plKSuspect               可疑时的保护级系数
+     * @param crossCheckedCovInflate   可交叉验证档的协方差膨胀倍数
+     */
+    public record Policy(
+            double verifiedThreshold,
+            double crossCheckedThreshold,
+            double suspectThreshold,
+            double plKVerified,
+            double plKCrossChecked,
+            double plKUnverified,
+            double plKSuspect,
+            double crossCheckedCovInflate
+    ) {
+        public static Policy defaults() {
+            return new Policy(0.02, 0.05, 0.05, 2.0, 3.0, 6.0, 10.0, 4.0);
+        }
+
+        public static Policy fromConfig(MultiBaselineConfig config) {
+            if (config == null || config.crossValidation() == null) return defaults();
+            MultiBaselineConfig.CrossValidationConfig c = config.crossValidation();
+            return new Policy(c.verifiedThreshold(), c.crossCheckedThreshold(),
+                    c.suspectThreshold(), c.plKVerified(), c.plKCrossChecked(),
+                    c.plKUnverified(), c.plKSuspect(), c.crossCheckedCovInflate());
+        }
+
+        public double plK(ReliabilityGrade grade) {
+            return switch (grade) {
+                case VERIFIED -> plKVerified;
+                case CROSS_CHECKED -> plKCrossChecked;
+                case SUSPECT -> plKSuspect;
+                default -> plKUnverified;
+            };
+        }
+    }
 
     public static AdjustResult adjust(BaselineEpoch epoch) {
-        return adjust(epoch, false);
+        return adjust(epoch, false, Policy.defaults());
     }
 
     public static AdjustResult adjust(BaselineEpoch epoch, boolean qualityWeight) {
+        return adjust(epoch, qualityWeight, Policy.defaults());
+    }
+
+    public static AdjustResult adjust(BaselineEpoch epoch, boolean qualityWeight, Policy policy) {
+        Policy p = policy != null ? policy : Policy.defaults();
         int k = epoch.count;
         if (k == 0) {
             return AdjustResult.failure(epoch.epochTag, 0, "无有效FIX基线");
         }
 
         if (k == 1) {
-            return adjustSingle(epoch, qualityWeight);
+            return adjustSingle(epoch, qualityWeight, p);
         }
 
-        CrossValidation cv = crossValidateEarly(epoch);
+        CrossValidation cv = crossValidateEarly(epoch, p);
 
         return switch (cv.grade) {
-            case VERIFIED -> adjustVerified(epoch, qualityWeight, cv);
-            case CROSS_CHECKED -> adjustCrossChecked(epoch, qualityWeight, cv);
-            case SUSPECT -> adjustSuspect(epoch, qualityWeight, cv);
-            default -> adjustSingle(epoch, qualityWeight);
+            case VERIFIED, CROSS_CHECKED -> adjustWithGrade(epoch, qualityWeight, cv, p);
+            case SUSPECT -> adjustSuspect(epoch, qualityWeight, cv, p);
+            default -> adjustSingle(epoch, qualityWeight, p);
         };
     }
 
-    private static AdjustResult adjustSingle(BaselineEpoch epoch, boolean qualityWeight) {
+    private static AdjustResult adjustSingle(BaselineEpoch epoch, boolean qualityWeight, Policy p) {
         int k = epoch.count;
         if (k == 0) {
             return AdjustResult.failure(epoch.epochTag, 0, "无有效FIX基线");
@@ -87,6 +130,7 @@ public class GnssBaselineAdjust {
             double[] baardaT;
             SimpleMatrix Qv;
             double[][] Dx;
+            double[] v = null;
 
             if (df == 0) {
                 sigma0 = Double.NaN;
@@ -95,7 +139,7 @@ public class GnssBaselineAdjust {
                 Dx = simpleMatrixTo2d(NInv);
             } else {
                 SimpleMatrix vMat = H.mult(dxMat).minus(l);
-                double[] v = new double[m];
+                v = new double[m];
                 for (int i = 0; i < m; i++) v[i] = vMat.get(i, 0);
 
                 double vRv = vMat.transpose().mult(RInv).mult(vMat).get(0, 0);
@@ -115,9 +159,9 @@ public class GnssBaselineAdjust {
                 Dx = simpleMatrixTo2d(NInv.scale(sigma0Sq));
             }
 
-            double pl = computeProtectionLevel(Dx, PL_K_UNVERIFIED);
+            double pl = computeProtectionLevel(Dx, p.plKUnverified());
 
-            return AdjustResult.success(epoch.epochTag, dx, Dx, null,
+            return AdjustResult.success(epoch.epochTag, dx, Dx, v,
                     sigma0, df, Qv, baardaT, p01Xyz, k,
                     ReliabilityGrade.UNVERIFIED, 0.0, pl, null);
 
@@ -126,18 +170,8 @@ public class GnssBaselineAdjust {
         }
     }
 
-    private static AdjustResult adjustVerified(BaselineEpoch epoch, boolean qualityWeight,
-                                                CrossValidation cv) {
-        return adjustWithGrade(epoch, qualityWeight, cv, 1.0);
-    }
-
-    private static AdjustResult adjustCrossChecked(BaselineEpoch epoch, boolean qualityWeight,
-                                                     CrossValidation cv) {
-        return adjustWithGrade(epoch, qualityWeight, cv, CROSS_CHECKED_COV_INFLATE);
-    }
-
     private static AdjustResult adjustSuspect(BaselineEpoch epoch, boolean qualityWeight,
-                                                CrossValidation cv) {
+                                               CrossValidation cv, Policy p) {
         if (cv.suspectBaseId != null && epoch.count >= 2) {
             BaselineEpoch.BaselineEntry[] filtered =
                     new BaselineEpoch.BaselineEntry[epoch.count - 1];
@@ -151,7 +185,7 @@ public class GnssBaselineAdjust {
                 BaselineEpoch cleanEpoch = new BaselineEpoch(epoch.epochTag,
                         java.util.Arrays.copyOf(filtered, n));
 
-                AdjustResult cleanResult = adjustSingle(cleanEpoch, qualityWeight);
+                AdjustResult cleanResult = adjustSingle(cleanEpoch, qualityWeight, p);
 
                 if (cleanResult.success) {
                     double pl = Math.max(cleanResult.protectionLevel, cv.maxDist);
@@ -164,11 +198,11 @@ public class GnssBaselineAdjust {
             }
         }
 
-        return adjustWithGrade(epoch, qualityWeight, cv, CROSS_CHECKED_COV_INFLATE * 4);
+        return adjustWithGrade(epoch, qualityWeight, cv, p);
     }
 
     private static AdjustResult adjustWithGrade(BaselineEpoch epoch, boolean qualityWeight,
-                                                  CrossValidation cv, double covInflateFactor) {
+                                                 CrossValidation cv, Policy p) {
         int k = epoch.count;
         int m = 3 * k;
         int n = 3;
@@ -179,29 +213,24 @@ public class GnssBaselineAdjust {
             SimpleMatrix H = CovAssembler.assembleDesignMatrix(epoch);
             SimpleMatrix R = CovAssembler.assembleGlobalR(epoch, qualityWeight);
 
-            if (covInflateFactor > 1.0 && cv.suspectBaseId != null && k >= 2) {
-                int suspectIdx = -1;
-                for (int i = 0; i < k; i++) {
-                    if (epoch.baselines[i].baseId.equals(cv.suspectBaseId)) {
-                        suspectIdx = i;
-                        break;
-                    }
-                }
-                if (suspectIdx >= 0) {
-                    int base = 3 * suspectIdx;
-                    for (int i = 0; i < 3; i++) {
-                        for (int j = 0; j < 3; j++) {
-                            R.set(base + i, base + j, R.get(base + i, base + j) * covInflateFactor);
+            if (cv.inflate > 1.0 && k >= 2) {
+                int inflateIdx = -1;
+                if (cv.suspectBaseId != null) {
+                    for (int i = 0; i < k; i++) {
+                        if (epoch.baselines[i].baseId.equals(cv.suspectBaseId)) {
+                            inflateIdx = i;
+                            break;
                         }
                     }
                 }
-            } else if (covInflateFactor > 1.0 && k >= 2) {
-                int weakIdx = findWeakestBaseline(epoch);
-                if (weakIdx >= 0) {
-                    int base = 3 * weakIdx;
+                if (inflateIdx < 0) {
+                    inflateIdx = findWeakestBaseline(epoch);
+                }
+                if (inflateIdx >= 0) {
+                    int base = 3 * inflateIdx;
                     for (int i = 0; i < 3; i++) {
                         for (int j = 0; j < 3; j++) {
-                            R.set(base + i, base + j, R.get(base + i, base + j) * covInflateFactor);
+                            R.set(base + i, base + j, R.get(base + i, base + j) * cv.inflate);
                         }
                     }
                 }
@@ -266,16 +295,7 @@ public class GnssBaselineAdjust {
                 Dx = simpleMatrixTo2d(DxMat);
             }
 
-            double plK;
-            switch (cv.grade) {
-                case VERIFIED -> plK = PL_K_VERIFIED;
-                case CROSS_CHECKED -> plK = PL_K_CROSS_CHECKED;
-                case UNVERIFIED -> plK = PL_K_UNVERIFIED;
-                case SUSPECT -> plK = PL_K_SUSPECT;
-                default -> plK = PL_K_UNVERIFIED;
-            }
-
-            double pl = computeProtectionLevel(Dx, plK);
+            double pl = computeProtectionLevel(Dx, p.plK(cv.grade));
             if (cv.grade == ReliabilityGrade.SUSPECT) {
                 pl = Math.max(pl, cv.maxDist);
             }
@@ -289,7 +309,7 @@ public class GnssBaselineAdjust {
         }
     }
 
-    private static CrossValidation crossValidateEarly(BaselineEpoch epoch) {
+    private static CrossValidation crossValidateEarly(BaselineEpoch epoch, Policy p) {
         int k = epoch.count;
 
         double maxDist = 0.0;
@@ -311,21 +331,31 @@ public class GnssBaselineAdjust {
 
         ReliabilityGrade grade;
         String suspectBaseId = null;
+        double inflate = 1.0;
 
-        if (maxDist < VERIFIED_THRESHOLD) {
+        if (maxDist < p.verifiedThreshold()) {
             grade = ReliabilityGrade.VERIFIED;
-        } else if (maxDist < CROSS_CHECKED_THRESHOLD) {
+        } else if (maxDist < p.crossCheckedThreshold()) {
             grade = ReliabilityGrade.CROSS_CHECKED;
-        } else if (maxDist < SUSPECT_THRESHOLD) {
+            inflate = p.crossCheckedCovInflate();
+        } else if (maxDist < p.suspectThreshold()) {
+            // 可交叉验证的上限到可疑阈值之间的过渡带：仍可解，但协方差加倍膨胀
             grade = ReliabilityGrade.CROSS_CHECKED;
+            inflate = p.crossCheckedCovInflate() * 4.0;
         } else {
             grade = ReliabilityGrade.SUSPECT;
+            inflate = p.crossCheckedCovInflate() * 4.0;
             suspectBaseId = identifySuspect(epoch, worstI, worstJ);
         }
 
-        return new CrossValidation(grade, maxDist, 0.0, suspectBaseId);
+        return new CrossValidation(grade, maxDist, 0.0, suspectBaseId, inflate);
     }
 
+    /**
+     * 在两条差异最大的基线中挑出<b>假固定</b>嫌疑者：取 {@code ratio × numSat} 较小者。
+     *
+     * <p>注意这只是"哪条基线更可能是假固定"的启发式，不能用来判定基站位移。</p>
+     */
     private static String identifySuspect(BaselineEpoch epoch, int i, int j) {
         double ratioI = epoch.baselines[i].solData.ratio;
         double ratioJ = epoch.baselines[j].solData.ratio;
@@ -390,5 +420,6 @@ public class GnssBaselineAdjust {
     }
 
     private record CrossValidation(ReliabilityGrade grade, double maxDist,
-                                    double protectionLevel, String suspectBaseId) {}
+                                   double protectionLevel, String suspectBaseId,
+                                   double inflate) {}
 }
