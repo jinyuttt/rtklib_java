@@ -19,7 +19,7 @@ RTKLIB 的 Java 移植版本，基于 [RTKLIB 2.5.0](https://github.com/tomojita
 | SPP | `PMODE_SINGLE` | 米级 | RTCM3 / RINEX |
 | RTK | `PMODE_KINEMA` / `PMODE_STATIC` / `PMODE_MOVEB` | 厘米~毫米 | RTCM3 / RINEX |
 | PPP | `PMODE_PPP_KINEMA` / `PMODE_PPP_STATIC` | 分米~厘米 | RTCM3 / RINEX |
-| PPP-AR | `PMODE_PPP_KINEMA` + FCB/OSB | 厘米级（模糊度固定） | RINEX + SP3/CLK/FCB |
+| PPP-AR | `PMODE_PPP_KINEMA` + FCB/OSB | 厘米级（模糊度固定） | RTCM3 / RINEX + SP3/CLK/FCB(OSB) |
 | PPP-RTK | `PMODE_PPP_KINEMA` + SSR | 厘米级（快速收敛） | RTCM3 (SSR) |
 
 核心包结构：
@@ -140,7 +140,7 @@ org.rtklib.java.stream
     └── NmeaGgaParser     流式解析器
 ```
 
-> **实时流接入能力**：本项目已打通 NTRIP 2.0 协议，成功验证了 CAS IGS 实时 MSM 观测流（WUH20）的接入与解析；CAS 的 SSR 改正流（`SSRA01CAS0`/`SSRC01CAS0`）也已接入，完成「实时录制 → 离线回放 → 改正应用」闭环验证，实时 PPP-RTK 链路已跑通。Caster 侧用本模块既有 `NtripClient` 反连做互操作验收（`NtripCasterClientInteropTest`），两侧实现互通即证明握手、鉴权、分帧一致。
+> **实时流接入能力**：本项目已打通 NTRIP 2.0 协议，成功验证了 CAS IGS 实时 MSM 观测流（WUH20）的接入与解析；CAS 的 SSR 改正流也已接入，完成「实时录制 → 离线回放 → 改正应用」闭环验证，实时 PPP-RTK 链路已跑通。Caster 侧用本模块既有 `NtripClient` 反连做互操作验收（`NtripCasterClientInteropTest`），两侧实现互通即证明握手、鉴权、分帧一致。
 
 ### rtklib-adjust — 多基线间接平差
 
@@ -148,13 +148,7 @@ org.rtklib.java.stream
 
 支持基站异常诊断：当σ₀持续超限时，自动定位异常基站并通过静态解算给出建议坐标。
 
-**P0~P3优化**（v2.1.1新增）：
-- **P0 基线质量加权**：根据ratio/numSat/age/DOP对低质量FIX基线降权，σ₀更稳健
-- **P1 逐卫星残差提取**：从Ssat提取伪距/载波残差、模糊度、周跳等结构化信息到SolData
-- **P3 H矩阵位置分量提取**：提取设计矩阵中位置分量，反映基线对Rover坐标的实际灵敏度
-- 通过 `PrcOpt.diagMask` 位掩码控制输出，默认关闭，零开销向后兼容
-
-已通过2基站1测站连续9小时RTCM实测数据验证，详见 [技术参考第10~11章](docs/ADJUST_TECHNICAL_REFERENCE.md#10-实测数据验证)。
+已通过2基站1测站连续9小时RTCM实测数据验证。基线质量加权、逐卫星残差与 H 矩阵位置分量等诊断输出，见 [使用说明](docs/ADJUST_USAGE.md)；实测结果见 [技术参考第10~11章](docs/ADJUST_TECHNICAL_REFERENCE.md#10-实测数据验证)。
 
 ```
 org.rtklib.java.adjust
@@ -168,11 +162,7 @@ org.rtklib.java.adjust
 
 面向 FGO（因子图优化）、IMU 预积分与场景自适应的研究模块。与 `rtklib-core` **无代码级耦合**（仅依赖 EJML/slf4j），独立演进、不参与主模块依赖链；API 可能随研究进展变动，生产集成请优先使用 `rtklib-core`。
 
-- **FGO 框架**：滑动窗口优化 + 边缘化 + SwitchVariable
-- **IMU 预积分**：预积分量与协方差传播
-- **IACE 聚类 / 场景自适应**：FE-GUT 数据集验证
-
-验证：FE-GUT 仿真数据集（`PipelineIntegrationTest`、`PreintegrationTest`）。
+功能清单见 [FEATURES.md](rtklib-research/FEATURES.md)，用法见 [USAGE.md](rtklib-research/USAGE.md)，开发状态与缺口见 [DEVELOPMENT.md](rtklib-research/DEVELOPMENT.md)。
 
 ### rtklib-otl — 海潮负荷BLQ系数生成
 
@@ -199,49 +189,52 @@ org.rtklib.java.otl
 
 ### rtklib-vrs — 虚拟参考站生成
 
-基于真实基站 RTCM3 数据生成 VRS（Virtual Reference Station）虚拟参考站数据。单基站差分改正 + RTCM3 编码，输出可被标准 NTRIP Client 解码的 RTCM3 文件。
+以单个真实基站的 RTCM3 观测值为输入，在指定虚拟位置合成虚拟参考站（VRS）观测值——基站观测加上几何距离、对流层、电离层差分改正量——再编码为标准 RTCM3 输出，可被通用 RTCM3 解码器（含 NTRIP Client）解析。
 
 - **VRS 改正**：几何距离 + 对流层（Saastamoinen/GMF）+ 电离层（Klobuchar）差分改正
 - **RTCM3 编码**：1005/1006 站坐标、1019/1020/1042/1045 星历、MSM4/MSM5 观测值（1074-1125）
 - **星历池管理**：逐历元按 `|toe − t|` 最近选择星历，避免长文件首历元用错星历
-- **MSM 信号裁剪**：`nsat×nsig > 64` 时按「频点覆盖最大化」贪心选择，保住双频不退化
+- **MSM 分批发送**：`nsat×nsig > 64` 时按卫星分批（每批 ≤ `64/nsig` 颗，`sigmask` 跨批保持一致，`sync` 位串联累积），不裁剪信号，双频不退化
 - **锁相指示**：跨历元维护 `lock` 计数，确保输出 LLI 正确（否则下游 RTK 永远无法 FIX）
 
-验证：真实双站 RTCM3（239 历元 / 15 s）——VRS+测站 RTK 与原始基站+测站 FIX 率均为 91.2%，VRS 设在基站位置时 P/L 逐位一致（max|dL|=0.0000 m）。详见 [VRS 模块设计文档](docs/VRS_MODULE_DESIGN.md)。
+验证：真实双站 RTCM3（239 历元 / 15 s）——原始基站+测站 FIX 77.0%，VRS+测站 FIX 76.6%，VRS 设在基站位置时 P/L 逐位一致。详见 [VRS 模块设计文档](docs/VRS_MODULE_DESIGN.md)。
 
 ### rtklib-joint — 多基线联合 RTK
 
-观测层联合解算：k 条基线的观测值送入**同一个 Kalman 滤波器**，Rover 坐标只出现一次但被 k 组观测同时约束。与 `rtklib-adjust`（结果层平差）互补——平差的数学本质是加权平均，短基线下对精度改善 <1%，属**可靠性**工具；联合解算追求**精度**改善。
+观测层联合解算：k 条基线的观测值送入**同一个 Kalman 滤波器**，Rover 坐标只出现一次但被 k 组观测同时约束。特点是**逐历元实时**、**环境好时精度提高**（共享位置约束加快模糊度收敛、提高 FIX 率）；全部 FIX 后精度与单基线等价。与 `rtklib-adjust`（结果层平差，属可靠性工具）互补。
 
-- **状态向量**：Rover 坐标共享 + 各基线模糊度（大气参数维度划分见设计文档 §2.1.1）
+- **状态向量**：Rover 坐标共享 + 各基线模糊度（大气维度划分见设计文档 §2.1.1）
 - **历元对齐**：`EpochAligner` 统一多基站时间标签
-- **分层架构**：`JointRtkProcessor`（观测层）/ `JointProcessor`（解算层）
-- **基站可靠性**：`BaseStationMonitor` 检测基站坐标突变与漂移
+- **分层架构**：`JointRtkProcessor`（外壳：数据源 + 解码 + 输出）/ `JointProcessor` → `JointCore`（内核：算法入口与联合 rtkpos 主循环）
+- **输入双模式**：`feedRover`/`feedBase` 实时字节流（RTCM3），`process`/`processRinex` 离线文件
 
-状态：**设计定稿 v1.1，实现进行中**。§2.1.1 的「每基线一份大气 → 跨基线共享大气」维度修正**尚未落地**（当前 `JointRtk.II()/IT()` 仍是每基线独立偏移），真实数据测试见 `JointRtkRealDataTest`。详见 [联合 RTK 设计文档](docs/JOINT_RTK_DESIGN.md)、[joint vs adjust 对比](docs/JOINT_VS_ADJUST_ANALYSIS.md)。
+状态：**核心实现已完成并经真实数据验证**（2 基站 + 1 测站 RTCM3 单小时 236 历元，单/双基线 FIX 91.5%，与单基线参考 91.2% 持平）。详见 [联合 RTK 设计文档](docs/JOINT_RTK_DESIGN.md)、[joint vs adjust 对比](docs/JOINT_VS_ADJUST_ANALYSIS.md)。
 
 ### rtklib-networkvrs — 多基站网络 VRS
 
 在 `rtklib-vrs` 单基站基础上组网，把每颗卫星的误差分解为**色散项**（电离层）与**非色散项**（对流层+轨道残差），按流动站位置空间插值后生成虚拟观测值，目标是突破单站改正 >30 km 的退化（对标 30~70 km 可靠、FIX≥90%）。
 
 - **多站同步**：`MultiStationSynchronizer` + `SynchronizedEpoch` 统一多基站历元标签
-- **空间插值**：`CorrectionInterpolator` 接口 + `IdwInterpolator`（反距离加权）
-- **误差模型**：`ModelCorrectionProvider` / `StationCorrection` 分离色散与非色散项
+- **网解引擎**：`BaselineNetwork` 组网 → `DdObservationBuilder` 逐基线双差 → `BaselineWindowSolver` 窗口解（宽巷/窄巷 AR）
+- **误差分解**：`NetworkErrorDecomposer` 把双差残差还原为各站相对主站的色散（电离层）/非色散（对流层+轨道）改正
+- **空间插值**：`CorrectionInterpolator` 接口 + `IdwInterpolator`（默认）+ `FkpInterpolator`（平面拟合，站点近共线可回退 IDW）
 - **输出桥接**：`VrsOutputBridge` 复用 `rtklib-vrs` 的 RTCM3 编码（1005/1006、MSM4/MSM5）
-- **数据加载**：`RinexStationLoader` / `RtcmStationLoader` 统一三站以上输入
+- **数据加载**：`RinexStationLoader` / `RtcmStationLoader` / `RinexNavLoader` 统一三站以上输入
+- **MAC 改正合成**：`MacCorrectionBuilder`（档 3 已冻结，只做改正合成，无编码与输出编排）
 
-状态：**档 1 已完成**（多站同步 + IDW 插值 + 相对主站改正 + vrs 输出桥），真实三站 RTCM 数据验证通过；档 2（网解引擎、误差分解、FKP）尚未实现。详见 [网络 VRS 设计文档](docs/NETWORK_VRS_DESIGN.md)。
+状态：**档 1 完成、档 2 已实现、档 3 冻结**。档 1 = 多站同步 + IDW 插值 + 相对主站改正 + VRS 输出桥；档 2 = 网解引擎 + 误差分解 + FKP，真实三站验证，BRDC 下仅宽巷固定，窄巷待 SSR/精密星历；档 3 MAC 仅改正合成。详见 [网络 VRS 设计文档](docs/NETWORK_VRS_DESIGN.md)。
 
 ### rtklib-ext-igs — IGS 专有 RTCM3 扩展
 
 4076 是 RTCM 分配给 IGS 的**专有消息号**（不是 RTCM 通用 SSR），本模块通过 `rtklib-core` 的 `CustomMessageDecoder` 扩展点注册解码器。
 
 - **公共头部**：版本、子类型、历元、更新间隔、多消息指示、IOD SSR、提供者 ID、解算 ID
-- **子类型识别**：卫星级（IM21~IM27 / IM41 / IM101 / IM121 等）与电离层（IM201/IM202）
-- **IM201/IM202 头部**：VTEC 质量指示（9 bit ×0.05 TECU）+ 电离层分层数
+- **子类型识别**：卫星级（IM21~IM127：GPS/GLONASS/Galileo/QZSS/BDS/SBAS × 轨道/钟差/码偏差/相位偏差/URA），并解析轨道类 CRS 指示、相位偏差类一致性指示与卫星数；电离层 IM201/IM202
+- **IM201 球谐**：VTEC 质量指示（9 bit ×0.05 TECU）+ 分层数，逐层层高/阶 N/次 M 与 C/S 系数（int16 ×0.005 TECU）
+- **VTEC 合成**：完全归一化勒让德（Heiskanen & Moritz）→ VTEC 合成 → 穿刺点几何 → 单层 STEC 映射 → 伪距延迟
 - **版本兼容**：标准规定版本为 1，实测 CAS `*CAS1` 流为 0，两者都接受
 
-状态：**骨架（仅公共头部）**。卫星级改正数与 IM201/IM202 球谐系数（C/S）**尚未解析**，协议字段、系数个数公式与 VTEC 合成算法见 [NETWORK_VRS_DESIGN.md §3.4](docs/NETWORK_VRS_DESIGN.md)，标准原文见 [docs/reference/igs_ssr_v1.pdf](docs/reference/igs_ssr_v1.pdf)。
+状态：**IM201 解码闭环**（头部→球谐系数→VTEC/STEC）；4076 卫星级改正数数值未解析，VTEC 未接入定位链路。协议细节见 [NETWORK_VRS_DESIGN.md §3.4](docs/NETWORK_VRS_DESIGN.md)。
 
 ### rtklib-test — 验证与示例
 
@@ -272,7 +265,7 @@ org.rtklib.java.otl
 | [算法修复档案](docs/ALGORITHM_FIX_LOG.md) | FIX-ALG-001~029 逐条 C 依据 / 根因 / 验证（改算法前必读） |
 | [测试用例与数据指南](docs/DATA_GUIDE.md) | 测试规范、测试类总览、数据依赖、优化矩阵测试用例、上传规范 |
 | [轨道模块技术参考](docs/ORBIT_MODULE_REFERENCE.md) | TLE解析、SGP4/SDP4传播、六根数转换、二体传播 |
-| [开发路线图](docs/ROADMAP.md) | 各模块完成度、四梯队（0~3）规划、v3.1.0 封存策略、暂缓与恢复条件 |
+| [开发路线图](docs/ROADMAP.md) | 各模块当前状态、未完成事项（按需激活/冻结/WONTFIX）、暂缓与恢复条件；历史梯队记录归档于 [docs/archive/ROADMAP_v3.3.0.md](docs/archive/ROADMAP_v3.3.0.md) |
 | [自适应引擎设计](docs/gnss-adaptive-design-v3.md) | 场景判定、参数预设、安全机制、日志体系、包结构、测试策略 |
 
 ### 项目级
@@ -306,7 +299,9 @@ org.rtklib.java.otl
 
 | 文档 | 说明 |
 |------|------|
-| — | 研究沙盒（FGO/IMU 预积分/场景自适应），代码含中文 Javadoc，暂无独立文档；验证见 `PipelineIntegrationTest`、`PreintegrationTest` |
+| [功能文档](rtklib-research/FEATURES.md) | 全部功能清单：数据结构、因子图因子表、模糊度算法、后端与场景分类、IMU 预积分 |
+| [使用文档](rtklib-research/USAGE.md) | 环境要求、FE-GUT 数据集准备、EKF/FGO 后端代码示例、测试运行 |
+| [开发文档](rtklib-research/DEVELOPMENT.md) | 模块定位、包级完成度表、核心缺口、FE-GUT 参考项目说明 |
 
 ### rtklib-adjust
 
@@ -319,7 +314,7 @@ org.rtklib.java.otl
 
 | 文档 | 说明 |
 |------|------|
-| [模块设计文档](docs/VRS_MODULE_DESIGN.md) | 实现状态、VRS 改正算法、RTCM3 编码器设计、MSM 信号裁剪与锁相指示、测试策略与实测结果、已踩过的坑 |
+| [模块设计文档](docs/VRS_MODULE_DESIGN.md) | 实现状态、VRS 改正算法、RTCM3 编码器设计、MSM 分批发送与锁相指示、测试策略与实测结果、已踩过的坑 |
 
 ### rtklib-joint
 
@@ -357,17 +352,17 @@ org.rtklib.java.otl
 
 > 直接使用，不会有实质影响，结论明确。有问题提交 Issue 或自行修改后提交 PR。
 
-不涉及定位解算核心逻辑，侧重点在数据获取、格式解析、辅助改正数计算。集成到业务系统时**不直接承担定位精度风险**——`rtklib-vrs` / `rtklib-networkvrs` 产出的是改正数，风险转嫁给下游 RTK，故其风险单列为「中」：
+不涉及定位解算核心逻辑，侧重点在数据获取、格式解析、辅助改正数计算。集成到业务系统时**不直接承担定位精度风险**——`rtklib-vrs` / `rtklib-networkvrs` 产出的是虚拟观测值，风险转嫁给下游 RTK，故其风险单列为「中」：
 
 | 模块 | 功能 | 集成风险 |
 |------|------|----------|
 | `rtklib-stream` | NTRIP客户端 + NTRIP Caster服务端 + 串口通讯 | 极低 — 纯数据流，输出为RTCM字节流 |
 | `rtklib-product` | IGS精密产品自动下载 | 极低 — 纯文件下载，与定位算法解耦 |
-| `rtklib-ext-igs` | IGS 专有 4076 解码（仅公共头部） | 极低 — 纯解码骨架，不产出改正数 |
+| `rtklib-ext-igs` | IGS 专有 4076 解码（公共头部 + IM201 球谐 + VTEC/STEC 合成） | 低 — 产出电离层延迟改正，4076 卫星级数值未解析，未接入定位链路 |
 | `rtklib-otl` | 海潮负荷BLQ系数/位移 | 极低 — mm级改正数，对定位无实质性负面风险 |
 | `rtklib-adjust` | 多基线间接平差 | 低 — 输入为已解算的RTK基线，不修改定位核心 |
-| `rtklib-vrs` | 单基站VRS虚拟观测值生成 | 中 — 输出改正数供下游RTK，编码/锁相错误会直接导致流动站无法FIX |
-| `rtklib-networkvrs` | 多基站网络VRS（档1） | 中 — 依赖 `rtklib-vrs` 编码器，改正插值正确性影响30km以上基线 |
+| `rtklib-vrs` | 单基站VRS虚拟观测值生成 | 中 — 输出虚拟观测值供下游RTK，编码/锁相错误会直接导致流动站无法FIX |
+| `rtklib-networkvrs` | 多基站网络VRS（档 1/2） | 中 — 依赖 `rtklib-vrs` 编码器，改正插值正确性影响30km以上基线 |
 | `rtklib-test` | 验证套件与示例 | 无 — 不被其它模块依赖，仅本地运行 |
 | `rtklib-core`（辅助部分） | 数据解析与模型 | 低 — 不涉及定位解算，子模块可独立使用： |
 
@@ -411,7 +406,7 @@ org.rtklib.java.otl
 
 ### ✅ 已实测验证
 
-以下场景已有公开/私有数据端到端验证，结果与参考解一致：
+以下场景已有公开/私有数据端到端验证（与参考解一致，或已记录实测指标）：
 
 | 场景 | 定位模式 | 数据来源 | 验证方式 |
 |------|----------|----------|----------|
@@ -420,6 +415,8 @@ org.rtklib.java.otl
 | BDS RTCM SPP | SPP | 本地RTCM3 (C) | 逐历元成功 |
 | 短基线 RTK Kinematic | RTK | RINEX2.10 GPS base+rover | vs C版参考结果 |
 | 多系统 RTK Static | RTK-Static | GREAT-PVT RTKFLT (G+E+C+R+J) | 端到端解算 |
+| 中长基线 RTK Static (~42 km) | RTK-Static | 香港SatRef HKWS+HKSL 2024 DOY060 30s | 链路级：2880/2880 历元全通，FIX 率 1.3%，FIX-only 2D RMS 0.106 m |
+| 动态车载 RTK | RTK-Kinematic | PPC-Dataset Tokyo/Nagoya（车载 5Hz）+ UrbanNav Tokyo 2018（车载 10Hz） | Fix/Float 率与 H.RMSE 对照 RTKLIB-EX（`RtkBenchmarkTest`、`DynamicRtkOptTest`） |
 | BDS RTK (RTCM) | RTK | 本地RTCM3 base+rover | 私有数据验证 |
 | 多系统 PPP Static | PPP-Static | GREAT-PVT PPPFLT (G+E+C+R) | 端到端解算 |
 | PPP + GPT3+VMF3 | PPP | 同上 + CODE产品 | 端到端解算 |
@@ -429,6 +426,7 @@ org.rtklib.java.otl
 | PPP-AR 三频 (EWL+WL+NL) | PPP-AR | ALGO 2024 DOY060 + WUM | 固定率 65.7%（1226 历元）/ 2D RMS 3.00 cm（C 参考 3.54 cm） |
 | PPP + GPT3 真网格 | PPP | HKWS / HKSL 2018 DOY157 | U RMS 0.806 / 1.662 m，优于 NMF 基线 |
 | 实时 NTRIP 流 + MSM7 | SPP | WUH20 实时流（CAS） | 262 帧 CRC 全通过；73 历元 SPP 3D 偏差 1.89 m |
+| 实时 PPP-RTK 链路 | PPP-RTK | CAS IGS 实时 SSR 流（录制 → 离线回放） | 链路级：SSR 改正链生效、ENU 与事后产品同量级；AR 受可见卫星数限制未达 FIX |
 | 精密产品读取 | — | IGS CODE WHU (SP3/CLK/IONEX/OSB/ATX) | 文件解析验证 |
 | 多基线间接平差 | Adjust | 本地RTCM3 2基站9小时 | σ₀+Baarda验证 |
 
@@ -441,8 +439,7 @@ org.rtklib.java.otl
 | 场景 | 定位模式 | 数据获取方式 |
 |------|----------|-------------|
 | PPP-AR 24h 静态精度 | PPP-AR | IGS 24h RINEX + CODE MGEX SP3/CLK + WHU UPD，CDDIS 免费注册下载 |
-| 长基线 RTK (>10km) | RTK-Static | IGS 双站 RINEX（如 WTZR+BRUX ~600km），CDDIS 免费注册下载 |
-| 动态车载 RTK | RTK-Kinematic | RTKLIB sample / rtkexplorer F9P 数据 / Google Smartphone Decimeter Challenge |
+| 超长基线 RTK (>100 km) | RTK-Static | IGS 双站 RINEX（如 WTZR+BRUX ~600 km），CDDIS 免费注册下载；10~100 km 中长基线已做链路级验证（见上表），>100 km 仍需梯度参数与精细大气建模 |
 
 > 下载脚本：`test-data/download-igs-data.ps1`（CDDIS 需先配置 [NASA Earthdata Login](https://urs.earthdata.nasa.gov/users/new)）
 
@@ -450,7 +447,6 @@ org.rtklib.java.otl
 
 | 场景 | 定位模式 | 数据获取方式 |
 |------|----------|-------------|
-| PPP-RTK 实时 | PPP-RTK | CAS / 北航 / Galileo HAS / QZSS CLAS 四条线的权限门槛与接入步骤见 [SSR 接入手册](docs/SSR_ACCESS_PLAYBOOK.md) |
 | 三频 RTK/PPP | RTK/PPP | IGS MGEX 三频测站 RINEX（BDS-3 B1c/B2a/B3i 或 GAL E1/E5a/E5b） |
 
 **数据确实稀缺，需自采或社区贡献**：
@@ -484,9 +480,9 @@ org.rtklib.java.otl
 | Compact SSR / CLAS / HAS 解码 | ✅ | 单元测试（CLAS MT4073 子类型 1-12、HAS MT1~MT9）/ CSSRlib 交叉验证 |
 | 多基线间接平差 | ✅ | 真实RTCM实测数据 |
 | VRS 单基站生成 | ✅ | 真实双站 RTCM3（239 历元/15 s），VRS@基站位置 P/L 逐位一致 |
-| 网络 VRS 多基站 | 🟡 档 1 完成 | 真实三站 RTCM；档 2（网解引擎、误差分解、FKP）未实现 |
-| 联合 RTK（joint） | 🟡 实现中 | 设计定稿 v1.1；§2.1.1 大气维度划分修正未落地，真实数据测试 `JointRtkRealDataTest` |
-| IGS SSR 4076 解码 | 🟡 骨架 | 公共头部 + 子类型识别（含 IM201/202 头部）；球谐系数与卫星级改正数未解析 |
+| 网络 VRS 多基站 | 🟡 档 2 部分 | 档 1（IDW）/档 2（网解+误差分解+FKP）已实现并真实三站验证；BRDC 下仅宽巷固定，窄巷待 SSR/精密星历；档 3 MAC 冻结 |
+| 联合 RTK（joint） | 🟡 已实现 | 单/双基线真实数据 FIX 91.5%（与 SBS 91.2% 持平） |
+| IGS SSR 4076 解码 | 🟡 IM201 闭环 | 公共头部 + 子类型识别 + IM201 球谐 + VTEC/STEC 合成；4076 卫星级数值未解析，VTEC 未接入定位链路 |
 | 因子图优化 FGO + IMU 预积分 | ✅ | FE-GUT 仿真数据集 |
 | 轨道模块 + 海潮负荷 | ✅ | Vallado/Fortran 参考对比 |
 | 自适应引擎框架 | ✅ | 14类实现，编译通过；待集成测试验证 |
@@ -495,9 +491,9 @@ org.rtklib.java.otl
 
 **梯队 0/1 ✅ — 性能基准与工程质量**（已完成 2026-10-12）：JMH 微基准 + 端到端计时基线、RtkCore/PppCore 工作数组复用、SLF4J 日志统一、异常捕获改进、SSR 对流层直接改正、34 个关键算法单元测试。
 
-**梯队 2/3 🔴 — 已关闭**：3A Kalman 优化与 3.5B null 消除经 JMH 基准实测后放弃；CI 真实数据回归、CLAS STEC 多项式、场景验证等依赖外部数据/条件，随 v3.1.0 封存整体 WONTFIX。恢复条件见 [开发路线图 §10](docs/ROADMAP.md)。
+**梯队 2/3 🔴 — 已关闭**：3A Kalman 优化与 3.5B null 消除经 JMH 基准实测后放弃；CI 真实数据回归、CLAS STEC 多项式、场景验证等依赖外部数据/条件，随 v3.1.0 封存整体 WONTFIX。恢复条件见 [开发路线图 §2](docs/ROADMAP.md)。
 
-**未实现的C版功能**（设计上不实现）：TCP/UDP服务端、接收机原始协议（u-blox/NovAtel等）、NMEA输出、GPX/KML输出、大地水准面/基准转换。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
+**项目设计不做**（功能定义不符合本项目定位，非缺口、非暂缓）：TCP 客户端、TCP/UDP 服务端、接收机原始协议（u-blox/NovAtel 等）、NMEA 输出、GPX/KML 输出、大地水准面/基准转换。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
 > **注**：NTRIP Caster 已不在上表内——`rtklib-stream` 于 v3.3.0 实现了 Caster 服务端（Sourcetable/订阅/鉴权/GGA 上行），这是相对 C 版的能力扩展，非移植项。
 
@@ -507,14 +503,6 @@ org.rtklib.java.otl
 - [RTKLIB Manual](http://www.rtklib.com/rtklib_document.htm) - 算法原理与使用说明
 
 > C版对齐状态、方法命名规则、测试验证状态详见 [技术文档](docs/RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第16~18章。
-
-## 补充说明
-
-**rtklib-stream 模块**：`rtklib-stream` 提供 NTRIP 客户端、NTRIP Caster 服务端、GGA 解析和串口通讯能力，是实时数据接入与分发的推荐方式。NTRIP 客户端支持 SSL/TLS、自动重连和 Sourcetable 查询；串口客户端基于 jSerialComm 实现跨平台支持。两者通过统一的 `StreamListener` 接口回调数据，上层应用收到数据后通过 `PppProcessor.feed()` 或 `RtkProcessor.feed()` 将字节流喂入核心算法即可。
-
-**NTRIP Caster 与 VRS 的配合**：Caster 不生成改正数据，典型用法是「应用层用 VRS 生成器按流动站 GGA 合成虚拟站数据 → `RtcmSink` 收帧 → `NtripCaster.publish(mountpoint, frame)` 分发」。上行 GGA 经 `NtripCasterListener.onGga()` 回调，由 `NmeaGgaParser` 解析后 `toVrsPosition()` 给出弧度坐标与椭球高，可直接作为 VRS 生成器的目标位置。
-
-**rtklib-test 中的 NtripClient**：`rtklib-test` 中的 `NtripClient` 是早期为方便 PPP-RTK 实时测试而编写的简易版本，功能已被 `rtklib-stream` 模块取代，保留仅为向后兼容。新代码应使用 `org.rtklib.java.stream.NtripClient`。
 
 ## License
 

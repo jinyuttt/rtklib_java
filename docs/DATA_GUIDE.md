@@ -300,8 +300,8 @@ List<String> files = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile
 |------|-----------|----------|
 | **深城市/峡谷RTK** | 更极端场景（天空角<30°，多路径严重）的base+rover对 | ✅ |
 | **高速动态RTK** | PPC-Dataset/UrbanNav为车载（~30km/h），缺高速(>80km/h)动态轨迹base+rover对 | ✅ |
-| **长基线RTK (>10km)** | 长基线base+rover，需估计大气参数 | ✅ |
-| **PPP-RTK实时** | SSR实时流数据 | ✅ |
+| **超长基线RTK (>100km)** | >100km的base+rover对，需梯度参数与精细大气建模；10~100km中长基线已做链路级验证（见 §2 阶段2长基线实测记录） | ✅ |
+| **PPP-RTK实时** | CAS IGS SSR 流已做「录制 → 回放」链路级验证；缺 Galileo HAS / QZSS CLAS 等其它 SSR 源的可公开样本 | ✅ |
 | **森林/林冠** | 树冠遮挡，信噪比低 | ✅ |
 | **室内定位** | 严重遮挡 | ✅ |
 
@@ -1085,8 +1085,8 @@ List<String> files = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile
 **数据公开可得，缺集成验证**（可自行下载，优先级高）：
 
 1. **PPP-AR 24h 静态精度** — IGS 24h RINEX + CODE MGEX SP3/CLK + WHU UPD，CDDIS 免费注册下载
-2. **长基线 RTK (>10km)** — IGS 双站 RINEX（如 WTZR+BRUX ~600km），CDDIS 免费注册下载
-3. **车载动态 RTK** — RTKLIB sample / rtkexplorer F9P 数据 / Google Smartphone Decimeter Challenge
+2. **超长基线 RTK (>100km)** — IGS 双站 RINEX（如 WTZR+BRUX ~600km），CDDIS 免费注册下载；10~100km 中长基线已做链路级验证（HKWS+HKSL ~42km，见 §2）
+3. **高速动态 RTK (>80 km/h)** — PPC-Dataset/UrbanNav 车载数据（~30 km/h）已实测（见 §2），缺高速轨迹的 base+rover 对
 
 > 下载脚本：`test-data/download-igs-data.ps1`（CDDIS 需先配置 [NASA Earthdata Login](https://urs.earthdata.nasa.gov/users/new)）
 >
