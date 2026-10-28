@@ -1480,6 +1480,16 @@ private RtkResult buildResult() {
 
 详见第9章"待完善项"。
 
+### 18.4 `valpos()` 不是质量控制点
+
+C 版 `valpos()` 只做大残差诊断输出（写 `errmsg`），**始终返回 1**，不会因后验残差丢弃历元。
+Java 版与之一致（始终返回 true）。移植或调试时不要把 `valpos()` 当作可用的剔除点。
+
+真正的质量控制在 `ddres()` 的前端剔除中：`maxinno` 超限置 `vsat=0, rejc++`，模糊度刚初始化时
+`threshadj=10`；模糊度管理在 `udbias()`（`rejc>=2` 或周跳时重置，`lock=-minlock, icbias=0`）；
+IFLC 模式观测噪声在 `varerr()` 中 `var *= SQR(3.0)`。以上均已与 C 版逐值对齐
+（Java 早期移植曾遗漏前端剔除，2026-07-19 补齐，见 ALGORITHM_FIX_LOG.md FIX-ALG-005）。
+
 ---
 
 ## 13. 方法命名规则

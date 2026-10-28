@@ -12,7 +12,7 @@
 | Phase 1 | 模块骨架 + VRS 改正算法 | ✅ 完成 |
 | Phase 2 | RTCM3 编码器（站坐标 1005/1006 + 天线描述 1032/1033 + 星历） | ✅ 完成 |
 | Phase 3 | RTCM3 编码器（MSM 观测值） | ✅ 完成（MSM4/MSM5） |
-| Phase 4 | MSM7 / SSR / 1230 / 多基站 | ⬜ 未开始 |
+| Phase 4 | MSM7 / SSR / 1230 / 多基站 | 🟡 部分完成：多基站已独立立项并落地为 `rtklib-networkvrs`；MSM7 编码、SSR 改正接入、1230 未做 |
 
 **实测结论**（239 历元 BDS 双站数据，2026-10-28 重测，详见 §9.4）：
 
@@ -361,7 +361,7 @@ MSM4 与 MSM5 的区别：
 
 映射缺失会导致 `toSigid` 返回 0、该信号被**静默跳过**，最终编码出的观测值为 0。因此 `code2obs` 必须覆盖全部 `CODE_*` 常量。BDS 尤其容易漏（`CODE_L2I=40 → "2I"`、`CODE_L7I=27 → "7I"`、`CODE_L6I=42 → "6I"`、`CODE_L5P=58 → "5P"`、`CODE_L1P=2 → "1P"`、`CODE_L7D=61 → "7D"`）。
 
-##### MSM 容量限制与信号裁剪（`selectSignals`）
+##### MSM 容量限制与分批发送
 
 RTCM MSM 的 `cellmask` 长度为 `nsat × nsig` 位，解码端（RTKLIB `decode_msm_head`）强制 `nsat × nsig ≤ 64`，超出即整条消息被丢弃。
 
@@ -369,16 +369,24 @@ RTCM MSM 的 `cellmask` 长度为 `nsat × nsig` 位，解码端（RTKLIB `decod
 
 | 方案 | 做法 | 本模块实现 |
 |------|------|-----------|
-| 分批发送 | 按 `maxNsat = 64 / nsig` 切分卫星，多条消息用 `sync` 位串联累积 | ⬜ 未实现 |
-| 信号裁剪 | 减少信号数至 `nsig ≤ 64 / nsat` | ✅ 已实现 |
+| 分批发送 | 按 `maxNsat = 64 / nsig` 切分卫星，多条消息用 `sync` 位串联累积 | ✅ **已实现（主路径）** |
+| 信号裁剪 | 减少信号数至 `nsig ≤ 64 / nsat` | 🟡 仅作兜底（调用方未分批时才走） |
 
-当前采用**信号裁剪**，且裁剪策略为「频点覆盖最大化」的贪心选择，而非简单删除高位索引：
+当前主路径是**按卫星分批**（`VrsGenerator.encodeSystemBatched` → `Rtcm3MsmEncoder.encodeMsmBatch`）：
+
+- 每批最多 `floor(64 / nsig)` 颗卫星，`sigmask` 跨批保持全局一致（信号一个不裁）
+- 非末批 `sync=1`、末批 `sync=0`，解码端累积为完整历元
+- `genMsmSat` / `genMsmSig` 跳过 `satInd==0` 的非本批卫星
+- 实测：BDS 13 星 × 6 信号 = 78 → `2 batches of <=10 sats`，解码端 10+3=13 颗累积正确，13×6=78 个 cell 完整恢复
+- 效果：双频不退化（对比下面旧裁剪路径会丢掉 B2b/B1C）
+
+**兜底路径：信号裁剪**（`selectSignals`）。仅当调用方未分批且 `nsat×nsig > 64` 时触发，策略为「频点覆盖最大化」贪心选择，而非简单删除高位索引：
 
 - 权重：频点索引 `fi ∈ {0,1}` → 1000，`fi ∈ [2, NFREQ)` → 100，扩展频点 → 1
 - 每轮选出「能为最多卫星补齐尚未覆盖频点」的信号
 - 效果：优先保住主频点双频组合，避免退化为单频
 
-BDS 实例（13 星 → `maxSig = 64/13 = 4`，实测选取结果）：
+BDS 实例（13 星 → `maxSig = 64/13 = 4`，兜底裁剪时的选取结果）：
 
 ```
 裁剪前 6 信号: 2I(fi0) 7I(fi1) 7D(fi1) 5P(fi2) 6I(fi3) 1P(fi4)
@@ -386,6 +394,8 @@ BDS 实例（13 星 → `maxSig = 64/13 = 4`，实测选取结果）：
 ```
 
 频点 0(B1I)、1(B2I)、3(B3I) 保留，丢掉 B2b(5P) 与 B1C(1P)。注意 7D 与 7I 同为 B2I 频点，二者是同一载波的不同伪码分量——按「频点覆盖最大化」规则，先选样本数更多的 7D（约 11 星/历元），再选 7I（约 2 星/历元），因此出现同频点两个信号并存、而独立频点 5P 被裁掉的结果。B1I+B2I 双频组合完整保留，双频 RTK 不受影响。
+
+> 分批路径落地记录见 [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) 的「超容量按卫星分批 + sync 累积」与 cellmask 编号顺序修复条目。
 
 ##### 原始基站的分批实践（实测）
 
@@ -413,7 +423,7 @@ BDS 实例（13 星 → `maxSig = 64/13 = 4`，实测选取结果）：
 - 第 2 条消息进入 `decodeMsmHead` 时 `obsflag==0` → **不清空**已解出的观测，直接追加
 - 第 2 条 `sync=0` → `obsflag=1`，下一历元第 1 条消息进来时清空，开始新历元
 
-因此原始文件能完整输出 6 信号 / 5 频点，而本模块单条消息方案只能裁剪到 4 信号。若要完全对齐，需按此规则实现分批。
+因此原始文件能完整输出 6 信号 / 5 频点。本模块已按同一规则实现分批（`encodeSystemBatched`），同样保持 6 信号、按卫星拆分，与原始固件行为一致。
 
 ##### 锁相指示（`lock`）与 LLI
 
@@ -773,7 +783,7 @@ public class VrsCorrection {
 
 ## 8. 开发计划
 
-> 实际进度见 §0。以下为原始计划，保留作为范围界定依据；Phase 1~3 已完成，Phase 4 未开始。
+> 实际进度见 §0。以下为原始计划，保留作为范围界定依据；Phase 1~3 已完成，Phase 4 部分完成。
 
 ### Phase 1：模块骨架 + VRS 改正算法（~1000 行）✅
 
@@ -813,14 +823,14 @@ public class VrsCorrection {
 
 **里程碑**：完整 VRS 流程：RTCM 文件 → VRS 改正 → RTCM 文件输出，可被标准 NTRIP Client 解码使用。
 
-### Phase 4：扩展与优化 ⬜
+### Phase 4：扩展与优化 🟡
 
-| 任务 | 说明 |
-|------|------|
-| MSM7 支持 | 全精度观测值编码 |
-| SSR 改正支持 | 若输入含 SSR，用 SSR 替代广播星历提高改正精度 |
-| 1230 GLONASS 频率号 | GLONASS 完整支持所需 |
-| 多基站 VRS 扩展 | 网络 RTK 插值模型（MAC/iMAX/FKP），需额外设计 → **已单独立项，见 [NETWORK_VRS_DESIGN.md](NETWORK_VRS_DESIGN.md)** |
+| 任务 | 说明 | 状态 |
+|------|------|------|
+| MSM7 支持 | 全精度观测值编码 | ⬜ 未做（`Rtcm3MsmEncoder` 仅 MSM4/5，其他类型直接告警返回） |
+| SSR 改正支持 | 若输入含 SSR，用 SSR 替代广播星历提高改正精度 | ⬜ 未做（`VrsGenerator.onSsr()` 为空实现，SSR 不参与改正） |
+| 1230 GLONASS 频率号 | GLONASS 完整支持所需 | ⬜ 未做 |
+| 多基站 VRS 扩展 | 网络 RTK 插值模型（MAC/iMAX/FKP） | ✅ 已独立立项落地为 [rtklib-networkvrs](NETWORK_VRS_DESIGN.md)（IDW + FKP + 网解 + 误差分解，档 3 MAC 冻结） |
 
 ---
 
@@ -950,18 +960,3 @@ VRS-测站        基线= 11m  FIX=183/239(76.6%)  3D-RMS=5.4651m
 | 单基站 VRS | 不支持 MAC / iMAX / FKP 网络插值 | 基线 > 30 km 时改正精度下降 → 已单独立项，见 [NETWORK_VRS_DESIGN.md](NETWORK_VRS_DESIGN.md) |
 | ~~仅离线文件~~ | **部分解决（3.3.0）**：输出侧已改为 `RtcmSink` 纯字节回调，可接文件、socket、队列或 Caster 的 `publish()`；输入侧仍是 `RtcmDataHandler` 解码器回调，可逐段 `feed()` | 输出可实时；输入仍按批提交 |
 | 测试数据单一 | 仅 BDS 为主的单组数据 | GPS/GAL/QZS 多系统路径未做真实数据验证 |
-
----
-
-## 11. 与 VrsCaster 的关系
-
-| 维度 | VrsCaster (C++) | rtk$lib-vrs (Java) |
-|------|-----------------|---------------------|
-| 定位 | NTRIP Caster + VRS 协议转发 | VRS 生成 + RTCM 文件处理 |
-| VRS 算法 | 无（靠远端 VRS Server） | 自含（单基站改正算法） |
-| RTCM 编码 | 无（只转发） | 有（翻译自 RTKLIB 2.5.1 rtcm3e.c） |
-| 数据源 | 网络流（NTRIP） | RTCM 文件 |
-| 协议 | 自定义 VRS 协议（0xDA 前导） | 标准 RTCM3 |
-| 依赖 | RTKLIB 2.4.3 | rtklib-core（对齐 2.5.1） |
-
-**结论**：rtklib-vrs 借鉴了 VrsCaster 的 VRS 概念，但实现完全独立，不依赖 VrsCaster 的自定义协议，使用标准 RTCM3 格式。

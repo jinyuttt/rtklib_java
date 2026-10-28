@@ -94,7 +94,7 @@
 
 | 文档 | 定位 | 状态 | 最后更新 |
 |------|------|------|----------|
-| [ROADMAP.md](ROADMAP.md) | 模块状态总览与阶段路线图（Phase 1/2、梯队 0~3） | ✅ 活跃 | 2026-10-19 |
+| [ROADMAP.md](ROADMAP.md) | 模块状态总览 + 未完成事项（按需激活/冻结/WONTFIX）+ 暂缓与恢复条件；历史梯队记录见 [archive/ROADMAP_v3.3.0.md](archive/ROADMAP_v3.3.0.md) | ✅ 活跃 | 2026-10-28 |
 | [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) | **终期技术摘要**：一句话定位 + 精度实测 + 001~029 闭环索引 + HAS/IMU/CLAS 扩展路线 | ✅ 活跃 | 2026-10-23 |
 | [TraceLog_V2_Design.md](TraceLog_V2_Design.md) | 追踪日志 V2 设计与实现（取代 archive 中的 V1 设计） | ✅ 活跃 | 2026-10-08 |
 | [RTKCONFIG_REFACTOR_DESIGN.md](RTKCONFIG_REFACTOR_DESIGN.md) | RtkConfig 组合模式重构：487 行扁平类按模式拆分子配置（Common/Rtk/Spp/Ppp）、向后兼容迁移路径 | 🟡 设计稿（v1.0 定稿，未执行；`RtkConfig` 仍为扁平类） | 2026-10-26 |
@@ -102,10 +102,11 @@
 
 ---
 
-## 六、archive/ 归档（16 份，仅历史追溯）
+## 六、archive/ 归档（17 份，仅历史追溯）
 
 | 文档 | 原主题 | 被谁取代 |
 |------|--------|----------|
+| [ROADMAP_v3.3.0.md](archive/ROADMAP_v3.3.0.md) | 路线图 v1.0~v2.1 全部梯队执行记录与决策依据（v3.3.0 归档） | [ROADMAP.md](ROADMAP.md)（重启版，只保留未完成事项） |
 | [PPP_RTK_Development_Plan.md](archive/PPP_RTK_Development_Plan.md) | PPP-RTK 开发计划（Phase 1~4 已实现） | ALGORITHM_FIX_LOG + PPP_Optimization_Systems |
 | [PPP-AR-C-vs-Java-Comparison.md](archive/PPP-AR-C-vs-Java-Comparison.md) | PPP-AR C/Java 逐项对比（差异分析过程） | ALGORITHM_FIX_LOG FIX-ALG-022/023/024 |
 | [RTK_Debug_Record.md](archive/RTK_Debug_Record.md) | RTK 早期 Bug #1~#6 调试记录 | RTKLIB_Differences + FIX-ALG-004~009 |

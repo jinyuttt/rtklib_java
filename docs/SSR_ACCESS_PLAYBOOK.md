@@ -1,7 +1,7 @@
 # SSR 接入手册（v3.1.0）
 
 > 定位：SSR 接入的**操作与验收手册**。CAS `SSRA01CAS0`/`SSRC01CAS0` 已接入并完成录制/回放闭环验证（2026-10-28）；算法已封存，接入不涉及算法改动。
-> 相关：[ROADMAP.md](ROADMAP.md) §8.8（✅ 已闭环） · [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) 表 3 · [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) FIX-ALG-026~028、035~036
+> 相关：[archive/ROADMAP_v3.3.0.md](archive/ROADMAP_v3.3.0.md) §8.8（✅ 已闭环，历史记录） · [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) 表 3 · [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) FIX-ALG-026~028、035~036
 
 ## 一、一页结论：只改两行
 
@@ -92,7 +92,7 @@ HAS ──────► HasSsrDecoder ──────► Nav.ssr ─┘
 
 | 想知道 | 看 |
 |---|---|
-| SSR 数据源接入现状（已闭环） | [ROADMAP.md](ROADMAP.md) §8.8 |
+| SSR 数据源接入现状（已闭环，历史记录） | [archive/ROADMAP_v3.3.0.md](archive/ROADMAP_v3.3.0.md) §8.8 |
 | 两行改动背后的能力边界 | [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) |
 | OSB / AR 的历史修复细节 | [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) FIX-ALG-022~029 |
 | 配置项完整语义 | [PPP_Extra_Optimizations.md](PPP_Extra_Optimizations.md) |
