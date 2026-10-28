@@ -19,6 +19,8 @@
         <module>rtklib-otl</module>
         <module>rtklib-research</module>
         <module>rtklib-vrs</module>
+        <module>rtklib-networkvrs</module>
+        <module>rtklib-ext-igs</module>
     </modules>
 
     <properties>

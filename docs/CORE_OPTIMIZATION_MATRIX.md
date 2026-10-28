@@ -197,7 +197,9 @@ RtkConfig: cfg.rtk.enableAdaptiveQ + cfg.rtk.enableAmbAnchor + cfg.rtk.enableIon
            + cfg.common.enableParamTypeNoise + cfg.common.atmFrozenNsThresh=7
 PrcOpt:    PMODE_STATIC, IONOOPT_EST, TROPOPT_EST/ESTG
 特点:      梯度建模电离层空间不均匀性，参数类型噪声精细建模
-注:        更依赖实际调试，无完整长基线验证数据
+实测:      RtkValidationTest（HKWS-HKSL，~42km，2880历元）仅验证链路通：
+           FIX率 1.3%（38/2880），以 FLOAT 为主，FIX 内部一致性 2D RMS 0.106m
+注:        属表面（链路级）验证，非精度验证；R7 梯度、R13 参数噪声的增益未做 A/B 对照
 ```
 
 ### 4.3 动态短基线 RTK（车载/无人机）
@@ -308,7 +310,7 @@ PrcOpt:    PMODE_SINGLE, dynamics=1 (需要速度状态), navsys=SYS_ALL
 | 项目 | 状态 | 说明 |
 |------|------|------|
 | 动态RTK对比 | ❌ 未验证 | 所有现有测试使用 `PMODE_KINEMA` 配置但数据本身可能是静态采集，无真实动态数据 |
-| 长基线验证 | ❌ 未验证 | R7梯度/CascadeAR/参数噪声在短基线上效果等价于关闭 |
+| 长基线验证 | ⚠️ 仅链路级 | HKWS-HKSL（~42km，2880历元）已跑通全流程，但 FIX 率仅 1.3%、以 FLOAT 为主，且参考坐标为 RINEX 头近似值。R7梯度/CascadeAR/参数噪声的长基线增益仍属未验证（表面测试，非精度验证） |
 | 城市峡谷场景 | ❌ 未验证 | 无NLOS/多路径密集场景数据，IGGIII/SwitchVariable实际效果未知 |
 | PPP-AR完整验证 | ⚠️ 部分 | 有算法级单元测试，集成测试受数据可用性限制 |
 | 多频(≥3频)验证 | ⚠️ 部分 | R8逐级AR/R10多频AR有测试但依赖多频数据 |

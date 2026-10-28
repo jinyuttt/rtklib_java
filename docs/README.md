@@ -57,6 +57,12 @@
 | [OTL_MODULE_REFERENCE.md](OTL_MODULE_REFERENCE.md) | 海潮负荷：分潮、BLQ 提取、位移序列、命令行 | ✅ 活跃 | 2026-09-24 |
 | [PRODUCT_MODULE_REFERENCE.md](PRODUCT_MODULE_REFERENCE.md) | 精密产品下载：产品类型、镜像优先级、缓存、协议 | ✅ 活跃 | 2026-09-24 |
 
+**外部标准原文**（`docs/reference/`，只读引用，**不得改写原文**）：
+
+| 文件 | 标准 | 用途 | 引用方 |
+|------|------|------|--------|
+| [igs_ssr_v1.pdf](reference/igs_ssr_v1.pdf) | IGS SSR v1.00（2020-10-05），660 KB / 49 页 | 4076 消息与 IM201 VTEC 球谐的字段定义、系数个数公式、穿刺点与合成算法 | [NETWORK_VRS_DESIGN.md §3.4](NETWORK_VRS_DESIGN.md) |
+
 ## 四、优化体系（核心主题）
 
 ### 4.1 总入口

@@ -1720,6 +1720,7 @@ if (segmentSigmaFilter != null && rtk.sol.stat == Constants.SOLQ_FIX) {
 | **段内σ过滤** | `enableSegmentSigmaFilter` | ⚠️ 需验证 | ⚠️ 需验证 | ⚠️ 无需(遮挡少) | ✅ **false fix 1.5%** | ✅ UrbanNav OFF |
 
 > ⚠️ **表注**：本表"动态开阔"列均为理论推断，本次测试无开阔天空数据集（测试数据集为UrbanNav严重遮挡、PPC部分遮挡）。标注"⚠️ 弱收益"的项在开阔天空下实际效果待验证。
+> ⚠️ **长基线口径**：`静态长基线`列标注"未专项测试"的项，指**优化项本身未做长基线 A/B 对照**。长基线链路已由 `RtkValidationTest` 跑通（HKWS-HKSL，~42km，2880 历元，fail=0），但 FIX 率仅 1.3%、以 FLOAT 为主，参考坐标为 RINEX 头近似值，属表面（链路级）验证，尚不能作为长基线精度或增益结论。
 
 ### 17.2 按功能分类
 
@@ -1812,7 +1813,7 @@ if (segmentSigmaFilter != null && rtk.sol.stat == Constants.SOLQ_FIX) {
 | 场景 | 推荐开启 | 不推荐 |
 |------|---------|--------|
 | **静态短基线** | `enablePartialAR` + `enableBootstrapping` + `enableSnrMedian`（弱收益，无害） + `enableResidualEdit`（微弱） + `enableBdsCodeBias`（微弱） | `enableCascadeAR`（动态场景已验证见§10.7，静态短基线场景未重测）、`enableAdaptiveQ`（无效）、`enableSegmentSigmaFilter`（未触发） |
-| **静态长基线** | `enableIggiii` + `enableSnrMedian` + `enableParamTypeNoise` + `enableIonoTropGradient` | — |
+| **静态长基线** | `enableIggiii` + `enableSnrMedian` + `enableParamTypeNoise` + `enableIonoTropGradient` | — （组合仅为理论推荐；长基线仅验证链路可跑通，FIX 率 1.3%，组合增益未做 A/B） |
 | **动态开阔天空** | `enableSnrMedian` + `enableResidualEdit` | `enableCascadeAR`（城市峡谷已验证有效见§10.7，开阔天空无实测）、`enableSegmentSigmaFilter`（无需）、`enableAdaptiveQ`（理论推断弱收益，无开阔天空实测） |
 | **动态城市峡谷** | `enableSegmentSigmaFilter`(σ<5m) + `enableSnrMedian`（无效果但无害，作为安全项保留） + `enableCascadeAR`（可选：可用性 Nagoya 4~15×/run2 2×，偏差污染区坏尾升高代价见§10.7） | `enableResidualEdit`（IFLC下有害，UrbanNav -75%）、`enableBootstrapping`（无效） |
 

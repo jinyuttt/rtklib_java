@@ -28,7 +28,7 @@ git grep -n -E "tdengine-jetlinks|[0-9]{2}\.[0-9]{6,}" -- . ":(exclude)test-data
 - 已误提交历史：先报告，由用户决定是否 `filter-repo` 重写；不得擅自 force push
 
 ## 项目结构（多模块）
-父POM：pom.xml（packaging=pom，version=3.2.0），`<modules>` 共 9 个，顺序即构建顺序：
+父POM：pom.xml（packaging=pom，version=3.2.0），`<modules>` 共 11 个，顺序即构建顺序：
 
 | 模块 | 包根 | 职责 |
 |---|---|---|
@@ -41,6 +41,8 @@ git grep -n -E "tdengine-jetlinks|[0-9]{2}\.[0-9]{6,}" -- . ":(exclude)test-data
 | rtklib-otl | org.rtklib.java.otl | 海潮负荷 BLQ 系数生成（FES2004） |
 | rtklib-research | org.rtklib.java.research | 研究沙盒：FGO / IMU 预积分 / 随机模型，与 core 无代码级耦合 |
 | rtklib-vrs | org.rtklib.java.vrs | 虚拟参考站生成（单基站差分改正 + RTCM3 编码） |
+| rtklib-networkvrs | org.rtklib.java.networkvrs | 网络 VRS：多站历元同步 + 误差插值（档 1 IDW；档 2/3 网解与 FKP/MAC） |
+| rtklib-ext-igs | org.rtklib.java.ext.igs | IGS SSR 4076 扩展模块隔离（非标准 RTCM 消息） |
 
 ### rtklib-core 子包（org.rtklib.java.）
 - 定位解算：`pntpos/`（SPP）、`rtkpos/`（RTK + 优化器）、`ppp/`（PPP/PPP-AR）、`pppar/`、`ppprtk/`（PPP-RTK）、`joint` 相关在 rtklib-joint、`kalman/`（EKF）、`ambiguity/`（LAMBDA）、`adaptive/`（自适应随机模型）、`aggregate/`
@@ -71,6 +73,8 @@ git grep -n -E "tdengine-jetlinks|[0-9]{2}\.[0-9]{6,}" -- . ":(exclude)test-data
 - rtklib-adjust → rtklib-core
 - rtklib-joint → rtklib-core
 - rtklib-vrs → rtklib-core
+- rtklib-networkvrs → rtklib-core + rtklib-vrs
+- rtklib-ext-igs → rtklib-core
 - rtklib-test → rtklib-core + rtklib-product（+ rtklib-stream，test scope）
 - rtklib-stream → rtklib-core（仅 test scope）
 - rtklib-product → rtklib-core（仅 test scope）

@@ -29,6 +29,16 @@ public class RtcmCallbackDecoder {
         this.rtcm.relaxSyncFlag = relaxSyncFlag;
     }
 
+    /**
+     * 注入参考时间（如离线文件按路径推出的小时时刻）。
+     * 设置后解码器以该时间为周基准，无需等待星历建立时间基准。
+     *
+     * @param time 参考时间（GPST）
+     */
+    public void setReferenceTime(GTime time) {
+        this.rtcm.setReferenceTime(time);
+    }
+
     public void feed(byte[] data, int offset, int length) {
         if (length <= 0 || finished) return;
         ensureCapacity(pendingLen + length);

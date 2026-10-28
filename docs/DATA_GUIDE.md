@@ -352,6 +352,22 @@ List<String> files = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile
 
 > 上述环境变量用于切换数据集（默认 `2024/WUM` 基线），须通过**环境变量**设置而非 `mvn -D`，原因见 [TEST_DEVELOPMENT_GUIDE.md](TEST_DEVELOPMENT_GUIDE.md)。
 
+#### 阶段2 长基线 RTK 实测记录（2026-10-28）
+
+数据：`HKWS`(rover) + `HKSL`(base)，2024 DOY060，30 s 采样，全天 2880 历元；
+配置：`PMODE_STATIC`、`IONOOPT_IFLC`、`TROPOPT_EST`、`ARMODE_FIXHOLD`，优化项 `enableSnrMedian` + `enableIggiii` + `enableParamTypeNoise` + `atmFrozenNsThresh=7`。
+
+| 指标 | 结果 |
+|------|------|
+| 处理历元 | total=2880，success=2880，fail=0（**链路全通**） |
+| 固定率 | **1.3%**（FIX 38 / FLOAT 2842），FIX 集中在历元 [1084..1201] |
+| 基线长度 | 42511.249 m（FIX 解均值 42510.894 m），期望 ~42 km |
+| 全历元 ENU RMS | E 1.017 m / N 0.522 m / U 1.262 m，2D 1.143 m |
+| FIX-only ENU RMS | E 0.105 m / N 0.018 m / U 0.044 m，2D 0.106 m |
+
+> **口径说明**：参考坐标取 RINEX 头 `APPROX POSITION`，非 ITRF 真值，故基线偏差 +511 m（+1.22%）不代表解算误差，绝对值也不能作为精度结论。
+> **结论定位**：本用例只证明**长基线链路可跑通、FIX 解内部一致性达分米级**，属于表面（链路级）验证；**固定率仅 1.3%，长基线 AR 能力与 R7 梯度 / R13 参数噪声等长基线优化项的实际增益尚未验证**，不作为长基线精度达标依据。
+
 ---
 
 ## 2. 公共测试数据文件清单
@@ -1021,6 +1037,23 @@ List<String> files = TestDataConfig.resolveRtcmFiles(TestDataConfig.getRoverFile
 | `nav/brdc3050.23p` | 11.6MB | IGS | 广播星历(2023 DOY305) |
 
 > 以上精密产品大文件通过 `download-test-data.ps1` 获取，与 §2.4 精密产品小文件（≤2MB，已在主仓库）互补。
+
+#### 网络VRS三角形数据集（EUREF/EPN，2026 DOY300）
+
+三站 30 s 全天观测，站距 46.8~64.6 km，用于多基站网络 RTK（VRS）验证，详见 [NETWORK_VRS_DESIGN.md §3.2.1](NETWORK_VRS_DESIGN.md)。
+
+| 文件 | 大小 | 来源 | 用途 |
+|------|------|------|------|
+| `gnss-validation/network-vrs/euref-2026300/CIMO00ITA_R_20263000000_01D_30S_MO.crx.gz` | 4.5MB | EUREF/EPN（BKG 镜像） | 意大利 CIMO 站原始 Hatanaka |
+| `gnss-validation/network-vrs/euref-2026300/PRAT00ITA_R_20263000000_01D_30S_MO.crx.gz` | 2.5MB | EUREF/EPN（BKG 镜像） | 意大利 PRAT 站原始 Hatanaka |
+| `gnss-validation/network-vrs/euref-2026300/VIRG00ITA_R_20263000000_01D_30S_MO.crx.gz` | 4.1MB | EUREF/EPN（BKG 镜像） | 意大利 VIRG 站原始 Hatanaka |
+| `gnss-validation/network-vrs/euref-2026300/*.rnx` | 84.3MB | 同上，crx2rnx 解压 | 三站标准 RINEX 3.04 观测 |
+| `gnss-validation/network-vrs/euref-2026300/stations.csv` | <1KB | 本项目生成 | 站名/DOMES/XYZ/BLH/文件名 |
+| `gnss-validation/network-vrs/euref-2026300/baselines.csv` | <1KB | 本项目生成 | 三条基线长度与 ENU 分量 |
+| `gnss-validation/network-vrs/euref-2026300/EPNIGB08.CRD` | ~0.1MB | EUREF | 98 站官方坐标（IGb08 框架） |
+
+> 原始 `.crx.gz` 与解压 `.rnx` **同时保留**：前者体积小、可复现解压结果，后者供测试直接读取。
+> 本地工作副本在 `data/network-vrs/2026/300/`（`data/` 在 `.gitignore`，不入主仓库）。
 
 ---
 

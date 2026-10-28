@@ -91,6 +91,8 @@ test-data/
 | `product/igsg1570.18i` | 0.8MB | IGS电离层格网 | IGS-data-policy |
 | `reference/ppp_wtza_20180606.pos` | 0.4MB | PPP参考解 | public |
 | `reference/ppp_wtzr_20180606.pos` | 0.4MB | PPP参考解 | public |
+| `gnss-validation/network-vrs/euref-2026300/` | 95.4MB | 网络VRS三站观测(CIMO/PRAT/VIRG, 30s, 含crx.gz与rnx) | public |
+| `gnss-validation/network-vrs/euref-2026300/EPNIGB08.CRD` | 0.1MB | EUREF官方坐标(98站, IGb08) | public |
 
 ## 小文件清单（已直接提交至 test-data/）
 
