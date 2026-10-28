@@ -23,8 +23,14 @@ public class Sta implements Serializable {
     /** Receiver type descriptor */
     public String rectype;
     
+    /** Receiver firmware version (RTCM 1033 only) */
+    public String recver;
+    
     /** Receiver serial number */
     public String recsno;
+    
+    /** Antenna setup ID (RTCM 1033 only) */
+    public int antSetupId;
     
     /** Antenna phase center offsets (H, E, N) */
     public double[] del;
@@ -53,7 +59,9 @@ public class Sta implements Serializable {
         this.antdes = "";
         this.antsno = "";
         this.rectype = "";
+        this.recver = "";
         this.recsno = "";
+        this.antSetupId = 0;
         this.del = new double[6];
         this.del2 = new double[3];
         this.pos = new double[3];
@@ -72,7 +80,9 @@ public class Sta implements Serializable {
         this.antdes = other.antdes;
         this.antsno = other.antsno;
         this.rectype = other.rectype;
+        this.recver = other.recver;
         this.recsno = other.recsno;
+        this.antSetupId = other.antSetupId;
         this.del = other.del.clone();
         this.del2 = other.del2.clone();
         this.pos = other.pos.clone();
