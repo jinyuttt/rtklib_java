@@ -28,13 +28,31 @@ git grep -n -E "tdengine-jetlinks|[0-9]{2}\.[0-9]{6,}" -- . ":(exclude)test-data
 - 已误提交历史：先报告，由用户决定是否 `filter-repo` 重写；不得擅自 force push
 
 ## 项目结构（多模块）
-- 父POM：pom.xml（packaging=pom，聚合rtklib-core + rtklib-adjust + rtklib-product + rtklib-test + rtklib-otl）
-- rtklib-core：src/main/java/org/rtklib/java/（核心定位算法：SPP/RTK/PPP/PPP-RTK）
-- rtklib-adjust：src/main/java/org/rtklib/java/adjust/（多基线间接平差）
-- rtklib-product：src/main/java/org/rtklib/java/product/（精密星历下载模块）
-- 测试：各模块 src/test/java/
-- 文档：docs/
-- 数据：data/
+父POM：pom.xml（packaging=pom，version=3.2.0），`<modules>` 共 9 个，顺序即构建顺序：
+
+| 模块 | 包根 | 职责 |
+|---|---|---|
+| rtklib-core | org.rtklib.java.* | 核心定位算法：SPP / RTK / PPP / PPP-AR / PPP-RTK |
+| rtklib-stream | org.rtklib.java.stream | NTRIP 客户端 + 串口通讯（对齐 stream.c） |
+| rtklib-adjust | org.rtklib.java.adjust | 多基线间接平差（σ₀ 检验 + Baarda 探测） |
+| rtklib-joint | org.rtklib.java.joint | 联合 RTK：多基站/多基线联合滤波解算 |
+| rtklib-product | org.rtklib.java.product | IGS/MGEX 精密产品下载（SP3/CLK/ERP/BIA/OSB/FCB/VMF3/GPT3 等） |
+| rtklib-test | org.rtklib.java.test | 早期测试入口与 Demo（NtripClient 已被 stream 取代，保留兼容） |
+| rtklib-otl | org.rtklib.java.otl | 海潮负荷 BLQ 系数生成（FES2004） |
+| rtklib-research | org.rtklib.java.research | 研究沙盒：FGO / IMU 预积分 / 随机模型，与 core 无代码级耦合 |
+| rtklib-vrs | org.rtklib.java.vrs | 虚拟参考站生成（单基站差分改正 + RTCM3 编码） |
+
+### rtklib-core 子包（org.rtklib.java.）
+- 定位解算：`pntpos/`（SPP）、`rtkpos/`（RTK + 优化器）、`ppp/`（PPP/PPP-AR）、`pppar/`、`ppprtk/`（PPP-RTK）、`joint` 相关在 rtklib-joint、`kalman/`（EKF）、`ambiguity/`（LAMBDA）、`adaptive/`（自适应随机模型）、`aggregate/`
+- 数据载体：`data/`（Nav/Obs/Eph/Ssr/Rtk/PrcOpt…）、`config/`（RtkConfig + CommonOpts/RtkOpts/PppOpts/PppArOpts/PppRtkOpts/SppOpts/AdaptiveOpts）
+- 解析与模型：`rtcm/`、`rinex/`、`ephemeris/`、`ionosphere/`、`troposphere/`、`orbit/`、`coord/`、`time/`、`tide/`、`cssr/`
+- 其他：`common/`、`constants/`、`monitor/`、`postpos/`、`trace/`
+
+### 目录约定
+- 测试：各模块 `src/test/java/`；测试资源 `src/test/resources/`（敏感配置只提交 `*.template`）
+- 文档：`docs/`（现行）、`docs/archive/`（历史归档）
+- 公开测试数据：`test-data/`（大文件按 `.gitignore` 排除，用 `download-test-data.ps1` 拉取）
+- 本地私有数据：`data/`（不入库）
 
 ## 构建与测试
 - 编译全部：mvn compile
@@ -49,9 +67,19 @@ git grep -n -E "tdengine-jetlinks|[0-9]{2}\.[0-9]{6,}" -- . ":(exclude)test-data
 - 安装core到本地仓库：mvn install -pl rtklib-core -DskipTests
 
 ## 依赖关系
-- rtklib-adjust → rtklib-core（单向依赖，core不依赖adjust）
-- rtklib-core → ejml-simple:0.41, slf4j, logback
-- rtklib-adjust → ejml-all:0.41, junit
+模块间（单向，core 不反向依赖任何业务模块）：
+- rtklib-adjust → rtklib-core
+- rtklib-joint → rtklib-core
+- rtklib-vrs → rtklib-core
+- rtklib-test → rtklib-core + rtklib-product（+ rtklib-stream，test scope）
+- rtklib-stream → rtklib-core（仅 test scope）
+- rtklib-product → rtklib-core（仅 test scope）
+- rtklib-research、rtklib-otl → 不依赖 core（独立演进）
+
+第三方（版本统一在父 POM `dependencyManagement`）：
+- ejml-simple / ejml-all 0.41、slf4j-api 2.0.9、logback-classic 1.4.14、junit-jupiter 5.10.1、jmh 1.37
+- rtklib-stream 额外：com.fazecast:jSerialComm
+- rtklib-product 额外：commons-net（FTPS/FTP）
 
 ## 高级优化（RtkConfig开关控制，默认关闭）
 - RTK模糊度固定优化（v2.2.1）：CascadeAR/ResEdit/PartialAR/Bootstrap/BdsBias/ParamTypeNoise
