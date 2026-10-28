@@ -58,9 +58,9 @@ public final class RtkOptimizationsBdsBias {
     public static void applyBdsCodeBias(Rtk rtk, Obsd[] obs, int[] iu, int[] ir,
                                          int ns, int nf, Nav nav) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enableBdsCodeBias) return;
+        if (!cfg.rtk.enableBdsCodeBias) return;
 
-        double elThreshRad = cfg.bdsCodeBiasElThresh * Math.PI / 180.0;
+        double elThreshRad = cfg.rtk.bdsCodeBiasElThresh * Math.PI / 180.0;
         int applyCount = 0;
 
         for (int i = 0; i < ns; i++) {
@@ -71,7 +71,7 @@ public final class RtkOptimizationsBdsBias {
             if ((sys & Constants.SYS_CMP) == 0) continue;
 
             double el = rtk.ssat[sat - 1].azel[1];
-            if (el < elThreshRad && !cfg.bdsCodeBiasForceOn) continue;
+            if (el < elThreshRad && !cfg.rtk.bdsCodeBiasForceOn) continue;
 
             double[] codeBias = computeBdsCodeBias(sat, el, nf, nav);
             for (int f = 0; f < nf && f < obs[iu[i]].P.length; f++) {

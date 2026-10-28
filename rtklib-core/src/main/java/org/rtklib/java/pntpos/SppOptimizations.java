@@ -29,11 +29,11 @@ public final class SppOptimizations {
     static double robustWeight(double resid, double sig, RtkConfig cfg, int mode) {
         resid = Math.abs(resid);
         if (sig == 0.0) sig = 1.0;
-        double k = (mode == ROBUST_POS) ? cfg.sppRobustKPos : cfg.sppRobustKVel;
-        double outlierThresh = (mode == ROBUST_POS) ? cfg.sppRobustPosOutlier : cfg.sppRobustVelOutlier;
+        double k = (mode == ROBUST_POS) ? cfg.spp.robustKPos : cfg.spp.robustKVel;
+        double outlierThresh = (mode == ROBUST_POS) ? cfg.spp.robustPosOutlier : cfg.spp.robustVelOutlier;
         double z = resid / sig;
         if (resid >= outlierThresh) {
-            return cfg.sppRobustMinW / sig;
+            return cfg.spp.robustMinW / sig;
         }
         if (z < k) {
             return 1.0 / sig;
@@ -51,7 +51,7 @@ public final class SppOptimizations {
         System.arraycopy(dx, 0, dxPrev, 0, nx);
         for (int i = 0; i < nx; i++) dx[i] = 0.0;
 
-        for (int iter = 0; iter < cfg.sppRobustMaxIter; iter++) {
+        for (int iter = 0; iter < cfg.spp.robustMaxIter; iter++) {
             for (int i = 0; i < nv; i++) {
                 double sig = Math.sqrt(var[i]);
                 double hdx = 0.0;
@@ -85,7 +85,7 @@ public final class SppOptimizations {
         double[] ddx = new double[nx];
         double[] Q = new double[nx * nx];
 
-        for (int iter = 0; iter < cfg.sppRobustMaxIter; iter++) {
+        for (int iter = 0; iter < cfg.spp.robustMaxIter; iter++) {
             for (int i = 0; i < nv; i++) {
                 double sig = Math.sqrt(var[i]);
                 double hdx = 0.0;
@@ -129,9 +129,9 @@ public final class SppOptimizations {
         double[] P = state.P;
 
         if (RtklibCommon.norm(x, 3) <= 0.0) {
-            for (int i = 0; i < 3; i++) initx(state, solLsq.rr[i], cfg.sppEkfVarPos, i);
-            for (int i = 3; i < 6; i++) initx(state, solLsq.rr[i < 6 ? i : 0], cfg.sppEkfVarVel, i);
-            for (int i = 6; i < 9; i++) initx(state, 1e-6, cfg.sppEkfVarAcc, i);
+            for (int i = 0; i < 3; i++) initx(state, solLsq.rr[i], cfg.spp.ekfVarPos, i);
+            for (int i = 3; i < 6; i++) initx(state, solLsq.rr[i < 6 ? i : 0], cfg.spp.ekfVarVel, i);
+            for (int i = 6; i < 9; i++) initx(state, 1e-6, cfg.spp.ekfVarAcc, i);
             return;
         }
 
@@ -139,22 +139,22 @@ public final class SppOptimizations {
         for (int i = 0; i < 3; i++) var += P[i * nxF + i];
         var /= 3.0;
 
-        if (var > cfg.sppEkfVarResetThresh && solLsq.stat > Constants.SOLQ_NONE) {
-            for (int i = 0; i < 3; i++) initx(state, solLsq.rr[i], cfg.sppEkfVarPos, i);
-            for (int i = 3; i < 6; i++) initx(state, solLsq.rr[i < 6 ? i : 0], cfg.sppEkfVarVel, i);
-            for (int i = 6; i < 9; i++) initx(state, 1e-6, cfg.sppEkfVarAcc, i);
+        if (var > cfg.spp.ekfVarResetThresh && solLsq.stat > Constants.SOLQ_NONE) {
+            for (int i = 0; i < 3; i++) initx(state, solLsq.rr[i], cfg.spp.ekfVarPos, i);
+            for (int i = 3; i < 6; i++) initx(state, solLsq.rr[i < 6 ? i : 0], cfg.spp.ekfVarVel, i);
+            for (int i = 6; i < 9; i++) initx(state, 1e-6, cfg.spp.ekfVarAcc, i);
             state.diverged = false;
             state.divergedEpochs = 0;
             LOG.trace("UdposSPP: reset position due to large variance: var={}", var);
             return;
         }
 
-        if (var > cfg.sppEkfVarResetThresh && solLsq.stat <= Constants.SOLQ_NONE) {
+        if (var > cfg.spp.ekfVarResetThresh && solLsq.stat <= Constants.SOLQ_NONE) {
             for (int i = 0; i < 3; i++) {
-                P[i * nxF + i] = Math.min(P[i * nxF + i], cfg.sppEkfVarCap);
+                P[i * nxF + i] = Math.min(P[i * nxF + i], cfg.spp.ekfVarCap);
             }
             for (int i = 3; i < 6; i++) {
-                P[i * nxF + i] = Math.min(P[i * nxF + i], cfg.sppEkfVarVel);
+                P[i * nxF + i] = Math.min(P[i * nxF + i], cfg.spp.ekfVarVel);
             }
             state.diverged = true;
             state.divergedEpochs++;
@@ -213,11 +213,11 @@ public final class SppOptimizations {
         }
 
         double[] Q = new double[9];
-        Q[0] = RtklibCommon.sqr(cfg.sppEkfAccPrn1) * Math.abs(tt);
-        Q[4] = RtklibCommon.sqr(cfg.sppEkfAccPrn1) * Math.abs(tt);
-        Q[8] = RtklibCommon.sqr(cfg.sppEkfAccPrn2) * Math.abs(tt);
+        Q[0] = RtklibCommon.sqr(cfg.spp.ekfAccPrn1) * Math.abs(tt);
+        Q[4] = RtklibCommon.sqr(cfg.spp.ekfAccPrn1) * Math.abs(tt);
+        Q[8] = RtklibCommon.sqr(cfg.spp.ekfAccPrn2) * Math.abs(tt);
         if (state.diverged) {
-            double qscale = cfg.sppEkfDivergedQscale;
+            double qscale = cfg.spp.ekfDivergedQscale;
             Q[0] *= qscale;
             Q[4] *= qscale;
             Q[8] *= qscale;
@@ -316,7 +316,7 @@ public final class SppOptimizations {
 
             v[nv] = (-obs[i].D[0] * Constants.CLIGHT / freq - (rate + x[nxF - 1] - Constants.CLIGHT * dts[1 + i * 2]));
 
-            if (cfg != null && cfg.enableSppDopplerSnr) {
+            if (cfg != null && cfg.spp.enableDopplerSnr) {
                 PrcOpt optDop = new PrcOpt(opt);
                 optDop.eratio[0] = 30.0;
                 if (ssat != null) {
@@ -367,7 +367,7 @@ public final class SppOptimizations {
         }
 
         int statLsq;
-        if (!state.initialized || RtklibCommon.norm(state.x, 3) < 1000 || Math.abs(dt) >= cfg.sppEkfDtGap) {
+        if (!state.initialized || RtklibCommon.norm(state.x, 3) < 1000 || Math.abs(dt) >= cfg.spp.ekfDtGap) {
             statLsq = SppCore.estpos(obs, n, rs, dts, vare, svh, nav, opt, ssat, sol, azel, vsat, resp, new String[1]);
             if (statLsq > Constants.SOLQ_NONE) {
                 double[] initVel = new double[3];
@@ -386,22 +386,22 @@ public final class SppOptimizations {
                 for (int i = 0; i < 6; i++) {
                     y[i] = state.x[i] - solLsq.rr[i];
                 }
-                double scale = cfg.sppEkfVelResidScale;
+                double scale = cfg.spp.ekfVelResidScale;
                 for (int i = 0; i < 3; i++) {
                     for (int j = 0; j < 3; j++) {
                         state.P[(i + 3) * nxF + (j + 3)] += scale * y[i + 3] * y[j + 3];
                     }
                 }
                 state.consecutiveLsSuccess++;
-                if (state.diverged && state.consecutiveLsSuccess >= cfg.sppEkfDivergedRecoverEpochs) {
+                if (state.diverged && state.consecutiveLsSuccess >= cfg.spp.ekfDivergedRecoverEpochs) {
                     for (int i = 0; i < 3; i++) {
-                        initx(state, solLsq.rr[i], cfg.sppEkfVarPos, i);
+                        initx(state, solLsq.rr[i], cfg.spp.ekfVarPos, i);
                     }
                     for (int i = 3; i < 6; i++) {
-                        initx(state, solLsq.rr[i], cfg.sppEkfVarVel, i);
+                        initx(state, solLsq.rr[i], cfg.spp.ekfVarVel, i);
                     }
                     for (int i = 6; i < 9; i++) {
-                        initx(state, 0.0, cfg.sppEkfVarAcc, i);
+                        initx(state, 0.0, cfg.spp.ekfVarAcc, i);
                     }
                     state.diverged = false;
                     state.divergedEpochs = 0;
@@ -412,7 +412,7 @@ public final class SppOptimizations {
             }
 
             for (int i = 9; i < nxF; i++) {
-                state.P[i * nxF + i] += cfg.sppEkfClkProcessNoise * cfg.sppEkfClkProcessNoise;
+                state.P[i * nxF + i] += cfg.spp.ekfClkProcessNoise * cfg.spp.ekfClkProcessNoise;
             }
         }
 
@@ -441,14 +441,14 @@ public final class SppOptimizations {
                 v, Htmp, var, azel, vsat, resp, nsArr);
 
         int nSat = nsArr[0];
-        if (nSat < cfg.sppEkfMinSat) {
-            LOG.debug("EKF degraded to LS-SPP: only {} satellites < minSat {}", nSat, cfg.sppEkfMinSat);
+        if (nSat < cfg.spp.ekfMinSat) {
+            LOG.debug("EKF degraded to LS-SPP: only {} satellites < minSat {}", nSat, cfg.spp.ekfMinSat);
             if (statLsq > Constants.SOLQ_NONE) {
                 for (int j = 0; j < 3; j++) {
-                    initx(state, solLsq.rr[j], cfg.sppEkfVarPos, j);
+                    initx(state, solLsq.rr[j], cfg.spp.ekfVarPos, j);
                 }
                 for (int j = 3; j < 6; j++) {
-                    initx(state, solLsq.rr[j], cfg.sppEkfVarVel, j);
+                    initx(state, solLsq.rr[j], cfg.spp.ekfVarVel, j);
                 }
                 for (int j = 0; j < 6; j++) sol.rr[j] = solLsq.rr[j];
                 sol.ns = (byte) nsArr[0];
@@ -489,12 +489,12 @@ public final class SppOptimizations {
             }
         }
 
-        if (cfg.enableSppRobust) {
+        if (cfg.spp.enableRobust) {
             robustFilter(HEff, v, nxEff, nc, nd, var, cfg);
         }
 
         boolean[] downweight = new boolean[nv];
-        if (cfg.enableSppInnovChisq && nv > 0) {
+        if (cfg.spp.enableInnovChisq && nv > 0) {
             int nvKeep = 0;
             int ncKeep = 0;
             int ndKeep = 0;
@@ -512,11 +512,11 @@ public final class SppOptimizations {
                 Sjj += var[j];
                 if (Sjj > 0.0) {
                     double nis = Math.abs(v[j]) / Math.sqrt(Sjj);
-                    double outlierThresh = cfg.sppInnovOutlierThresh;
-                    double downweightThresh = cfg.sppInnovDownweightThresh;
-                    if (nSat < cfg.sppEkfLowSatThresh) {
-                        outlierThresh = cfg.sppInnovOutlierThreshLowSat;
-                        downweightThresh = cfg.sppInnovDownweightThreshLowSat;
+                    double outlierThresh = cfg.spp.innovOutlierThresh;
+                    double downweightThresh = cfg.spp.innovDownweightThresh;
+                    if (nSat < cfg.spp.ekfLowSatThresh) {
+                        outlierThresh = cfg.spp.innovOutlierThreshLowSat;
+                        downweightThresh = cfg.spp.innovDownweightThreshLowSat;
                     }
                     if (nis > outlierThresh) {
                         extremeOutlier[j] = true;
@@ -574,20 +574,20 @@ public final class SppOptimizations {
         for (int j = 0; j < nv; j++) {
             R[j * nv + j] = var[j];
             if (downweight[j]) {
-                R[j * nv + j] *= cfg.sppInnovDownweightRscale;
+                R[j * nv + j] *= cfg.spp.innovDownweightRscale;
             }
         }
 
         if (state.diverged) {
             double rscale;
-            if (nSat < cfg.sppEkfLowSatThresh) {
-                rscale = cfg.sppEkfDivergedRscaleBase;
-            } else if (state.divergedEpochs > cfg.sppEkfDivergedMaxEpochs) {
+            if (nSat < cfg.spp.ekfLowSatThresh) {
+                rscale = cfg.spp.ekfDivergedRscaleBase;
+            } else if (state.divergedEpochs > cfg.spp.ekfDivergedMaxEpochs) {
                 rscale = 1.0;
-                LOG.info("Diverged state persisted {} epochs > max {}, forcing R scale to 1.0 to unlock KF update", state.divergedEpochs, (int) cfg.sppEkfDivergedMaxEpochs);
+                LOG.info("Diverged state persisted {} epochs > max {}, forcing R scale to 1.0 to unlock KF update", state.divergedEpochs, (int) cfg.spp.ekfDivergedMaxEpochs);
             } else {
-                rscale = Math.min(cfg.sppEkfDivergedRscaleMax,
-                        cfg.sppEkfDivergedRscaleBase * Math.pow(2.0, state.divergedEpochs));
+                rscale = Math.min(cfg.spp.ekfDivergedRscaleMax,
+                        cfg.spp.ekfDivergedRscaleBase * Math.pow(2.0, state.divergedEpochs));
             }
             for (int j = 0; j < nv; j++) {
                 R[j * nv + j] *= rscale;
@@ -604,7 +604,7 @@ public final class SppOptimizations {
             }
         }
 
-        if (state.initialized && !cfg.enableSppRobust) {
+        if (state.initialized && !cfg.spp.enableRobust) {
             double PPosPre = Math.sqrt(P[0*nxF+0]+P[1*nxF+1]+P[2*nxF+2]);
             double PVelPre = Math.sqrt(P[3*nxF+3]+P[4*nxF+4]+P[5*nxF+5]);
             double PClkPre = Math.sqrt(P[9*nxF+9]);
@@ -627,7 +627,7 @@ public final class SppOptimizations {
             return -2;
         }
 
-        if (state.initialized && !cfg.enableSppRobust) {
+        if (state.initialized && !cfg.spp.enableRobust) {
             double[] posLlh = new double[3];
             CoordTransform.ecef2pos(x, posLlh);
             double PVel = Math.sqrt(P[3*nxF+3]+P[4*nxF+4]+P[5*nxF+5]);
@@ -641,14 +641,14 @@ public final class SppOptimizations {
             }
         }
 
-        if (cfg.enableSppZeroVel) {
+        if (cfg.spp.enableZeroVel) {
             double[] posEnu = new double[3];
             double[] enu = new double[3];
             CoordTransform.ecef2pos(x, posEnu);
             double[] velEcef = new double[]{x[3], x[4], x[5]};
             CoordTransform.ecef2enu(posEnu, velEcef, enu);
-            if (Math.abs(enu[0]) < cfg.sppZeroVelSpeedThresh &&
-                Math.abs(enu[1]) < cfg.sppZeroVelSpeedThresh &&
+            if (Math.abs(enu[0]) < cfg.spp.zeroVelSpeedThresh &&
+                Math.abs(enu[1]) < cfg.spp.zeroVelSpeedThresh &&
                 RtklibCommon.norm(xLast, 3) >= 1000) {
                 state.consecutiveZeroVelEpochs++;
                 int nzupt = state.consecutiveZeroVelEpochs;

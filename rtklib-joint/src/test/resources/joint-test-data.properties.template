@@ -3,16 +3,16 @@
 # The file joint-test-data.properties is in .gitignore and will NOT be committed.
 
 # Data root directory (device RTCM binary storage)
-data.root=D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage
+data.root=<PATH_TO_DEVICE_RTCM_STORAGE>
 
 # Base station IDs (comma-separated)
-base.group=GS2025090017,GS2025090020
+base.group=<BASE_DEVICE_ID_1>,<BASE_DEVICE_ID_2>
 
 # Rover station ID (single for 2-base-1-rover test)
-rover.id=GS2025090003
+rover.id=<ROVER_DEVICE_ID_1>
 
 # All rover station IDs (for multi-rover tests)
-rover.group=GS2025090003,GS2025090004,GS2025090005,GS2025090006,GS2025090007,GS2025090008,GS2025090009
+rover.group=<ROVER_DEVICE_ID_1>,<ROVER_DEVICE_ID_2>,<ROVER_DEVICE_ID_3>
 
 # Date (used for path construction: data.root/station/date/)
 date=2026-10-26
@@ -23,4 +23,4 @@ end.hour=17
 
 # === Path Rule ===
 # RTCM files: {data.root}/{station}/{date}/{hour}.rtcm3
-# Example: D:\tdengine-jetlinks\jetlinks-data\device_rtcmbin_storage\GS2025090017\2026-10-26\0.rtcm3
+# Example: <PATH_TO_DEVICE_RTCM_STORAGE>/<DEVICE_ID>/<date>/<hour>.rtcm3

@@ -213,7 +213,7 @@ public class SppProcessor {
 
     public void setRtkConfig(RtkConfig rtkConfig) {
         this.rtkConfig = rtkConfig;
-        if (rtkConfig != null && rtkConfig.enableSppEkf) {
+        if (rtkConfig != null && rtkConfig.spp.enableEkf) {
             int nxF = SppEkfState.computeNxF(opt);
             this.ekfState = new SppEkfState(nxF);
         } else {
@@ -355,7 +355,7 @@ public class SppProcessor {
 
         if (adaptiveCtl != null) { adaptiveCtl.deactivate(); adaptiveCtl = null; }
 
-        if (rtkConfig != null && rtkConfig.enableSppEkf && ekfState != null) {
+        if (rtkConfig != null && rtkConfig.spp.enableEkf && ekfState != null) {
             ekfState.reset();
         }
     }

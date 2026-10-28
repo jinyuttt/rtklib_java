@@ -183,37 +183,37 @@ public class PppArValidationTest {
 
     private static RtkConfig createPppArConfig() {
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppIsbClockInit = true;
-        cfg.enablePppAR = true;
-        cfg.pppArRatioWl = 2.0;
-        cfg.pppArRatioNl = 3.0;
+        cfg.ppp.enableIsbClockInit = true;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.arRatioWl = 2.0;
+        cfg.pppAr.arRatioNl = 3.0;
         // FIX-ALG-026: integer-domain delta gate for IFLC rounding branches
         // (rejects whole-cycle WL/NL OSB biases invisible to frac gates)
-        cfg.enablePppArDeltaGate = true;
-        if (fcbFile != null) cfg.fcbFile = fcbFile;
-        if (updFile != null) cfg.updFile = updFile;
+        cfg.pppAr.enableDeltaGate = true;
+        if (fcbFile != null) cfg.pppAr.fcbFile = fcbFile;
+        if (updFile != null) cfg.pppAr.updFile = updFile;
         return cfg;
     }
 
     private static RtkConfig createPppArFixHoldConfig() {
         RtkConfig cfg = createPppArConfig();
-        cfg.enablePppArFixHold = true;
-        cfg.pppArFixHoldVar = 1e-6;
-        cfg.pppArFixHoldMinEp = 50;
+        cfg.pppAr.enableFixHold = true;
+        cfg.pppAr.fixHoldVar = 1e-6;
+        cfg.pppAr.fixHoldMinEp = 50;
         return cfg;
     }
 
     private static RtkConfig createPppPartialArConfig() {
         RtkConfig cfg = createPppArConfig();
-        cfg.enablePppPartialAR = true;
-        cfg.pppPartialArMinRatio = 2.0;
-        cfg.pppPartialArMinSats = 4;
+        cfg.pppAr.enablePartialAR = true;
+        cfg.pppAr.partialArMinRatio = 2.0;
+        cfg.pppAr.partialArMinSats = 4;
         return cfg;
     }
 
     private static RtkConfig createPppArIonEstConfig() {
         RtkConfig cfg = createPppArConfig();
-        cfg.enableIsbIfcbIfb = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
         return cfg;
     }
 
@@ -305,7 +305,7 @@ public class PppArValidationTest {
 
         PrcOpt opt = createPppArOpt();
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppIsbClockInit = true;
+        cfg.ppp.enableIsbClockInit = true;
         evaluatePppArAccuracy(opt, cfg, "PPP-Float");
     }
 
@@ -378,19 +378,19 @@ public class PppArValidationTest {
         opt.maxinno = new double[]{5.0, 30.0};
 
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppIsbClockInit = true;
-        cfg.enableMultiFreqAR = true;
-        cfg.enablePppAR = false;
-        cfg.pppArRatioWl = 2.0;
-        cfg.pppArRatioNl = 3.0;
+        cfg.ppp.enableIsbClockInit = true;
+        cfg.pppAr.enableMultiFreqAR = true;
+        cfg.pppAr.enableAR = false;
+        cfg.pppAr.arRatioWl = 2.0;
+        cfg.pppAr.arRatioNl = 3.0;
         // FIX-ALG-028: 3F branch previously ran without the integer-domain
         // delta gate — wrong WL/NL integers were frozen via initx(var=0).
         // Delta gate available but OFF for the primary A/B (gold-standard
         // 65.7%/3.54cm comparability); a gate-on run records the interception
         // behavior separately.
-        cfg.enablePppArDeltaGate = false;
-        if (fcbFile != null) cfg.fcbFile = fcbFile;
-        if (updFile != null) cfg.updFile = updFile;
+        cfg.pppAr.enableDeltaGate = false;
+        if (fcbFile != null) cfg.pppAr.fcbFile = fcbFile;
+        if (updFile != null) cfg.pppAr.updFile = updFile;
 
         evaluatePppArAccuracy(opt, cfg, "PPP-AR(3F-EWL+WL+NL)");
     }

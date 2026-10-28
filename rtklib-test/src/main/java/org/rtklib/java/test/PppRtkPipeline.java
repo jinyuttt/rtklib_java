@@ -243,7 +243,7 @@ public class PppRtkPipeline {
                 Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP,
                 Constants.IONOOPT_IFLC, Constants.TROPOPT_ESTG, 2);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppRtk = true;
+        cfg.pppRtk.enable = true;
         p.setRtkConfig(cfg);
         runRinexTest("PPRTK-IF", p, obsFile, navFile);
     }
@@ -254,7 +254,7 @@ public class PppRtkPipeline {
                 Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP,
                 Constants.IONOOPT_EST, Constants.TROPOPT_ESTG, 2);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppRtk = true;
+        cfg.pppRtk.enable = true;
         p.setRtkConfig(cfg);
         runRinexTest("PPRTK-DF", p, obsFile, navFile);
     }
@@ -265,7 +265,7 @@ public class PppRtkPipeline {
                 Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP,
                 Constants.IONOOPT_IFLC, Constants.TROPOPT_ESTG, 2);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppRtk = true;
+        cfg.pppRtk.enable = true;
         p.setRtkConfig(cfg);
         if (gpt3File != null) p.loadGpt3Grid(gpt3File);
         if (vmf3File != null) p.loadVmf3Op(vmf3File);
@@ -280,8 +280,8 @@ public class PppRtkPipeline {
                 Constants.IONOOPT_IFLC, Constants.TROPOPT_ESTG, 2);
         if (fcbFile != null) p.loadOsb(fcbFile);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppRtk = true;
-        cfg.enablePppRtkAR = true;
+        cfg.pppRtk.enable = true;
+        cfg.pppRtk.enableAR = true;
         p.setRtkConfig(cfg);
         runRinexTest("PPRTK-AR", p, obsFile, navFile);
     }
@@ -304,10 +304,10 @@ public class PppRtkPipeline {
         }
 
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppRtk = true;
-        cfg.enablePppRtkAR = true;
-        cfg.enablePppRtkFixHold = true;
-        cfg.enableIers2010 = true;
+        cfg.pppRtk.enable = true;
+        cfg.pppRtk.enableAR = true;
+        cfg.pppRtk.enableFixHold = true;
+        cfg.ppp.enableIers2010 = true;
         p.setRtkConfig(cfg);
         p.getRtk().opt.tidecorr = 7;
         runRinexTest("PPRTK-FULL", p, obsFile, navFile);
@@ -319,8 +319,8 @@ public class PppRtkPipeline {
                 Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP,
                 Constants.IONOOPT_SSR, Constants.TROPOPT_SSR, 2);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppRtk = true;
-        cfg.enablePppRtkAR = true;
+        cfg.pppRtk.enable = true;
+        cfg.pppRtk.enableAR = true;
         p.setRtkConfig(cfg);
         if (fcbFile != null) p.loadOsb(fcbFile);
         if (dcbFile != null) p.loadDcb(dcbFile);
@@ -347,7 +347,7 @@ public class PppRtkPipeline {
             if (dcbFile != null) p.loadDcb(dcbFile);
 
             RtkConfig cfg = new RtkConfig();
-            cfg.enablePppRtk = true;
+            cfg.pppRtk.enable = true;
             p.setRtkConfig(cfg);
 
             PppProcessor.PppResult r = p.process(rtcmFile);

@@ -1,7 +1,7 @@
 # rtklib-joint 联合 RTK 解算模块设计文档
 
-> 版本：v1.0  
-> 日期：2026-10-26  
+> 版本：v1.1  
+> 日期：2026-10-26（2026-10-28 核实修订：2.1.1 待实施状态、Phase 0/1 工时、13.11.6 缺陷状态；13.7 改为中性路径区分表述）  
 > 状态：定稿
 
 ---
@@ -56,6 +56,8 @@
 ## 2. 数学模型
 
 ### 2.1 状态向量
+
+> **实现状态（2026-10-28 核实）**：当前代码仍是下述「每基线一份大气」结构（`JointCore.java:146-171` 的 `nx` / `baselineOffset` 计算、`JointRtk.java:79-94` 的 `II()` / `IT()`）。本节描述的是**现状**，正确结构见 2.1.1，修正**尚未落地**。
 
 k 个基准站，1 个 Rover，双差模式：
 
@@ -133,7 +135,11 @@ x = [ pos ] + [ rover 大气 · 全局共享 ] + [ base 大气 · 每站一份 ]
 
 **落地方式**：只改索引函数（`NI()`, `NT()`, `II()`, `IT()`, `nx` 计算，`baselineOffset[]` 起点），`ddres` / `udpos` / `udtrop` / `udiono` 的算法逻辑不变。
 
+**补充核实（2026-10-28）**：`JointCore.udstate()` 目前只给模糊度加过程噪声（`prn[0]`），未实现电离层/对流层的过程噪声与初值（无 `prn[1]`/`prn[2]`、无 `initx`）。因此当前代码里 EST 大气状态是**无效维度**（P 恒为 0、不吸收任何误差）。修正维度时需同时把 `prn[1]`/`prn[2]` 与初值接线，否则收益仍为零。
+
 ### 2.2 状态索引函数
+
+> **实现状态（2026-10-28 核实）**：当前代码即此「每基线独立偏移」结构，`II()/IT()` 的 `baseline` 位于索引最外层；修正后的分组方式见 2.1.1。
 
 Rover 参数索引（与 RtkCore 兼容）：
 
@@ -339,8 +345,8 @@ RtkCore.zdres(jrtk.toState(), base, obs, ...);
 | detslpCode() | private static | public static | `Rtk` → `RtkState`（record） |
 | detslpDop() | private static | public static | `Rtk` → `RtkState`（record） |
 | tidedisp() | private static | public static | 无 |
-| validobs() | private static | public static | 无 |
-| initx() | private static | public static | 无 |
+| validobs() | private static | public static | 无（2026-10-28 仍未改，joint 用本地副本） |
+| initx() | private static | public static | 无（2026-10-28 仍未改，joint 用本地副本） |
 | baseline() | private static | public static | 无 |
 | interpvar() | private static | public static | 无 |
 | gfobs() | private static | public static | 无 |
@@ -668,14 +674,14 @@ joint 模块的 `JointSol` 可被 product 模块消费，格式化输出与现�
 
 ```
 Step 0: RtkState record（用当前扁平 RtkConfig）+ core 可见性修改     1d
-Step 1: joint Phase 1（2 基线 + 双频 GPS）                         11.5d
+Step 1: joint Phase 1（2 基线 + 双频 GPS）                         13d
 Step 2: 真实数据验证——固定率是否提升                                 —
 Step 3: 若验证通过 → RtkConfig 重构 → RtkState 精简               5d
 Step 4: joint Phase 2 + 3                                        13d
 ```
 
 先做 joint 的理由：
-- 核心假设优先验证（12.5d vs 17.5d，早 5d 知道联合 RTK 是否有效）
+- 核心假设优先验证（14d vs 17.5d，早 3.5d 知道联合 RTK 是否有效）
 - 新增模块零回归风险（不改 core 任何一行，不影响其他并行开发）
 - RtkConfig 重构后置更稳（joint 跑通后可实测对比，而非假设收益）
 
@@ -684,7 +690,7 @@ Step 4: joint Phase 2 + 3                                        13d
 | 任务 | 估计 | 说明 |
 |------|------|------|
 | RtkState record | 0.5d | Java 17 record，用当前扁平 RtkConfig |
-| core 方法可见性修改 | 0.5d | 18 个 private→public static，8 个方法签名 Rtk→RtkState |
+| core 方法可见性修改 | 0.5d | 18 个 private→public static，8 个方法签名 Rtk→RtkState。截至 2026-10-28 已完成 16/18 并提交；剩余 `validobs`、`initx` 属清理债，joint 用等价本地副本替代，不阻塞 Phase 1（见第 11 节） |
 | **合计** | **1d** | |
 
 ### Phase 1：最小可用版本（2 基线 + 双频 GPS）
@@ -693,6 +699,7 @@ Step 4: joint Phase 2 + 3                                        13d
 |------|------|------|
 | 模块骨架 + pom.xml | 0.5d | Maven 模块、依赖 core |
 | JointRtk + BaseStation | 1d | 状态向量、索引函数 |
+| 大气参数维度修正（2.1.1 节） | 1~2d | 改 `NI()/NT()/II()/IT()`、`nx` 计算、`baselineOffset[]` 起点；`ddres`/`udpos`/`udtrop`/`udiono` 算法逻辑不变。若同时补齐 `udstate` 的 `prn[1]`/`prn[2]` 过程噪声与初值，另加 ~1d |
 | JointObsModel | 0.5d | 调用 core 改可见性后的方法（RtkState 传参），无需复制 |
 | JointDdRes | 2d | 联合双差观测方程（核心） |
 | JointUdState + JointUdBias | 1.5d | 状态预测、模糊度更新 |
@@ -701,7 +708,7 @@ Step 4: joint Phase 2 + 3                                        13d
 | EpochAligner | 0.5d | 2 基线历元对齐 |
 | JointProcessor | 1d | 入口数据流 |
 | 测试 + 验证 | 2d | 与单基线对比、固定率验证 |
-| **合计** | **~11.5d** | |
+| **合计** | **~13d** | |
 
 验证标准：
 - 2 基线联合解的 FLOAT 解精度优于单基线
@@ -994,7 +1001,9 @@ public class JointRefSatManager {
 ## 11. 待办：core 方法可见性恢复后清理
 
 > 记录日期：2026-10-26
-> 状态：**阻塞中** — 等待 core 另一方处理完成
+> 状态：**清理债，不阻塞 Phase 1**
+> 核实（2026-10-28）：3.2 节所列 18 个方法中 16 个已为 `public static`（HEAD 已提交，`zdres`/`varerr`/`prectrop`/`selsat`/`antmodel` 等均含 `RtkState` 签名改造）。仅 `validobs`、`initx` 仍为 `private static`，joint 侧保留本地副本；两者与 core 逐字符相同、为纯函数，功能等价，**Phase 1 可正常推进**。
+> 处置（2026-10-28）：`JointDdRes.SQR` 本地副本已删除（所有调用点早已使用 `RtkCore.SQR`）。`validobs`/`initx` 暂不切换——`RtkCore.java` 工作区存在 config 结构重构未提交（`cfg.pppRtk.enable` 等 23 增 23 删），此时插入改动会制造冲突与 blame 污染，待该重构提交、工作区干净后再切。
 
 ### 11.1 背景
 
@@ -1003,21 +1012,24 @@ core 中 `RtkCore` 的 `validobs`、`initx` 方法当前为 `private static`，j
 
 ### 11.2 joint 模块临时本地实现
 
-| 方法 | 位置 | 对应 core 方法 |
-|------|------|---------------|
-| `JointDdRes.validobs(int iu, int ir, int f, int nf, double[] y)` | [JointDdRes.java](file:///D:/code/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java) | `RtkCore.validobs` |
-| `JointDdRes.initx(double[] x, double[] P, int nx, double xi, double var, int i)` | [JointDdRes.java](file:///D:/code/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java) | `RtkCore.initx` |
-| `JointDdRes.SQR(double x)` | [JointDdRes.java](file:///D:/code/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java) | `RtkCore.SQR`（已是 public，此为冗余备份） |
+| 方法 | 位置 | 对应 core 方法 | 状态 |
+|------|------|---------------|------|
+| `JointDdRes.validobs(int iu, int ir, int f, int nf, double[] y)` | [JointDdRes.java](file:///D:/code/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java) | `RtkCore.validobs` | 保留，待切换 |
+| `JointDdRes.initx(double[] x, double[] P, int nx, double xi, double var, int i)` | [JointDdRes.java](file:///D:/code/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java) | `RtkCore.initx` | 保留，待切换 |
+| ~~`JointDdRes.SQR(double x)`~~ | ~~[JointDdRes.java](file:///D:/code/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java)~~ | `RtkCore.SQR`（已是 public） | **已删除（2026-10-28）** |
 
-### 11.3 core 恢复后的清理步骤
+### 11.3 清理步骤
 
-当 core 另一方处理完成、允许修改 core 时：
+**已完成**：
 
-1. 将 `RtkCore.validobs` 从 `private static` 改为 `public static`
-2. 将 `RtkCore.initx` 从 `private static` 改为 `public static`
-3. 删除 `JointDdRes.validobs` 本地实现，替换调用为 `RtkCore.validobs`
-4. 删除 `JointDdRes.initx` 本地实现，替换调用为 `RtkCore.initx`
-5. 删除 `JointDdRes.SQR` 本地实现（`RtkCore.SQR` 已是 public static，直接使用）
+1. ~~删除 `JointDdRes.SQR` 本地实现~~ — 2026-10-28 完成，全部调用点使用 `RtkCore.SQR`
+
+**待 core 重构提交后执行**（不阻塞 Phase 1）：
+
+2. 将 `RtkCore.validobs` 从 `private static` 改为 `public static`
+3. 将 `RtkCore.initx` 从 `private static` 改为 `public static`
+4. 删除 `JointDdRes.validobs` 本地实现，替换调用为 `RtkCore.validobs`
+5. 删除 `JointDdRes.initx` 本地实现，替换调用为 `RtkCore.initx`
 6. 运行 `mvn compile -pl rtklib-joint -am` 验证编译通过
 7. 运行全量测试确认无回归
 
@@ -1246,28 +1258,26 @@ UNKNOWN ──→ STABLE ──→ DRIFTING ──→ DISPLACED ──→ REJECT
 | DISPLACED | 从 `bases[]` 剔除，nx 变化需重构 `P` 相应块 |
 | REJECTED | 永久排除并告警，需人工介入 |
 
-### 13.7 与专利方法的对比
+### 13.7 与既有工程监测方法的路径区分
 
-参考文档：《一种基于已知系统的高精度GNSS工程监测方法》（专利申请，四川中水成勘院测绘工程有限责任公司）。
+本节方案面向**观测层、历元级**的实时质量控制（双差残差反演 + χ² 统计检验），与工程监测领域常见的**坐标层、期级**做法（先解基线再网平差，三维七参数 Helmert 归算 + 递推加权，依赖首期基准成果）在数据前提、时间尺度、数学路径上均不同：
 
-| 项 | 该专利 | 本节方案 |
-|----|--------|---------|
+| 维度 | 坐标层 / 期级方法 | 本节方案 |
+|---|---|---|
 | 解算层级 | 坐标层（先算基线，再网平差） | **观测层**（双差残差直接参与） |
-| 时间尺度 | 期级（年/半年，每期 24h×3） | 历元级（秒级） |
-| 核心数学 | 三维七参数 Helmert 归算 + 递推加权 `q_i = 3+i` | 残差反演 + χ² 统计检验 |
-| 数据前提 | 必须有"已知系统"首期成果 | 无需历史，自适应 |
+| 时间尺度 | 期级（年 / 半年） | 历元级（秒级） |
+| 核心数学 | Helmert 归算 + 递推加权 | 残差反演 + χ² 统计检验 |
+| 数据前提 | 需首期基准成果 | 无需历史，自适应 |
 | 位移判定 | 归算后较差 > 阈值 | `\|Δδb\|` 统计检验 + 持续历元数 |
-| 成果合成 | 加权递推平均 | 降权 / 剔除 |
 | 适用场景 | 长期形变监测（mm 级） | 实时 RTK 质量控制（cm 级） |
-| 共同思想 | 多基站互检、基准可靠性优先 | 同源 |
 
-**两者互补而非替代**：
+两者互补而非替代：
 
-- 专利方案适合做**成果层**的长期基准维护（跨期系统误差消除、沉降量计算）
-- 本节方案适合做**解算层**的实时质量控制（单历元异常基站识别）
+- 坐标层 / 期级方法适合**成果层**的长期基准维护（跨期系统误差消除、沉降量计算）
+- 本节方案适合**解算层**的实时质量控制（单历元异常基站识别）
 - 若未来做"实时解算 + 长期形变"一体化，两层都应保留
 
-**IP 提示**：该文档为专利申请文本（含权利要求书）。本节方案采用完全不同的技术路径（残差反演 vs Helmert 归算、历元级 vs 期级），不落入其权利要求 1 的步骤组合。若后续产品化，建议仅借鉴"多站互检"这一通用思想，独立实现。
+**实现说明**：本节只保留"多站互检、基准可靠性优先"这一通用工程思想，代码为独立实现；对外部资料的任何引用与比对均不纳入本仓库。
 
 ### 13.8 实现落点
 
@@ -1388,7 +1398,7 @@ baardaT = |v_i| / (σ0 · sqrt(qv_ii))
 
 ```
 ① 定位异常基站
-   k ≥ 3 → identifyByResidual()        ← 空实现（见 13.11.6）
+   k ≥ 3 → identifyByResidual()        ← Baarda 残差判据（2026-10-28 已实现，仅定位最大偏差单站）
    k = 2 → identifyBySpp()             ← SPP 均值 vs RTCM 1005，>1m 判异常
 
 ② 定量诊断
@@ -1417,9 +1427,11 @@ baardaT = |v_i| / (σ0 · sqrt(qv_ii))
 
 | # | 问题 | 影响 |
 |---|---|---|
-| 1 | `identifyByResidual()` 返回空列表 | **k ≥ 3 时深度诊断完全不触发**，基站越多反而越不诊断 |
-| 2 | `CROSS_CHECKED_THRESHOLD == SUSPECT_THRESHOLD == 0.05` | 第三个分支是死代码，实际只有 2cm / 5cm 两档 |
+| 1 | ~~`identifyByResidual()` 返回空列表~~ **已修复** | 2026-10-28 提交 a5e1a21 改为 Baarda 残差判据（`BaseStationDiagnoser.java:235`），k ≥ 3 场景已有 `BaseStationDiagnoserResidualTest` 覆盖 |
+| 2 | `crossCheckedThreshold == suspectThreshold == 0.05`（`MultiBaselineConfig.java:53-54`） | 第三个分支是死代码，实际只有 2cm / 5cm 两档 |
 | 3 | Layer 4 依赖 RTCM 1005 播发坐标 | 基站换天线但 1005 未更新 → 把正常基站判成异常；且只挑最大偏差一个，多站同时位移会漏检 |
+
+> **归属**：上表剩余两项（#2 阈值死分支、#3 Layer 4 的 1005 依赖与单站局限）属于 **rtklib-adjust** 的待办，不属 joint。joint 的 `BaseStabilityMonitor` 只需在设计中规避同样问题（阈值档位必须严格递增；坐标自检不依赖播发坐标；支持多站同时位移）。
 
 #### 13.11.7 概念混淆：假固定 ≠ 基站位移
 
@@ -1437,7 +1449,7 @@ baardaT = |v_i| / (σ0 · sqrt(qv_ii))
 | 能 | 不能 |
 |---|---|
 | 判"这批解里有基站不可信" | 判位移**方向与量值**（只有标量距离） |
-| k=2 时定位到具体基站 | k≥3 时定位（空实现） |
+| k=2 时定位到具体基站 | k≥3 时仅能定位最大偏差单站（多站同时位移会漏检） |
 | 给替代坐标建议 | 自动剔除/降权（只回调） |
 | 依赖多解冗余做交叉检验 | 无冗余时（单基站）完全失效 |
 
@@ -1456,7 +1468,7 @@ joint ：只有一个共享 rover 坐标 → 看不到离散，但握有完整 v
 | 残差反演 δb | ❌ 无 | ✅ joint 独有，§13.5 |
 | 基站间骨架网 | ❌ 无 | ⚠️ 两边都缺，Phase C |
 
-**结论**：`BaseStabilityMonitor` 的闸1 直接用 Baarda w-test + σ0 滑窗（现成算法），闸2 用 §13.5 的残差反演，闸3 另行建设。同时建议回头补掉 `identifyByResidual()` 的空实现——k ≥ 3 恰恰是最需要诊断的场景，当前完全失效。
+**结论**：`BaseStabilityMonitor` 的闸1 直接用 Baarda w-test + σ0 滑窗（现成算法），闸2 用 §13.5 的残差反演，闸3 另行建设。`identifyByResidual()` 的空实现已于 2026-10-28 补齐（见 13.11.6），§13.11.6 剩余两项记入 **rtklib-adjust** 待办，joint 侧无需动作。
 
 ---
 

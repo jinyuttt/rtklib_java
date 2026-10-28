@@ -233,7 +233,7 @@ public class PppIndividualOptTest {
         log.info("--- + GPT3+VMF3 ---");
         PrcOpt optGpt3 = createBaseOpt(station.navsys);
         RtkConfig cfgGpt3 = new RtkConfig();
-        cfgGpt3.enableGpt3Vmf3 = true;
+        cfgGpt3.ppp.enableGpt3Vmf3 = true;
         PppRunResult gpt3 = runPpp(station, optGpt3, cfgGpt3, maxEpochs);
 
         // GPT3 网格对照：默认探测 test-data/product/gpt3/gpt3_5.grd，可用环境变量 PPP_GPT3_GRID 覆盖；
@@ -246,17 +246,17 @@ public class PppIndividualOptTest {
             log.info("--- + GPT3+VMF3+GRID ---");
             PrcOpt optG3 = createBaseOpt(station.navsys);
             RtkConfig cfgG3 = new RtkConfig();
-            cfgG3.enableGpt3Vmf3 = true;
-            cfgG3.gpt3GridFile = gpt3GridPath;
+            cfgG3.ppp.enableGpt3Vmf3 = true;
+            cfgG3.ppp.gpt3GridFile = gpt3GridPath;
             gpt3Grid = runPpp(station, optG3, cfgG3, maxEpochs);
 
             if (gpt3GridStateOn) {
                 log.info("--- + GPT3+VMF3+GRID+WETSTATE ---");
                 PrcOpt optG3s = createBaseOpt(station.navsys);
                 RtkConfig cfgG3s = new RtkConfig();
-                cfgG3s.enableGpt3Vmf3 = true;
-                cfgG3s.gpt3GridFile = gpt3GridPath;
-                cfgG3s.useGpt3Grid = true;
+                cfgG3s.ppp.enableGpt3Vmf3 = true;
+                cfgG3s.ppp.gpt3GridFile = gpt3GridPath;
+                cfgG3s.ppp.useGpt3Grid = true;
                 gpt3GridState = runPpp(station, optG3s, cfgG3s, maxEpochs);
             }
         }
@@ -264,20 +264,20 @@ public class PppIndividualOptTest {
         log.info("--- + IERS2010 ---");
         PrcOpt optIers = createBaseOpt(station.navsys);
         RtkConfig cfgIers = new RtkConfig();
-        cfgIers.enableIers2010 = true;
+        cfgIers.ppp.enableIers2010 = true;
         PppRunResult iers = runPpp(station, optIers, cfgIers, maxEpochs);
 
         log.info("--- + IERS2010 + S1/S2大气潮 ---");
         PrcOpt optAt1s2 = createBaseOpt(station.navsys);
         RtkConfig cfgAt1s2 = new RtkConfig();
-        cfgAt1s2.enableIers2010 = true;
-        cfgAt1s2.enableAt1S2 = true;
+        cfgAt1s2.ppp.enableIers2010 = true;
+        cfgAt1s2.ppp.enableAt1S2 = true;
         PppRunResult at1s2 = runPpp(station, optAt1s2, cfgAt1s2, maxEpochs);
 
         log.info("--- + ISB/IFCB/IFB ---");
         PrcOpt optIsb = createBaseOpt(station.navsys);
         RtkConfig cfgIsb = new RtkConfig();
-        cfgIsb.enableIsbIfcbIfb = true;
+        cfgIsb.ppp.enableIsbIfcbIfb = true;
         PppRunResult isb = runPpp(station, optIsb, cfgIsb, maxEpochs);
 
         log.info("--- + 非组合PPP(EST) ---");

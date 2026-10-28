@@ -238,7 +238,7 @@ public class PppAccuracyTest {
         p.loadClk(CLK_FILE);
         if (new File(ERP_FILE).exists()) p.loadErp(ERP_FILE);
         RtkConfig cfg = new RtkConfig();
-        cfg.enableIers2010 = true;
+        cfg.ppp.enableIers2010 = true;
         p.setRtkConfig(cfg);
 
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);
@@ -259,7 +259,7 @@ public class PppAccuracyTest {
         p.loadClk(CLK_FILE);
         if (new File(ERP_FILE).exists()) p.loadErp(ERP_FILE);
         RtkConfig cfg = new RtkConfig();
-        cfg.enableIsbIfcbIfb = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
         p.setRtkConfig(cfg);
 
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);
@@ -281,7 +281,7 @@ public class PppAccuracyTest {
         if (new File(ERP_FILE).exists()) p.loadErp(ERP_FILE);
         if (fcbExists) p.loadFcb(FCB_FILE);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppAR = true;
+        cfg.pppAr.enableAR = true;
         p.setRtkConfig(cfg);
 
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);
@@ -303,8 +303,8 @@ public class PppAccuracyTest {
         if (new File(ERP_FILE).exists()) p.loadErp(ERP_FILE);
         if (fcbExists) p.loadFcb(FCB_FILE);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppAR = true;
-        cfg.enablePppArFixHold = true;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.enableFixHold = true;
         p.setRtkConfig(cfg);
 
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);
@@ -326,8 +326,8 @@ public class PppAccuracyTest {
         if (new File(ERP_FILE).exists()) p.loadErp(ERP_FILE);
         if (fcbExists) p.loadFcb(FCB_FILE);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppAR = true;
-        cfg.enablePppPartialAR = true;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.enablePartialAR = true;
         p.setRtkConfig(cfg);
 
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);
@@ -349,8 +349,8 @@ public class PppAccuracyTest {
         if (new File(ERP_FILE).exists()) p.loadErp(ERP_FILE);
         if (fcbExists) p.loadFcb(FCB_FILE);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppAR = true;
-        cfg.enableBds3PppAR = true;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.enableBds3AR = true;
         p.setRtkConfig(cfg);
 
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);
@@ -374,7 +374,7 @@ public class PppAccuracyTest {
             OtlReader.readblq(BLQ_FILE, STATION, p.getRtk().opt.odisp[0]);
         }
         RtkConfig cfg = new RtkConfig();
-        cfg.enableIers2010 = true;
+        cfg.ppp.enableIers2010 = true;
         p.setRtkConfig(cfg);
         p.getRtk().opt.tidecorr = 7;
 
@@ -398,10 +398,10 @@ public class PppAccuracyTest {
         if (fcbExists) p.loadFcb(FCB_FILE);
         if (new File(DCB_FILE).exists()) p.loadDcb(DCB_FILE);
         RtkConfig cfg = new RtkConfig();
-        cfg.enableIers2010 = true;
-        cfg.enableIsbIfcbIfb = true;
-        cfg.enablePppAR = true;
-        cfg.enablePppArFixHold = true;
+        cfg.ppp.enableIers2010 = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.enableFixHold = true;
         p.setRtkConfig(cfg);
 
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);

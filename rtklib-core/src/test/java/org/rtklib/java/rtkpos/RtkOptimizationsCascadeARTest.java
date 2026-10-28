@@ -12,7 +12,7 @@ class RtkOptimizationsCascadeARTest {
     @Test
     void testCascadeAmbFixDefaultOff() {
         Rtk rtk = new Rtk();
-        rtk.rtkConfig.enableCascadeAR = false;
+        rtk.rtkConfig.rtk.enableCascadeAR = false;
         double[] bias = new double[10];
         double[] xa = new double[10];
         int result = RtkOptimizationsCascadeAR.cascadeAmbFix(rtk, bias, xa, 1, 0, 0, null);
@@ -22,7 +22,7 @@ class RtkOptimizationsCascadeARTest {
     @Test
     void testCascadeAmbFixSingleFreqSkips() {
         Rtk rtk = new Rtk();
-        rtk.rtkConfig.enableCascadeAR = true;
+        rtk.rtkConfig.rtk.enableCascadeAR = true;
         rtk.opt.nf = 1;
         rtk.opt.ionoopt = Constants.IONOOPT_BRDC;
         double[] bias = new double[10];

@@ -607,19 +607,23 @@ rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码�
 
 ---
 
-### 8.8 SSR 数据源获取（⏳ 等待处理中）
+### 8.8 SSR 数据源接入（✅ 已闭环，2026-10-28）
 
-> 状态：**等待外部资源**。代码链路已就绪（RTCM SSR 解码 → `nav.ssr[]` → `SsrCorrector` → `ppprtkos`），当前缺口是可验证的数据源。
+> 状态：**已完成**。CAS `SSRA01CAS0` / `SSRC01CAS0` SSR 挂载点可用，已打通
+> 「实时流录制 → 离线回放 → `nav.ssr[]` → `SsrCorrector` → `ppprtkos()`」闭环：
+> 30 s 录制 CRC 全通过，120 s 回放 `total=119 success=119 fail=0`（详见
+> [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) FIX-ALG-035/036）。
+> 落盘样本：`data/ssr_SSRA01CAS0.rtcm3`（201 帧，全部为 SSR 电文）。
 
 | 来源 | 状态 | 说明 |
 |------|------|------|
+| CAS IGS `SSRA01CAS0` / `SSRC01CAS0` | ✅ 已接入并验证 | 含轨道/钟差/码偏差/相位偏差；录制回放闭环通过 |
 | Galileo HAS IDD | 待注册审批 | 无公开事后存档；`HasSsrDecoder` 已实现 COMPACT-SSR（MT1~MT9）解码，缺 IDD 帧同步与互联网接入 |
 | BDS PPP-B2b（BDSet） | 公开归档可用 | 无相位偏差，仅支撑浮点 PPP 验证 |
 | 北航 2025 全球区域 SSR | 待离线申请 | 元数据未明确含相位偏差/区域大气改正 |
-| CAS IGS SSRA*/SSRC* | 权限未授权 | 账号当前仅开放观测流挂载点 |
 | QZSS CLAS L6 | 公开样本待寻 | 日本区域；`CompactSsrDecoder` 已就绪，缺公开 L6 二进制存档 |
 
-> 接入手册：权限到位后按 [SSR_ACCESS_PLAYBOOK.md](SSR_ACCESS_PLAYBOOK.md) 执行（两行改动 + 五步接入 + 验收清单）。
+> 接入手册：[SSR_ACCESS_PLAYBOOK.md](SSR_ACCESS_PLAYBOOK.md)（两行改动 + 五步接入 + 验收清单）。
 
 ## 9. 暂不建议投入 🔴
 

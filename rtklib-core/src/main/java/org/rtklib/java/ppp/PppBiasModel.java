@@ -9,19 +9,19 @@ public class PppBiasModel {
     }
 
     public static int extraDim(RtkConfig cfg) {
-        if (!cfg.enableIsbIfcbIfb) return 0;
+        if (!cfg.ppp.enableIsbIfcbIfb) return 0;
 
         int dim = 0;
 
-        if (cfg.estimateIsb) {
+        if (cfg.ppp.estimateIsb) {
             dim += 3;
         }
 
-        if (cfg.estimateIfcb) {
+        if (cfg.ppp.estimateIfcb) {
             dim += Constants.MAXSAT;
         }
 
-        if (cfg.estimateIfb) {
+        if (cfg.ppp.estimateIfb) {
             dim += 4;
         }
 
@@ -29,22 +29,22 @@ public class PppBiasModel {
     }
 
     public static int isbIndex(RtkConfig cfg, PrcOpt opt) {
-        if (!cfg.estimateIsb) return -1;
+        if (!cfg.ppp.estimateIsb) return -1;
         return pppBaseDim(opt);
     }
 
     public static int ifcbIndex(RtkConfig cfg, PrcOpt opt) {
-        if (!cfg.estimateIfcb) return -1;
+        if (!cfg.ppp.estimateIfcb) return -1;
         int idx = pppBaseDim(opt);
-        if (cfg.estimateIsb) idx += 3;
+        if (cfg.ppp.estimateIsb) idx += 3;
         return idx;
     }
 
     public static int ifbIndex(RtkConfig cfg, PrcOpt opt) {
-        if (!cfg.estimateIfb) return -1;
+        if (!cfg.ppp.estimateIfb) return -1;
         int idx = pppBaseDim(opt);
-        if (cfg.estimateIsb) idx += 3;
-        if (cfg.estimateIfcb) idx += Constants.MAXSAT;
+        if (cfg.ppp.estimateIsb) idx += 3;
+        if (cfg.ppp.estimateIfcb) idx += Constants.MAXSAT;
         return idx;
     }
 
@@ -59,7 +59,7 @@ public class PppBiasModel {
     }
 
     public static void extendStateVector(Rtk rtk, int nxOrig, int nxNew, RtkConfig cfg) {
-        if (!cfg.enableIsbIfcbIfb) return;
+        if (!cfg.ppp.enableIsbIfcbIfb) return;
 
         double[] xNew = new double[nxNew];
         double[] PNew = new double[nxNew * nxNew];
@@ -74,21 +74,21 @@ public class PppBiasModel {
         double varIfcb = 30.0 * 30.0;
         double varIfb = 60.0 * 60.0;
 
-        if (cfg.estimateIsb) {
+        if (cfg.ppp.estimateIsb) {
             for (int i = 0; i < 3; i++) {
                 PNew[idx * nxNew + idx] = varIsb;
                 idx++;
             }
         }
 
-        if (cfg.estimateIfcb) {
+        if (cfg.ppp.estimateIfcb) {
             for (int i = 0; i < Constants.MAXSAT; i++) {
                 PNew[idx * nxNew + idx] = varIfcb;
                 idx++;
             }
         }
 
-        if (cfg.estimateIfb) {
+        if (cfg.ppp.estimateIfb) {
             for (int i = 0; i < 4; i++) {
                 PNew[idx * nxNew + idx] = varIfb;
                 idx++;
@@ -103,7 +103,7 @@ public class PppBiasModel {
     public static void extendObsEquation(double[] H, int nxOrig, int nxNew, int nv,
                                           int sat, int sys, int freq, PrcOpt opt,
                                           RtkConfig cfg) {
-        if (!cfg.enableIsbIfcbIfb) return;
+        if (!cfg.ppp.enableIsbIfcbIfb) return;
 
         int isbIdx = isbIndex(cfg, opt);
         if (isbIdx >= 0) {

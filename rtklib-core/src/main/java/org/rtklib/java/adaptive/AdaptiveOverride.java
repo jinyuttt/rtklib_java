@@ -18,14 +18,14 @@ public class AdaptiveOverride {
         originals.put("maxinno0", opt.maxinno[0]);
         originals.put("maxinno1", opt.maxinno[1]);
         originals.put("elmin", opt.elmin);
-        originals.put("enableIggiii", cfg.enableIggiii);
-        originals.put("enableSnrMedian", cfg.enableSnrMedian);
-        originals.put("enableSegmentSigmaFilter", cfg.enableSegmentSigmaFilter);
-        originals.put("enableAdaptiveQ", cfg.enableAdaptiveQ);
-        originals.put("enableSppEkf", cfg.enableSppEkf);
-        originals.put("enableSppRobust", cfg.enableSppRobust);
-        originals.put("enableSppInnovChisq", cfg.enableSppInnovChisq);
-        originals.put("sppInnovOutlierThresh", cfg.sppInnovOutlierThresh);
+        originals.put("enableIggiii", cfg.rtk.enableIggiii);
+        originals.put("enableSnrMedian", cfg.rtk.enableSnrMedian);
+        originals.put("enableSegmentSigmaFilter", cfg.rtk.enableSegmentSigmaFilter);
+        originals.put("enableAdaptiveQ", cfg.rtk.enableAdaptiveQ);
+        originals.put("spp.enableEkf", cfg.spp.enableEkf);
+        originals.put("spp.enableRobust", cfg.spp.enableRobust);
+        originals.put("spp.enableInnovChisq", cfg.spp.enableInnovChisq);
+        originals.put("spp.innovOutlierThresh", cfg.spp.innovOutlierThresh);
     }
 
     public void set(String key, Object value) {
@@ -49,14 +49,14 @@ public class AdaptiveOverride {
         if (overrides.containsKey("maxinno0")) opt.maxinno[0] = (double) overrides.get("maxinno0");
         if (overrides.containsKey("maxinno1")) opt.maxinno[1] = (double) overrides.get("maxinno1");
         if (overrides.containsKey("elmin")) opt.elmin = (double) overrides.get("elmin");
-        if (overrides.containsKey("enableIggiii")) cfg.enableIggiii = (boolean) overrides.get("enableIggiii");
-        if (overrides.containsKey("enableSnrMedian")) cfg.enableSnrMedian = (boolean) overrides.get("enableSnrMedian");
-        if (overrides.containsKey("enableSegmentSigmaFilter")) cfg.enableSegmentSigmaFilter = (boolean) overrides.get("enableSegmentSigmaFilter");
-        if (overrides.containsKey("enableAdaptiveQ")) cfg.enableAdaptiveQ = (boolean) overrides.get("enableAdaptiveQ");
-        if (overrides.containsKey("enableSppEkf")) cfg.enableSppEkf = (boolean) overrides.get("enableSppEkf");
-        if (overrides.containsKey("enableSppRobust")) cfg.enableSppRobust = (boolean) overrides.get("enableSppRobust");
-        if (overrides.containsKey("enableSppInnovChisq")) cfg.enableSppInnovChisq = (boolean) overrides.get("enableSppInnovChisq");
-        if (overrides.containsKey("sppInnovOutlierThresh")) cfg.sppInnovOutlierThresh = (double) overrides.get("sppInnovOutlierThresh");
+        if (overrides.containsKey("enableIggiii")) cfg.rtk.enableIggiii = (boolean) overrides.get("enableIggiii");
+        if (overrides.containsKey("enableSnrMedian")) cfg.rtk.enableSnrMedian = (boolean) overrides.get("enableSnrMedian");
+        if (overrides.containsKey("enableSegmentSigmaFilter")) cfg.rtk.enableSegmentSigmaFilter = (boolean) overrides.get("enableSegmentSigmaFilter");
+        if (overrides.containsKey("enableAdaptiveQ")) cfg.rtk.enableAdaptiveQ = (boolean) overrides.get("enableAdaptiveQ");
+        if (overrides.containsKey("spp.enableEkf")) cfg.spp.enableEkf = (boolean) overrides.get("spp.enableEkf");
+        if (overrides.containsKey("spp.enableRobust")) cfg.spp.enableRobust = (boolean) overrides.get("spp.enableRobust");
+        if (overrides.containsKey("spp.enableInnovChisq")) cfg.spp.enableInnovChisq = (boolean) overrides.get("spp.enableInnovChisq");
+        if (overrides.containsKey("spp.innovOutlierThresh")) cfg.spp.innovOutlierThresh = (double) overrides.get("spp.innovOutlierThresh");
     }
 
     public void restoreAll(RtkConfig cfg, PrcOpt opt) {
@@ -64,14 +64,14 @@ public class AdaptiveOverride {
         if (originals.containsKey("maxinno0")) opt.maxinno[0] = (double) originals.get("maxinno0");
         if (originals.containsKey("maxinno1")) opt.maxinno[1] = (double) originals.get("maxinno1");
         if (originals.containsKey("elmin")) opt.elmin = (double) originals.get("elmin");
-        if (originals.containsKey("enableIggiii")) cfg.enableIggiii = (boolean) originals.get("enableIggiii");
-        if (originals.containsKey("enableSnrMedian")) cfg.enableSnrMedian = (boolean) originals.get("enableSnrMedian");
-        if (originals.containsKey("enableSegmentSigmaFilter")) cfg.enableSegmentSigmaFilter = (boolean) originals.get("enableSegmentSigmaFilter");
-        if (originals.containsKey("enableAdaptiveQ")) cfg.enableAdaptiveQ = (boolean) originals.get("enableAdaptiveQ");
-        if (originals.containsKey("enableSppEkf")) cfg.enableSppEkf = (boolean) originals.get("enableSppEkf");
-        if (originals.containsKey("enableSppRobust")) cfg.enableSppRobust = (boolean) originals.get("enableSppRobust");
-        if (originals.containsKey("enableSppInnovChisq")) cfg.enableSppInnovChisq = (boolean) originals.get("enableSppInnovChisq");
-        if (originals.containsKey("sppInnovOutlierThresh")) cfg.sppInnovOutlierThresh = (double) originals.get("sppInnovOutlierThresh");
+        if (originals.containsKey("enableIggiii")) cfg.rtk.enableIggiii = (boolean) originals.get("enableIggiii");
+        if (originals.containsKey("enableSnrMedian")) cfg.rtk.enableSnrMedian = (boolean) originals.get("enableSnrMedian");
+        if (originals.containsKey("enableSegmentSigmaFilter")) cfg.rtk.enableSegmentSigmaFilter = (boolean) originals.get("enableSegmentSigmaFilter");
+        if (originals.containsKey("enableAdaptiveQ")) cfg.rtk.enableAdaptiveQ = (boolean) originals.get("enableAdaptiveQ");
+        if (originals.containsKey("spp.enableEkf")) cfg.spp.enableEkf = (boolean) originals.get("spp.enableEkf");
+        if (originals.containsKey("spp.enableRobust")) cfg.spp.enableRobust = (boolean) originals.get("spp.enableRobust");
+        if (originals.containsKey("spp.enableInnovChisq")) cfg.spp.enableInnovChisq = (boolean) originals.get("spp.enableInnovChisq");
+        if (originals.containsKey("spp.innovOutlierThresh")) cfg.spp.innovOutlierThresh = (double) originals.get("spp.innovOutlierThresh");
         overrides.clear();
     }
 

@@ -20,6 +20,12 @@
             <version>2.10.4</version>
         </dependency>
         <dependency>
+            <groupId>org.rtklib</groupId>
+            <artifactId>rtklib-core</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
         </dependency>

@@ -14,7 +14,7 @@ class AdaptiveOverrideTest {
         RtkConfig cfg = new RtkConfig();
         PrcOpt opt = new PrcOpt();
         double origThresslip = opt.thresslip;
-        boolean origIggiii = cfg.enableIggiii;
+        boolean origIggiii = cfg.rtk.enableIggiii;
 
         AdaptiveOverride ov = new AdaptiveOverride();
         ov.snapshot(cfg, opt);
@@ -24,13 +24,13 @@ class AdaptiveOverrideTest {
         ov.set("enableIggiii", true);
         ov.applyTo(cfg, opt);
         assertEquals(0.10, opt.thresslip, 1e-12);
-        assertTrue(cfg.enableIggiii);
+        assertTrue(cfg.rtk.enableIggiii);
         assertTrue(ov.getBoolean("enableIggiii", false));
         assertEquals(0.10, ov.getDouble("thresslip", 0), 1e-12);
 
         ov.restoreAll(cfg, opt);
         assertEquals(origThresslip, opt.thresslip, 1e-12);
-        assertEquals(origIggiii, cfg.enableIggiii);
+        assertEquals(origIggiii, cfg.rtk.enableIggiii);
     }
 
     @Test

@@ -102,7 +102,7 @@ public class CascadeArBehaviorTest {
     private RunStat runOne(DataSet ds, boolean cascadeOn) {
         PrcOpt opt = baseOpt();
         RtkConfig cfg = new RtkConfig();
-        if (cascadeOn) cfg.enableCascadeAR = true;
+        if (cascadeOn) cfg.rtk.enableCascadeAR = true;
 
         RtkProcessor.RtkResult result;
         try {

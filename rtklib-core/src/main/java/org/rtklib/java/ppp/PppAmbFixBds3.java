@@ -39,7 +39,7 @@ public final class PppAmbFixBds3 {
 
     public static int pppAmbFixBds3(Rtk rtk, double[] bias, double[] xa, Nav nav) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enableBds3PppAR) return -1;
+        if (!cfg.pppAr.enableBds3AR) return -1;
 
         PrcOpt opt = rtk.opt;
         int nx = rtk.nx;
@@ -113,7 +113,7 @@ public final class PppAmbFixBds3 {
         if (info != 0) return -1;
 
         double wlRatio = sWl[0] > 0 ? sWl[1] / sWl[0] : 0.0;
-        if (wlRatio < cfg.pppArRatioWl) {
+        if (wlRatio < cfg.pppAr.arRatioWl) {
             LOG.debug("BDS-3 PPP-AR: WL ratio too low: {}", String.format("%.2f", wlRatio));
             return -1;
         }
@@ -149,7 +149,7 @@ public final class PppAmbFixBds3 {
         if (info != 0) return -1;
 
         double nlRatio = sNl[0] > 0 ? sNl[1] / sNl[0] : 0.0;
-        if (nlRatio < cfg.pppArRatioNl) {
+        if (nlRatio < cfg.pppAr.arRatioNl) {
             LOG.debug("BDS-3 PPP-AR: NL ratio too low: {}", String.format("%.2f", nlRatio));
             return -1;
         }

@@ -358,7 +358,7 @@ public class DynamicRtkOptTest {
         void apply(PrcOpt opt) { CV_EST_REF.apply(opt); }
         RtkConfig createRtkConfig() {
             RtkConfig cfg = new RtkConfig();
-            cfg.enableAdaptiveQ = true;
+            cfg.rtk.enableAdaptiveQ = true;
             return cfg;
         }
     };
@@ -367,7 +367,7 @@ public class DynamicRtkOptTest {
         void apply(PrcOpt opt) { CV_EST_REF.apply(opt); }
         RtkConfig createRtkConfig() {
             RtkConfig cfg = new RtkConfig();
-            cfg.enableIggiii = true;
+            cfg.rtk.enableIggiii = true;
             return cfg;
         }
     };
@@ -376,7 +376,7 @@ public class DynamicRtkOptTest {
         void apply(PrcOpt opt) { CV_EST_REF.apply(opt); }
         RtkConfig createRtkConfig() {
             RtkConfig cfg = new RtkConfig();
-            cfg.enableResidualEdit = true;
+            cfg.rtk.enableResidualEdit = true;
             return cfg;
         }
     };
@@ -385,7 +385,7 @@ public class DynamicRtkOptTest {
         void apply(PrcOpt opt) { CV_EST_REF.apply(opt); }
         RtkConfig createRtkConfig() {
             RtkConfig cfg = new RtkConfig();
-            cfg.enableSnrMedian = true;
+            cfg.rtk.enableSnrMedian = true;
             return cfg;
         }
     };
@@ -394,7 +394,7 @@ public class DynamicRtkOptTest {
         void apply(PrcOpt opt) { CV_EST_REF.apply(opt); }
         RtkConfig createRtkConfig() {
             RtkConfig cfg = new RtkConfig();
-            cfg.enableParamTypeNoise = true;
+            cfg.common.enableParamTypeNoise = true;
             return cfg;
         }
     };
@@ -403,7 +403,7 @@ public class DynamicRtkOptTest {
         void apply(PrcOpt opt) { CV_EST_REF.apply(opt); }
         RtkConfig createRtkConfig() {
             RtkConfig cfg = new RtkConfig();
-            cfg.enableIonoTropGradient = true;
+            cfg.rtk.enableIonoTropGradient = true;
             return cfg;
         }
     };
@@ -412,7 +412,7 @@ public class DynamicRtkOptTest {
         void apply(PrcOpt opt) { CV_OFF_REF.apply(opt); }
         RtkConfig createRtkConfig() {
             RtkConfig cfg = new RtkConfig();
-            cfg.enableAdaptiveQ = true;
+            cfg.rtk.enableAdaptiveQ = true;
             return cfg;
         }
     };
@@ -421,7 +421,7 @@ public class DynamicRtkOptTest {
         void apply(PrcOpt opt) { CV_OFF_REF.apply(opt); }
         RtkConfig createRtkConfig() {
             RtkConfig cfg = new RtkConfig();
-            cfg.enableIggiii = true;
+            cfg.rtk.enableIggiii = true;
             return cfg;
         }
     };
@@ -430,7 +430,7 @@ public class DynamicRtkOptTest {
         void apply(PrcOpt opt) { CV_OFF_REF.apply(opt); }
         RtkConfig createRtkConfig() {
             RtkConfig cfg = new RtkConfig();
-            cfg.enableResidualEdit = true;
+            cfg.rtk.enableResidualEdit = true;
             return cfg;
         }
     };
@@ -439,7 +439,7 @@ public class DynamicRtkOptTest {
         void apply(PrcOpt opt) { CV_OFF_REF.apply(opt); }
         RtkConfig createRtkConfig() {
             RtkConfig cfg = new RtkConfig();
-            cfg.enableSnrMedian = true;
+            cfg.rtk.enableSnrMedian = true;
             return cfg;
         }
     };
@@ -448,9 +448,9 @@ public class DynamicRtkOptTest {
         void apply(PrcOpt opt) { CV_OFF_REF.apply(opt); }
         RtkConfig createRtkConfig() {
             RtkConfig cfg = new RtkConfig();
-            cfg.enableBootstrapping = true;
-            cfg.bootstrappingMinSuccess = 0.99;
-            cfg.bootstrappingWithRatio = true;
+            cfg.rtk.enableBootstrapping = true;
+            cfg.rtk.bootstrappingMinSuccess = 0.99;
+            cfg.rtk.bootstrappingWithRatio = true;
             return cfg;
         }
     };
@@ -459,10 +459,10 @@ public class DynamicRtkOptTest {
         void apply(PrcOpt opt) { CV_OFF_REF.apply(opt); }
         RtkConfig createRtkConfig() {
             RtkConfig cfg = new RtkConfig();
-            cfg.enableAdaptiveQ = true;
-            cfg.enableBootstrapping = true;
-            cfg.bootstrappingMinSuccess = 0.99;
-            cfg.bootstrappingWithRatio = true;
+            cfg.rtk.enableAdaptiveQ = true;
+            cfg.rtk.enableBootstrapping = true;
+            cfg.rtk.bootstrappingMinSuccess = 0.99;
+            cfg.rtk.bootstrappingWithRatio = true;
             return cfg;
         }
     };
@@ -989,9 +989,9 @@ public class DynamicRtkOptTest {
         for (double sigmaThresh : sigmaThreshValues) {
             for (int minLen : minLenValues) {
                 RtkConfig cfg = CV_OFF_REF.createRtkConfig();
-                cfg.enableSegmentSigmaFilter = true;
-                cfg.segmentSigmaThreshold = sigmaThresh;
-                cfg.segmentSigmaMinLen = minLen;
+                cfg.rtk.enableSegmentSigmaFilter = true;
+                cfg.rtk.segmentSigmaThreshold = sigmaThresh;
+                cfg.rtk.segmentSigmaMinLen = minLen;
 
                 RtkProcessor.RtkResult result = RinexRtkProcessor.processRinex(
                         ds.roverObs, ds.baseObs, ds.nav, opt, cfg);
@@ -1115,7 +1115,7 @@ public class DynamicRtkOptTest {
 
         RtkConfig createRtkConfig() {
             RtkConfig cfg = new RtkConfig();
-            cfg.enableIflcPairNegotiation = true;
+            cfg.common.enableIflcPairNegotiation = true;
             return cfg;
         }
     }
@@ -1203,8 +1203,8 @@ public class DynamicRtkOptTest {
             }
             RtkConfig createRtkConfig() {
                 RtkConfig cfg = new RtkConfig();
-                cfg.enableIflcPairNegotiation = true;
-                cfg.enableAdaptiveQ = true;
+                cfg.common.enableIflcPairNegotiation = true;
+                cfg.rtk.enableAdaptiveQ = true;
                 return cfg;
             }
         });
@@ -1222,8 +1222,8 @@ public class DynamicRtkOptTest {
             }
             RtkConfig createRtkConfig() {
                 RtkConfig cfg = new RtkConfig();
-                cfg.enableIflcPairNegotiation = true;
-                cfg.enableIggiii = true;
+                cfg.common.enableIflcPairNegotiation = true;
+                cfg.rtk.enableIggiii = true;
                 return cfg;
             }
         });
@@ -1241,8 +1241,8 @@ public class DynamicRtkOptTest {
             }
             RtkConfig createRtkConfig() {
                 RtkConfig cfg = new RtkConfig();
-                cfg.enableIflcPairNegotiation = true;
-                cfg.enableResidualEdit = true;
+                cfg.common.enableIflcPairNegotiation = true;
+                cfg.rtk.enableResidualEdit = true;
                 return cfg;
             }
         });
@@ -1260,8 +1260,8 @@ public class DynamicRtkOptTest {
             }
             RtkConfig createRtkConfig() {
                 RtkConfig cfg = new RtkConfig();
-                cfg.enableIflcPairNegotiation = true;
-                cfg.enablePartialAR = true;
+                cfg.common.enableIflcPairNegotiation = true;
+                cfg.rtk.enablePartialAR = true;
                 return cfg;
             }
         });
@@ -1279,8 +1279,8 @@ public class DynamicRtkOptTest {
             }
             RtkConfig createRtkConfig() {
                 RtkConfig cfg = new RtkConfig();
-                cfg.enableIflcPairNegotiation = true;
-                cfg.enableCascadeAR = true;
+                cfg.common.enableIflcPairNegotiation = true;
+                cfg.rtk.enableCascadeAR = true;
                 return cfg;
             }
         });
@@ -1298,8 +1298,8 @@ public class DynamicRtkOptTest {
             }
             RtkConfig createRtkConfig() {
                 RtkConfig cfg = new RtkConfig();
-                cfg.enableIflcPairNegotiation = true;
-                cfg.enableSnrMedian = true;
+                cfg.common.enableIflcPairNegotiation = true;
+                cfg.rtk.enableSnrMedian = true;
                 return cfg;
             }
         });
@@ -1317,15 +1317,15 @@ public class DynamicRtkOptTest {
             }
             RtkConfig createRtkConfig() {
                 RtkConfig cfg = new RtkConfig();
-                cfg.enableIflcPairNegotiation = true;
-                cfg.enableAdaptiveQ = true;
-                cfg.enableIggiii = true;
-                cfg.enableResidualEdit = true;
-                cfg.enablePartialAR = true;
-                cfg.enableCascadeAR = true;
-                cfg.enableSnrMedian = true;
-                cfg.enableParRefReselect = true;
-                cfg.enableParamTypeNoise = true;
+                cfg.common.enableIflcPairNegotiation = true;
+                cfg.rtk.enableAdaptiveQ = true;
+                cfg.rtk.enableIggiii = true;
+                cfg.rtk.enableResidualEdit = true;
+                cfg.rtk.enablePartialAR = true;
+                cfg.rtk.enableCascadeAR = true;
+                cfg.rtk.enableSnrMedian = true;
+                cfg.common.enableParRefReselect = true;
+                cfg.common.enableParamTypeNoise = true;
                 return cfg;
             }
         });
@@ -1343,8 +1343,8 @@ public class DynamicRtkOptTest {
             }
             RtkConfig createRtkConfig() {
                 RtkConfig cfg = new RtkConfig();
-                cfg.enableIflcPairNegotiation = true;
-                cfg.enableParRefReselect = true;
+                cfg.common.enableIflcPairNegotiation = true;
+                cfg.common.enableParRefReselect = true;
                 return cfg;
             }
         });
@@ -1362,8 +1362,8 @@ public class DynamicRtkOptTest {
             }
             RtkConfig createRtkConfig() {
                 RtkConfig cfg = new RtkConfig();
-                cfg.enableIflcPairNegotiation = true;
-                cfg.enableParamTypeNoise = true;
+                cfg.common.enableIflcPairNegotiation = true;
+                cfg.common.enableParamTypeNoise = true;
                 return cfg;
             }
         });

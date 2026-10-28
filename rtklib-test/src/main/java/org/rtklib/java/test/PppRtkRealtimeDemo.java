@@ -103,10 +103,10 @@ public class PppRtkRealtimeDemo {
         loadProducts(p, sp3Prev, sp3, clkPrev, clk, erpPrev, dcb);
 
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppRtk = true;
-        cfg.enablePppRtkAR = true;
-        cfg.pppRtkArRatio = 3.0;
-        cfg.ssrMaxAge = 60.0;
+        cfg.pppRtk.enable = true;
+        cfg.pppRtk.enableAR = true;
+        cfg.pppRtk.arRatio = 3.0;
+        cfg.ppp.ssrMaxAge = 60.0;
         p.setRtkConfig(cfg);
 
         ConcurrentLinkedQueue<byte[]> ssrQueue = new ConcurrentLinkedQueue<>();
@@ -201,8 +201,8 @@ public class PppRtkRealtimeDemo {
         loadProducts(p, sp3Prev, sp3, clkPrev, clk, erpPrev, dcb);
 
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppRtk = true;
-        cfg.enablePppRtkAR = true;
+        cfg.pppRtk.enable = true;
+        cfg.pppRtk.enableAR = true;
         p.setRtkConfig(cfg);
 
         try {

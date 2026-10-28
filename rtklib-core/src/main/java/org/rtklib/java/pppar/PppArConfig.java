@@ -21,11 +21,11 @@ public final class PppArConfig {
 
     public static PppArConfig from(RtkConfig cfg) {
         return new PppArConfig(
-            cfg.enablePppAR,
-            cfg.enablePppArFixHold,
-            cfg.enablePppPartialAR,
-            cfg.enableBds3PppAR,
-            cfg.enableMultiFreqAR
+            cfg.pppAr.enableAR,
+            cfg.pppAr.enableFixHold,
+            cfg.pppAr.enablePartialAR,
+            cfg.pppAr.enableBds3AR,
+            cfg.pppAr.enableMultiFreqAR
         );
     }
 

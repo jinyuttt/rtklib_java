@@ -17,11 +17,11 @@ public final class RtkOptimizationsResEdit {
 
     public static void checkCycleSlip(Rtk rtk, double[] v, double[] R, int[] vflg, int nv) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enableResidualEdit) return;
+        if (!cfg.rtk.enableResidualEdit) return;
 
         PrcOpt opt = rtk.opt;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
-        double jumpThresh = cfg.residEditJumpThresh;
+        double jumpThresh = cfg.rtk.residEditJumpThresh;
 
         int slipCount = 0;
         for (int i = 0; i < nv; i++) {
@@ -46,9 +46,9 @@ public final class RtkOptimizationsResEdit {
 
     public static void checkPcConsistency(Rtk rtk, Obsd[] obs, int[] sat, int ns, int nf, Nav nav) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enableResidualEdit) return;
+        if (!cfg.rtk.enableResidualEdit) return;
 
-        double thresh = cfg.residEditPcConsistThresh;
+        double thresh = cfg.rtk.residEditPcConsistThresh;
         int rejectCount = 0;
 
         for (int i = 0; i < ns; i++) {
@@ -80,11 +80,11 @@ public final class RtkOptimizationsResEdit {
 
     public static void screenArcIntegrity(Rtk rtk) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enableResidualEdit) return;
+        if (!cfg.rtk.enableResidualEdit) return;
 
         PrcOpt opt = rtk.opt;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
-        int minArcLen = cfg.residEditMinArcLen;
+        int minArcLen = cfg.rtk.residEditMinArcLen;
         int resetCount = 0;
 
         for (int i = 0; i < Constants.MAXSAT; i++) {

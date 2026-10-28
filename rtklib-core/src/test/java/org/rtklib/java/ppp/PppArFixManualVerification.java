@@ -66,9 +66,9 @@ public class PppArFixManualVerification {
             rtk.ssat[i].code = new int[Constants.NFREQ][2];
         }
 
-        cfg.enablePppArFixHold = true;
-        cfg.pppArFixHoldMinEp = 50;
-        cfg.pppArFixHoldVar = 1e-6;
+        cfg.pppAr.enableFixHold = true;
+        cfg.pppAr.fixHoldMinEp = 50;
+        cfg.pppAr.fixHoldVar = 1e-6;
 
         int[] testSats = {1, 2, 3};
         double initialVar = 0.5;
@@ -101,7 +101,7 @@ public class PppArFixManualVerification {
         for (int sat : testSats) {
             int idx = PppCore.IB(sat, 0, opt);
             double varAfter = rtk.P[idx * rtk.nx + idx];
-            if (Math.abs(varAfter - cfg.pppArFixHoldVar) > 1e-10) {
+            if (Math.abs(varAfter - cfg.pppAr.fixHoldVar) > 1e-10) {
                 throw new AssertionError("nfix=50时方差应收紧到1e-6，sat=" + sat + ", var=" + varAfter);
             }
         }
@@ -145,10 +145,10 @@ public class PppArFixManualVerification {
             rtk.ssat[i].code = new int[Constants.NFREQ][2];
         }
 
-        cfg.enablePppPartialAR = true;
-        cfg.pppPartialArMinSats = 4;
-        cfg.pppPartialArMinRatio = 2.0;
-        cfg.pppPartialArMaxTries = 10;
+        cfg.pppAr.enablePartialAR = true;
+        cfg.pppAr.partialArMinSats = 4;
+        cfg.pppAr.partialArMinRatio = 2.0;
+        cfg.pppAr.partialArMaxTries = 10;
 
         double freq1 = Constants.FREQL1;
         double lambda1 = Constants.CLIGHT / freq1;
@@ -192,8 +192,8 @@ public class PppArFixManualVerification {
 
         System.out.println("    pppPartialAR返回: " + nb);
 
-        if (nb < cfg.pppPartialArMinSats) {
-            throw new AssertionError("Partial AR应固定至少" + cfg.pppPartialArMinSats + "颗卫星，实际=" + nb);
+        if (nb < cfg.pppAr.partialArMinSats) {
+            throw new AssertionError("Partial AR应固定至少" + cfg.pppAr.partialArMinSats + "颗卫星，实际=" + nb);
         }
         System.out.println("  ✓ 成功固定" + nb + "颗卫星");
 
@@ -262,8 +262,8 @@ public class PppArFixManualVerification {
             rtk.ssat[i].code = new int[Constants.NFREQ][2];
         }
 
-        cfg.enablePppPartialAR = true;
-        cfg.pppPartialArMinSats = 4;
+        cfg.pppAr.enablePartialAR = true;
+        cfg.pppAr.partialArMinSats = 4;
 
         double lambda1 = Constants.CLIGHT / Constants.FREQL1;
         double[] floatAmbCycles = {5.1, 8.2, 12.3, 15.4, 20.5, 25.6, 30.7, 35.8};

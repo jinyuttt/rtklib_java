@@ -55,7 +55,7 @@ class RtkOptimizationsBdsBiasTest {
     @Test
     void testApplyBdsCodeBiasDefaultOff() {
         Rtk rtk = new Rtk();
-        rtk.rtkConfig.enableBdsCodeBias = false;
+        rtk.rtkConfig.rtk.enableBdsCodeBias = false;
         Obsd[] obs = new Obsd[1];
         obs[0] = new Obsd();
         obs[0].P = new double[]{100.0, 100.0, 100.0};

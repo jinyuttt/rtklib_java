@@ -122,7 +122,7 @@ org.rtklib.java.stream
 └── SerialPortConfig      串口配置
 ```
 
-> **实时流接入能力**：本项目已打通 NTRIP 2.0 协议，成功验证了 CAS IGS 实时 MSM 观测流（WUH20）的接入与解析。目前正在接入 CAS 的 SSR 改正流（SSRA*/SSRC* 挂载点，需单独申请权限），待权限开通后将实现完整的实时 PPP-RTK 闭环。
+> **实时流接入能力**：本项目已打通 NTRIP 2.0 协议，成功验证了 CAS IGS 实时 MSM 观测流（WUH20）的接入与解析；CAS 的 SSR 改正流（`SSRA01CAS0`/`SSRC01CAS0`）也已接入，完成「实时录制 → 离线回放 → 改正应用」闭环验证，实时 PPP-RTK 链路已跑通。
 
 ### rtklib-adjust — 多基线间接平差
 
@@ -221,7 +221,7 @@ org.rtklib.java.otl
 | [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md) | 一句话定位 + 精度实测汇总 + FIX-ALG 001~029 闭环索引 + HAS/IMU/CLAS 扩展路线 |
 | [变更日志](docs/CHANGELOG.md) | 版本级变更摘要（当前至 3.1.0） |
 | [发布说明](RELEASE.md) | v3.1.0 封存版发布稿：本版重点、配置项、兼容性、已知问题、验收口径 |
-| [SSR 接入手册](docs/SSR_ACCESS_PLAYBOOK.md) | 权限到位后的两行改动、五步接入、开关表、验收清单与已知坑 |
+| [SSR 接入手册](docs/SSR_ACCESS_PLAYBOOK.md) | 接入操作与验收（已闭环）：两行改动、五步接入、开关表、验收清单与已知坑 |
 
 ### rtklib-product
 

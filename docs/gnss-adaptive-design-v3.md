@@ -1,6 +1,7 @@
 # GNSS 引擎自适应方案设计文档 (v3.0)
 
 > 版本: 3.0 | 日期: 2026-10-23 | 状态: 设计定稿
+> 修订: 2026-10-28 — `RtkConfig` 拆分为 7 个子配置后，本文所有配置字段名改为带命名空间前缀（`cfg.adaptive.*` / `cfg.pppAr.*` / `cfg.pppRtk.*` 等）
 > 替代: docs/archive/gnss-adaptive-design.md (v2.0)
 
 ---
@@ -63,7 +64,7 @@ enum AdaptiveMode {
     SPP,        // PMODE_SINGLE / DGPS
     RTK,        // PMODE_KINEMA / STATIC
     PPP,        // PMODE_PPP + 无AR
-    PPP_AR,     // PMODE_PPP + enablePppAR/PartialAR/3F 任一开启
+    PPP_AR,     // PMODE_PPP + cfg.pppAr.enableAR/enablePartialAR/enableBds3AR 任一开启
     PPP_RTK     // PMODE_PPPRTK
 }
 ```
@@ -81,8 +82,8 @@ static AdaptiveMode resolve(int pmode, RtkConfig cfg) {
         || pmode == PMODE_FIXED) return RTK;
     if (pmode == PMODE_PPPRTK_KINEMA || pmode == PMODE_PPPRTK_STATIC) return PPP_RTK;
     // PMODE_PPP_KINEMA / PMODE_PPP_STATIC / PMODE_PPP_FIXED 按 AR 开关归类
-    boolean hasAr = cfg.enablePppAR || cfg.enablePppArFixHold
-                    || cfg.enablePppPartialAR || cfg.enableBds3PppAR || cfg.enableMultiFreqAR;
+    boolean hasAr = cfg.pppAr.enableAR || cfg.pppAr.enableFixHold
+                    || cfg.pppAr.enablePartialAR || cfg.pppAr.enableBds3AR || cfg.pppAr.enableMultiFreqAR;
     return hasAr ? PPP_AR : PPP;
 }
 ```
@@ -120,8 +121,8 @@ OPEN→CANYON 和 CANYON→OPEN 用不同阈值，防卫星升降抖动：
 | SNR_OPEN_TO_CANYON | 开阔→峡谷：avgSnr 低于此值才切 | 30 dB-Hz |
 | SNR_CANYON_TO_OPEN | 峡谷→开阔：avgSnr 高于此值才切回 | 34 dB-Hz |
 
-四个阈值均可通过 `RtkConfig` 的 `adaptiveNsatOpenToCanyon` / `adaptiveSnrOpenToCanyon` /
-`adaptiveNsatCanyonToOpen` / `adaptiveSnrCanyonToOpen` 现场调整（默认值即上表）。
+四个阈值均可通过 `RtkConfig.adaptive` 的 `nsatOpenToCanyon` / `snrOpenToCanyon` /
+`nsatCanyonToOpen` / `snrCanyonToOpen` 现场调整（即 `cfg.adaptive.*`，默认值即上表）。
 
 > 标定依据（2026-10-24 真实数据实测，EMA α=0.1）：opensky 数据的平滑 avgSnr 峰值仅
 > **37.90 dB-Hz**，原阈值 38 在数学上不可达，导致开阔场景永远无法切回 OPEN_SKY。
@@ -164,8 +165,8 @@ GnssScene detect(FeatureMetrics m, GnssScene current) {
 ### 5.1 API（历元数）
 
 ```java
-public int adaptiveWindowEpochs = 0;    // 0 = 按模式默认
-public int adaptiveCooldownEpochs = 0;  // 0 = 按模式默认
+public int windowEpochs = 0;    // 0 = 按模式默认（AdaptiveOpts）
+public int cooldownEpochs = 0;  // 0 = 按模式默认（AdaptiveOpts）
 ```
 
 用户设历元数，引擎自动检测采样间隔，启动时输出配置摘要：
@@ -207,7 +208,7 @@ public int adaptiveCooldownEpochs = 0;  // 0 = 按模式默认
   ⚠ 实际采样间隔15.000s，当前配置: 30历元 × 15.000s = 450.0s (7分30秒)
 ```
 
-采样间隔异常时仅 WARN，不自动钳制物理窗口。理由：钳制会静默改变用户意图，且反算历元数过少（如 120s/15s=8 历元）导致判定不可靠。根本问题是用户配置错误，应通过 WARN 提示用户自行调整 `adaptiveWindowEpochs`。
+采样间隔异常时仅 WARN，不自动钳制物理窗口。理由：钳制会静默改变用户意图，且反算历元数过少（如 120s/15s=8 历元）导致判定不可靠。根本问题是用户配置错误，应通过 WARN 提示用户自行调整 `cfg.adaptive.windowEpochs`。
 
 ---
 
@@ -360,11 +361,11 @@ public int adaptiveCooldownEpochs = 0;  // 0 = 按模式默认
 窗口自动提升规则：
 
 ```java
-int win = cfg.adaptiveWindowEpochs;         // 0 = 按模式默认
+int win = cfg.adaptive.windowEpochs;         // 0 = 按模式默认
 if (win == 0) win = PresetManager.defaultWindow(mode);
 if (isStatic(dynamics) && win < 100) {
     win = 100;   // 静态模式窗口过小自动提升
-    logger.info("[ADAPTIVE] 静态模式窗口自动提升: {} → 100 历元", cfg.adaptiveWindowEpochs);
+    logger.info("[ADAPTIVE] 静态模式窗口自动提升: {} → 100 历元", cfg.adaptive.windowEpochs);
 }
 ```
 
@@ -384,8 +385,8 @@ if (jump > 3.0 * posStd) {
 ```
 [ADAPTIVE-RECOMMEND] epoch=1230 STATIC 模式
   建议（未执行）:
-  adaptiveWindowEpochs: 0 → 300   (静态解对误切敏感，建议加长窗口)
-  adaptiveCooldownEpochs: 0 → 1800
+  cfg.adaptive.windowEpochs: 0 → 300   (静态解对误切敏感，建议加长窗口)
+  cfg.adaptive.cooldownEpochs: 0 → 1800
 ```
 
 ---
@@ -433,8 +434,8 @@ SSR 恢复后自动清除超时标记，无需额外操作（PPP-RTK 滤波器�
 ### 10.1 双 API
 
 ```java
-public Set<String> adaptiveManagedParams = null;   // 白名单（优先级高）
-public Set<String> adaptiveLockedParams = null;    // 黑名单
+public Set<String> managedParams = null;   // 白名单（优先级高，AdaptiveOpts）
+public Set<String> lockedParams = null;    // 黑名单（AdaptiveOpts）
 ```
 
 解析优先级：
@@ -447,13 +448,13 @@ public Set<String> adaptiveLockedParams = null;    // 黑名单
 
 ```java
 // 全自动（默认）
-cfg.enableAdaptiveScene = true;
+cfg.adaptive.enableScene = true;
 
 // 只让自适应管 3 个参数（白名单）
-cfg.adaptiveManagedParams = Set.of("thresslip", "maxinno", "enableIggiii");
+cfg.adaptive.managedParams = Set.of("thresslip", "maxinno", "enableIggiii");
 
 // 锁住 1 个参数（黑名单）
-cfg.adaptiveLockedParams = Set.of("enableIggiii");
+cfg.adaptive.lockedParams = Set.of("enableIggiii");
 ```
 
 ### 10.3 黑名单参数推荐回调
@@ -588,9 +589,9 @@ boolean isDiverging = divergingCount >= 3 && posVarTrace > baselinePosVarTrace *
 
 | 层 | 输出位置 | 内容 | 始终开启？ |
 |---|---------|------|-----------|
-| 控制台 | SLF4J INFO | 切换摘要 + 推荐 + 退化 + 回滚 + 异常 | ✅ adaptiveVerbose=true（低频事件，不扰） |
-| 审计文件 | CSV 文件 | 完整事件记录 + 参数前后对比 | ✅ adaptiveAuditEnabled=true |
-| 追踪文件 | CSV 文件 | 逐窗口特征值 + 优化效果 | ❌ adaptiveTraceAll=true |
+| 控制台 | SLF4J INFO | 切换摘要 + 推荐 + 退化 + 回滚 + 异常 | ✅ cfg.adaptive.verbose=true（低频事件，不扰） |
+| 审计文件 | CSV 文件 | 完整事件记录 + 参数前后对比 | ✅ cfg.adaptive.auditEnabled=true |
+| 追踪文件 | CSV 文件 | 逐窗口特征值 + 优化效果 | ❌ cfg.adaptive.traceAll=true |
 
 ### 13.2 审计日志格式
 
@@ -615,12 +616,14 @@ boolean isDiverging = divergingCount >= 3 && posVarTrace > baselinePosVarTrace *
 0008000,2024-01-01T02:13:20GPST,BASELINE_SWITCH,SHORT,LONG,phaseInnovMean=0.32|fixRate=0.12|ambVar=0.45|posRms=0.62,HARD
 ```
 
+> 注：文件头中的 `adaptiveWindowEpochs` / `adaptiveCooldownEpochs` 是**审计文件字段**（沿用历史命名，保证已归档日志可解析），与配置字段 `cfg.adaptive.windowEpochs` / `cooldownEpochs` 属不同命名空间。
+
 ### 13.3 审计日志轮转
 
 | 配置 | 默认值 | 说明 |
 |------|--------|------|
-| adaptiveAuditMaxSizeKB | 5120 (5MB) | 超过大小后轮转 |
-| adaptiveAuditMaxFiles | 3 | 保留 3 个历史文件 |
+| cfg.adaptive.auditMaxSizeKB | 5120 (5MB) | 超过大小后轮转 |
+| cfg.adaptive.auditMaxFiles | 3 | 保留 3 个历史文件 |
 
 ### 13.4 运行结束统计
 
@@ -636,35 +639,45 @@ boolean isDiverging = divergingCount >= 3 && posVarTrace > baselinePosVarTrace *
 
 ---
 
-## 十四、RtkConfig 完整配置
+## 十四、AdaptiveOpts 完整配置
+
+`RtkConfig` 拆分后，自适应参数集中在 `RtkConfig.adaptive`（即 `AdaptiveOpts`），字段名已去掉原 `adaptive` 前缀：
 
 ```java
-// 开关
-public boolean enableAdaptiveScene = false;
+public class AdaptiveOpts {
+    // 开关（原 enableAdaptiveScene）
+    public boolean enableScene = false;
 
-// 窗口/冷却（历元数，0=按模式默认）
-public int adaptiveWindowEpochs = 0;
-public int adaptiveCooldownEpochs = 0;
+    // 窗口/冷却（历元数，0=按模式默认；原 adaptiveWindowEpochs / adaptiveCooldownEpochs）
+    public int windowEpochs = 0;
+    public int cooldownEpochs = 0;
 
-// 白名单/黑名单
-public Set<String> adaptiveManagedParams = null;  // 白名单优先
-public Set<String> adaptiveLockedParams = null;   // 黑名单次之
+    // 场景判定阈值（EMA 平滑特征；原 adaptiveNsat*/adaptiveSnr*）
+    public int nsatOpenToCanyon = 8;
+    public double snrOpenToCanyon = 30.0;
+    public int nsatCanyonToOpen = 14;
+    public double snrCanyonToOpen = 34.0;
 
-// 审计日志
-public boolean adaptiveAuditEnabled = true;
-public String adaptiveAuditDir = "";
-public int adaptiveAuditMaxSizeKB = 5120;
-public int adaptiveAuditMaxFiles = 3;
+    // 白名单/黑名单（原 adaptiveManagedParams / adaptiveLockedParams）
+    public Set<String> managedParams = null;  // 白名单优先
+    public Set<String> lockedParams = null;   // 黑名单次之
 
-// 诊断
-public boolean adaptiveVerbose = true;
-public boolean adaptiveTraceAll = false;
+    // 审计日志（原 adaptiveAudit*）
+    public boolean auditEnabled = true;
+    public String auditDir = "";
+    public int auditMaxSizeKB = 5120;
+    public int auditMaxFiles = 3;
 
-// 回调
-public AdaptiveListener adaptiveListener = null;
+    // 诊断（原 adaptiveVerbose / adaptiveTraceAll）
+    public boolean verbose = true;
+    public boolean traceAll = false;
+
+    // 回调（原 adaptiveListener）
+    public transient AdaptiveListener listener = null;
+}
 ```
 
-共 12 个字段。
+共 16 个字段，访问方式为 `cfg.adaptive.xxx`。
 
 ---
 

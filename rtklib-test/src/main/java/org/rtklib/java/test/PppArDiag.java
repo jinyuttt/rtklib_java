@@ -100,7 +100,7 @@ public class PppArDiag {
             if (erpFile != null) p.loadErp(erpFile);
             if (fcbFile != null) p.loadOsb(fcbFile);
             RtkConfig cfg = new RtkConfig();
-            cfg.enablePppAR = true;
+            cfg.pppAr.enableAR = true;
             p.setRtkConfig(cfg);
             runAndReport("BDS-AR", p, obsFile, navFile);
         }
@@ -119,7 +119,7 @@ public class PppArDiag {
             if (erpFile != null) p.loadErp(erpFile);
             if (fcbFile != null) p.loadOsb(fcbFile);
             RtkConfig cfg = new RtkConfig();
-            cfg.enablePppAR = true;
+            cfg.pppAr.enableAR = true;
             p.setRtkConfig(cfg);
             runAndReport("MGNSS-AR", p, obsFile, navFile);
         }

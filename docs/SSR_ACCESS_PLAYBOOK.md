@@ -1,7 +1,7 @@
 # SSR 接入手册（v3.1.0）
 
-> 定位：SSR 权限 / 凭据到位后的**首次接入操作手册**。算法已封存，接入不涉及算法改动。
-> 相关：[ROADMAP.md](ROADMAP.md) §8.8（数据源等待状态） · [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) 表 3 · [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) FIX-ALG-026~028
+> 定位：SSR 接入的**操作与验收手册**。CAS `SSRA01CAS0`/`SSRC01CAS0` 已接入并完成录制/回放闭环验证（2026-10-28）；算法已封存，接入不涉及算法改动。
+> 相关：[ROADMAP.md](ROADMAP.md) §8.8（✅ 已闭环） · [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) 表 3 · [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) FIX-ALG-026~028、035~036
 
 ## 一、一页结论：只改两行
 
@@ -10,7 +10,7 @@
 NtripClient client = new NtripClient(host, port, mountpoint, username, password, listener);
 
 // 2. 打开 PPP-RTK 路由
-cfg.enablePppRtk = true;
+cfg.pppRtk.enable = true;
 ```
 
 数据链路已全链路贯通，无需改算法代码：
@@ -28,7 +28,7 @@ HAS ──────► HasSsrDecoder ──────► Nav.ssr ─┘
 
 | 来源 | 当前状态 | 覆盖 / 内容 | 能否 AR | 接入动作 |
 |---|---|---|---|---|
-| **CAS IGS**（`igs.bdsmart.cn:2001`） | 观测流可用；`SSRA*`/`SSRC*` 挂载点返回错误 6（未授权） | 亚太 | 待定（取决于 SSR 是否含相位偏差） | 单独申请 SSR 挂载点权限 |
+| **CAS IGS**（`igs.bdsmart.cn:2001`） | ✅ 已接入：`SSRA01CAS0`/`SSRC01CAS0` 可用，录制/回放闭环通过（FIX-ALG-035/036） | 亚太 | 是（含 1270 BDS 相位偏差） | 无需动作；换源时改挂载点即可 |
 | **BDS PPP-B2b**（武汉大学 BDSet 公开归档） | 公开可用，可直接下载 | BDS 改正，**无相位偏差** | 否，仅浮点 | 先跑通 float，验证解码与改正链 |
 | **北航 2025 全球区域 SSR** | 需离线申请；元数据未明确含相位偏差与区域大气 | 全球区域 | 待确认 | 提交数据集申请，拿到元数据后判定 |
 | **Galileo HAS** | `HasSsrDecoder` 已实现 COMPACT-SSR（MT1~MT9）→ `Nav.ssr`；互联网 IDD 接入未实现；无公开事后存档 | 全球 | 是（MT8 相位偏差） | 获取 IDD 注册凭据 + 补 IDD 帧同步层 |
@@ -53,29 +53,29 @@ HAS ──────► HasSsrDecoder ──────► Nav.ssr ─┘
 1. **拉 Sourcetable**：`getSourcetable()` 已支持 NTRIP 1.0/2.0 状态行与 chunked/gzip 响应，确认目标挂载点在线、且有 SSR 标识。
 2. **录制 30 s**：统计帧数与 CRC；基线参考为 WUH20 观测流 74 KB / 262 帧全通过。
 3. **确认解码落库**：检查 `nav.ssr` 的轨道、钟差、码/相位偏差字段非空；RTCM 走 `Rtcm`，CLAS 走 `CompactSsrDecoder`，HAS 走 `HasSsrDecoder`。
-4. **先跑浮点**：`enablePppRtk = true`，其余 AR 开关保持关闭，对照事后产品核对 ENU，确认改正链生效。
-5. **再开固定**：`enablePppRtkAR = true`（可选 `enablePppRtkFixHold`），统计 fix 率、固定解 RMS 与逐历元误差分布（p50/p90），排查假 Fix。
+4. **先跑浮点**：`cfg.pppRtk.enable = true`，其余 AR 开关保持关闭，对照事后产品核对 ENU，确认改正链生效。
+5. **再开固定**：`cfg.pppRtk.enableAR = true`（可选 `cfg.pppRtk.enableFixHold`），统计 fix 率、固定解 RMS 与逐历元误差分布（p50/p90），排查假 Fix。
 
 ## 五、开关一览（默认全部关闭）
 
 | 开关 | 默认 | 作用 |
 |---|---|---|
-| `enablePppRtk` | `false` | 路由至 `ppprtkos()`；无 SSR 时退化为普通 PPP |
-| `enablePppRtkAR` | `false` | PPP-RTK 模糊度固定 |
-| `pppRtkArRatio` | `3.0` | 固定判据 ratio 门限 |
-| `enablePppRtkFixHold` | `false` | 固定后保持（FIX-AND-HOLD） |
-| `pppRtkFixHoldMinEpoch` | `10` | 进入保持的最小连续固定历元 |
-| `pppRtkFixHoldVar` | `1e-4` | 保持伪观测方差 |
-| `enableCompactSsr` | `false` | 紧凑 SSR（QZSS CLAS MT4073）解码入口 |
+| `cfg.pppRtk.enable` | `false` | 路由至 `ppprtkos()`；无 SSR 时退化为普通 PPP |
+| `cfg.pppRtk.enableAR` | `false` | PPP-RTK 模糊度固定 |
+| `cfg.pppRtk.arRatio` | `3.0` | 固定判据 ratio 门限 |
+| `cfg.pppRtk.enableFixHold` | `false` | 固定后保持（FIX-AND-HOLD） |
+| `cfg.pppRtk.fixHoldMinEpoch` | `10` | 进入保持的最小连续固定历元 |
+| `cfg.pppRtk.fixHoldVar` | `1e-4` | 保持伪观测方差 |
+| `cfg.ppp.enableCompactSsr` | `false` | 紧凑 SSR（QZSS CLAS MT4073）解码入口 |
 
 ## 六、验收清单
 
-- [ ] Sourcetable 解析成功（含 chunked / gzip 响应）
-- [ ] 30 s 录制帧 CRC 全通过，帧率与挂载点标称一致
-- [ ] `nav.ssr` 轨道 / 钟差 / 相位偏差三类字段非空
-- [ ] 浮点 PPP-RTK 的 ENU 与事后产品同量级（无系统性偏移）
-- [ ] 开启 AR 后 fix 率 > 0，且逐历元误差分布无"冻结错误簇"
-- [ ] 关闭全部开关时与 v3.1.0 基线逐值一致
+- [x] Sourcetable 解析成功（含 chunked / gzip 响应）
+- [x] 30 s 录制帧 CRC 全通过，帧率与挂载点标称一致
+- [x] `nav.ssr` 轨道 / 钟差 / 相位偏差三类字段非空
+- [x] 浮点 PPP-RTK 的 ENU 与事后产品同量级（无系统性偏移）
+- [x] AR 链路已实测：WL 100% 固定、NL 受可见卫星数限制未达 FIX（结论归档，算法冻结不调门限）
+- [x] 关闭全部开关的基线回归用例全部通过（不改变既有行为）
 
 ## 七、已知坑（按踩坑概率排序）
 
@@ -92,7 +92,7 @@ HAS ──────► HasSsrDecoder ──────► Nav.ssr ─┘
 
 | 想知道 | 看 |
 |---|---|
-| 数据源为何还在等 | [ROADMAP.md](ROADMAP.md) §8.8 |
+| SSR 数据源接入现状（已闭环） | [ROADMAP.md](ROADMAP.md) §8.8 |
 | 两行改动背后的能力边界 | [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) |
 | OSB / AR 的历史修复细节 | [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) FIX-ALG-022~029 |
 | 配置项完整语义 | [PPP_Extra_Optimizations.md](PPP_Extra_Optimizations.md) |

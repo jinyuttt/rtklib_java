@@ -74,9 +74,9 @@ public class PppArFixVerificationTest {
     @Test
     @DisplayName("P2: Fix-and-Hold最小历元守卫")
     void testFixAndHoldMinEpochGuard() {
-        cfg.enablePppArFixHold = true;
-        cfg.pppArFixHoldMinEp = 50;  // 默认值
-        cfg.pppArFixHoldVar = 1e-6;  // 默认值
+        cfg.pppAr.enableFixHold = true;
+        cfg.pppAr.fixHoldMinEp = 50;  // 默认值
+        cfg.pppAr.fixHoldVar = 1e-6;  // 默认值
 
         // 设置3颗GPS卫星（sat=1,2,3），模糊度已固定
         int[] testSats = {1, 2, 3};
@@ -108,7 +108,7 @@ public class PppArFixVerificationTest {
         for (int sat : testSats) {
             int idx = PppCore.IB(sat, 0, opt);
             double varAfter = rtk.P[idx * rtk.nx + idx];
-            assertEquals(cfg.pppArFixHoldVar, varAfter, 1e-10,
+            assertEquals(cfg.pppAr.fixHoldVar, varAfter, 1e-10,
                 "nfix=50时方差应收紧到pppArFixHoldVar，sat=" + sat);
         }
 
@@ -118,7 +118,7 @@ public class PppArFixVerificationTest {
         int testIdx = PppCore.IB(testSats[0], 0, opt);
         rtk.P[testIdx * rtk.nx + testIdx] = 0.1;
         PppAmbFix.pppArFixHold(rtk, nav);
-        assertEquals(cfg.pppArFixHoldVar, rtk.P[testIdx * rtk.nx + testIdx], 1e-10,
+        assertEquals(cfg.pppAr.fixHoldVar, rtk.P[testIdx * rtk.nx + testIdx], 1e-10,
             "nfix=100时方差应收紧");
     }
 
@@ -132,13 +132,13 @@ public class PppArFixVerificationTest {
     @Test
     @DisplayName("P3: Partial AR周空间转换数值验证")
     void testPartialARCycleSpaceConversion() {
-        cfg.enablePppPartialAR = true;
-        cfg.pppPartialArMinSats = 4;
-        cfg.pppPartialArMinRatio = 2.0;
-        cfg.pppPartialArMaxTries = 10;
+        cfg.pppAr.enablePartialAR = true;
+        cfg.pppAr.partialArMinSats = 4;
+        cfg.pppAr.partialArMinRatio = 2.0;
+        cfg.pppAr.partialArMaxTries = 10;
         // synthetic single-epoch setup: relax the NL arc maturity gate (real
         // pipeline default is PRIDE-PPPAR minsav=4)
-        cfg.pppArNlMinsav = 1;
+        cfg.pppAr.arNlMinsav = 1;
 
         double freq1 = Constants.FREQL1;
         double freq2 = Constants.FREQL2;
@@ -171,8 +171,8 @@ public class PppArFixVerificationTest {
 
         int nb = PppAmbFix.pppPartialAR(rtk, null, rtk.xa, 1, 0, 0, nav);
 
-        assertTrue(nb >= cfg.pppPartialArMinSats,
-            "Partial AR应固定至少" + cfg.pppPartialArMinSats + "颗卫星，实际=" + nb);
+        assertTrue(nb >= cfg.pppAr.partialArMinSats,
+            "Partial AR应固定至少" + cfg.pppAr.partialArMinSats + "颗卫星，实际=" + nb);
 
         int fixedCount = 0;
         for (int i = 0; i < numSats; i++) {
@@ -202,13 +202,13 @@ public class PppArFixVerificationTest {
     @Test
     @DisplayName("P3: Partial AR方差过滤验证")
     void testPartialARVarianceFilter() {
-        cfg.enablePppPartialAR = true;
-        cfg.pppPartialArMinSats = 4;
-        cfg.pppPartialArMinRatio = 2.0;
-        cfg.pppPartialArMaxTries = 10;
+        cfg.pppAr.enablePartialAR = true;
+        cfg.pppAr.partialArMinSats = 4;
+        cfg.pppAr.partialArMinRatio = 2.0;
+        cfg.pppAr.partialArMaxTries = 10;
         // synthetic single-epoch setup: relax the NL arc maturity gate (real
         // pipeline default is PRIDE-PPPAR minsav=4)
-        cfg.pppArNlMinsav = 1;
+        cfg.pppAr.arNlMinsav = 1;
 
         double freq1 = Constants.FREQL1;
         double freq2 = Constants.FREQL2;
@@ -265,13 +265,13 @@ public class PppArFixVerificationTest {
     @Test
     @DisplayName("P3: Partial AR多系统波长处理")
     void testPartialARMultiSystemWavelength() {
-        cfg.enablePppPartialAR = true;
-        cfg.pppPartialArMinSats = 4;
-        cfg.pppPartialArMinRatio = 2.0;
-        cfg.pppPartialArMaxTries = 10;
+        cfg.pppAr.enablePartialAR = true;
+        cfg.pppAr.partialArMinSats = 4;
+        cfg.pppAr.partialArMinRatio = 2.0;
+        cfg.pppAr.partialArMaxTries = 10;
         // synthetic single-epoch setup: relax the NL arc maturity gate (real
         // pipeline default is PRIDE-PPPAR minsav=4)
-        cfg.pppArNlMinsav = 1;
+        cfg.pppAr.arNlMinsav = 1;
 
         double freq1Gps = Constants.FREQL1;
         double freq2Gps = Constants.FREQL2;

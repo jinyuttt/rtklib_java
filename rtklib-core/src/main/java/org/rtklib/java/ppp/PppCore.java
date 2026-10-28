@@ -276,7 +276,7 @@ public class PppCore {
         udclk_ppp(rtk, nx);
         if (rtk.opt.tropopt == Constants.TROPOPT_EST || rtk.opt.tropopt == Constants.TROPOPT_ESTG
             || (rtk.opt.tropopt == Constants.TROPOPT_SSR
-                && (rtk.rtkConfig == null || !rtk.rtkConfig.enableSsrTropDirect))) {
+                && (rtk.rtkConfig == null || !rtk.rtkConfig.ppp.enableSsrTropDirect))) {
             udtrop_ppp(rtk, nx);
         }
         if (rtk.opt.ionoopt == Constants.IONOOPT_EST || rtk.opt.ionoopt == Constants.IONOOPT_SSR) {
@@ -371,7 +371,7 @@ public class PppCore {
              * enablePppIsbClockInit (JAVA-ONLY, default off) extends the
              * broadcast semantics to the precise branch so multi-GNSS PPP
              * keeps GLO/GAL clocks inside maxinno. */
-            if (i == 0 || opt.sateph != Constants.EPHOPT_PREC || rtk.rtkConfig.enablePppIsbClockInit) {
+            if (i == 0 || opt.sateph != Constants.EPHOPT_PREC || rtk.rtkConfig.ppp.enableIsbClockInit) {
                 dtr = i == 0 ? rtk.sol.dtr[0] : rtk.sol.dtr[0] + rtk.sol.dtr[i];
             } else {
                 dtr = rtk.sol.dtr[0];
@@ -770,7 +770,7 @@ public class PppCore {
 
         if (opt.tidecorr != 0) {
             double[] disp = new double[3];
-            if (rtk.rtkConfig != null && rtk.rtkConfig.enableIers2010) {
+            if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableIers2010) {
                 double[] disp2010 = PppOptimizations.tideDisplacementIers2010(
                         TimeSystem.gpst2utc(obs[0].time), rr, opt.tidecorr, nav.erp, opt.odisp[0], rtk.rtkConfig);
                 if (disp2010 != null) {
@@ -858,7 +858,7 @@ public class PppCore {
             }
 
             double osbCorr = 0.0;
-            if (rtk.rtkConfig != null && rtk.rtkConfig.enableOsb) {
+            if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableOsb) {
                 if (opt.ionoopt == Constants.IONOOPT_IFLC) {
                     osbCorr = PppOsbModel.osbCorrectionIfComb(sat, obs[i].code[0], obs[i].code[1],
                             nav, rtk.sol.time.time, rtk.rtkConfig);
@@ -882,7 +882,7 @@ public class PppCore {
                     double freq = SatUtils.sat2freq(sat, obs[i].code[frq], nav);
                     if (freq == 0.0) continue;
                     C = SQR(Constants.FREQL1 / freq) * (code == 0 ? -1.0 : 1.0);
-                    if (rtk.rtkConfig != null && rtk.rtkConfig.enableOsb) {
+                    if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableOsb) {
                         osbCorr = PppOsbModel.osbCorrection(sat, frq, obs[i].code[frq],
                                 nav, rtk.sol.time.time, rtk.rtkConfig);
                     }
@@ -953,7 +953,7 @@ public class PppCore {
                  * prefit 剔除，让 EKF 一次性吸收码偏差，解除首历元死锁。开关关闭时
                  * freshEstState 恒 false，与 C 行为逐值一致。 */
                 boolean freshEstState = code == 0 && post == 0
-                        && rtk.rtkConfig != null && rtk.rtkConfig.enableIonoEstRobust
+                        && rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableIonoEstRobust
                         && opt.ionoopt == Constants.IONOOPT_EST
                         && (rtk.P[IB(sat, frq, opt) * nx + IB(sat, frq, opt)] == VAR_BIAS
                             || rtk.P[II(sat, opt) * nx + II(sat, opt)] == VAR_IONO);
@@ -1024,9 +1024,9 @@ public class PppCore {
         if (opt.tropopt == Constants.TROPOPT_EST || opt.tropopt == Constants.TROPOPT_ESTG
             || opt.tropopt == Constants.TROPOPT_SSR) {
             if (opt.tropopt == Constants.TROPOPT_SSR
-                    && rtk.rtkConfig != null && rtk.rtkConfig.enableSsrTropDirect
-                    && rtk.rtkConfig.cssrDecoder != null) {
-                double[] tropCssr = rtk.rtkConfig.cssrDecoder.getTrop(
+                    && rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableSsrTropDirect
+                    && rtk.rtkConfig.ppp.cssrDecoder != null) {
+                double[] tropCssr = rtk.rtkConfig.ppp.cssrDecoder.getTrop(
                         pos[0] * Constants.R2D, pos[1] * Constants.R2D);
                 double zhdCssr = tropCssr[0];
                 double zwdCssr = tropCssr[1];
@@ -1043,7 +1043,7 @@ public class PppCore {
             double[] trp = new double[3];
             int nt = (opt.tropopt == Constants.TROPOPT_EST) ? 1 : 3;
             for (int i = 0; i < nt; i++) trp[i] = x[IT(opt) + i];
-            if (rtk.rtkConfig != null && rtk.rtkConfig.enableGpt3Vmf3) {
+            if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableGpt3Vmf3) {
                 dtrp[0] = PppOptimizations.tropoDelayGpt3Vmf3(time, pos, azel, trp, dtdx, var, rtk.rtkConfig, nav);
                 if (!Double.isNaN(dtrp[0])) return true;
             }

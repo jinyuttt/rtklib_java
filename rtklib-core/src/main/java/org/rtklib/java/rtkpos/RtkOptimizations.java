@@ -14,7 +14,7 @@ public final class RtkOptimizations {
     public static void computeSnrMedian(Rtk rtk, Obsd[] obs, int nu, int nr,
                                         int[] sat, int ns, int nf, Nav nav) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enableSnrMedian) {
+        if (!cfg.rtk.enableSnrMedian) {
             for (int f = 0; f < nf; f++) {
                 rtk.snrMedian[f] = Double.NEGATIVE_INFINITY;
             }
@@ -27,19 +27,19 @@ public final class RtkOptimizations {
             for (int i = 0; i < ns; i++) {
                 int s = sat[i] - 1;
                 double el = rtk.ssat[s].azel[1];
-                if (el < cfg.snrMedianMinEl) continue;
+                if (el < cfg.rtk.snrMedianMinEl) continue;
                 double lockTime = rtk.ssat[s].lock[f] >= 0 ? rtk.ssat[s].lock[f] : 0;
-                if (lockTime < cfg.snrMedianMinLockTime) continue;
+                if (lockTime < cfg.rtk.snrMedianMinLockTime) continue;
                 double snr = Math.max(rtk.ssat[s].snrRover[f], rtk.ssat[s].snrBase[f]);
-                if (snr < cfg.snrMedianAbsMin) continue;
+                if (snr < cfg.rtk.snrMedianAbsMin) continue;
                 validSnrs[validCount++] = snr;
             }
-            if (validCount >= cfg.snrMedianMinSatsForFallback) {
+            if (validCount >= cfg.rtk.snrMedianMinSatsForFallback) {
                 java.util.Arrays.sort(validSnrs, 0, validCount);
                 rtk.snrMedian[f] = validSnrs[validCount / 2];
                 rtk.diagSnrMedianValidCount++;
             } else {
-                rtk.snrMedian[f] = cfg.snrMedianFallbackPhaseRef;
+                rtk.snrMedian[f] = cfg.rtk.snrMedianFallbackPhaseRef;
                 rtk.diagSnrMedianFallbackCount++;
             }
         }
@@ -47,7 +47,7 @@ public final class RtkOptimizations {
 
     static void computeQScale(Rtk rtk, int[] sat, int ns) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enableAdaptiveQ) {
+        if (!cfg.rtk.enableAdaptiveQ) {
             rtk.qScale = 1.0;
             return;
         }
@@ -63,7 +63,7 @@ public final class RtkOptimizations {
             double dz = curPos[2] - rtk.xOld[2];
             double posInc = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-            int winSize = cfg.adaptiveQWinSize;
+            int winSize = cfg.rtk.adaptiveQWinSize;
             if (winSize > rtk.posWin.length) {
                 winSize = rtk.posWin.length;
             }
@@ -81,7 +81,7 @@ public final class RtkOptimizations {
         if (rtk.winCnt < 2) {
             sigmaPos = 0.0;
         } else {
-            int winSize = Math.min(cfg.adaptiveQWinSize, rtk.posWin.length);
+            int winSize = Math.min(cfg.rtk.adaptiveQWinSize, rtk.posWin.length);
             double sum = 0.0;
             double sumSq = 0.0;
             int validCount = 0;
@@ -99,19 +99,19 @@ public final class RtkOptimizations {
         }
 
         double scale;
-        if (sigmaPos <= cfg.adaptiveQStaticThresh) {
-            scale = cfg.adaptiveQScaleMinStatic;
-        } else if (sigmaPos >= cfg.adaptiveQDynamicThresh) {
-            scale = cfg.adaptiveQScaleMaxDynamic;
+        if (sigmaPos <= cfg.rtk.adaptiveQStaticThresh) {
+            scale = cfg.rtk.adaptiveQScaleMinStatic;
+        } else if (sigmaPos >= cfg.rtk.adaptiveQDynamicThresh) {
+            scale = cfg.rtk.adaptiveQScaleMaxDynamic;
         } else {
-            double t = (sigmaPos - cfg.adaptiveQStaticThresh) /
-                       (cfg.adaptiveQDynamicThresh - cfg.adaptiveQStaticThresh);
+            double t = (sigmaPos - cfg.rtk.adaptiveQStaticThresh) /
+                       (cfg.rtk.adaptiveQDynamicThresh - cfg.rtk.adaptiveQStaticThresh);
             double sigmoid = 1.0 / (1.0 + Math.exp(-10.0 * (t - 0.5)));
-            scale = cfg.adaptiveQScaleMinStatic +
-                    sigmoid * (cfg.adaptiveQScaleMaxDynamic - cfg.adaptiveQScaleMinStatic);
+            scale = cfg.rtk.adaptiveQScaleMinStatic +
+                    sigmoid * (cfg.rtk.adaptiveQScaleMaxDynamic - cfg.rtk.adaptiveQScaleMinStatic);
         }
 
-        double nsFactor = Math.min(ns / cfg.adaptiveQNsRef, 1.5);
+        double nsFactor = Math.min(ns / cfg.rtk.adaptiveQNsRef, 1.5);
 
         double[] dop = new double[4];
         double[] azelCopy = new double[ns * 2];
@@ -122,21 +122,21 @@ public final class RtkOptimizations {
         org.rtklib.java.common.RtklibCommon.dops(ns, azelCopy, rtk.opt.elmin, dop);
         double pdopFactor = 1.0;
         if (dop[1] > 0) {
-            pdopFactor = Math.min(cfg.adaptiveQPdopRef / dop[1], 2.0);
+            pdopFactor = Math.min(cfg.rtk.adaptiveQPdopRef / dop[1], 2.0);
         }
 
         double rawScale = scale * nsFactor * pdopFactor;
 
         boolean zeroVel = isZeroVelocity(rtk);
-        double scaleMin = zeroVel ? cfg.adaptiveQScaleMinZeroVel : cfg.adaptiveQScaleMinMoving;
-        double scaleMax = cfg.adaptiveQScaleMax;
+        double scaleMin = zeroVel ? cfg.rtk.adaptiveQScaleMinZeroVel : cfg.rtk.adaptiveQScaleMinMoving;
+        double scaleMax = cfg.rtk.adaptiveQScaleMax;
         double finalScale = clamp(rawScale, scaleMin, scaleMax);
 
         double pTrace = 0.0;
         for (int i = 0; i < Math.min(9, rtk.nx); i++) {
             pTrace += rtk.P[i * rtk.nx + i];
         }
-        if (pTrace > cfg.adaptiveQTraceThresh) {
+        if (pTrace > cfg.rtk.adaptiveQTraceThresh) {
             finalScale = 1.0;
         }
 
@@ -152,14 +152,14 @@ public final class RtkOptimizations {
 
     static boolean isZeroVelocity(Rtk rtk) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enableAdaptiveQ) return false;
+        if (!cfg.rtk.enableAdaptiveQ) return false;
 
         double speed = 0.0;
         if (rtk.opt.dynamics != 0 && rtk.nx >= 6) {
             speed = Math.sqrt(rtk.x[3] * rtk.x[3] + rtk.x[4] * rtk.x[4] + rtk.x[5] * rtk.x[5]);
         }
 
-        if (speed >= cfg.zeroVelSpeedThresh) {
+        if (speed >= cfg.rtk.zeroVelSpeedThresh) {
             rtk.consecutiveZeroVelEpochs = 0;
             return false;
         }
@@ -176,13 +176,13 @@ public final class RtkOptimizations {
 
         System.arraycopy(curPos, 0, rtk.prevPosForZeroVel, 0, 3);
 
-        if (posDiff >= cfg.zeroVelPosDiffThresh) {
+        if (posDiff >= cfg.rtk.zeroVelPosDiffThresh) {
             rtk.consecutiveZeroVelEpochs = 0;
             return false;
         }
 
         rtk.consecutiveZeroVelEpochs++;
-        return rtk.consecutiveZeroVelEpochs >= cfg.zeroVelConsecutiveEpochs;
+        return rtk.consecutiveZeroVelEpochs >= cfg.rtk.zeroVelConsecutiveEpochs;
     }
 
     public static void applyIggiii(Rtk rtk, double[] v, double[] H, double[] R,
@@ -190,7 +190,7 @@ public final class RtkOptimizations {
                                    Obsd[] obs, int[] iu, double[] azel, int nf,
                                    double[] Pp) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enableIggiii) return;
+        if (!cfg.rtk.enableIggiii) return;
 
         rtk.diagIggCallCount++;
 
@@ -207,12 +207,12 @@ public final class RtkOptimizations {
             double innovation = Math.abs(v[i]) / Math.sqrt(predVar + sigma * sigma);
 
             double wk;
-            if (innovation <= cfg.iggiiiK0) {
+            if (innovation <= cfg.rtk.iggiiiK0) {
                 wk = 1.0;
-            } else if (innovation <= cfg.iggiiiK1) {
-                wk = cfg.iggiiiK0 / innovation;
+            } else if (innovation <= cfg.rtk.iggiiiK1) {
+                wk = cfg.rtk.iggiiiK0 / innovation;
             } else {
-                wk = cfg.iggiiiMinW;
+                wk = cfg.rtk.iggiiiMinW;
             }
 
             int sat2 = (vflg[i] >> 16) & 0xFF;
@@ -220,8 +220,8 @@ public final class RtkOptimizations {
             if (sat2 > 0 && sat2 <= Constants.MAXSAT) {
                 el = rtk.ssat[sat2 - 1].azel[1];
             }
-            if (el < cfg.iggiiiLowElMask && innovation > cfg.iggiiiLowElNormThresh) {
-                wk = Math.min(wk, cfg.iggiiiLowElW);
+            if (el < cfg.rtk.iggiiiLowElMask && innovation > cfg.rtk.iggiiiLowElNormThresh) {
+                wk = Math.min(wk, cfg.rtk.iggiiiLowElW);
             }
 
             w[i] = wk;
@@ -263,8 +263,8 @@ public final class RtkOptimizations {
                 }
             }
 
-            if (minSatW < cfg.iggiiiMultiFreqW) {
-                w[i] = Math.min(w[i], cfg.iggiiiMultiFreqW);
+            if (minSatW < cfg.rtk.iggiiiMultiFreqW) {
+                w[i] = Math.min(w[i], cfg.rtk.iggiiiMultiFreqW);
             }
         }
 
@@ -389,7 +389,7 @@ public final class RtkOptimizations {
         if (anyRefReselect) {
             rtk.parConsecutiveReselectCount++;
             rtk.diagRefReselectCount++;
-            if (rtk.parConsecutiveReselectCount > cfg.parMaxConsecutiveReselect) {
+            if (rtk.parConsecutiveReselectCount > cfg.common.parMaxConsecutiveReselect) {
                 rtk.parExcludedSatCount = 0;
                 rtk.parConsecutiveReselectCount = 0;
                 return ddidxFallback(rtk, ix, gps, glo, sbs);
@@ -489,7 +489,7 @@ public final class RtkOptimizations {
 
     public static void applyParamTypeNoise(Rtk rtk, double[] P, int nx, double tt) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enableParamTypeNoise) return;
+        if (!cfg.common.enableParamTypeNoise) return;
         if (tt == 0.0) return;
 
         PrcOpt opt = rtk.opt;
@@ -507,7 +507,7 @@ public final class RtkOptimizations {
         double[] x = rtk.x;
         for (int i = ztdStart; i < ztdStart + ztdCount && i < na; i++) {
             if (x[i] != 0.0) {
-                P[i * nx + i] += cfg.noiseZtdRw * cfg.noiseZtdRw * Math.abs(tt);
+                P[i * nx + i] += cfg.common.noiseZtdRw * cfg.common.noiseZtdRw * Math.abs(tt);
             }
         }
 
@@ -522,7 +522,7 @@ public final class RtkOptimizations {
             int ionoCount = opt.ionoGradient ? Constants.MAXSAT * 3 : Constants.MAXSAT;
             for (int i = ionoStart; i < ionoStart + ionoCount && i < na; i++) {
                 if (x[i] != 0.0) {
-                    P[i * nx + i] += cfg.noiseIonoRw * cfg.noiseIonoRw * Math.abs(tt);
+                    P[i * nx + i] += cfg.common.noiseIonoRw * cfg.common.noiseIonoRw * Math.abs(tt);
                 }
             }
         }

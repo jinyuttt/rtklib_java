@@ -34,7 +34,7 @@ public final class PppOsbModel {
      * @return OSB偏差改正值(米)
      */
     public static double osbCorrection(int sat, int freq, int code, Nav nav, double time, RtkConfig cfg) {
-        if (!cfg.enableOsb) return 0.0;
+        if (!cfg.ppp.enableOsb) return 0.0;
         if (nav.fcbWlByCode == null || sat <= 0 || sat > Constants.MAXSAT) return 0.0;
         if (code < 0 || code > Constants.MAXCODE) return 0.0;
         return nav.fcbWlByCode[sat - 1][code];
@@ -51,7 +51,7 @@ public final class PppOsbModel {
      * @return IF组合OSB偏差改正值(米)
      */
     public static double osbCorrectionIfComb(int sat, int code0, int code1, Nav nav, double time, RtkConfig cfg) {
-        if (!cfg.enableOsb) return 0.0;
+        if (!cfg.ppp.enableOsb) return 0.0;
         if (nav.fcbWlByCode == null || sat <= 0 || sat > Constants.MAXSAT) return 0.0;
 
         double osb1 = (code0 >= 0 && code0 <= Constants.MAXCODE) ? nav.fcbWlByCode[sat - 1][code0] : 0.0;

@@ -95,7 +95,7 @@ public final class PppRtkCore {
         PrcOpt opt = rtk.opt;
         RtkConfig cfg = rtk.rtkConfig;
         int nx = ppprtknx(opt);
-        double ssrMaxAge = cfg != null ? cfg.ssrMaxAge : 60.0;
+        double ssrMaxAge = cfg != null ? cfg.ppp.ssrMaxAge : 60.0;
         boolean hasSsr = SsrCorrector.hasSsrData(nav.ssr);
 
         rtk.epoch++;
@@ -229,7 +229,7 @@ public final class PppRtkCore {
         }
 
         if (stat == Constants.SOLQ_PPP) {
-            if (cfg != null && cfg.enablePppRtkAR) {
+            if (cfg != null && cfg.pppRtk.enableAR) {
                 PppRtkAmbFix.ppprtkAmbFix(rtk, nav);
             }
             updateStat(rtk, obs, n, stat, nx);
@@ -252,7 +252,7 @@ public final class PppRtkCore {
         udclk(rtk, nx);
         if (opt.tropopt == Constants.TROPOPT_EST || opt.tropopt == Constants.TROPOPT_ESTG
             || (opt.tropopt == Constants.TROPOPT_SSR
-                && (rtk.rtkConfig == null || !rtk.rtkConfig.enableSsrTropDirect))) {
+                && (rtk.rtkConfig == null || !rtk.rtkConfig.ppp.enableSsrTropDirect))) {
             udtrop(rtk, nx);
         }
         if (opt.ionoopt == Constants.IONOOPT_EST || opt.ionoopt == Constants.IONOOPT_SSR) {
@@ -651,7 +651,7 @@ public final class PppRtkCore {
 
         if (opt.tidecorr != 0) {
             double[] disp = new double[3];
-            if (rtk.rtkConfig != null && rtk.rtkConfig.enableIers2010) {
+            if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableIers2010) {
                 double[] disp2010 = PppOptimizations.tideDisplacementIers2010(
                         TimeSystem.gpst2utc(obs[0].time), rr, opt.tidecorr, nav.erp, opt.odisp[0], rtk.rtkConfig);
                 if (disp2010 != null) {
@@ -760,7 +760,7 @@ public final class PppRtkCore {
             PppCore.corrMeas(obs[i], nav, azelI, opt, dantr, dants, phw, L, P_arr, Lc, Pc);
 
             double osbCorr = 0.0;
-            if (rtk.rtkConfig != null && rtk.rtkConfig.enableOsb) {
+            if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableOsb) {
                 if (opt.ionoopt == Constants.IONOOPT_IFLC) {
                     osbCorr = PppOsbModel.osbCorrectionIfComb(sat, obs[i].code[0], obs[i].code[1],
                             nav, rtk.sol.time.time, rtk.rtkConfig);
@@ -791,7 +791,7 @@ public final class PppRtkCore {
                     double freq = SatUtils.sat2freq(sat, obs[i].code[frq], nav);
                     if (freq == 0.0) continue;
                     C = PppCore.SQR(Constants.FREQL1 / freq) * (code == 0 ? -1.0 : 1.0);
-                    if (rtk.rtkConfig != null && rtk.rtkConfig.enableOsb) {
+                    if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableOsb) {
                         osbCorr = PppOsbModel.osbCorrection(sat, frq, obs[i].code[frq],
                                 nav, rtk.sol.time.time, rtk.rtkConfig);
                     }

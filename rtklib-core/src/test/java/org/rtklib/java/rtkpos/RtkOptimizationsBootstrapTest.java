@@ -56,7 +56,7 @@ class RtkOptimizationsBootstrapTest {
     @Test
     void testValidateFixDefaultOff() {
         Rtk rtk = new Rtk();
-        rtk.rtkConfig.enableBootstrapping = false;
+        rtk.rtkConfig.rtk.enableBootstrapping = false;
         double[] bias = {1.0, 2.0};
         boolean result = RtkOptimizationsBootstrap.validateFix(rtk, bias, 2);
         assertTrue(result, "When bootstrapping disabled, validateFix should return true");
@@ -65,8 +65,8 @@ class RtkOptimizationsBootstrapTest {
     @Test
     void testValidateFixRejectsBadAmbiguities() {
         Rtk rtk = new Rtk();
-        rtk.rtkConfig.enableBootstrapping = true;
-        rtk.rtkConfig.bootstrappingMinSuccess = 0.99;
+        rtk.rtkConfig.rtk.enableBootstrapping = true;
+        rtk.rtkConfig.rtk.bootstrappingMinSuccess = 0.99;
 
         double[] bias = new double[6];
         bias[0] = 1.45;

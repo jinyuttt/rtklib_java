@@ -98,14 +98,14 @@ public class LandslideMonitorTest {
 
     private static RtkConfig createLandslideConfig() {
         RtkConfig cfg = new RtkConfig();
-        cfg.enableAdaptiveQ = true;
-        cfg.enableAmbAnchor = true;
-        cfg.adaptiveQWinSize = 50;
-        cfg.adaptiveQStaticThresh = 0.001;
-        cfg.adaptiveQDynamicThresh = 0.05;
-        cfg.adaptiveQScaleMinStatic = 0.01;
-        cfg.adaptiveQScaleMaxDynamic = 5.0;
-        cfg.ambAnchorMinFixCount = 100;
+        cfg.rtk.enableAdaptiveQ = true;
+        cfg.rtk.enableAmbAnchor = true;
+        cfg.rtk.adaptiveQWinSize = 50;
+        cfg.rtk.adaptiveQStaticThresh = 0.001;
+        cfg.rtk.adaptiveQDynamicThresh = 0.05;
+        cfg.rtk.adaptiveQScaleMinStatic = 0.01;
+        cfg.rtk.adaptiveQScaleMaxDynamic = 5.0;
+        cfg.rtk.ambAnchorMinFixCount = 100;
         return cfg;
     }
 
@@ -151,8 +151,8 @@ public class LandslideMonitorTest {
         PrcOpt opt = createLandslideOpt();
 
         RtkConfig cfgNoOpt = new RtkConfig();
-        cfgNoOpt.enableAdaptiveQ = false;
-        cfgNoOpt.enableAmbAnchor = false;
+        cfgNoOpt.rtk.enableAdaptiveQ = false;
+        cfgNoOpt.rtk.enableAmbAnchor = false;
 
         RtkConfig cfgWithOpt = createLandslideConfig();
 

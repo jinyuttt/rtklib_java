@@ -27,10 +27,10 @@ public class PppCoreEx {
     private static final Logger LOG = LoggerFactory.getLogger(PppCoreEx.class);
 
     public static void ppos(Rtk rtk, Obsd[] obs, int n, Nav nav, RtkConfig cfg) {
-        LOG.info("PppCoreEx.ppos called: pppAR={}, bds3AR={}", cfg.enablePppAR, cfg.enableBds3PppAR);
-        boolean needExtendedState = cfg.enableIsbIfcbIfb || cfg.enableOsb || cfg.enableAt1S2 || cfg.useGpt3Grid;
-        boolean needAr = cfg.enablePppAR || cfg.enablePppArFixHold || cfg.enablePppPartialAR
-                || cfg.enableBds3PppAR || cfg.enableMultiFreqAR;
+        LOG.info("PppCoreEx.ppos called: pppAR={}, bds3AR={}", cfg.pppAr.enableAR, cfg.pppAr.enableBds3AR);
+        boolean needExtendedState = cfg.ppp.enableIsbIfcbIfb || cfg.ppp.enableOsb || cfg.ppp.enableAt1S2 || cfg.ppp.useGpt3Grid;
+        boolean needAr = cfg.pppAr.enableAR || cfg.pppAr.enableFixHold || cfg.pppAr.enablePartialAR
+                || cfg.pppAr.enableBds3AR || cfg.pppAr.enableMultiFreqAR;
 
         if (!needExtendedState && !needAr) {
             PppCore.pppos(rtk, obs, n, nav);
@@ -212,44 +212,44 @@ public class PppCoreEx {
     private static void udstateEx(Rtk rtk, Obsd[] obs, int n, Nav nav, int nx, RtkConfig cfg) {
         PppCore.udstate_ppp(rtk, obs, n, nav, nx);
 
-        if (!cfg.enableIsbIfcbIfb) return;
+        if (!cfg.ppp.enableIsbIfcbIfb) return;
 
         double[] x = rtk.x;
         double[] P = rtk.P;
         PrcOpt opt = rtk.opt;
 
         int isbIdx = PppBiasModel.isbIndex(cfg, opt);
-        if (isbIdx >= 0 && cfg.estimateIsb) {
+        if (isbIdx >= 0 && cfg.ppp.estimateIsb) {
             for (int i = 0; i < 3; i++) {
                 int idx = isbIdx + i;
                 if (x[idx] == 0.0) {
                     PppCore.initx(x, P, nx, 0.0, PppCore.VAR_CLK, idx);
                 } else {
-                    P[idx * nx + idx] += PppCore.SQR(cfg.isbPrn) * Math.abs(rtk.tt);
+                    P[idx * nx + idx] += PppCore.SQR(cfg.ppp.isbPrn) * Math.abs(rtk.tt);
                 }
             }
         }
 
         int ifcbIdx = PppBiasModel.ifcbIndex(cfg, opt);
-        if (ifcbIdx >= 0 && cfg.estimateIfcb) {
+        if (ifcbIdx >= 0 && cfg.ppp.estimateIfcb) {
             for (int i = 0; i < Constants.MAXSAT; i++) {
                 int idx = ifcbIdx + i;
                 if (x[idx] == 0.0) {
                     PppCore.initx(x, P, nx, 0.0, PppCore.VAR_DCB, idx);
                 } else {
-                    P[idx * nx + idx] += PppCore.SQR(cfg.ifcbPrn) * Math.abs(rtk.tt);
+                    P[idx * nx + idx] += PppCore.SQR(cfg.ppp.ifcbPrn) * Math.abs(rtk.tt);
                 }
             }
         }
 
         int ifbIdx = PppBiasModel.ifbIndex(cfg, opt);
-        if (ifbIdx >= 0 && cfg.estimateIfb) {
+        if (ifbIdx >= 0 && cfg.ppp.estimateIfb) {
             for (int i = 0; i < 4; i++) {
                 int idx = ifbIdx + i;
                 if (x[idx] == 0.0) {
                     PppCore.initx(x, P, nx, 0.0, PppCore.VAR_CLK, idx);
                 } else {
-                    P[idx * nx + idx] += PppCore.SQR(cfg.ifbPrn) * Math.abs(rtk.tt);
+                    P[idx * nx + idx] += PppCore.SQR(cfg.ppp.ifbPrn) * Math.abs(rtk.tt);
                 }
             }
         }
@@ -261,7 +261,7 @@ public class PppCoreEx {
                                 double[] R, double[] azel, int nx, RtkConfig cfg) {
         int nv = PppCore.pppRes(post, obs, n, rs, dts, varRs, svh, exc, nav, x, rtk, v, H, R, azel, nx);
 
-        if (!cfg.enableIsbIfcbIfb || H == null || nv == 0) return nv;
+        if (!cfg.ppp.enableIsbIfcbIfb || H == null || nv == 0) return nv;
 
         PrcOpt opt = rtk.opt;
 

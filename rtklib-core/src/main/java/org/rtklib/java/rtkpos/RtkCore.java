@@ -98,13 +98,13 @@ public final class RtkCore {
              * enablePppRtk takes precedence over the PppCoreEx (AR/bias) switch
              * group. Without SSR data present in nav.ssr this degrades to
              * standard PPP via PppRtkCore internally. */
-            if (cfg != null && cfg.enablePppRtk) {
+            if (cfg != null && cfg.pppRtk.enable) {
                 PppRtkCore.ppprtkos(rtk, obs, nu, nav);
                 return 1;
             }
-            boolean useEx = cfg != null && (cfg.enablePppAR || cfg.enablePppPartialAR || cfg.enablePppArFixHold
-                    || cfg.enableBds3PppAR || cfg.enableMultiFreqAR || cfg.enableIsbIfcbIfb
-                    || cfg.enableOsb || cfg.enableAt1S2 || cfg.useGpt3Grid);
+            boolean useEx = cfg != null && (cfg.pppAr.enableAR || cfg.pppAr.enablePartialAR || cfg.pppAr.enableFixHold
+                    || cfg.pppAr.enableBds3AR || cfg.pppAr.enableMultiFreqAR || cfg.ppp.enableIsbIfcbIfb
+                    || cfg.ppp.enableOsb || cfg.ppp.enableAt1S2 || cfg.ppp.useGpt3Grid);
             if (useEx) {
                 PppCoreEx.ppos(rtk, obs, nu, nav, cfg);
             } else {
@@ -164,7 +164,7 @@ public final class RtkCore {
         TraceConfig v2cfg = rtk.traceConfig;
         TraceCallback v2cb = rtk.traceCallback;
 
-        if (rtk.rtkConfig.enableIonoTropGradient && !opt.ionoGradient) {
+        if (rtk.rtkConfig.rtk.enableIonoTropGradient && !opt.ionoGradient) {
             opt.ionoGradient = true;
         }
 
@@ -821,7 +821,7 @@ public final class RtkCore {
         double qh = opt.prn[3] * opt.prn[3] * Math.abs(tt);
         double qv = opt.prn[4] * opt.prn[4] * Math.abs(tt);
 
-        if (rtk.rtkConfig.enableAdaptiveQ && rtk.qScale != 1.0) {
+        if (rtk.rtkConfig.rtk.enableAdaptiveQ && rtk.qScale != 1.0) {
             qh *= rtk.qScale * rtk.qScale;
             qv *= rtk.qScale * rtk.qScale;
         }
@@ -852,7 +852,7 @@ public final class RtkCore {
         int nx = rtk.nx;
         boolean ionoGrad = opt.ionoGradient;
 
-        if (rtk.rtkConfig.atmFrozenNsThresh > 0 && ns < rtk.rtkConfig.atmFrozenNsThresh) {
+        if (rtk.rtkConfig.common.atmFrozenNsThresh > 0 && ns < rtk.rtkConfig.common.atmFrozenNsThresh) {
             return;
         }
 
@@ -869,8 +869,8 @@ public final class RtkCore {
             }
         }
 
-        double gradInitVar = rtk.rtkConfig.gradientIonoInitVar;
-        double gradPrn = rtk.rtkConfig.gradientIonoPrn;
+        double gradInitVar = rtk.rtkConfig.rtk.gradientIonoInitVar;
+        double gradPrn = rtk.rtkConfig.rtk.gradientIonoPrn;
 
         for (int i = 0; i < ns; i++) {
             int j = II(sat[i], opt);
@@ -881,7 +881,7 @@ public final class RtkCore {
                     initx(x, P, nx, 0.0, gradInitVar, j + 2);
                 }
             } else {
-                if (!rtk.rtkConfig.enableParamTypeNoise) {
+                if (!rtk.rtkConfig.common.enableParamTypeNoise) {
                     double el = rtk.ssat[sat[i] - 1].azel[1];
                     double fact = Math.cos(el);
                     P[j * nx + j] += SQR(opt.prn[1] * bl / 1E4 * fact) * Math.abs(rtk.tt);
@@ -900,7 +900,7 @@ public final class RtkCore {
         double[] P = rtk.P;
         int nx = rtk.nx;
 
-        if (rtk.rtkConfig.atmFrozenNsThresh > 0 && ns < rtk.rtkConfig.atmFrozenNsThresh) {
+        if (rtk.rtkConfig.common.atmFrozenNsThresh > 0 && ns < rtk.rtkConfig.common.atmFrozenNsThresh) {
             return;
         }
 
@@ -915,7 +915,7 @@ public final class RtkCore {
                     }
                 }
             } else {
-                if (!rtk.rtkConfig.enableParamTypeNoise) {
+                if (!rtk.rtkConfig.common.enableParamTypeNoise) {
                     P[j * nx + j] += SQR(opt.prn[2]) * Math.abs(rtk.tt);
                     if (opt.tropopt >= Constants.TROPOPT_ESTG) {
                         for (int k = 0; k < 2; k++) {
@@ -1298,7 +1298,7 @@ public final class RtkCore {
      * ssat.iflcSlot={0,0}时各读取点自动回退固定槽位{0,seliflc()}，与C版行为逐位一致。
      */
     public static boolean iflcNegotiationActive(RtkState rtk) {
-        return rtk.rtkConfig() != null && rtk.rtkConfig().enableIflcPairNegotiation
+        return rtk.rtkConfig() != null && rtk.rtkConfig().common.enableIflcPairNegotiation
                 && rtk.opt().ionoopt == Constants.IONOOPT_IFLC;
     }
 
@@ -1459,7 +1459,7 @@ public final class RtkCore {
         if (opt.err[6] > 0.0) {
             double e = fact * opt.err[6];
             double snrRef = opt.err[5];
-            if (rtk != null && rtk.rtkConfig().enableSnrMedian && frq < rtk.snrMedian().length
+            if (rtk != null && rtk.rtkConfig().rtk.enableSnrMedian && frq < rtk.snrMedian().length
                 && rtk.snrMedian()[frq] > Double.NEGATIVE_INFINITY) {
                 snrRef = rtk.snrMedian()[frq];
             }
@@ -1565,12 +1565,12 @@ public final class RtkCore {
                     if (!validobs(iu[j], ir[j], f, nf, y)) continue;
                     if (refIdx >= 0 && (rtk.ssat[sat[j] - 1].slip[frq] & Constants.LLI_SLIP) != 0) continue;
                     double el_j = azel[1 + iu[j] * 2];
-                    if (rtk.rtkConfig.enableSnrMedian && frq < rtk.snrMedian.length
+                    if (rtk.rtkConfig.rtk.enableSnrMedian && frq < rtk.snrMedian.length
                         && rtk.snrMedian[frq] > Double.NEGATIVE_INFINITY) {
                         double snr_j = rtk.ssat[sat[j] - 1].snrRover[frq];
                         double snrMedianVal = rtk.snrMedian[frq];
                         double snrScore = 1.0 - Math.abs(snr_j - snrMedianVal) / Math.max(snrMedianVal, 1.0);
-                        double score = el_j + snrScore * rtk.rtkConfig.snrMedianKPhase;
+                        double score = el_j + snrScore * rtk.rtkConfig.rtk.snrMedianKPhase;
                         if (refIdx < 0 || score > bestRefScore) {
                             refIdx = j;
                             bestRefScore = score;
@@ -1764,7 +1764,7 @@ public final class RtkCore {
     }
 
     private static int ddidx(Rtk rtk, int[] ix, int gps, int glo, int sbs) {
-        if (rtk.rtkConfig.enableParRefReselect) {
+        if (rtk.rtkConfig.common.enableParRefReselect) {
             return RtkOptimizations.buildParIndex(rtk, ix, gps, glo, sbs);
         }
         return RtkOptimizations.ddidxFallback(rtk, ix, gps, glo, sbs);
@@ -1776,7 +1776,7 @@ public final class RtkCore {
         // IFLC 模式状态空间压缩为每星单 IF 组合偏差，逐级固定不适用（FIX-ALG-006 守卫保留）；
         // 级联任一级失败（返回<=0）时回落标准 LAMBDA 路径，保证可用性不低于基线。
         int nfAr = (rtk.opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : rtk.opt.nf;
-        if (rtk.rtkConfig.enableCascadeAR && nfAr >= 2) {
+        if (rtk.rtkConfig.rtk.enableCascadeAR && nfAr >= 2) {
             int nbCas = RtkOptimizationsCascadeAR.cascadeAmbFix(rtk, bias, xa, gps, glo, sbs, nav);
             if (nbCas > 0) return nbCas;
         }
@@ -1797,7 +1797,7 @@ public final class RtkCore {
         }
         rtk.nb_ar = nb;
 
-        boolean enableAnchor = rtk.rtkConfig.enableAmbAnchor;
+        boolean enableAnchor = rtk.rtkConfig.rtk.enableAmbAnchor;
 
         int[] anchorMap = null;
         int[] freeMap = null;
@@ -1967,7 +1967,7 @@ public final class RtkCore {
 
             if (s[0] <= 0.0 || s[1] / s[0] >= rtk.sol.thres) {
                 // [OPT-BOOTSTRAP] Bootstrapping联合判据
-                if (rtk.rtkConfig.enableBootstrapping) {
+                if (rtk.rtkConfig.rtk.enableBootstrapping) {
                     if (!RtkOptimizationsBootstrap.validateFix(rtk, b, nbLambda)) {
                         rtk.sol.ratio = 0.0f;
                         rtk.diagBootstrapRejectCount++;
@@ -2032,7 +2032,7 @@ public final class RtkCore {
         }
 
         // [OPT-PARTIAL-AR] 部分模糊度固定
-        if (nb <= 0 && rtk.rtkConfig.enablePartialAR) {
+        if (nb <= 0 && rtk.rtkConfig.rtk.enablePartialAR) {
             int nbPar = RtkOptimizationsPartialAR.partialAmbFix(
                             rtk, bias, xa, ix, rtk.nb_ar, gps, glo, sbs);
             if (nbPar > 1) return nbPar;
@@ -2192,7 +2192,7 @@ public final class RtkCore {
         int na = rtk.na;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
         int nb = nx - na;
-        boolean enableAnchor = rtk.rtkConfig.enableAmbAnchor;
+        boolean enableAnchor = rtk.rtkConfig.rtk.enableAmbAnchor;
 
         if (enableAnchor && rtk.sol.stat == Constants.SOLQ_FIX) {
             for (int i = 0; i < Constants.MAXSAT; i++) {
@@ -2200,7 +2200,7 @@ public final class RtkCore {
                     int globalIdx = i * nf + f;
                     if (rtk.ssat[i].fix[f] > 0) {
                         rtk.ambAnchorCount[globalIdx]++;
-                        if (rtk.ambAnchorCount[globalIdx] >= rtk.rtkConfig.ambAnchorMinFixCount) {
+                        if (rtk.ambAnchorCount[globalIdx] >= rtk.rtkConfig.rtk.ambAnchorMinFixCount) {
                             rtk.ambAnchored[globalIdx] = true;
                         }
                     }

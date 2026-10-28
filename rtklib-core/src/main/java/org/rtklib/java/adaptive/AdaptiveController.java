@@ -65,21 +65,21 @@ public class AdaptiveController {
         this.mode = resolveMode(pmode, cfg);
         this.isStatic = opt.dynamics == 0 || opt.mode == Constants.PMODE_STATIC
                 || opt.mode == Constants.PMODE_STATIC_START;
-        this.managedParams = cfg.adaptiveManagedParams;
-        this.lockedParams = cfg.adaptiveLockedParams;
-        this.listener = cfg.adaptiveListener;
+        this.managedParams = cfg.adaptive.managedParams;
+        this.lockedParams = cfg.adaptive.lockedParams;
+        this.listener = cfg.adaptive.listener;
     }
 
     public void activate() {
-        if (!cfg.enableAdaptiveScene) return;
+        if (!cfg.adaptive.enableScene) return;
         active = true;
 
-        windowEpochs = cfg.adaptiveWindowEpochs > 0 ? cfg.adaptiveWindowEpochs : PresetManager.defaultWindow(mode);
-        cooldownEpochs = cfg.adaptiveCooldownEpochs > 0 ? cfg.adaptiveCooldownEpochs : PresetManager.defaultCooldown(mode);
-        nSatOpenToCanyon = cfg.adaptiveNsatOpenToCanyon > 0 ? cfg.adaptiveNsatOpenToCanyon : NSAT_OPEN_TO_CANYON;
-        snrOpenToCanyon = cfg.adaptiveSnrOpenToCanyon > 0 ? cfg.adaptiveSnrOpenToCanyon : SNR_OPEN_TO_CANYON;
-        nSatCanyonToOpen = cfg.adaptiveNsatCanyonToOpen > 0 ? cfg.adaptiveNsatCanyonToOpen : NSAT_CANYON_TO_OPEN;
-        snrCanyonToOpen = cfg.adaptiveSnrCanyonToOpen > 0 ? cfg.adaptiveSnrCanyonToOpen : SNR_CANYON_TO_OPEN;
+        windowEpochs = cfg.adaptive.windowEpochs > 0 ? cfg.adaptive.windowEpochs : PresetManager.defaultWindow(mode);
+        cooldownEpochs = cfg.adaptive.cooldownEpochs > 0 ? cfg.adaptive.cooldownEpochs : PresetManager.defaultCooldown(mode);
+        nSatOpenToCanyon = cfg.adaptive.nsatOpenToCanyon > 0 ? cfg.adaptive.nsatOpenToCanyon : NSAT_OPEN_TO_CANYON;
+        snrOpenToCanyon = cfg.adaptive.snrOpenToCanyon > 0 ? cfg.adaptive.snrOpenToCanyon : SNR_OPEN_TO_CANYON;
+        nSatCanyonToOpen = cfg.adaptive.nsatCanyonToOpen > 0 ? cfg.adaptive.nsatCanyonToOpen : NSAT_CANYON_TO_OPEN;
+        snrCanyonToOpen = cfg.adaptive.snrCanyonToOpen > 0 ? cfg.adaptive.snrCanyonToOpen : SNR_CANYON_TO_OPEN;
 
         if (isStatic) {
             if (windowEpochs < STATIC_WINDOW_MIN) {
@@ -107,12 +107,12 @@ public class AdaptiveController {
         state.setScene(currentScene);
 
         auditLogger = new AdaptiveAuditLogger(
-                cfg.adaptiveAuditEnabled, cfg.adaptiveAuditDir,
-                cfg.adaptiveAuditMaxSizeKB, cfg.adaptiveAuditMaxFiles);
+                cfg.adaptive.auditEnabled, cfg.adaptive.auditDir,
+                cfg.adaptive.auditMaxSizeKB, cfg.adaptive.auditMaxFiles);
         openAudit();
         auditOpened = true;
 
-        if (cfg.adaptiveVerbose) {
+        if (cfg.adaptive.verbose) {
             LOG.info("[ADAPTIVE] 自适应引擎启动: mode={}, scene={}, window={}历元, cooldown={}历元, static={}",
                     mode, currentScene, windowEpochs, cooldownEpochs, isStatic);
         }
@@ -226,7 +226,7 @@ public class AdaptiveController {
                 nSatCanyonToOpen, snrCanyonToOpen);
         String changes = override.diffString();
 
-        if (cfg.adaptiveVerbose) {
+        if (cfg.adaptive.verbose) {
             LOG.info("[ADAPTIVE] SCENE_SWITCH epoch={} {} → {}, trigger={}, changes={}",
                     epoch, oldScene, newScene, trigger, changes);
         }
@@ -265,7 +265,7 @@ public class AdaptiveController {
         PresetManager.applyPreset(mode, rollbackTarget, override, managedParams, lockedParams, opt.dynamics);
         override.applyTo(cfg, opt);
 
-        if (cfg.adaptiveVerbose) {
+        if (cfg.adaptive.verbose) {
             LOG.warn("[ADAPTIVE] ROLLBACK epoch={}, reason={}", epoch, reason);
         }
         auditLogger.logRollback(epoch, reason);
@@ -281,7 +281,7 @@ public class AdaptiveController {
         if (!active) return;
         state.incrementDegradation();
 
-        if (cfg.adaptiveVerbose) {
+        if (cfg.adaptive.verbose) {
             LOG.info("[ADAPTIVE] DEGRADATION epoch={} {} → {}, reason={}", epoch, from, to, reason);
         }
         auditLogger.logEvent(epoch, "", "DEGRADATION", from, to, "", "reason=" + reason, "");
@@ -304,7 +304,7 @@ public class AdaptiveController {
             }
             auditLogger.close();
         }
-        if (cfg.adaptiveVerbose && state != null) {
+        if (cfg.adaptive.verbose && state != null) {
             LOG.info(state.summary());
         }
     }
@@ -323,13 +323,13 @@ public class AdaptiveController {
                 || pmode == Constants.PMODE_FIXED) return AdaptiveMode.RTK;
         if (pmode == Constants.PMODE_PPPRTK_KINEMA || pmode == Constants.PMODE_PPPRTK_STATIC) return AdaptiveMode.PPP_RTK;
         // PMODE_PPP_KINEMA / PMODE_PPP_STATIC / PMODE_PPP_FIXED 及未知模式按 AR 开关归 PPP_AR / PPP
-        boolean hasAr = cfg.enablePppAR || cfg.enablePppArFixHold
-                || cfg.enablePppPartialAR || cfg.enableBds3PppAR || cfg.enableMultiFreqAR;
+        boolean hasAr = cfg.pppAr.enableAR || cfg.pppAr.enableFixHold
+                || cfg.pppAr.enablePartialAR || cfg.pppAr.enableBds3AR || cfg.pppAr.enableMultiFreqAR;
         return hasAr ? AdaptiveMode.PPP_AR : AdaptiveMode.PPP;
     }
 
     /**
-     * 处理器接线辅助：仅当 {@code cfg.enableAdaptiveScene=true} 时构造并激活控制器，
+     * 处理器接线辅助：仅当 {@code cfg.adaptive.enableScene=true} 时构造并激活控制器，
      * 否则返回 null（默认关闭时零干预、零对象开销，调用方按 null 跳过即可）。
      * <p>控制器直接绑定传入的 opt/cfg 引用，场景切换通过覆盖-恢复机制就地修改，
      * 解算链路下一历元即读到新参数；{@link #deactivate()} 恢复全部原始值。</p>
@@ -347,7 +347,7 @@ public class AdaptiveController {
      * {@link #startIfEnabled(PrcOpt, Rtk)} 的显式配置版本，供无 Rtk 对象的链路（如 SPP）使用。
      */
     public static AdaptiveController startIfEnabled(PrcOpt opt, RtkConfig cfg) {
-        if (opt == null || cfg == null || !cfg.enableAdaptiveScene) return null;
+        if (opt == null || cfg == null || !cfg.adaptive.enableScene) return null;
         AdaptiveController ctl = new AdaptiveController(opt.mode, cfg, opt);
         ctl.activate();
         return ctl;

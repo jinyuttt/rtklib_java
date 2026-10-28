@@ -64,7 +64,7 @@ public final class PntPos {
         double[] azel_ = new double[n * 2];
 
         int stat;
-        if (cfg != null && cfg.enableSppEkf && ekfState != null) {
+        if (cfg != null && cfg.spp.enableEkf && ekfState != null) {
             stat = SppOptimizations.estposFilter(obs, n, rs, dts, vare, svh, nav, opt_, ssat,
                     sol, azel_, vsat, resp, ekfState, cfg);
         } else {
@@ -75,7 +75,7 @@ public final class PntPos {
             }
         }
 
-        if (stat != 0 && !(cfg != null && cfg.enableSppEkf)) {
+        if (stat != 0 && !(cfg != null && cfg.spp.enableEkf)) {
             estvel(obs, n, rs, dts, nav, opt_, sol, azel_, vsat, cfg);
         }
 
@@ -269,7 +269,7 @@ public final class PntPos {
                      rs[3 + i * 6] * rr[1] - rs[i * 6] * x[1]);
 
             double sig;
-            if (cfg != null && cfg.enableSppDopplerSnr && opt != null) {
+            if (cfg != null && cfg.spp.enableDopplerSnr && opt != null) {
                 PrcOpt optDop = new PrcOpt(opt);
                 optDop.eratio[0] = 30.0;
                 double varr = SppCore.varerr(optDop, null, obs[i], azel[1 + i * 2], sys);
