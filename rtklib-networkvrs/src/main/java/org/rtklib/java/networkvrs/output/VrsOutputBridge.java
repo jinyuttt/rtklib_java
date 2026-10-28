@@ -12,6 +12,8 @@ import org.rtklib.java.vrs.VrsCorrectionProvider;
 import org.rtklib.java.vrs.VrsGenerator;
 import org.rtklib.java.vrs.config.VrsOptionalConfig;
 import org.rtklib.java.vrs.rtcm.Rtcm3Encoder;
+import org.rtklib.java.vrs.rtcm.RtcmSink;
+import org.rtklib.java.vrs.rtcm.RtcmSinks;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -35,12 +37,9 @@ public final class VrsOutputBridge {
     }
 
     /**
-     * @param master       主站观测（同时作为 VRS 计算的基准观测与星历来源）
-     * @param targetPos    虚拟站大地坐标 [lat(rad), lon(rad), height(m)]
-     * @param corrections  {@link NetworkVrsProcessor#processRelative} 的输出（相对主站增量）
+     * 输出到文件（便捷重载）：内部打开出口，生命周期由本方法管理。
+     *
      * @param outputRtcmPath 输出 RTCM3 文件
-     * @param opt          VRS 可选配置
-     * @param vrsStationId 输出流的站名
      * @return 传入的历元数（含未产生观测的历元）
      */
     public static int generate(StationObservation master,
@@ -49,6 +48,48 @@ public final class VrsOutputBridge {
                                String outputRtcmPath,
                                VrsOptionalConfig opt,
                                String vrsStationId) throws IOException {
+        try (RtcmSink sink = RtcmSinks.file(outputRtcmPath)) {
+            return generate(master, targetPos, corrections, sink, opt, vrsStationId);
+        }
+    }
+
+    /**
+     * 输出为字节数组（便捷重载）：把全部帧攒在内存里一次性返回。
+     *
+     * <p>只适合有界批量场景；连续推流请用 {@link #generate} 的 {@link RtcmSink} 重载，
+     * 避免字节在内存中无界累积。</p>
+     *
+     * @return 全部 RTCM3 帧拼接后的字节
+     */
+    public static byte[] generateToBytes(StationObservation master,
+                                         double[] targetPos,
+                                         List<NetworkVrsProcessor.EpochCorrection> corrections,
+                                         VrsOptionalConfig opt,
+                                         String vrsStationId) {
+        RtcmSinks.Collector collector = RtcmSinks.collect();
+        generate(master, targetPos, corrections, collector, opt, vrsStationId);
+        return collector.toByteArray();
+    }
+
+    /**
+     * 库主入口：把改正量交给 VRS 生成器，每条 RTCM3 帧以字节数组回调给出口。
+     *
+     * <p>库不关心字节去向——落盘、推 socket、入队都由调用方实现。</p>
+     *
+     * @param master       主站观测（同时作为 VRS 计算的基准观测与星历来源）
+     * @param targetPos    虚拟站大地坐标 [lat(rad), lon(rad), height(m)]，由调用方按流动站位置给出
+     * @param corrections  {@link NetworkVrsProcessor#processRelative} 的输出（相对主站增量）
+     * @param sink         RTCM3 字节出口
+     * @param opt          VRS 可选配置
+     * @param vrsStationId 输出流的站名
+     * @return 传入的历元数（含未产生观测的历元）
+     */
+    public static int generate(StationObservation master,
+                               double[] targetPos,
+                               List<NetworkVrsProcessor.EpochCorrection> corrections,
+                               RtcmSink sink,
+                               VrsOptionalConfig opt,
+                               String vrsStationId) {
         NavigableMap<Long, Map<Integer, double[]>> byEpoch = new TreeMap<>();
         for (NetworkVrsProcessor.EpochCorrection epoch : corrections) {
             Map<Integer, double[]> perSat = new HashMap<>();
@@ -81,29 +122,25 @@ public final class VrsOutputBridge {
         encoder.seqNo = opt.seqNo;
 
         VrsGenerator generator = new VrsGenerator(targetPos, vrsStationId, opt, encoder,
-                outputRtcmPath, nav, null, null, provider);
-        try {
-            generator.onStation(masterSta(master));
-            for (Eph eph : master.ephemerides()) {
-                generator.onEph(new Eph(eph));
-            }
-
-            int epochs = 0;
-            for (Map.Entry<Double, List<Obsd>> entry : master.groupByEpoch().entrySet()) {
-                List<Obsd> observations = entry.getValue();
-                if (observations.isEmpty()) {
-                    continue;
-                }
-                ObservationEpoch epoch = new ObservationEpoch(observations.get(0).time, master.id());
-                epoch.obsList.addAll(observations);
-                generator.onObservationEpoch(epoch);
-                epochs++;
-            }
-            generator.onFinish();
-            return epochs;
-        } finally {
-            generator.close();
+                sink, nav, null, null, provider);
+        generator.onStation(masterSta(master));
+        for (Eph eph : master.ephemerides()) {
+            generator.onEph(new Eph(eph));
         }
+
+        int epochs = 0;
+        for (Map.Entry<Double, List<Obsd>> entry : master.groupByEpoch().entrySet()) {
+            List<Obsd> observations = entry.getValue();
+            if (observations.isEmpty()) {
+                continue;
+            }
+            ObservationEpoch epoch = new ObservationEpoch(observations.get(0).time, master.id());
+            epoch.obsList.addAll(observations);
+            generator.onObservationEpoch(epoch);
+            epochs++;
+        }
+        generator.onFinish();
+        return epochs;
     }
 
     private static Sta masterSta(StationObservation master) {
