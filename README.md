@@ -4,9 +4,9 @@ RTKLIB 的 Java 移植版本，基于 [RTKLIB 2.5.0](https://github.com/tomojita
 
 项目定位为**算法引擎库（Library）**而非独立软件，可嵌入 Java 应用中实现 GNSS 数据处理与定位解算。
 
-> **当前版本 v3.2.0（2026-10-24）**：算法能力已冻结，自适应引擎框架已实现。29 项算法修复的闭环索引与精度实测见 [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md)，版本级变更见 [CHANGELOG](docs/CHANGELOG.md)。
+> **当前版本 v3.3.0（2026-10-28）**：新增 rtklib-stream NTRIP Caster（服务端）与 GGA 解析；VRS 输出接口改为纯字节回调 `RtcmSink`。29 项算法修复的闭环索引与精度实测见 [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md)，版本级变更见 [CHANGELOG](docs/CHANGELOG.md)。
 
-> **功能边界**：Java版专注核心定位算法（SPP/RTK/PPP/PPP-AR/PPP-RTK），数据流通讯由 `rtklib-stream` 模块提供（NTRIP客户端+串口），不包含C版的TCP/UDP服务端、NTRIP Caster、接收机原始协议（u-blox/NovAtel等）、NMEA输出等功能。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
+> **功能边界**：Java版专注核心定位算法（SPP/RTK/PPP/PPP-AR/PPP-RTK），数据流通讯由 `rtklib-stream` 模块提供（NTRIP客户端 + NTRIP Caster 服务端 + 串口 + GGA 解析），不包含C版的TCP/UDP服务端、接收机原始协议（u-blox/NovAtel等）、NMEA输出等功能。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
 ## 模块
 
@@ -113,9 +113,11 @@ IGS/MGEX精密产品自动下载器，下载规则对齐PRIDE-PPPAR v3.2 `pdp3.s
 
 ### rtklib-stream — 数据流通讯
 
-GNSS数据流通讯模块，对齐原版RTKLIB的 `stream.c` 核心功能，提供NTRIP客户端和串口通讯能力。
+GNSS数据流通讯模块，对齐原版RTKLIB的 `stream.c` 核心功能，提供NTRIP客户端、NTRIP Caster 服务端、GGA 解析和串口通讯能力。
 
 - **NTRIP客户端**：连接NTRIP Caster获取差分数据流（RTCM3观测值、SSR改正数等），支持NTRIP v2.0、HTTP Basic认证、Sourcetable查询、分块传输（chunked）与 gzip 解码、断线自动重连、NMEA GGA上行
+- **NTRIP Caster（服务端）**：监听 TCP、播发 Sourcetable、接受挂载点订阅、HTTP Basic 鉴权、接收客户端上行 GGA。`publish(mountpoint, byte[])` 向指定挂载点全部订阅者广播；每会话独立写线程 + 有界队列，队列满丢弃最旧帧，慢客户端不影响其他订阅者。**Caster 只做连接与分发，不生成改正数据**——下行内容由应用层提供
+- **GGA 解析**：`NmeaGgaParser` 兼容任意 talker ID、强制校验和、坏行静默忽略；`NmeaGga.ellipsoidHeight()` 按 `h = H + N` 把正高换算为椭球高，`toVrsPosition()` 直接给出 `[lat(rad), lon(rad), h(m)]`
 - **SSL/TLS**：支持TLS加密连接，兼容EUREF/IGS等要求HTTPS的Caster；可自定义SSLContext（自签名证书、双向TLS认证）
 - **串口通讯**：基于jSerialComm实现跨平台串口读写（Windows COM、Linux /dev/ttyUSB*、macOS /dev/cu.*），支持可配置波特率/数据位/校验位/流控
 - **统一监听器**：`StreamListener` 接口统一数据/错误/关闭事件回调
@@ -126,10 +128,19 @@ org.rtklib.java.stream
 ├── NtripClient           NTRIP客户端（JDK Socket + SSL/TLS）
 ├── NtripClientConfig     NTRIP连接配置（含SSL设置）
 ├── SerialPort            串口流客户端（jSerialComm）
-└── SerialPortConfig      串口配置
+├── SerialPortConfig      串口配置
+├── caster/               NTRIP Caster 服务端（独立包，3.3.0）
+│   ├── NtripCaster       监听/握手/鉴权/Sourcetable/广播
+│   ├── NtripCasterConfig 监听地址、挂载点、鉴权用户
+│   ├── MountPoint        挂载点描述（对应 STR 记录）
+│   ├── CasterSession     单订阅会话 + 异步写队列
+│   └── NtripCasterListener 连接/断开/GGA 事件回调
+└── nmea/                 NMEA 解析（独立包，3.3.0）
+    ├── NmeaGga           GGA 值对象（含椭球高换算）
+    └── NmeaGgaParser     流式解析器
 ```
 
-> **实时流接入能力**：本项目已打通 NTRIP 2.0 协议，成功验证了 CAS IGS 实时 MSM 观测流（WUH20）的接入与解析；CAS 的 SSR 改正流（`SSRA01CAS0`/`SSRC01CAS0`）也已接入，完成「实时录制 → 离线回放 → 改正应用」闭环验证，实时 PPP-RTK 链路已跑通。
+> **实时流接入能力**：本项目已打通 NTRIP 2.0 协议，成功验证了 CAS IGS 实时 MSM 观测流（WUH20）的接入与解析；CAS 的 SSR 改正流（`SSRA01CAS0`/`SSRC01CAS0`）也已接入，完成「实时录制 → 离线回放 → 改正应用」闭环验证，实时 PPP-RTK 链路已跑通。Caster 侧用本模块既有 `NtripClient` 反连做互操作验收（`NtripCasterClientInteropTest`），两侧实现互通即证明握手、鉴权、分帧一致。
 
 ### rtklib-adjust — 多基线间接平差
 
@@ -269,7 +280,7 @@ org.rtklib.java.otl
 | 文档 | 说明 |
 |------|------|
 | [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md) | 一句话定位 + 精度实测汇总 + FIX-ALG 001~029 闭环索引 + HAS/IMU/CLAS 扩展路线 |
-| [变更日志](docs/CHANGELOG.md) | 版本级变更摘要（当前至 3.1.0） |
+| [变更日志](docs/CHANGELOG.md) | 版本级变更摘要（当前至 3.3.0） |
 | [发布说明](RELEASE.md) | v3.1.0 封存版发布稿：本版重点、配置项、兼容性、已知问题、验收口径 |
 | [SSR 接入手册](docs/SSR_ACCESS_PLAYBOOK.md) | 接入操作与验收（已闭环）：两行改动、五步接入、开关表、验收清单与已知坑 |
 
@@ -283,7 +294,7 @@ org.rtklib.java.otl
 
 | 文档 | 说明 |
 |------|------|
-| — | 模块代码含完整中文Javadoc，暂无独立文档 |
+| — | 模块代码含完整中文Javadoc，暂无独立文档；`caster/`、`nmea/` 为 3.3.0 新增独立包 |
 
 ### rtklib-otl
 
@@ -350,7 +361,7 @@ org.rtklib.java.otl
 
 | 模块 | 功能 | 集成风险 |
 |------|------|----------|
-| `rtklib-stream` | NTRIP客户端 + 串口通讯 | 极低 — 纯数据流，输出为RTCM字节流 |
+| `rtklib-stream` | NTRIP客户端 + NTRIP Caster服务端 + 串口通讯 | 极低 — 纯数据流，输出为RTCM字节流 |
 | `rtklib-product` | IGS精密产品自动下载 | 极低 — 纯文件下载，与定位算法解耦 |
 | `rtklib-ext-igs` | IGS 专有 4076 解码（仅公共头部） | 极低 — 纯解码骨架，不产出改正数 |
 | `rtklib-otl` | 海潮负荷BLQ系数/位移 | 极低 — mm级改正数，对定位无实质性负面风险 |
@@ -486,7 +497,9 @@ org.rtklib.java.otl
 
 **梯队 2/3 🔴 — 已关闭**：3A Kalman 优化与 3.5B null 消除经 JMH 基准实测后放弃；CI 真实数据回归、CLAS STEC 多项式、场景验证等依赖外部数据/条件，随 v3.1.0 封存整体 WONTFIX。恢复条件见 [开发路线图 §10](docs/ROADMAP.md)。
 
-**未实现的C版功能**（设计上不实现）：TCP/UDP服务端、NTRIP Caster、接收机原始协议（u-blox/NovAtel等）、NMEA输出、GPX/KML输出、大地水准面/基准转换。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
+**未实现的C版功能**（设计上不实现）：TCP/UDP服务端、接收机原始协议（u-blox/NovAtel等）、NMEA输出、GPX/KML输出、大地水准面/基准转换。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
+
+> **注**：NTRIP Caster 已不在上表内——`rtklib-stream` 于 v3.3.0 实现了 Caster 服务端（Sourcetable/订阅/鉴权/GGA 上行），这是相对 C 版的能力扩展，非移植项。
 
 ## 参考来源
 
@@ -497,7 +510,9 @@ org.rtklib.java.otl
 
 ## 补充说明
 
-**rtklib-stream 模块**：`rtklib-stream` 提供 NTRIP 客户端和串口通讯能力，是实时数据接入的推荐方式。NTRIP 客户端支持 SSL/TLS、自动重连和 Sourcetable 查询；串口客户端基于 jSerialComm 实现跨平台支持。两者通过统一的 `StreamListener` 接口回调数据，上层应用收到数据后通过 `PppProcessor.feed()` 或 `RtkProcessor.feed()` 将字节流喂入核心算法即可。
+**rtklib-stream 模块**：`rtklib-stream` 提供 NTRIP 客户端、NTRIP Caster 服务端、GGA 解析和串口通讯能力，是实时数据接入与分发的推荐方式。NTRIP 客户端支持 SSL/TLS、自动重连和 Sourcetable 查询；串口客户端基于 jSerialComm 实现跨平台支持。两者通过统一的 `StreamListener` 接口回调数据，上层应用收到数据后通过 `PppProcessor.feed()` 或 `RtkProcessor.feed()` 将字节流喂入核心算法即可。
+
+**NTRIP Caster 与 VRS 的配合**：Caster 不生成改正数据，典型用法是「应用层用 VRS 生成器按流动站 GGA 合成虚拟站数据 → `RtcmSink` 收帧 → `NtripCaster.publish(mountpoint, frame)` 分发」。上行 GGA 经 `NtripCasterListener.onGga()` 回调，由 `NmeaGgaParser` 解析后 `toVrsPosition()` 给出弧度坐标与椭球高，可直接作为 VRS 生成器的目标位置。
 
 **rtklib-test 中的 NtripClient**：`rtklib-test` 中的 `NtripClient` 是早期为方便 PPP-RTK 实时测试而编写的简易版本，功能已被 `rtklib-stream` 模块取代，保留仅为向后兼容。新代码应使用 `org.rtklib.java.stream.NtripClient`。
 

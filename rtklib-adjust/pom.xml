@@ -1,4 +1,4 @@
-ï»¿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -7,14 +7,14 @@
     <parent>
         <groupId>org.rtklib</groupId>
         <artifactId>rtklib-java</artifactId>
-        <version>3.2.0</version>
+        <version>3.3.0</version>
     </parent>
 
     <artifactId>rtklib-adjust</artifactId>
     <packaging>jar</packaging>
 
     <properties>
-        <!-- æ‰‹åŠ¨è¿è¡Œ manual æ ‡ç­¾æµ‹è¯•ï¼šmvn test -pl rtklib-adjust -Dgroups=manual -Dsurefire.excludedGroups= -->
+        <!-- ÊÖ¶¯ÔËÐÐ manual ±êÇ©²âÊÔ£ºmvn test -pl rtklib-adjust -Dgroups=manual -Dsurefire.excludedGroups= -->
         <surefire.excludedGroups>manual</surefire.excludedGroups>
     </properties>
 
@@ -41,7 +41,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <!-- é•¿æ—¶æ®µçœŸå®žæ•°æ®æµ‹è¯•é»˜è®¤ä¸è·‘ï¼ˆç»å±žæ€§å¼•ç”¨ï¼Œå‘½ä»¤è¡Œå¯è¦†ç›–ï¼‰ -->
+                    <!-- ³¤Ê±¶ÎÕæÊµÊý¾Ý²âÊÔÄ¬ÈÏ²»ÅÜ£¨¾­ÊôÐÔÒýÓÃ£¬ÃüÁîÐÐ¿É¸²¸Ç£© -->
                     <excludedGroups>${surefire.excludedGroups}</excludedGroups>
                     <argLine>-Xmx2g</argLine>
                 </configuration>

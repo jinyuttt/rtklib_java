@@ -1173,7 +1173,7 @@ python rtk_compare/compare_results.py \
 | TCP客户端 (STR_TCPCLI) | stream.c | ❌ 未实现 | NtripClient内部使用Socket，无独立TCP流抽象 |
 | NTRIP客户端 (STR_NTRIPCLI) | stream.c | ✅ rtklib-stream | `NtripClient`，NTRIP v2.0+SSL/TLS+自动重连+Sourcetable查询 |
 | NTRIP服务端 (STR_NTRIPSVR) | stream.c | ❌ 未实现 | 无法向Caster推送数据 |
-| NTRIP Caster (STR_NTRIPCAS) | stream.c | ❌ 未实现 | — |
+| NTRIP Caster (STR_NTRIPCAS) | stream.c | ✅ rtklib-stream（Java 扩展） | `NtripCaster`，NTRIP 2.0 服务端：Sourcetable + 挂载点订阅 + Basic 鉴权 + 上行 GGA。**C 版无对应实现**，属 Java 版能力扩展；Caster 不生成改正数据，下行由应用层 `publish()` 提供 |
 | UDP服务端/客户端 | stream.c | ❌ 未实现 | — |
 | FTP下载 (STR_FTP) | stream.c | ❌ 未实现 | rtklib-product模块已实现FTP/FTPS/HTTPS下载 |
 | HTTP下载 (STR_HTTP) | stream.c | ❌ 未实现 | rtklib-product模块已实现 |
@@ -1181,7 +1181,7 @@ python rtk_compare/compare_results.py \
 | 流服务 (streamsvr.c) | streamsvr.c | ❌ 未实现 | 数据流管理、格式转换服务 |
 | RTK服务 (rtksvr.c) | rtksvr.c | ❌ 未实现 | 多流实时定位服务 |
 
-**Java版数据输入方式**：rtklib-stream模块提供NTRIP客户端和串口通讯，通过`StreamListener`回调获取数据后调用`feed()`注入核心算法；也支持本地文件（RTCM/RINEX）和byte[]直接输入。
+**Java版数据输入方式**：rtklib-stream模块提供NTRIP客户端、NTRIP Caster服务端、GGA解析和串口通讯，通过`StreamListener`回调获取数据后调用`feed()`注入核心算法；也支持本地文件（RTCM/RINEX）和byte[]直接输入。
 
 ### 15.2 接收机原始协议
 
@@ -1266,7 +1266,8 @@ SBAS改正算法、集成、消息输入均已完整实现，与C版一致。
 - 多种优化项（自适应Q、IGGIII抗差、SNR质量控制等）
 
 **需要应用层自行实现**：
-- TCP/UDP服务端、NTRIP Caster → 不在rtklib-stream范围内
+- TCP/UDP服务端 → 不在rtklib-stream范围内
+- NTRIP Caster → **已实现**（`rtklib-stream` 的 `caster` 包，v3.3.0），C 版无此能力
 - NMEA输出 → 通过SolData自行编码
 - 实时流管理 → 自行组合Processor实例
 ### 15.9 实时流双向缓存系统（Java版新增，C版无对应）

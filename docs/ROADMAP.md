@@ -10,13 +10,13 @@
 |------|------|--------|----------|
 | rtklib-core | 核心定位算法（SPP/RTK/PPP/PPP-RTK）+ 自适应引擎 | **95%** | 四大定位模式全实现，高级优化已接齐（CascadeAR/PartialAR/GPT3+VMF3/IERS2010等）。RAIM FDE 已移植（`PntPos.raimFde()`）。自适应引擎框架已实现（14类）。剩余缺口（完好性监测/保护级/ARAIM、PPP-RTK区域大气约束）均为 WONTFIX——无上游场景驱动，不再投入 |
 | rtklib-product | 精密产品下载 | **90%** | IGS/MGEX 11类产品全支持，多镜像源回退，可按需扩展其他中心 |
-| rtklib-stream | NTRIP/串口 | **85%** | NTRIP客户端+SSL/TLS+串口+统一监听器；缺：TCP客户端（无生产驱动） |
+| rtklib-stream | NTRIP/串口 | **90%** | NTRIP 客户端 + SSL/TLS + **NTRIP Caster（服务端）** + GGA 解析 + 串口 + 统一监听器；缺：TCP 客户端（无生产驱动） |
 | rtklib-adjust | 多基线间接平差 | **85%** | 核心流程+基站诊断+P0~P3优化；可按需扩展多时段累积平差 |
 | rtklib-otl | 海潮负荷BLQ | **95%** | Fortran对比验证通过；属成熟稳定辅助模块 |
 | rtklib-research | 前沿研究（FGO/IACE/预积分） | **70%** | FGO框架+IMU预积分+场景自适应已齐；缺：完好性保护级、PPP-FGO |
 | rtklib-test | 测试/演示 | **80%** | SPP/RTK城市峡谷优化对比测试(DynamicRtkOptTest 12变体+UrbanCanyonSppOptTest)+NtripClient实时演示 |
 
-> 95% / 90% / 85% / 70% 为相对项目自身定位的估计值，**不含 RTKLIB C 版中明确不实现的功能**（TCP服务端、NTRIP Caster、接收机原始协议等）。
+> 95% / 90% / 85% / 70% 为相对项目自身定位的估计值，**不含 RTKLIB C 版中明确不实现的功能**（TCP客户端、接收机原始协议等）。NTRIP Caster 已于 3.3.0 实现（服务端监听/订阅/鉴权/GGA 上行），与 RTKLIB C 版「无 Caster」的定位差异不再适用。
 
 ---
 
@@ -84,6 +84,7 @@
 - 坐标变换 / 时间系统 / 电离层 / 对流层模型
 - 精密产品下载（rtklib-product）
 - NTRIP 客户端（rtklib-stream）
+- NTRIP Caster 服务端（rtklib-stream，3.3.0）
 - 轨道模块（TLE/SGP4/SDP4）
 - 海潮负荷 OTL（rtklib-otl）
 
@@ -101,6 +102,8 @@
 | 星历 + 坐标变换 + 电离层对流层 | GPS/GAL/BDS/QZS 广播星历 |
 | 精密产品下载（rtklib-product） | 11 类产品 + 多镜像源 |
 | NTRIP 客户端（rtklib-stream） | 含 SSL/TLS + 自动重连 |
+| NTRIP Caster 服务端（rtklib-stream） | Sourcetable + 挂载点订阅 + Basic 鉴权 + GGA 上行；异步队列按会话隔离 |
+| GGA 解析（rtklib-stream） | 任意 talker ID、校验和、正高→椭球高换算 |
 | 轨道模块（TLE/SGP4/SDP4） | Vallado 14 用例验证 |
 | 海潮负荷 OTL（rtklib-otl） | Fortran 对比验证 |
 | Trace 日志 + SolData 扩展 | 分散在各模块 |
