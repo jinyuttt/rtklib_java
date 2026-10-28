@@ -6,10 +6,21 @@
 
 ---
 
-## [Unreleased]
+## [3.3.0] - 2026-10-28
+
+### Added
+
+- **rtklib-stream NTRIP Caster**（新包 `org.rtklib.java.stream.caster`，与公共工具包 `org.rtklib.java.stream` 隔离）：监听 TCP、Sourcetable 播发、挂载点订阅、HTTP Basic 鉴权、上行 GGA 接收。协议双版本——`Ntrip-Version: Ntrip/2.0` 回 `HTTP/1.1 200 OK` + `Content-Type: gnss/data`，老客户端回 `ICY 200 OK`。`NtripCaster`、`NtripCasterConfig`、`MountPoint`、`CasterSession`、`NtripCasterListener` 五个类
+- **Caster 异步下行队列**：`publish(mountpoint, byte[])` 非阻塞，每会话独立写线程 + 定长队列，队列满丢弃最旧帧并由 `CasterSession.getDroppedFrames()` 可观测。慢客户端不拖累其他订阅者，实时改正数的时效性优先于完整性
+- **Caster 不生成数据**：与库的边界一致——Caster 只做连接与分发，下行内容全部由应用层经 `publish()` 交入；数据来源与合成规则属应用层职责
+- **rtklib-stream GGA 解析**（新包 `org.rtklib.java.stream.nmea`）：`NmeaGga`、`NmeaGgaParser`。支持任意 talker ID（GP/GN/GL/GA/GB/BD），强制校验和，坏行返回 `Optional.empty()` 不抛异常。`ellipsoidHeight()` 按 `h = H + N` 把 GGA 的正高换算为椭球高，`toVrsPosition()` 直接输出 `[lat(rad), lon(rad), h(m)]`
+- **VRS 1033 天线描述播发接线**：`VrsGenerator.writeVrsStation()` 在站坐标后追加天线描述消息；`VrsOptionalConfig` 新增 `antennaMsgType`（默认 1033，0 关闭）、`antSerial`、`antSetupId`、`recVersion`、`recSerial`。编码器 `Rtcm3StationEncoder` 的 1032/1033 支持此前已存在，本次仅完成配置到输出的接线
+- **rtklib-networkvrs 档 1（多基站网络 VRS）**：多站输入同步、IDW 插值、相对主站改正、复用 vrs 输出（`output/VrsOutputBridge`）；真实三站 RTCM 数据验证通过
 
 ### Changed（破坏性 API）
 
+- **VRS 输出接口由 `OutputStream` 改为纯字节回调 `RtcmSink`**：`RtcmSink` 单方法 `write(byte[] message)`，与输入侧 `RtcmDataHandler` 对称。库不假设字节去向（文件/网络/队列），传输由应用层负责。`VrsGenerator` 主构造收 `RtcmSink`，原文件路径重载内部委托 `RtcmSinks.file()`；`VrsOutputBridge` 同步适配并新增 `generateToBytes()` 便捷方法
+- **`RtcmSinks` 仅保留 `file(path)` 与 `collect()` 两个实现**，移除 `stream()` 流适配器
 - **`RtkConfig` 拆分为 7 个子配置**：原单一扁平类按归属拆为 `CommonOpts`（`cfg.common`）、`RtkOpts`（`cfg.rtk`）、`PppOpts`（`cfg.ppp`）、`PppArOpts`（`cfg.pppAr`）、`PppRtkOpts`（`cfg.pppRtk`）、`SppOpts`（`cfg.spp`）、`AdaptiveOpts`（`cfg.adaptive`）。子配置内字段名去掉原命名空间前缀，`RtkConfig` 保留 7 个 `public final` 子配置引用与拷贝构造函数
 - **字段重命名映射**（调用方需同步修改）：
   - `enablePppRtk` / `enablePppRtkAR` / `enablePppRtkFixHold` → `cfg.pppRtk.enable` / `enableAR` / `enableFixHold`
@@ -24,9 +35,27 @@
 - **序列化不兼容**：`RtkConfig` 的 `serialVersionUID` 由 `1L` 提升为 `2L`，旧版本序列化的配置对象无法直接反序列化
 - **配置访问路径同步**：`RtkCore`、`RtkOptimizations`、`AdaptiveController`、`AdaptiveOverride`、`PresetManager` 及 `rtklib-joint`/`rtklib-vrs`/`rtklib-product` 等调用方全部改为按子配置命名空间访问
 
+### Frozen（冻结，未完成）
+
+- **MAC 播发（rtklib-networkvrs 档 3）冻结**：仅改正合成落地（`mac/MacCorrectionSet`、`mac/MacCorrectionBuilder`，单测通过）；`Rtcm3MacEncoder`（1014–1017 / 1037–1039 编码）与 `MacOutputBridge`（输出编排）未实现。冻结原因：缺外部验收判据——无真实 MAC 改正差样本可做「解码→重编码→逐字节比对」，也无公开第三方编码器可比对，无法按 §7 的 V1–V5 体系证伪。现有 `mac/` 代码与单测原样保留，不删除不扩展；**有明确需求且具备外部验收基准时再启动**。详见 `docs/NETWORK_VRS_DESIGN.md` §5.3
+
+### Fixed
+
+- **`EphSelector` 空槽位误选**：星历槽位为空时原逻辑仍参与比较，导致选中空星历；已修正并补 `EphSelectorTest`
+
+### Tests
+
+- 新增 `NtripCasterTest`（15 例）：Sourcetable 播发与字段序列化、订阅握手（v2/v1 双协议）、广播分发、挂载点隔离、上行 GGA 解析、Basic 鉴权（无凭据/错密码/正确凭据）、Sourcetable 鉴权下仍公开、404 未知挂载点、`publish` 空参安全、`stop` 断开全部会话
+- 新增 `NtripCasterClientInteropTest`（4 例）：**用本模块既有 `NtripClient` 反连新 `NtripCaster`** 做协议互操作验收——客户端订阅收帧、上行 GGA 被服务端解析、客户端读取 Sourcetable、带凭据连接鉴权 Caster。两侧实现互通即证明握手、鉴权、分帧一致
+- 新增 `NmeaGgaParserTest`（11 例）：标准语句、椭球高换算（`H + N`）、南半球/西经符号、任意 talker ID、校验和错误/缺失、非 GGA 语句、截断语句、可选字段缺失、无效定位仍可解析、行尾容错
+- 新增 `VrsGeneratorTest.testAntennaDescriptorWiring`：验证输出序列为 [1005, 1033]、字段解码回读与配置一致、`antennaMsgType=0` 时无 1033 输出
+- `VrsOutputBridgeTest` 同步新增断言：回调帧序（首帧 1005、次帧 1033）、每帧均以帧头 `0xD3` 开头、逐帧拼接可还原完整输出
+
 ### Docs
 
+- `docs/NETWORK_VRS_DESIGN.md`：档 3（MAC）全篇标注冻结，头部状态、§2.1 模块树、§5.2 档位表、§5.3 冻结声明块、§6 实施阶段表、§7 验证方案 V5、§9 决策点共 7 处同步；同时纠正「1033 当前缺失」的过期描述
 - `docs/gnss-adaptive-design-v3.md`、`docs/CORE_OPTIMIZATION_MATRIX.md` 中的配置示例同步为 `cfg.<子配置>.<字段>` 新命名
+- `docs/ROADMAP.md`、`docs/VRS_MODULE_DESIGN.md` 同步 NTRIP Caster 与 `RtcmSink` 接口变更
 
 ---
 

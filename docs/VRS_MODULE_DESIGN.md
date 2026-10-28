@@ -10,7 +10,7 @@
 | Phase | 内容 | 状态 |
 |-------|------|------|
 | Phase 1 | 模块骨架 + VRS 改正算法 | ✅ 完成 |
-| Phase 2 | RTCM3 编码器（站坐标 + 星历） | ✅ 完成 |
+| Phase 2 | RTCM3 编码器（站坐标 1005/1006 + 天线描述 1032/1033 + 星历） | ✅ 完成 |
 | Phase 3 | RTCM3 编码器（MSM 观测值） | ✅ 完成（MSM4/MSM5） |
 | Phase 4 | MSM7 / SSR / 1230 / 多基站 | ⬜ 未开始 |
 
@@ -159,11 +159,20 @@ public class VrsRequiredConfig implements Serializable {
 | `navsys` | `int` | `SYS_GPS\|SYS_GLO\|SYS_GAL\|SYS_CMP` | 输出 GNSS 系统 |
 | `msmType` | `int` | `4` | MSM 消息类型（1-7），默认 MSM4 |
 | `stationMsgType` | `int` | `1005` | 站坐标消息类型（1005 或 1006） |
-| `antType` | `String` | `""` | 虚拟站天线类型描述 |
+| `antennaMsgType` | `int` | `1033` | 天线描述消息类型；`1033` 启用，`0` 关闭。设 0 时只发站坐标 |
+| `antType` | `String` | `""` | 虚拟站天线类型描述（1033 字段） |
+| `antSerial` | `String` | `""` | 天线序列号（1033 字段） |
+| `antSetupId` | `int` | `0` | 天线安装方式代码（1033 字段） |
 | `recType` | `String` | `""` | 虚拟站接收机类型描述 |
+| `recVersion` | `String` | `""` | 接收机固件版本（1033 字段） |
+| `recSerial` | `String` | `""` | 接收机序列号（1033 字段） |
 | `passThroughEph` | `boolean` | `true` | 是否透传星历到输出 |
 | `rtcmStationId` | `int` | `1` | RTCM 域 Station ID（1-4095） |
 | `seqNo` | `int` | `0` | IODS（Issue of Data Station），0-7 |
+
+> **1033 的作用**：流动站 RTK 引擎依赖天线相位中心（PCO/PCV）改正，而 1005/1006 只给天线参考点（ARP）坐标。
+> 不发 1033 时，流动站只能用默认天线模型或自带的天线文件，VRS 与流动站的天线基准不一致会引入厘米级系统偏差。
+> 消息顺序固定为「1005/1006 → 1033 → MSM」，与主流 Caster 一致。
 
 ```java
 package org.rtklib.java.vrs.config;
@@ -181,8 +190,13 @@ public class VrsOptionalConfig implements Serializable {
                             | Constants.SYS_GAL | Constants.SYS_CMP;
     public int msmType       = 4;
     public int stationMsgType = 1005;
+    public int antennaMsgType = 1033;   // 0 = 不播发天线描述
     public String antType    = "";
+    public String antSerial  = "";
+    public int antSetupId    = 0;
     public String recType    = "";
+    public String recVersion = "";
+    public String recSerial  = "";
     public boolean passThroughEph = true;
     public int rtcmStationId = 1;
     public int seqNo         = 0;
@@ -515,6 +529,19 @@ public class VrsProcessor {
 
 ### 6.2 VrsGenerator — 核心生成器
 
+**输出接口（3.3.0 起）**：`RtcmSink` 是单方法纯字节回调，与输入侧 `RtcmDataHandler` 对称：
+
+```java
+@FunctionalInterface
+public interface RtcmSink {
+    void write(byte[] message) throws IOException;
+}
+```
+
+库只负责「产出完整 RTCM3 帧」，不假设字节去向。文件、socket、消息队列、Caster 的 `publish()`
+都由应用层通过 `RtcmSinks.file(path)` / `RtcmSinks.collect()` 或自定义 lambda 接入。
+原 `OutputStream` 构造参数已移除——它把「库」和「传输」耦在一起，且无法表达「一帧一回调」的语义。
+
 ```java
 package org.rtklib.java.vrs;
 
@@ -524,7 +551,7 @@ public class VrsGenerator implements RtcmDataHandler {
     private final String stationId;
     private final VrsOptionalConfig opt;
     private final Rtcm3Encoder encoder;
-    private final OutputStream outputStream;
+    private final RtcmSink sink;            // 纯字节回调，库不假设去向
 
     private final Nav nav = new Nav();      // 收集的星历
     private Sta baseSta;                    // 基站位置
@@ -711,7 +738,7 @@ public class VrsCorrection {
     <parent>
         <groupId>org.rtklib</groupId>
         <artifactId>rtklib-java</artifactId>
-        <version>3.2.0</version>
+        <version>3.3.0</version>
     </parent>
 
     <artifactId>rtklib-vrs</artifactId>
@@ -921,7 +948,7 @@ VRS-测站        基线= 11m  FIX=183/239(76.6%)  3D-RMS=5.4651m
 |------|------|------|
 | ~~单条 MSM 消息~~ | **已解决（2026-10-28）**：`nsat×nsig > 64` 时按卫星分批 + `sync` 累积，13 星×6 信号=78 cell 完整恢复；旧的信号裁剪路径仅作兜底 | 无 |
 | 单基站 VRS | 不支持 MAC / iMAX / FKP 网络插值 | 基线 > 30 km 时改正精度下降 → 已单独立项，见 [NETWORK_VRS_DESIGN.md](NETWORK_VRS_DESIGN.md) |
-| 仅离线文件 | 输入输出均为 `byte[]`/文件，无流式接口 | 不支持实时流；但 15 s 批量提交的原始数据可直接用 |
+| ~~仅离线文件~~ | **部分解决（3.3.0）**：输出侧已改为 `RtcmSink` 纯字节回调，可接文件、socket、队列或 Caster 的 `publish()`；输入侧仍是 `RtcmDataHandler` 解码器回调，可逐段 `feed()` | 输出可实时；输入仍按批提交 |
 | 测试数据单一 | 仅 BDS 为主的单组数据 | GPS/GAL/QZS 多系统路径未做真实数据验证 |
 
 ---

@@ -29,7 +29,7 @@
 
 | 文档 | 定位 | 状态 | 最后更新 |
 |------|------|------|----------|
-| [CHANGELOG.md](CHANGELOG.md) | 面向用户的版本级变更摘要（当前至 3.1.0） | ✅ 活跃 | 2026-10-23 |
+| [CHANGELOG.md](CHANGELOG.md) | 面向用户的版本级变更摘要（当前至 3.3.0） | ✅ 活跃 | 2026-10-28 |
 | [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) | **定版核心档案**：每次改变数值行为的修改（C 依据/根因/验证），现存 FIX-ALG-001~029 | ✅ 活跃 | 2026-10-23 |
 | [RTKLIB_Differences.md](RTKLIB_Differences.md) | 与 RTKLIB 2.5.0 C 版的长期差异声明（设计选择，非 Bug） | ✅ 活跃 | 2026-10-21 |
 
