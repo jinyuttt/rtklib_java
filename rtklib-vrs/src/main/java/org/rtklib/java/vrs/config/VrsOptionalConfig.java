@@ -13,8 +13,13 @@ public class VrsOptionalConfig implements Serializable {
                       | Constants.SYS_GAL | Constants.SYS_CMP;
     public int msmType = 4;
     public int stationMsgType = 1005;
+    public int antennaMsgType = 1033;
     public String antType = "";
+    public String antSerial = "";
+    public int antSetupId = 0;
     public String recType = "";
+    public String recVersion = "";
+    public String recSerial = "";
     public boolean passThroughEph = true;
     public int rtcmStationId = 1;
     public int seqNo = 0;

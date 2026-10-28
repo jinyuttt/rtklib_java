@@ -51,6 +51,8 @@ public class Rtcm3Encoder {
         switch (type) {
             case 1005: ok = Rtcm3StationEncoder.encodeType1005(this, sync); break;
             case 1006: ok = Rtcm3StationEncoder.encodeType1006(this, sync); break;
+            case 1032: ok = Rtcm3StationEncoder.encodeType1032(this, sync); break;
+            case 1033: ok = Rtcm3StationEncoder.encodeType1033(this, sync); break;
             case 1019: ok = Rtcm3EphEncoder.encodeType1019(this, sync); break;
             case 1020: ok = Rtcm3EphEncoder.encodeType1020(this, sync); break;
             case 1042: ok = Rtcm3EphEncoder.encodeType1042(this, sync); break;
