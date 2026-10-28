@@ -115,7 +115,7 @@ class NtripCasterTest {
 
             await(() -> c.sessionCount("VRS01") == 1, 2000);
 
-            byte[] frame = {(byte) 0xD3, 0x00, 0x04, 0x4C, 0xE0, 0x00, 0x00};
+            byte[] frame = {(byte) 0xD3, 0x00, 0x04, 0x4C, (byte) 0xE0, 0x00, 0x00};
             c.publish("VRS01", frame);
 
             byte[] received = new byte[frame.length];
