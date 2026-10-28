@@ -2,6 +2,7 @@ package org.rtklib.java.networkvrs.mac;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.Eph;
 import org.rtklib.java.data.GTime;
@@ -24,6 +25,7 @@ class MacCorrectionBuilderTest {
 
     private static final GTime TIME = new GTime(2270000000L, 0.0);
     private static final double[] MASTER_ECEF = {1.0e6, 2.0e6, 3.0e6};
+    private static final int CMP_SAT = SatUtils.satno(Constants.SYS_CMP, 1);
 
     @Test
     @DisplayName("辅站按距离升序、IODE 打标、几何差为对流层+轨道")
@@ -33,9 +35,12 @@ class MacCorrectionBuilderTest {
 
         Map<String, Map<Integer, NetworkVrsProcessor.CorrectionValue>> byStation =
                 new LinkedHashMap<>();
-        byStation.put("MASTER", corrections(new double[]{0, 0, 0}, new double[]{0, 0, 0}));
-        byStation.put("FAR", corrections(new double[]{0.2, 0.1, 0.0}, new double[]{0.05, 0.02, 0.0}));
-        byStation.put("NEAR", corrections(new double[]{0.1, 0.2, 0.01}, new double[]{0.01, 0.0, 0.0}));
+        byStation.put("MASTER", corrections(new int[]{1, 2},
+                new double[]{0, 0, 0}, new double[]{0, 0, 0}));
+        byStation.put("FAR", corrections(new int[]{1, 2},
+                new double[]{0.2, 0.1, 0.0}, new double[]{0.05, 0.02, 0.0}));
+        byStation.put("NEAR", corrections(new int[]{1, 2},
+                new double[]{0.1, 0.2, 0.01}, new double[]{0.01, 0.0, 0.0}));
 
         List<StationObservation> stations = List.of(
                 station("MASTER", MASTER_ECEF),
@@ -56,7 +61,8 @@ class MacCorrectionBuilderTest {
         assertEquals(42, near.iode());
         assertEquals(0.1, near.ionoDiff(), 1e-12);
         assertEquals(0.21, near.geometricDiff(), 1e-12, "几何差 = 对流层 + 轨道残差");
-        assertEquals(0, set.droppedSatellites());
+        assertEquals(List.of(1), set.satellites());
+        assertEquals(1, set.droppedSatellites(), "sat 2 无星历应剔除");
     }
 
     @Test
@@ -67,8 +73,10 @@ class MacCorrectionBuilderTest {
 
         Map<String, Map<Integer, NetworkVrsProcessor.CorrectionValue>> byStation =
                 new LinkedHashMap<>();
-        byStation.put("MASTER", corrections(new double[]{0, 0, 0}, new double[]{0, 0, 0}));
-        byStation.put("AUX", corrections(new double[]{0.1, 0.1, 0.0}, new double[]{0.0, 0.0, 0.0}));
+        byStation.put("MASTER", corrections(new int[]{1, 2},
+                new double[]{0, 0, 0}, new double[]{0, 0, 0}));
+        byStation.put("AUX", corrections(new int[]{1, 2},
+                new double[]{0.1, 0.1, 0.0}, new double[]{0.0, 0.0, 0.0}));
 
         List<StationObservation> stations = List.of(
                 station("MASTER", MASTER_ECEF),
@@ -89,12 +97,14 @@ class MacCorrectionBuilderTest {
     void testFiltersNonBroadcastSystems() {
         Nav nav = new Nav();
         nav.eph[0] = eph(1, 11);
-        nav.eph[5] = eph(6, 12);
+        nav.eph[CMP_SAT - 1] = eph(CMP_SAT, 12);
 
         Map<String, Map<Integer, NetworkVrsProcessor.CorrectionValue>> byStation =
                 new LinkedHashMap<>();
-        byStation.put("MASTER", corrections(new double[]{0, 0, 0}, new double[]{0, 0, 0}));
-        byStation.put("AUX", corrections(new double[]{0.1, 0.1, 0.0}, new double[]{0.0, 0.0, 0.0}));
+        byStation.put("MASTER", corrections(new int[]{1, CMP_SAT},
+                new double[]{0, 0, 0}, new double[]{0, 0, 0}));
+        byStation.put("AUX", corrections(new int[]{1, CMP_SAT},
+                new double[]{0.1, 0.1, 0.0}, new double[]{0.0, 0.0, 0.0}));
 
         List<StationObservation> stations = List.of(
                 station("MASTER", MASTER_ECEF),
@@ -103,7 +113,8 @@ class MacCorrectionBuilderTest {
         List<MacCorrectionSet> sets = new MacCorrectionBuilder(new NetworkConfig())
                 .build(result(byStation), stations, nav, "MASTER");
 
-        assertEquals(List.of(1), sets.get(0).satellites(), "BDS(sat 6) 不应播发");
+        assertEquals(List.of(1), sets.get(0).satellites(), "BDS 卫星不应播发");
+        assertEquals(0, sets.get(0).droppedSatellites(), "被星座过滤的卫星不计入剔除");
     }
 
     @Test
@@ -126,11 +137,10 @@ class MacCorrectionBuilderTest {
     }
 
     private static Map<Integer, NetworkVrsProcessor.CorrectionValue> corrections(
-            double[] sat1, double[] sat2) {
+            int[] sats, double[] first, double[] second) {
         Map<Integer, NetworkVrsProcessor.CorrectionValue> bySat = new LinkedHashMap<>();
-        bySat.put(1, new NetworkVrsProcessor.CorrectionValue(sat1[0], sat1[1], sat1[2]));
-        bySat.put(2, new NetworkVrsProcessor.CorrectionValue(sat2[0], sat2[1], sat2[2]));
-        bySat.put(6, new NetworkVrsProcessor.CorrectionValue(sat1[0], sat1[1], sat1[2]));
+        bySat.put(sats[0], new NetworkVrsProcessor.CorrectionValue(first[0], first[1], first[2]));
+        bySat.put(sats[1], new NetworkVrsProcessor.CorrectionValue(second[0], second[1], second[2]));
         return bySat;
     }
 

@@ -1,7 +1,9 @@
 package org.rtklib.java.networkvrs.config;
 
+import org.rtklib.java.constants.Constants;
+
 /**
- * 网络 RTK 配置（档 1：多站同步 + IDW；档 2：网解 + 误差分解 + FKP）。
+ * 网络 RTK 配置（档 1：多站同步 + IDW；档 2：网解 + 误差分解 + FKP；档 3：MAC）。
  *
  * <p>字段均为 public，保持与 core 的 RtkConfig 风格一致。</p>
  */
@@ -82,4 +84,42 @@ public class NetworkConfig {
 
     /** 双差非色散残差观测标准差（米）。 */
     public double ddNonDispSigmaM = 0.05;
+
+    // ---------------- 档 3：MAC 星座策略 ----------------
+
+    /** 参与网解与误差分解的系统。 */
+    public int solutionSystems = Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP;
+
+    /**
+     * 播发 MAC 改正差的系统，只能取 GPS / GLONASS 的子集，
+     * 且必须是 {@link #solutionSystems} 的子集。默认仅 GPS。
+     */
+    public int macBroadcastSystems = Constants.SYS_GPS;
+
+    /** 主站 MSM 播发的系统；0 表示跟随输入观测。 */
+    public int msmSystems = 0;
+
+    /** MAC 网络号（RTCM 1014 的 DF003，12 bit）。 */
+    public int macNetworkId = 1;
+
+    /**
+     * 启动期一致性校验：违反星座配置约束时直接抛异常，不允许静默降级。
+     */
+    public void validate() {
+        int macAllowed = Constants.SYS_GPS | Constants.SYS_GLO;
+        if ((macBroadcastSystems & ~macAllowed) != 0) {
+            throw new IllegalArgumentException(
+                    "macBroadcastSystems 只能包含 GPS/GLONASS: 0x"
+                            + Integer.toHexString(macBroadcastSystems));
+        }
+        if ((macBroadcastSystems & ~solutionSystems) != 0) {
+            throw new IllegalArgumentException(
+                    "macBroadcastSystems 必须是 solutionSystems 的子集: mac=0x"
+                            + Integer.toHexString(macBroadcastSystems)
+                            + ", solution=0x" + Integer.toHexString(solutionSystems));
+        }
+        if (macBroadcastSystems == 0) {
+            throw new IllegalArgumentException("macBroadcastSystems 不能为空");
+        }
+    }
 }

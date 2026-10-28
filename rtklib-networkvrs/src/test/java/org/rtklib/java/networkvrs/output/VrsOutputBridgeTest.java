@@ -20,6 +20,7 @@ import org.rtklib.java.vrs.config.VrsOptionalConfig;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -57,6 +58,50 @@ class VrsOutputBridgeTest {
         assertEquals(1, inspector.stationCount);
         assertArrayEquals(ecef, inspector.sta.pos, 1e-4);
         assertEquals(0, inspector.epochCount, "无星历不应产生观测历元");
+    }
+
+    @Test
+    @DisplayName("输出桥：字节数组接口与文件接口逐字节一致，且回调收到的是完整帧")
+    void testByteArrayOutput(@TempDir Path dir) throws IOException {
+        double[] pos = {30.0 * Math.PI / 180.0, 95.0 * Math.PI / 180.0, 100.0};
+        double[] ecef = new double[3];
+        CoordTransform.pos2ecef(pos, ecef);
+
+        Obsd obs = new Obsd();
+        obs.time = new GTime(1000L, 0.0);
+        obs.sat = 1;
+        StationObservation master = new StationObservation("MASTER", ecef, List.of(obs));
+
+        VrsOptionalConfig opt = new VrsOptionalConfig();
+
+        Path output = dir.resolve("bridge.rtcm3");
+        int fileEpochs = VrsOutputBridge.generate(master, pos, List.of(),
+                output.toString(), opt, "NETVRS");
+        byte[] fromFile = Files.readAllBytes(output);
+
+        byte[] fromBytes = VrsOutputBridge.generateToBytes(master, pos, List.of(),
+                opt, "NETVRS");
+
+        assertArrayEquals(fromFile, fromBytes, "字节数组接口与文件接口应逐字节一致");
+
+        List<byte[]> frames = new ArrayList<>();
+        VrsOutputBridge.generate(master, pos, List.of(), frames::add, opt, "NETVRS");
+        assertTrue(frames.size() >= 2, "至少应有站坐标与天线描述两帧");
+        assertEquals(0xD3, frames.get(0)[0] & 0xFF, "每条回调都应是完整帧，以帧头开头");
+        assertEquals(1005, messageType(frames.get(0)), "首帧应为站坐标 1005");
+        assertEquals(1033, messageType(frames.get(1)), "次帧应为天线描述 1033");
+
+        int total = 0;
+        for (byte[] frame : frames) {
+            assertEquals(0xD3, frame[0] & 0xFF, "每条回调都应是完整帧，以帧头开头");
+            total += frame.length;
+        }
+        assertEquals(fromFile.length, total, "逐帧拼接应还原完整输出");
+        assertEquals(2, frames.size(), "本用例无星历，只有站坐标与天线描述两帧");
+    }
+
+    private static int messageType(byte[] frame) {
+        return ((frame[3] & 0xFF) << 4) | ((frame[4] & 0xF0) >> 4);
     }
 
     private static final class Inspector implements RtcmDataHandler {
