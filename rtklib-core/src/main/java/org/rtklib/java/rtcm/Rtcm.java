@@ -11,6 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * RTCM3 message decoder.
@@ -72,6 +74,11 @@ public class Rtcm implements Serializable {
     public int ephset;
     /** Whether stream time has been initialized from ephemeris */
     private boolean timeInitialized = false;
+    /**
+     * 外部注入的专有消息解码器（如 IGS 4076）。
+     * transient：不参与序列化，避免把扩展实现写进核心状态。
+     */
+    private transient List<CustomMessageDecoder> customDecoders;
 
     public boolean isTimeInitialized() {
         return timeInitialized;
@@ -80,6 +87,26 @@ public class Rtcm implements Serializable {
     public void setReferenceTime(GTime time) {
         this.time = new GTime(time);
         this.timeInitialized = true;
+    }
+
+    /**
+     * 注册专有消息解码器（如 IGS 4076）。
+     * 未内置支持的消息号会依次委托给已注册的解码器。
+     * @param decoder 解码器实现
+     */
+    public void registerCustomDecoder(CustomMessageDecoder decoder) {
+        if (decoder == null) return;
+        customDecoderList().add(decoder);
+    }
+
+    /**
+     * 惰性初始化；同时兼容反序列化后 transient 字段为 null 的情况。
+     */
+    private List<CustomMessageDecoder> customDecoderList() {
+        if (customDecoders == null) {
+            customDecoders = new ArrayList<>();
+        }
+        return customDecoders;
     }
     /** Lock time each satellite (for loss-of-lock detection) */
     public short[][] lock = new short[Constants.MAXSAT][Constants.NFREQ + Constants.NEXOBS];
@@ -346,13 +373,46 @@ public class Rtcm implements Serializable {
                 case 1269: return decodeSsrPhaseBias(Constants.SYS_SBS);
                 case 1270: return decodeSsrPhaseBias(Constants.SYS_CMP);
                 default:
-                    log.trace("RTCM3 type {} not yet implemented", type);
-                    return true;
+                    return decodeCustom(type);
             }
         } catch (Exception ex) {
             log.error("RTCM3 decode exception for type {}: {}", type, ex.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 委托给外部注册的专有消息解码器。
+     * 无解码器认领时保持原有行为：消费消息、不报错。
+     * @param type 消息号
+     * @return true（消息已被消费）
+     */
+    private boolean decodeCustom(int type) {
+        List<CustomMessageDecoder> decoders = customDecoderList();
+        if (decoders.isEmpty()) {
+            log.trace("RTCM3 type {} not yet implemented", type);
+            return true;
+        }
+        // 消息体：去掉 3 字节帧头与 3 字节 CRC
+        int payloadLen = this.len - 6;
+        if (payloadLen <= 0) {
+            log.warn("RTCM3 type {} has invalid length {}", type, this.len);
+            return true;
+        }
+        byte[] payload = new byte[payloadLen];
+        System.arraycopy(this.buff, 3, payload, 0, payloadLen);
+        for (CustomMessageDecoder decoder : decoders) {
+            if (decoder.messageType() != type) continue;
+            try {
+                if (decoder.decode(this, type, payload, payloadLen)) {
+                    return true;
+                }
+            } catch (RuntimeException ex) {
+                log.warn("custom RTCM decoder failed for type {}: {}", type, ex.getMessage());
+            }
+        }
+        log.trace("RTCM3 type {} not handled by any custom decoder", type);
+        return true;
     }
 
     // ---- Legacy observation decoders (1001-1004) -----------------------------

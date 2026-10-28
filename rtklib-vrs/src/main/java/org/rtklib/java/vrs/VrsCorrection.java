@@ -25,6 +25,17 @@ public class VrsCorrection {
     public static Obs correct(ObservationEpoch epoch, Nav nav,
                               Sta baseSta, double[] vrsPos,
                               VrsOptionalConfig opt) {
+        return correct(epoch, nav, baseSta, vrsPos, opt, null);
+    }
+
+    /**
+     * @param provider 外部改正量提供者；为 null 时全部卫星走模型计算，
+     *                 某卫星返回 null 时该卫星同样回退模型
+     */
+    public static Obs correct(ObservationEpoch epoch, Nav nav,
+                              Sta baseSta, double[] vrsPos,
+                              VrsOptionalConfig opt,
+                              VrsCorrectionProvider provider) {
         double elMaskRad = opt.elMaskDeg * Constants.D2R;
 
         double[] basePos = new double[3];
@@ -66,19 +77,32 @@ public class VrsCorrection {
             RtklibCommon.satazel(vrsPos, eVrs, azelVrs);
             if (azelVrs[1] < elMaskRad) continue;
 
-            double[] tropOut = new double[2];
-            TroposphereModel.tropcorr(baseObsd.time, nav, basePos, azelBase, opt.tropModel, tropOut);
-            double tropBase = tropOut[0];
-            TroposphereModel.tropcorr(baseObsd.time, nav, vrsPos, azelVrs, opt.tropModel, tropOut);
-            double tropVrs = tropOut[0];
-            double dTrop = tropVrs - tropBase;
+            double dIon;
+            double dTrop;
+            double dOrbit = 0.0;
+            double[] external = provider == null ? null
+                    : provider.correction(baseObsd.time, baseObsd.sat);
+            if (external != null && external.length >= 3) {
+                dIon = external[0];
+                dTrop = external[1];
+                dOrbit = external[2];
+            } else {
+                double[] tropOut = new double[2];
+                TroposphereModel.tropcorr(baseObsd.time, nav, basePos, azelBase, opt.tropModel, tropOut);
+                double tropBase = tropOut[0];
+                TroposphereModel.tropcorr(baseObsd.time, nav, vrsPos, azelVrs, opt.tropModel, tropOut);
+                double tropVrs = tropOut[0];
+                dTrop = tropVrs - tropBase;
 
-            double[] ionOut = new double[2];
-            IonosphereModel.ionocorr(baseObsd.time, nav, baseObsd.sat, basePos, azelBase, opt.ionoModel, ionOut);
-            double ionBase = ionOut[0];
-            IonosphereModel.ionocorr(baseObsd.time, nav, baseObsd.sat, vrsPos, azelVrs, opt.ionoModel, ionOut);
-            double ionVrs = ionOut[0];
-            double dIon = ionVrs - ionBase;
+                double[] ionOut = new double[2];
+                IonosphereModel.ionocorr(baseObsd.time, nav, baseObsd.sat, basePos, azelBase, opt.ionoModel, ionOut);
+                double ionBase = ionOut[0];
+                IonosphereModel.ionocorr(baseObsd.time, nav, baseObsd.sat, vrsPos, azelVrs, opt.ionoModel, ionOut);
+                double ionVrs = ionOut[0];
+                dIon = ionVrs - ionBase;
+            }
+
+            double dRange = dGeom + dTrop + dOrbit;
 
             Obsd vrsObsd = new Obsd(baseObsd);
             for (int f = 0; f < Constants.NFREQ; f++) {
@@ -86,10 +110,10 @@ public class VrsCorrection {
                 double lam = freq > 0.0 ? Constants.CLIGHT / freq : 0.0;
 
                 if (baseObsd.P[f] != 0.0) {
-                    vrsObsd.P[f] = baseObsd.P[f] + dGeom + dTrop + dIon;
+                    vrsObsd.P[f] = baseObsd.P[f] + dRange + dIon;
                 }
                 if (baseObsd.L[f] != 0.0 && lam > 0.0) {
-                    vrsObsd.L[f] = baseObsd.L[f] + (dGeom + dTrop - dIon) / lam;
+                    vrsObsd.L[f] = baseObsd.L[f] + (dRange - dIon) / lam;
                 }
             }
 

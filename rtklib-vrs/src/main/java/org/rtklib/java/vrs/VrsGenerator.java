@@ -37,6 +37,7 @@ public class VrsGenerator implements RtcmDataHandler {
     private final Nav nav;
     private final List<Eph> ephPool;
     private final List<Geph> gephPool;
+    private final VrsCorrectionProvider correctionProvider;
     private Sta baseSta;
     private boolean staWritten = false;
     private int epochCount = 0;
@@ -57,6 +58,17 @@ public class VrsGenerator implements RtcmDataHandler {
                         VrsOptionalConfig opt, Rtcm3Encoder encoder,
                         String outputRtcmPath, Nav nav,
                         List<Eph> ephPool, List<Geph> gephPool) throws IOException {
+        this(vrsPos, stationId, opt, encoder, outputRtcmPath, nav, ephPool, gephPool, null);
+    }
+
+    /**
+     * @param correctionProvider 外部改正量提供者；为 null 时使用模型改正
+     */
+    public VrsGenerator(double[] vrsPos, String stationId,
+                        VrsOptionalConfig opt, Rtcm3Encoder encoder,
+                        String outputRtcmPath, Nav nav,
+                        List<Eph> ephPool, List<Geph> gephPool,
+                        VrsCorrectionProvider correctionProvider) throws IOException {
         this.vrsPos = vrsPos;
         this.stationId = stationId;
         this.opt = opt;
@@ -64,6 +76,7 @@ public class VrsGenerator implements RtcmDataHandler {
         this.nav = nav;
         this.ephPool = ephPool;
         this.gephPool = gephPool;
+        this.correctionProvider = correctionProvider;
         this.outputStream = new BufferedOutputStream(new FileOutputStream(outputRtcmPath));
     }
 
@@ -121,7 +134,7 @@ public class VrsGenerator implements RtcmDataHandler {
 
         selectEphemerisForEpoch(epoch.time);
 
-        Obs vrsObs = VrsCorrection.correct(epoch, nav, baseSta, vrsPos, opt);
+        Obs vrsObs = VrsCorrection.correct(epoch, nav, baseSta, vrsPos, opt, correctionProvider);
         if (vrsObs.n == 0) return;
 
         encoder.obs = vrsObs;

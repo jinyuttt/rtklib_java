@@ -2,7 +2,8 @@
 
 > 版本：v0.1（草稿）
 > 日期：2026-10-28
-> 状态：**待数据启动** —— 动工前提：拿到 ≥3 个同步基站的真实观测数据
+> 状态：**档 1 已完成**（多站同步 + IDW 插值 + 相对主站改正 + vrs 输出桥；真实三站 RTCM 数据验证通过）；
+> **档 3 方案已定**（§5.3，仅 MAC，iMAX 单列评估项，待决策点 4 后动工）
 > 前置文档：VRS_MODULE_DESIGN.md（单基站 VRS，已完成）、JOINT_RTK_DESIGN.md
 
 ---
@@ -37,22 +38,23 @@ rtklib-vrs 已实现**单基站 VRS**：一个基站的观测值按几何/对流
 
 ## 2. 总体架构
 
-### 2.1 模块划分：新建 `rtklib-network`，不塞进 vrs
+### 2.1 模块划分：新建 `rtklib-networkvrs`，不塞进 vrs
 
 ```
 rtklib-core                                （不动：Rtcm/RINEX 解码、satpos、双差、LAMBDA）
    ↑
 rtklib-vrs                                 （不动：单站改正算法 + MSM 编码，API 直接复用）
    ↑
-rtklib-network （新）                       org.rtklib.java.network
+rtklib-networkvrs （新）                       org.rtklib.java.network
    ├── sync/      多站输入管理：RTCM/RINEX 接入、历元对齐、坐标归算、参考星归一
    ├── netsol/    网解引擎：基线网构建、站间模糊度固定（§4）
    ├── error/     误差分解：逐卫星色散/非色散分离（§5.1）
-   ├── interp/    插值模型：IDW → FKP → MAC/iMAX（§5.2，分档实现）
+   ├── interp/    插值模型：IDW → FKP（§5.2，分档实现）
+   ├── mac/       档 3 MAC 改正合成：主站+辅站改正差、IODE 打标、辅站索引表（§5.3）
    └── NetworkVrsProcessor  主入口：多站观测 → 插值改正 → 调 vrs 生成 RTCM 输出
 ```
 
-依赖声明：`rtklib-network → rtklib-core + rtklib-vrs`，父 pom 加一行聚合。
+依赖声明：`rtklib-networkvrs → rtklib-core + rtklib-vrs`，父 pom 加一行聚合。
 
 ### 2.2 为什么不并入 vrs
 
@@ -71,7 +73,7 @@ rtklib-network （新）                       org.rtklib.java.network
 | rtklib-vrs | 单站改正 + RTCM 生成 | 输出层复用：插值后的改正量交给 VrsGenerator 出 RTCM |
 | rtklib-joint | 多基线联合 RTK（流动站侧） | 不直接依赖；网解引擎可参考其骨架 |
 | rtklib-adjust | 多基线间接平差 | 不直接依赖；网平差思想可参考 |
-| rtklib-network | 多站同步、网解、误差分解、插值 | **本设计的新建模块** |
+| rtklib-networkvrs | 多站同步、网解、误差分解、插值 | **本设计的新建模块** |
 
 ---
 
@@ -91,9 +93,71 @@ rtklib-network （新）                       org.rtklib.java.network
 | **自有 CORS 站** | 现有设备（GS2025xxxx 系列）再布 2~3 个站 | 最佳：数据格式与现有管线完全一致 |
 | **IGS/MGEX 公开站** | CDDIS / IGN / BKG / 武大 IGS 数据中心（igs.gnsswhu.cn）免费下载 RINEX；国内可用站如 KUNM（昆明）、LHAZ（拉萨）、XIA1（西安）、WUH2（武汉）、SHAO（上海） | 可验证方法论，但站间距常 200km+，超出 FKP 适用范围；适合先打通流程 |
 | **GEONET（日本）** | 免费注册，站距 20~60km，密度理想 | 网络 RTK 方法验证的理想数据集 |
+| **EUREF/EPN 公开站** | BKG 免登录镜像 `igs.bkg.bund.de` 可直接取 30 s RINEX（Hatanaka `.crx.gz`）；官方坐标 `EPNIGB08.CRD`（98 站，IGb08 框架） | ✅ **已落地**（见 §3.2.1）：欧洲站网密度足够组 30~100 km 三角形，无需注册 |
 | **省级 CORS / 千寻等商业网** | 需申请/购买 | 实战部署阶段 |
 
 数据形态：离线验证用 RINEX 即可（core 的 RinexParser 已有）；实战用 RTCM 流（vrs 管线已有）。
+
+### 3.2.1 已获取的三角形数据集（2026-10-28，DOY 300 / 10-27）
+
+| 项 | 值 |
+|---|---|
+| 观测来源 | BKG 镜像 `https://igs.bkg.bund.de/root_ftp/EUREF/obs/2026/300/`，30 s，RINEX 3.04，Hatanaka `.crx.gz`，**免登录** |
+| 当日可用站 | 196 站 |
+| 几何筛选 | 全 196 站按站距 30~100 km 组三角形，**合格仅 15 组**（意大利 12、波兰 2、塞尔维亚 1） |
+| 坐标文件 | `EPNIGB08.CRD`（98 站，IGb08 框架）已取得；与观测同放数据仓库 `gnss-validation/network-vrs/euref-2026300/`（不入主仓库，见下） |
+
+候选三角形（边长为两两站距，单位 km）：
+
+| 优先级 | 站组 | 边长 | 状态 |
+|---|---|---|---|
+| 首选 | KATO–KRAW–ZYWI（波兰） | 66.4 / 66.3 / 64.2 | 未下载（最接近等边、平原、高程接近） |
+| 次选 | CIMO–IGM2–VIRG（意大利） | 60.3 / 60.1 / 64.6 | 未下载（IGM2 当日无 30 s 数据） |
+| 备选 | CIMO–PRAT–VIRG（意大利） | 46.8 / 55.7 / 64.6 | ✅ **已下载** `data/network-vrs/2026/300/` |
+
+实际下载数据集（备选组，三站均为 30 s 全天观测，`data/network-vrs/2026/300/`）：
+
+| 文件 | 说明 |
+|---|---|
+| `CIMO00ITA_R_20263000000_01D_30S_MO.rnx` | 33.7 MB，Hatanaka 已解压 |
+| `PRAT00ITA_R_20263000000_01D_30S_MO.rnx` | 18.2 MB，Hatanaka 已解压 |
+| `VIRG00ITA_R_20263000000_01D_30S_MO.rnx` | 32.4 MB，Hatanaka 已解压 |
+| `CIMO00ITA_..._MO.crx.gz` / `PRAT00ITA_..._MO.crx.gz` / `VIRG00ITA_..._MO.crx.gz` | 原始 Hatanaka 压缩件，4.5 / 2.5 / 4.1 MB，**保留**（体积小、可复现解压结果） |
+| `stations.csv` | 三站 XYZ/BLH + DOMES 号 |
+| `baselines.csv` | 三条基线实算长度：CIMO–PRAT 46848.967 m / PRAT–VIRG 55846.054 m / CIMO–VIRG 64590.163 m，含 ENU 分量 |
+
+> 📦 **入库口径**：本数据集属于大文件，走**独立数据仓库** `rtklib-java-data`
+> （`https://github.com/jinyurrr/rtklib-java-data.git`，指针文件 `test-data/.data-repo`），
+> **不进主仓库**。仓库内路径建议 `gnss-validation/network-vrs/euref-2026300/`，
+> 与既有 `gnss-validation/rtk/long-baseline/hkws-hksl/` 同构；
+> 本地 `data/network-vrs/2026/300/` 仅作工作副本（`data/` 在 `.gitignore`）。
+> 获取方式：`./test-data/download-test-data.ps1`（脚本已含 `gnss-validation` 子目录）。
+> EUREF/EPN 观测与 `EPNIGB08.CRD` 均为公开数据，可自由下载、复现与对外引用，不涉密。
+> ⚠️ **坐标口径**：`stations.csv` 的坐标取自 RINEX 头 `APPROX POSITION XYZ`（站方提供），**非官方 ITRF2020 解**。三站同日同源，相对几何一致，**V1 留一法验证不受影响**；若要出绝对精度结论，需替换为 `EPNIGB08.CRD` 或 ITRF 真值。
+> ⚠️ **选型偏差**：已下载的是备选组，最短边 46.8 km，未达次选（60 km）的等边程度；对 V2 平面拟合优度无实质影响，但 V4 基线扩展曲线的起点会偏低。
+> ⚠️ **V3 缺口**：三站可做 V1 留一法，但**没有独立流动站**做端到端 RTK（V3），需再取第 4 站或改用留一法替代。
+
+**数据可用性复核（2026-10-28，实测）**：`data/network-vrs/2026/300/` 三站 RINEX 与 BRDC 均完好，
+`NetworkSolutionRealDataTest` 以 120 历元（1 h）跑通（BUILD SUCCESS，2 项测试通过）：
+
+| 项 | 实测值 |
+|---|---|
+| 同步历元 / 基线窗口 | 120 / 18 |
+| 窄巷固定 | 0（与 §4.1「宽巷固定 + IF 浮点」一致） |
+| 相位残差均值 | 0.0092 m（≈9 mm，与 §4.1 的 0.9~1.2 cm 吻合） |
+| 双差码残差 | GPS 140 组 2.26 m ／ GAL 170 组 4.27 m ／ BDS 144 组 2.82 m |
+
+三站 RINEX 头实测信号（RINEX 3.04，30 s）：
+
+| 系统 | CIMO | PRAT | VIRG | 网解是否参与 |
+|---|---|---|---|---|
+| GPS | 1C/2S/2W/5Q | 1C/2S/2W/5Q | 1C/1L/2S/2W/5Q | ✅（`1C+2W` 三站齐备） |
+| GAL | 1C/5Q/6C/7Q/8Q | 1C/5Q/7Q/8Q | 1C/5Q/6C/7Q/8Q | ✅ |
+| BDS | 2I/6I/7I/5P 等 | 2I/6I/7I/5P 等 | 2I/6I/7I/5P 等 | ✅ |
+| GLO | 1C/2P/3Q | 1C/2P/2C | 1C/2P/3Q | ❌ 网解主动剔除（无 FDMA 频率号） |
+
+**结论**：GPS 双频观测三站齐备且**已在网解中产出改正**，`macBroadcastSystems = {GPS}`
+（§5.3.6 默认）无需任何新数据即可落地；GLONASS 虽有观测但网解未支持，与 §5.3.6 的判断一致。
 
 ### 3.3 SSR 账号的角色（已有权限，2026-10-28 已实测）
 
@@ -113,7 +177,7 @@ SSR **不能替代**基站观测（空间插值必须实测），但能显著提
 | 推荐挂载点 | `SSRA01CAS0` / `SSRC01CAS0`（`*01CAS*` = 含相位偏差产品，王宁波老师推荐） |
 | 实测内容（2026-10-28，15s 采样） | GPS 1057/1058/1059、GAL 1240/1241/1242、BDS 1258/1259/1260、相位偏差 **1265/1267/1270** 全部在线 |
 | 账号有效期 | 2026-10-23 ~ 2028-10-23，最大 10 连接 |
-| 连接方式 | rtklib-stream 的 NtripClient 可直接消费；core 的 Rtcm 已支持全部上述消息解码 |
+| 连接方式 | rtklib-stream 的 NtripClient 可直接消费；core 的 Rtcm 已支持上述 RTCM-SSR 电文；**IGS-SSR 4076 由 `rtklib-ext-igs` 支持（公共头 + IM201 球谐 + VTEC 合成）**（见 §3.4） |
 
 **关键结论（2026-10-28 二次核实，修正原表述）**：
 
@@ -121,17 +185,116 @@ SSR **不能替代**基站观测（空间插值必须实测），但能显著提
    `ssr_ssrc01cas0_20261026.rtcm3`（396 帧）逐帧统计，电文只有
    1057/1058/1059（GPS 轨道/钟差/码偏差）、1240/1241/1242（GAL）、1258/1259/1260（BDS）、
    1265/1267/1270（GPS/GAL/BDS 相位偏差），**无 1264（VTEC）**。
-2. **但 CAS 并非没有大气产品**：IGS 官方 RTS 产品表明确列出
-   `SSR*01CAS#`「含 VTEC from Global Ionospheric Map」、`IONO00CAS#`「纯 VTEC」；
-   IGS 邮件列表亦说明 `IONO00CAS1` 仅电离层、`SSRC01CAS1` 含 VTEC+RT-RMS。
-   关键在挂载点末位格式位 F：**0=RTCM-SSR，1=IGS-SSR**；VTEC 实际由 `*CAS1`
-   的 IGS-SSR 流（4076 封装、IM201 球谐）播发，本项目 `Rtcm` 目前只解 RTCM-SSR，
-   尚未实现 4076/IM201 解码。
-3. **对流层仍无 SSR 改正**：RTCM-SSR 与 IGS-SSR v1 均无对流层电文，只有电离层 VTEC/球谐。
+2. **现有账号已可直接接入 `*CAS1`（2026-10-28 实测）**：用账号拉 `SSRC01CAS1` 15 s，
+   收到 71 帧且全部为 4076，子类型含 IM21/22/25/26（GPS）、IM61/62/65/66（GAL）、
+   IM101/102/105/106（BDS），以及 **IM201（VTEC 球谐）1 帧 + IM202（VTEC-RMS）1 帧**，
+   每帧 531 字节（3 B 头 + 525 B payload + 3 B CRC，详见 §3.4）。样本已存
+   `test-data/gnss-validation/rtcm/ssr_ssrc01cas1_20261028.rtcm3`。
+   `IONO00CAS0/CAS1` 用同一账号拉流仅返回 100~300 字节非 RTCM 数据（该挂载点疑似未开放/异常），
+   但 `SSRC01CAS1` 已覆盖 VTEC，无需依赖 IONO。
+3. **实现缺口（已闭合）**：RTKLIB C 2.5.1 的 `decode_type4076()` 支持 IM21~IM127（轨道/钟差/码偏差/相位偏差），
+   **但未实现 IM201/IM202**，需按 IGS SSR v1 标准自行解析球谐系数；
+   Java 端已在 `rtklib-ext-igs` 完成公共头部、IM201 分层头与 C/S 球谐系数解析，
+   以及 VTEC 合成、穿刺点与单层 STEC 映射（协议细节见 §3.4）。
+4. **对流层仍无 SSR 改正**：RTCM-SSR 与 IGS-SSR v1 均无对流层电文，只有电离层 VTEC/球谐。
+5. **实现架构（2026-10-28 定）：扩展隔离**。4076 属于 IGS 专有格式，不进入
+   `rtklib-core` 的通用 RTCM 解析：core 只保留
+   `Rtcm.registerCustomDecoder(CustomMessageDecoder)` 注入点，未识别消息号委托给外部解码器；
+   IGS 专有实现放在独立模块 `rtklib-ext-igs`（`IgsSsr4076Decoder`），不使用 IGS SSR 的模块
+   无需引入该依赖。后续 QZSS CLAS、Galileo HAS、国内私有电文可按同一模式各自建扩展包。
+   当前已落地：识别 4076 及 IM21~IM127、IM201/IM202 的公共头部
+   （含实测兼容：CAS 流版本字段为 0；IM201 头部含 VTEC 质量指示，无 CRS 指示）；
+   IM201 分层头、C/S 球谐系数、VTEC 合成与 STEC 映射均已实现并以实测流回归。
 
-因此：仅用 RTCM-SSR #0 流时，「SSR 大气增强 PPP-RTK」不成立，**网络 RTK 仍是主路线**；
-若后续接入 `*CAS1` 的 VTEC（需新增 IGS-SSR 解码），可做**电离层增强**，
-但对流层仍需本地模型（VMF3/GPT3），并非完整大气增强。
+因此：**权限已具备、数据已拿到、解码已闭环**。
+接入后可做**电离层增强**（VTEC 球谐），对流层仍需本地模型（VMF3/GPT3），
+并非完整大气增强；网络 RTK 仍是主路线，SSR 在网解中承担精密轨道/钟差。
+
+### 3.4 IGS-SSR 4076 / IM201 球谐协议（实现依据）
+
+**协议来源**：[docs/reference/igs_ssr_v1.pdf](reference/igs_ssr_v1.pdf)（*IGS SSR v1.00, 2020-10-05*，660 KB，49 页），
+§8.4.1 SSR Ionosphere VTEC Spherical Harmonics Message（Table 24~27）、
+§6 VTEC 球谐模型定义、Table 6/7（IDF035~IDF041）。
+
+**当前实现边界**（`rtklib-ext-igs`）：
+
+| 项 | 状态 | 位置 |
+|---|---|---|
+| 4076 消息号注册与分发 | ✅ | [Rtcm.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java) 的 `registerCustomDecoder` 注入点 |
+| 公共头部（12+3+8 位后 49 位） | ✅ | [IgsSsr4076Decoder.readCommonHeader](file:///D:/code/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsr4076Decoder.java) |
+| IM201/202 的 VTEC 质量指示 + 分层数 | ✅ | [parseVtecHeader](file:///D:/code/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsr4076Decoder.java) |
+| 分层头（高度/阶 N/次 M） | ✅ | [parseVtecLayers](file:///D:/code/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsr4076Decoder.java) |
+| 球谐系数 C/S | ✅ | [IgsSsrVtecLayer](file:///D:/code/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsrVtecLayer.java) |
+| VTEC 合成与 STEC 映射 | ✅ | [IgsSsrVtec](file:///D:/code/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsrVtec.java) |
+
+> IM202 与 IM201 共用头部，但 IGS SSR v1 未定义其系数布局，故只解析到公共头，不臆测系数。
+> 完全归一化勒让德采用 Heiskanen &amp; Moritz 定义（P_00=1、P_10=√3·sinφ、P_11=√3·cosφ），
+> 与 Orekit `LegendrePolynomials` 一致。
+
+**消息结构**（位序，与 Table 24~27 一致）：
+
+| 部分 | 字段 | 位宽 | 说明 |
+|---|---|---|---|
+| 公共 | DF002 消息号 | 12 | 恒为 4076 |
+| 公共 | IDF001 版本 | 3 | 标准为 1；**实测 CAS 流为 0**，代码两者都接受 |
+| 公共 | IDF002 子类型 | 8 | 201 |
+| 公共 | IDF003 历元 | 20 | 1 s，模 86400 |
+| 公共 | IDF004 更新间隔 | 4 | 查表：1/2/5/10/15/30/60/120/240/300/600/900/1800/3600/7200/10800 s |
+| 公共 | IDF005 多消息指示 | 1 | — |
+| 公共 | IDF007 IOD SSR | 4 | — |
+| 公共 | IDF008 提供者 ID | 16 | — |
+| 公共 | IDF009 解算 ID | 4 | — |
+| 公共 | IDF041 VTEC 质量指示 | 9 | ×0.05 TECU；0=未知，25.55=超限 |
+| 公共 | IDF035 电离层分层数 | 2 | 存 NIL−1，**实际层数 = 值+1** |
+| 每层 | IDF036 层高 | 8 | ×10 km，0~2550 km |
+| 每层 | IDF037 阶 N | 4 | 存 N−1，N=1~16 |
+| 每层 | IDF038 次 M | 4 | 存 M−1，M=1~16 |
+| 每层 | IDF039 余弦系数 C | 16×NC | int16，×0.005 TECU，±163.835 |
+| 每层 | IDF040 正弦系数 S | 16×NS | int16，×0.005 TECU，±163.835 |
+
+头部固定 83 bit（10.375 B）；总长 `10.375 + 2×NIL + 2×NHC` 字节
+（NHC = 所有层的系数个数之和）。**帧内末尾可能有填充位**。
+
+**系数个数与排列顺序**：
+
+```
+NC = (N+1)(N+2)/2 − (N−M)(N−M+1)/2
+NS = (N+1)(N+2)/2 − (N−M)(N−M+1)/2 − (N+1)
+```
+
+排列为**先全部 C 后全部 S**，各自按 m 外层、n 内层递增：
+`C00,C10,…,CN0, C11,C21,…`，再 `S11,S21,…`（无 S_m0）。
+例：N=3,M=2 → C 9 个、S 5 个。
+
+**VTEC 合成**（TECU，逐层求和）：
+
+```
+VTEC(φ_PP, λ_PP) = Σ_{n=0..N} Σ_{m=0..min(n,M)} ( C_nm·cos(m·λ_S) + S_nm·sin(m·λ_S) ) · P_nm(sin φ_PP)
+λ_S = ( λ_PP + (t − 50400)·π/43200 ) mod 2π        // 太阳固定系，2h 相位移至 14:00 地方时
+```
+
+- `P_nm` 为**完全归一化**连带勒让德函数；球面地球模型 Re = 6370 km；
+- 穿刺点：`ψ_PP = π/2 − E − arcsin( (Re+h_R)/(Re+h_I) · cos E )`，
+  `φ_PP = arcsin( sin φ_R·cos ψ_PP + cos φ_R·sin ψ_PP·cos A )`；
+- **负 VTEC 必须置 0**；卫星方位角/高度角须在**信号发射时刻卫星位置**上按 Sagnac 改正后计算；
+- VTEC → STEC 用对应层高度的**单层映射函数**（1/cos z_IPP）。
+
+**实测样本核对**（`ssr_ssrc01cas1_20261028.rtcm3`，71 帧）：
+
+| 子类型 | 帧数 | 说明 |
+|---|---|---|
+| IM21/22/25/26（GPS）、IM61/62/65/66（GAL）、IM101/102/105/106（BDS） | 各 5~6 | 卫星级，代码已识别 |
+| IM201 | 1 | VTEC 球谐 |
+| IM202 | 1 | 与 IM201 **同为 525 B payload** |
+
+- 帧长 531 B = 3 B RTCM 头 + **525 B payload** + 3 B CRC；payload 4200 bit。
+- 头部 83 bit + 1 层头 16 bit = 99 bit，余 4101 bit → **256 个系数（4096 bit）+ 5 个填充位**。
+- 256 恰为 `N=M=15` 的系数总数（272−0−16=256），即该产品为 **15 阶 15 次、单层**。
+
+**⚠️ IM202 口径存疑**：IGS SSR v1.00 的 Table 5 明确 `IM202 – IM254 Reserved`，
+标准中并无 IM202 定义；但实测 CAS 的 IM202 与 IM201 长度、头部完全同构。
+代码现按"与 IM201 共用头部"处理，`subtypeName()` 命名为"VTEC-RMS"属**推测**，
+尚无标准依据，实现前需向服务方确认或等标准更新。
 
 ---
 
@@ -141,8 +304,9 @@ SSR **不能替代**基站观测（空间插值必须实测），但能显著提
 
 ```
 步骤1  Melbourne-Wübbena 组合固定宽巷（波长 ~86cm，对电离层不敏感）
-        MW = (f1·L1 + f2·L2)/(f1+f2) − (f1·P1 + f2·P2)/(f1−f2)
+        N_WL = (φ1 − φ2) − (f1·P1 + f2·P2) / ((f1+f2)·λ_WL)，φ 为载波相位周数
 步骤2  无电离层组合（IF）浮点解 → 用已固定的宽巷约束，解窄巷模糊度（波长 ~10.7cm）
+        N1 = N_if/λ_if − f2·N_WL/(f1−f2)，λ_if = c/(f1+f2)
 步骤3  窄巷固定失败时降级：保持宽巷固定 + IF 浮点，误差分解只用宽巷+码
 ```
 
@@ -153,6 +317,14 @@ SSR **不能替代**基站观测（空间插值必须实测），但能显著提
 
 **关键诚实声明**：这一层是整个项目的技术风险所在。长基线 AR 成功率受数据质量、
 采样率、共视卫星数影响大，没有真实 3 站数据前无法预估。
+
+### 4.1 档 2 实测结论（BRDC 广播星历，三站 30 s，DOY 300）
+
+- 双差中卫星钟为**共模**（两站看到同一 `dts`），在双差里自动抵消，网解**不需要**再扣广播钟差；实测双差码 IF 残差约 2.8 m（均值），主要来自频间码偏差（DCB）与多路径。
+- 宽巷（MW）在 20～60 历元窗口内 100% 可固定（窗口内小数部分散度 < 0.15 周）。
+- 窄巷（LAMBDA）在 BRDC 下未达 ratio 阈值（≈1.0～1.7）：浮点 N1 小数部分近似均匀分布，σ_N1 约 2.5～4 周。根因是广播星历米级轨道误差与未建模的相位中心/缠绕等，逐星表现为非整数常数并被模糊度吸收；拉长窗口只按 1/√N 缓慢收敛，无法降到可固定水平。
+- 因此当前按 §4 步骤 3 降级为**宽巷固定 + IF 浮点**：相位双差残差 RMS 约 0.9～1.2 cm，基线坐标增量重复性 0.1～0.2 m。误差分解在浮点分支下照常产出改正（电离层随距离 30/50/70 km 约 0.22/0.37/0.52 m，非色散亚毫米级）。
+- 窄巷固定需接入精密轨道（SSR / IGS 精密星历）后再验证。
 
 ---
 
@@ -172,10 +344,167 @@ SSR **不能替代**基站观测（空间插值必须实测），但能显著提
 |---|---|---|---|
 | 档 1 | **IDW 距离加权** | 多站单站改正量按距离反比加权；不做网解 | 只需多站输入同步 |
 | 档 2 | **FKP 平面拟合** | 色散/非色散误差各自对 (Δφ, Δλ) 拟合平面，最少 3 站；输出 FKP 系数 | 需要网解（§4） |
-| 档 3 | **MAC / iMAX** | 主站改正 + 辅站差分改正（MAC），或按流动站位置合成单站化改正（iMAX）；含 RTCM 网络消息 1032/1034 播发 | 档 2 + 协议编码 |
+| 档 3 | **MAC** | 主站观测 + 辅站相对主站的改正差（电离层/几何），流动站侧在辅站间内插；含 1032/1033 + 1014–1017 / 1037–1039 播发 | 档 2 + 协议编码 |
+| 评估项 | iMAX（非档 3） | 按流动站位置合成单站化改正，Leica 私有格式 | 厂商文档 + 可对照解码器 |
 
 档 1 不需要网解、不需要 3 站数据即可开发（2 站也能跑流程），可先动工；
 档 2 起必须等数据到位。
+
+> **消息对应关系更正（2026-10-28）**：1034/1035 在 RTCM 10403.2 分组表中是
+> **GPS / GLONASS Network FKP Gradient**，即**档 2 FKP 的播发格式**，不是 MAC 的辅站改正载体。
+> MAC 的辅站改正走 GPS 的 1014（辅站数据）+ 1015/1016/1017（电离层/几何/合并改正差），
+> 以及 GLONASS 的 1037/1038/1039（电离层/几何/合并改正差）。
+> 现有 `Rtcm.java` 中 `1038 // Extended reference station`、`1039 // GLONASS extended network`
+> 两条注释有误，`1037` 的「GLONASS network RTK」表述也不准确，动工时按 10403.x 表重写；
+> `1036` 在 10403.2 未分配，switch 中不补 case 是正确的。
+
+### 5.3 档 3：MAC 播发实施方案
+
+#### 5.3.1 范围界定：只做 MAC
+
+- **档 3 = MAC 播发**。iMAX 不进档 3 验收，单列为 §5.3.8 的评估项。
+- 依据：iMAX 是 Leica 私有格式，RTCM 10403.x 无定义，既无标准文本也无公开第三方解码器，
+  无法进入 §7 的 V1–V4 客观验证体系；强行实现只能得到「看起来能跑」而无法证伪的产物。
+
+#### 5.3.2 消息集（按 RTCM 10403.x，实现前逐位核对标准文本）
+
+| 用途 | GPS | GLONASS | 说明 |
+|---|---|---|---|
+| 主站坐标 | 1005 / 1006 | 同 | 已有编码，直接复用 |
+| 站描述 | 1033 | 同 | **当前缺失**，MAC 配套必需 |
+| 物理参考站坐标 | 1032 | 同 | 网络主站与物理主站不同时用于还原真实位置 |
+| 辅站数据 | 1014 | 待核 | 辅站列表 + 站坐标 + 卫星-辅站改正差索引表 |
+| 电离层改正差 | 1015 | 1037 | 逐卫星，带 IODE |
+| 几何改正差 | 1016 | 1038 | 逐卫星，带 IODE |
+| 合并改正差 | 1017 | 1039 | 逐卫星，带 IODE；1015+1016 的压缩形态 |
+
+要点：
+1. **1034/1035 不在本路径**——它们是 FKP 梯度消息，属档 2 的播发格式。
+2. GLONASS 是否有独立的「辅站数据」消息需按 10403.x 表核对；若标准未单列，
+   则辅站坐标复用 1014 的表结构，改正差走 1037–1039。
+3. 1015–1017 与 1037–1039 字段布局同构（仅卫星系统与 IODE 语义不同），
+   先做一套，另一套是照抄 + 换 IOD 字段。
+
+#### 5.3.3 数据流：与 VRS 管线平行的第二条输出路径
+
+```
+多站观测 ──sync──> 网解 + 误差分解（档 2 已实现）
+                      │
+                      ├─> EpochCorrections（站→卫星→iono/tropo/orbit）
+                      │        └─> MAC 合成：辅站相对主站的改正差 + IODE
+                      │                └─> 1014 / 1015–1017 / 1037–1039
+                      │
+                      └─> 主站原始观测 ──> 主站 MSM（1074–1137）
+```
+
+- **不复用 `VrsGenerator`**：它做的是「按模型重算到虚拟位置」，MAC 是「主站观测原样 + 改正差」，
+  编排逻辑相反。
+- **复用 `Rtcm3Encoder` / `Rtcm3MsmEncoder`**：MSM 编码与帧封装是共用的。
+- 新增 `networkvrs/output/MacOutputBridge`，与现有 `VrsOutputBridge` 并列，互不依赖。
+
+#### 5.3.4 三块改造的落点
+
+| 块 | 内容 | 落点 |
+|---|---|---|
+| MAC 改正合成 | 主站/辅站改正差参数化、IODE 打标、辅站索引表 | **新建 `networkvrs/mac/`**（`MacCorrectionSet`、`MacCorrectionBuilder`） |
+| 1032 / 1033 编码 | 物理参考站坐标、接收机天线描述 | `vrs/rtcm/Rtcm3StationEncoder` 扩展 + `Rtcm3Encoder.encode` 加分支 |
+| 1014–1017 / 1037–1039 编码 | 辅站数据与改正差 | `vrs/rtcm/Rtcm3MacEncoder`（新建） |
+| 1033 解码（仅此一项） | 外部样本强验证 + 修 `RtcmCallbackDecoder` 死分支 | `core/rtcm/Rtcm.java` `decodeType1033()` |
+| ~~1032/1034/1035/1037–1039 解码~~ | **不做**，见 §5.3.7.1 | — |
+
+`mac/` 不塞进 `interp/` 的理由：`CorrectionInterpolator` 是「多站标量 → 单标量」，
+而 MAC 的产物是「多站改正差结构 + 索引表」，形态不同，塞进去会污染档 1/档 2 的接口。
+
+#### 5.3.5 IODE 贯通（对上一轮判断的修正）
+
+IODE **不必**侵入 `netsol` 的 `CorrectionValue` 结构。正确落点是在 MAC 编码层：
+按 (卫星, 历元) 从广播星历中选取当前 `Eph` 取 `eph.iode`（GLONASS 取 `Geph.iode`），
+与流动站手上持有的星历对齐。
+
+三个约束：
+1. **必须用广播星历的 IODE**。即使网解用了 SSR/精密星历，改正差仍要按流动站能拿到的
+   广播星历打标，否则流动站按 IODE 匹配会整条丢弃。
+2. **选不到星历的卫星必须剔除并计数告警**，不能发 IODE 未知的改正差。
+3. core 目前没有公共的「按时间选星历」工具（`SppCore.getseleph` 是私有的、且只判系统），
+   需新增一个 `Nav` 侧的选星历工具，供 MAC 层与 vrs 层共用。
+
+#### 5.3.6 星座策略：配置化（决策点 4 已定，替代 A/B/C 单选）
+
+RTCM 10403.x 的网络改正差消息**只定义 GPS 与 GLONASS**，没有 Galileo / BDS 的对应消息。
+但不把星座策略写死成单选路线，而是拆成三条**独立配置项 + 启动期一致性校验**：
+
+| 配置项 | 含义 | 取值约束 | 默认 |
+|---|---|---|---|
+| `solutionSystems` | 参与网解与误差分解的系统 | core 支持的任意组合（当前实现：GPS / GAL / CMP） | GPS + GAL + CMP |
+| `macBroadcastSystems` | 播发 MAC 改正差的系统 | ⊆ {GPS, GLONASS}，且 ⊆ `solutionSystems` | {GPS} |
+| `msmSystems` | 主站 MSM 播发的系统 | 任意，不要求 ⊆ `solutionSystems` | 与输入一致 |
+
+三条规则：
+
+1. 系统在 `msmSystems` 但不在 `macBroadcastSystems` → 该系统改正量退回**主站单站改正**。
+   这就是原「路线 B」的逐系统版本，不再是「BDS 特殊处理」：任何非 GPS/GLO 系统都走同一分支。
+2. 校验失败（`macBroadcastSystems` 越界，或超出 `solutionSystems`）→ **启动期报错**，不允许静默降级。
+3. **BDS 建议保留在 `solutionSystems`**：可用于 V1 留一法验证、FKP 拟合与基线网诊断，
+   只是不播发 MAC 改正差，数据不浪费。自采数据与 CAS 产品含 BDS 这一点因此不构成约束。
+
+前置事实（动工前必须知道，影响 S5）：
+
+- **GPS 已在网解中**：实测三站 GPS `1C+2W` 齐备，网解已产出 140 组 GPS 双差码观测
+  （§3.2.1 复核），因此 `macBroadcastSystems = {GPS}` 无需新增数据、无需改网解。
+- **GLONASS 目前完全不在网解里**：`DdObservationBuilder` 直接 `continue` 掉 `SYS_GLO`，
+  `ModelCorrectionProvider` 同样跳过，`netsol/` 全文无 `Geph`。三站虽有 GLO 观测（§3.2.1），
+  但网解不产出 GLO 改正量。
+- 因此按配置分两种情形：
+  - `macBroadcastSystems = {GPS}`（默认）：现状即可支撑，**1037–1039 可暂不实现**；
+  - `macBroadcastSystems` 含 GLONASS：需先给网解补 GLONASS 支持（FDMA 频率号、站间频间偏差、
+    `Geph` 选星历），属档 2 级改造，**不是编码层能解决的**。
+
+另外，1037–1039 与 1015–1017 **结构同构但 IOD 字段不同**（GPS IODE 与 GLONASS IOD 的位宽与语义
+不一致），不能纯照抄，实现时按标准文本逐位核对。
+
+#### 5.3.7 切片与验收
+
+> **验收原则（2026-10-28 修订）**：**本仓库自己的解码器不能作为编码器的验收判据**。
+> 两侧由同一人按同一份理解实现，round-trip 通过只能证明自洽，不能证明符合标准。
+> 因此编码类切片的验收一律用**外部字节**做判据（真实录制流、第三方编码器输出），
+> 自研解码器只作为结构 sanity 检查与测试脚手架。
+
+| 切片 | 内容 | 前置 | 验收判据 |
+|---|---|---|---|
+| S2 | 1033 解码 + 编码、1032 仅编码 | 无 | **外部判据**：`test-data/gnss-validation/rtcm/record_wuh20.msm.rtcm3` 含真实 1033 帧 → 解出字段 → 重编码 → 与原帧逐字节比对一致 |
+| S3 | 广播 IODE 选星历工具 + 改正差数据通路 | 无 | 单元测试（含选不到星历的剔除分支）；IODE 与 BRDC 中同卫星 `eph.iode` 逐一相符 |
+| S4 | 1015–1017 编码（GPS） | S3 | **外部判据**：相同输入经 go-gnss/rtcm 或 RTKLIB demo5 编码，字节逐位比对；无外部流时至少比对位域布局与标准文本 |
+| S5 | 1037–1039（GLONASS） | S4；**且 `macBroadcastSystems` 含 GLO**，前置为网解补 GLONASS | 同 S4 |
+| S6 | MAC 输出编排（主站 MSM + 1032/1033 + 改正差） | S2、S4（S5 可选） | 输出流可被 RTKLIB / 第三方解析器完整识别，无未知消息、无字段告警 |
+| S7 | 流动站侧端到端 | 第 4 站 / 流动站 | §7 的 V3 / V4 |
+
+**原 S1（批量补 1032/1034/1035/1037–1039 解码）已取消**，理由见 §5.3.7.1。
+
+S2–S6 全部可在现有 3 站数据上完成（不需要流动站）；S7 受数据门槛限制。
+
+##### 5.3.7.1 为什么不做 1032/1034/1035/1037–1039 的解码
+
+1. **无生产消费者**：`RtcmCallbackDecoder` 全仓库仅被测试引用（`VrsRealDataTest`、
+   `VrsGeneratorTest`、`Wuh20MsmSppTest` 等），没有运行时代码读取这些解码结果。
+   本模块是**服务端编码方**，不接收别家的 MAC/FKP 改正流。
+2. **不能充当判据**：见上面的验收原则，自研解码器对本项目编码器不构成外部判据，
+   补解码不会提升 S4/S5 的结论强度。
+3. **1034/1035 是 FKP 播发格式**（§5.2），档 2 若真要播 FKP 梯度，需要的是**编码**，
+   不是解码；解码永远用不上。
+4. **1037–1039 仅在 `macBroadcastSystems` 含 GLO 时才需要**，而该开关默认关闭（§5.3.6），
+   且开启前置是网解补 GLONASS（档 2 级改造）。
+5. **1032** 是 MAC 输出侧编码需求（S2/S6），解码无消费方；且手头真实流里没有 1032 帧，
+   补了也无外部样本可比。
+
+**唯一例外：1033 解码**（并入 S2）。理由不是"顺手补全"，而是它有**真实外部样本**：
+`record_wuh20.msm.rtcm3` 内含真实 1033 帧，可做「解码 → 重编码 → 逐字节比对」的强验证；
+同时它修掉一个死分支——`RtcmCallbackDecoder:116` 对 `type == 1033` 检查 `sta.antdes`，
+但 `decodeType1033()` 从不填该字段，导致**只带 1033 的流永远拿不到天线描述**（1007/1008 掩盖了这个问题）。
+
+#### 5.3.8 iMAX 评估项（不在档 3 验收内）
+
+- 私有格式，需厂商文档或逆向工程；无第三方解码器 → 无客观验证手段。
+- 若将来纳入，前置条件是先取得「可对照解码器」，否则不具备进入 §7 验证体系的基础。
 
 ---
 
@@ -183,9 +512,9 @@ SSR **不能替代**基站观测（空间插值必须实测），但能显著提
 
 | 阶段 | 内容 | 前置 |
 |---|---|---|
-| 档 1 | rtklib-network 骨架 + 多站输入同步 + IDW 插值 + 复用 vrs 输出 | 无（现有 2 站数据即可开发调试） |
-| 档 2 | 网解引擎（§4）+ 误差分解 + FKP | **≥3 站数据到位**；SSR 接入同步做 |
-| 档 3 | MAC/iMAX + RTCM 网络消息播发 | 档 2 验证通过 |
+| 档 1 | ✅ rtklib-networkvrs 骨架 + 多站输入同步 + IDW 插值 + 相对主站改正 + 复用 vrs 输出（`output/VrsOutputBridge`） | 无（现有 2 站数据即可开发调试） |
+| 档 2 | 🟡 网解引擎（§4）+ 误差分解 + FKP 已实现；BRDC 下降级为「宽巷固定 + IF 浮点」（§4.1），窄巷固定待 SSR/精密星历 | **≥3 站数据已到位**（EUREF 备选组 CIMO–PRAT–VIRG，见 §3.2.1） |
+| 档 3 | **MAC 播发**（仅 MAC，iMAX 另行评估）：`mac/` 改正合成 + 1032/1033 编码 + 1014–1017 / 1037–1039 编码 + `output/MacOutputBridge` 平行输出（§5.3） | 档 2 验证通过；决策点 4（星座路线）已定 |
 
 ---
 
@@ -197,6 +526,9 @@ SSR **不能替代**基站观测（空间插值必须实测），但能显著提
 | V2 | **插值残差统计**：FKP 平面拟合优度 | 色散/非色散拟合残差均 < 数 cm；站点共线时自动降级告警 |
 | V3 | **端到端 RTK**：流动站+网络 VRS vs 流动站+最近单基站，复用 vrs 的 L4 反向验证套路 | FIX 率不差于单站，30km+ 时显著优于单站 |
 | V4 | **基线扩展曲线**：VRS 距最近基站 30/50/70km 分别统计 FIX 率 | 衰减曲线明显平缓于单站方案 |
+| V5 | **MAC 协议层**：以**外部字节**为准 —— ①真实 1033 帧「解码→重编码→逐字节比对」；②1015–1017 与第三方编码器同输入比对；③自研解码仅作 sanity | 字节逐位一致；改正差 IODE 与广播星历匹配 |
+
+> 档 2 当前仅有 3 站且无流动站，V2 的平面拟合在 3 点上恒为 0、V4 的 FIX 率需流动站，故实测先用「基线重复性 + 距主站 30/50/70km 的改正梯度」作为前哨指标，见 §4.1；完整 V1/V3/V4 待第 4 站/流动站数据补齐。
 
 验证数据优先级：自有 CORS > GEONET > IGS/MGEX（站距过大只用于流程打通）。
 
@@ -216,11 +548,20 @@ SSR **不能替代**基站观测（空间插值必须实测），但能显著提
 
 ## 9. 动工前决策点
 
-1. **数据**：能否在测试区域布 3 个自有站？或先用 GEONET 公开数据？
-   （CAS caster 上的全球 MSM 观测站可作补充源，但中国区域站密度不足）
-2. ~~**SSR 产品类型**~~：**已核实（2026-10-28，见 §3.3）**——实际接入的 RTCM-SSR
-   `SSRA01CAS0`/`SSRC01CAS0` 无 VTEC；CAS 的 VTEC 在 `*CAS1` IGS-SSR 流（4076/IM201），
-   且无对流层改正；网络 RTK 仍为主路线，SSR 用于网解精密轨道/钟差
+1. **数据**：~~能否布 3 个自有站？~~ **已用公开数据落地（2026-10-28，见 §3.2.1）**——
+   EUREF/EPN 备选组 CIMO–PRAT–VIRG（意大利，46.8/55.7/64.6 km）三站 30 s 全天观测已就位，
+   可支撑档 1/档 2 开发与 V1 留一法验证；自有 CORS 仍是最终目标（格式与管线一致、可布站距），
+   公开数据用于方法验证；V3 端到端 RTK 仍缺独立流动站（需第 4 站）
+2. ~~**SSR 产品类型**~~：**已闭环（2026-10-28，见 §3.3）**——现有账号可直连
+   `SSRC01CAS1`，实测含 IM201/IM202 VTEC；IM201 解码（分层头 + 球谐系数 + VTEC/STEC）
+   已在 `rtklib-ext-igs` 落地；IM202 标准未定义系数布局，仅公共头；对流层仍无改正；
+   网络 RTK 仍为主路线，SSR 用于网解精密轨道/钟差
 3. **目标区域与基线量级**：30km 级还是 70km 级（决定档 2 的 AR 策略激进度）？
+4. **档 3 星座路线**：~~A 切星座 / B 混合播发 / C 自定义消息 三选一~~ →
+   **已定（2026-10-28）：配置化**，见 §5.3.6。三条独立配置项
+   （`solutionSystems` / `macBroadcastSystems` / `msmSystems`）+ 启动期校验，
+   默认 `macBroadcastSystems = {GPS}`。BDS 保留在网解中（V1/FKP 用），不播发 MAC 改正差。
+   仅当 `macBroadcastSystems` 要含 GLONASS 时，才需先补网解的 GLONASS 支持（档 2 级改造）。
 
-剩余决策点有答案前，只建议动工档 1（多站输入 + IDW），其余保持设计状态。
+档 3 的 S2/S3（1033 编解码 + 1032 编码、IODE 选星历）不依赖剩余决策点，可先行；
+S4 起需 `macBroadcastSystems` 配置落地（默认 {GPS} 即可，不阻塞）；S7 需第 4 站/流动站数据。

@@ -553,7 +553,7 @@ mvn test -pl rtklib-core -Dtest="DynamicRtkOptTest#testPpcTokyoRun1"
 | 任务 | 需要的数据 | 贡献方式 |
 |------|-----------|----------|
 | 动态车载 RTK 验证 | 高速动态 base+rover 对（>50km/h） | 上传数据至 `test-data/` 或提交 Issue |
-| 长基线 RTK (>10km) | 长基线 base+rover | 同上 |
+| 长基线 RTK (>10km) | 长基线 base+rover | ⚠️ **数据已入库**（HKWS-HKSL，~42km，2024 DOY060），`RtkValidationTest` 已做链路级验证（FIX 率 1.3%，未达精度验证）；**仍需 ITRF 真值参考坐标**做精度评估与长基线 AR 专项调优 |
 | 城市峡谷/深城市 RTK | 高遮挡 base+rover | 同上 |
 | 多星座多频 PPP 验证 | 三频 BDS/GAL 数据 + IGS 参考解 | 同上 |
 | 长时段静态连续运行 | 24h/72h RINEX 数据 | 同上 |

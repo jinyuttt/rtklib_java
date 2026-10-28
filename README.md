@@ -27,21 +27,28 @@ RTKLIB 的 Java 移植版本，基于 [RTKLIB 2.5.0](https://github.com/tomojita
 ```
 org.rtklib.java
 ├── adaptive/      自适应引擎（场景判定、参数预设、覆盖层、审计日志、安全监控）
+├── aggregate/     历元聚合（鲁棒加权 / Kalman+RTS 平滑）
 ├── ambiguity/     模糊度解算（LAMBDA算法）
 ├── common/        通用工具（矩阵运算、卫星工具、观测值编码）
+├── config/        配置对象（RtkConfig 及 Common/Rtk/Spp/Ppp/PppAr/PppRtk/Adaptive 子配置）
 ├── constants/     常量定义（物理常数、模式常量、卡方分布表）
 ├── coord/         坐标变换（ECEF↔LLH、ENU变换）
+├── cssr/          紧凑SSR（CSSR/4073）解码与格网改正
 ├── data/          数据结构（观测值、星历、导航、解算结果等）
 ├── ephemeris/     星历计算（卫星位置与钟差）、PCV/DCB/OTL读取
 ├── ionosphere/    电离层延迟模型
 ├── kalman/        Kalman滤波器
+├── monitor/       基站稳定性监测（SPP中位数窗口，检测坐标突变/漂移）
+├── orbit/         轨道计算（TLE解析、SGP4/SDP4传播、开普勒传播、六根数转换）
 ├── pntpos/        单点定位（SPP、RAIM FDE、速度估计）
+├── postpos/       事后处理（.pos 文件 RTS 平滑，实验性）
 ├── ppp/           精密单点定位（PPP动态、静态、固定坐标）
 ├── pppar/         PPP-AR引擎（AR调度、AR配置只读视图）
 ├── ppprtk/        PPP-RTK定位（SSR改正、模糊度固定）
 ├── rinex/         RINEX 文件读写与处理
-├── rtcm/          RTCM 数据解码
+├── rtcm/          RTCM 数据解码（含 CustomMessageDecoder 扩展点）
 ├── rtkpos/        RTK 相对定位核心（含周跳检测、潮汐改正、高级模糊度固定优化）
+├── tide/          潮汐位移（IERS2010 大气潮 S1/S2）
 ├── time/          时间系统（GPS时、UTC转换）
 ├── trace/         追踪日志系统（RtkTrace/PppTrace）
 └── troposphere/   对流层延迟模型
@@ -191,6 +198,49 @@ org.rtklib.java.otl
 
 验证：真实双站 RTCM3（239 历元 / 15 s）——VRS+测站 RTK 与原始基站+测站 FIX 率均为 91.2%，VRS 设在基站位置时 P/L 逐位一致（max|dL|=0.0000 m）。详见 [VRS 模块设计文档](docs/VRS_MODULE_DESIGN.md)。
 
+### rtklib-joint — 多基线联合 RTK
+
+观测层联合解算：k 条基线的观测值送入**同一个 Kalman 滤波器**，Rover 坐标只出现一次但被 k 组观测同时约束。与 `rtklib-adjust`（结果层平差）互补——平差的数学本质是加权平均，短基线下对精度改善 <1%，属**可靠性**工具；联合解算追求**精度**改善。
+
+- **状态向量**：Rover 坐标共享 + 各基线模糊度（大气参数维度划分见设计文档 §2.1.1）
+- **历元对齐**：`EpochAligner` 统一多基站时间标签
+- **分层架构**：`JointRtkProcessor`（观测层）/ `JointProcessor`（解算层）
+- **基站可靠性**：`BaseStationMonitor` 检测基站坐标突变与漂移
+
+状态：**设计定稿 v1.1，实现进行中**。§2.1.1 的「每基线一份大气 → 跨基线共享大气」维度修正**尚未落地**（当前 `JointRtk.II()/IT()` 仍是每基线独立偏移），真实数据测试见 `JointRtkRealDataTest`。详见 [联合 RTK 设计文档](docs/JOINT_RTK_DESIGN.md)、[joint vs adjust 对比](docs/JOINT_VS_ADJUST_ANALYSIS.md)。
+
+### rtklib-networkvrs — 多基站网络 VRS
+
+在 `rtklib-vrs` 单基站基础上组网，把每颗卫星的误差分解为**色散项**（电离层）与**非色散项**（对流层+轨道残差），按流动站位置空间插值后生成虚拟观测值，目标是突破单站改正 >30 km 的退化（对标 30~70 km 可靠、FIX≥90%）。
+
+- **多站同步**：`MultiStationSynchronizer` + `SynchronizedEpoch` 统一多基站历元标签
+- **空间插值**：`CorrectionInterpolator` 接口 + `IdwInterpolator`（反距离加权）
+- **误差模型**：`ModelCorrectionProvider` / `StationCorrection` 分离色散与非色散项
+- **输出桥接**：`VrsOutputBridge` 复用 `rtklib-vrs` 的 RTCM3 编码（1005/1006、MSM4/MSM5）
+- **数据加载**：`RinexStationLoader` / `RtcmStationLoader` 统一三站以上输入
+
+状态：**档 1 已完成**（多站同步 + IDW 插值 + 相对主站改正 + vrs 输出桥），真实三站 RTCM 数据验证通过；档 2（网解引擎、误差分解、FKP）尚未实现。详见 [网络 VRS 设计文档](docs/NETWORK_VRS_DESIGN.md)。
+
+### rtklib-ext-igs — IGS 专有 RTCM3 扩展
+
+4076 是 RTCM 分配给 IGS 的**专有消息号**（不是 RTCM 通用 SSR），本模块通过 `rtklib-core` 的 `CustomMessageDecoder` 扩展点注册解码器。
+
+- **公共头部**：版本、子类型、历元、更新间隔、多消息指示、IOD SSR、提供者 ID、解算 ID
+- **子类型识别**：卫星级（IM21~IM27 / IM41 / IM101 / IM121 等）与电离层（IM201/IM202）
+- **IM201/IM202 头部**：VTEC 质量指示（9 bit ×0.05 TECU）+ 电离层分层数
+- **版本兼容**：标准规定版本为 1，实测 CAS `*CAS1` 流为 0，两者都接受
+
+状态：**骨架（仅公共头部）**。卫星级改正数与 IM201/IM202 球谐系数（C/S）**尚未解析**，协议字段、系数个数公式与 VTEC 合成算法见 [NETWORK_VRS_DESIGN.md §3.4](docs/NETWORK_VRS_DESIGN.md)，标准原文见 [docs/reference/igs_ssr_v1.pdf](docs/reference/igs_ssr_v1.pdf)。
+
+### rtklib-test — 验证与示例
+
+跨模块端到端验证套件与可运行示例。**不是库**，不被其它模块依赖，仅用于回归与实测。
+
+- **精度验证**：`SppValidationTest` / `RtkValidationTest` / `PppValidationTest` / `PppArValidationTest` / `PppRtkValidationTest`（GNSS 验证数据流水线）
+- **集成与自适应**：`RtkPppIntegrationTest`、`AdaptiveWiringE2ETest`、`AdaptiveEngineHarnessTest`
+- **链路检查**：`SsrAccessCheckTest`（CAS SSR 接入）、`ReplayBdsSigCheckTest`（录制回放）
+- **示例程序**（`src/main`）：`PppRtkDemo`、`PppRtkPipeline`、`PppRtkRealtimeDemo`、`PppBdsPipeline`、`PppArDiag`、`Sp3Diag`
+
 ## 文档
 
 > 全部文档的索引、状态标注（活跃/待复核/归档）与已知不一致清单见 [文档地图](docs/README.md)。
@@ -241,6 +291,12 @@ org.rtklib.java.otl
 |------|------|
 | [海潮负荷模块技术参考](docs/OTL_MODULE_REFERENCE.md) | BLQ系数提取、位移时间序列、命令行用法、API示例、验证结果 |
 
+### rtklib-research
+
+| 文档 | 说明 |
+|------|------|
+| — | 研究沙盒（FGO/IMU 预积分/场景自适应），代码含中文 Javadoc，暂无独立文档；验证见 `PipelineIntegrationTest`、`PreintegrationTest` |
+
 ### rtklib-adjust
 
 | 文档 | 说明 |
@@ -254,6 +310,34 @@ org.rtklib.java.otl
 |------|------|
 | [模块设计文档](docs/VRS_MODULE_DESIGN.md) | 实现状态、VRS 改正算法、RTCM3 编码器设计、MSM 信号裁剪与锁相指示、测试策略与实测结果、已踩过的坑 |
 
+### rtklib-joint
+
+| 文档 | 说明 |
+|------|------|
+| [联合RTK设计文档](docs/JOINT_RTK_DESIGN.md) | 观测层联合解算数学模型、状态向量与大气维度划分、分层架构、基站位移监测、实现路线 |
+| [joint vs adjust 对比](docs/JOINT_VS_ADJUST_ANALYSIS.md) | 观测层联合 vs 结果层平差的融合层级、故障隔离、FIX 后精度等价性、选型结论 |
+
+### rtklib-networkvrs
+
+| 文档 | 说明 |
+|------|------|
+| [网络VRS设计文档](docs/NETWORK_VRS_DESIGN.md) | 多站同步、误差分解与空间插值、档 1/档 2 实施计划、4076/IM201 球谐协议（§3.4）、四层验证策略 |
+
+### rtklib-ext-igs
+
+| 文档 | 说明 |
+|------|------|
+| [IGS SSR v1.00 标准原文](docs/reference/igs_ssr_v1.pdf) | 4076 字段定义（§8.4.1 Table 24~27）、VTEC 球谐模型（§6）、IDF 表（Table 6/7） |
+| [网络VRS设计文档 §3.4](docs/NETWORK_VRS_DESIGN.md) | 本项目对该协议的落地解读：位序表、系数个数公式、实测样本核对、IM202 存疑说明 |
+
+### rtklib-test
+
+| 文档 | 说明 |
+|------|------|
+| [验证流水线说明](rtklib-test/src/test/java/org/rtklib/java/test/gnssvalidation/GNSS_VALIDATION_PIPELINE.md) | GNSS 验证数据集组织、执行方式与结果口径 |
+| [测试开发指南](docs/TEST_DEVELOPMENT_GUIDE.md) | 测试开发标准流程与常见模式 |
+| [测试用例与数据指南](docs/DATA_GUIDE.md) | 测试类总览、公共测试数据清单、大文件仓库 |
+
 ## 使用建议
 
 本项目各模块按影响面和风险分为两类，使用者可根据自身需求选择对应的集成策略：
@@ -262,14 +346,18 @@ org.rtklib.java.otl
 
 > 直接使用，不会有实质影响，结论明确。有问题提交 Issue 或自行修改后提交 PR。
 
-不涉及定位解算核心逻辑，侧重点在数据获取、格式解析、辅助改正数计算。集成到业务系统时**无定位精度风险**：
+不涉及定位解算核心逻辑，侧重点在数据获取、格式解析、辅助改正数计算。集成到业务系统时**不直接承担定位精度风险**——`rtklib-vrs` / `rtklib-networkvrs` 产出的是改正数，风险转嫁给下游 RTK，故其风险单列为「中」：
 
 | 模块 | 功能 | 集成风险 |
 |------|------|----------|
 | `rtklib-stream` | NTRIP客户端 + 串口通讯 | 极低 — 纯数据流，输出为RTCM字节流 |
 | `rtklib-product` | IGS精密产品自动下载 | 极低 — 纯文件下载，与定位算法解耦 |
+| `rtklib-ext-igs` | IGS 专有 4076 解码（仅公共头部） | 极低 — 纯解码骨架，不产出改正数 |
 | `rtklib-otl` | 海潮负荷BLQ系数/位移 | 极低 — mm级改正数，对定位无实质性负面风险 |
 | `rtklib-adjust` | 多基线间接平差 | 低 — 输入为已解算的RTK基线，不修改定位核心 |
+| `rtklib-vrs` | 单基站VRS虚拟观测值生成 | 中 — 输出改正数供下游RTK，编码/锁相错误会直接导致流动站无法FIX |
+| `rtklib-networkvrs` | 多基站网络VRS（档1） | 中 — 依赖 `rtklib-vrs` 编码器，改正插值正确性影响30km以上基线 |
+| `rtklib-test` | 验证套件与示例 | 无 — 不被其它模块依赖，仅本地运行 |
 | `rtklib-core`（辅助部分） | 数据解析与模型 | 低 — 不涉及定位解算，子模块可独立使用： |
 
 `rtklib-core` 中大量子模块属于数据解析和模型计算，不包含定位解算逻辑，可直接复用：
@@ -294,6 +382,7 @@ org.rtklib.java.otl
 | 模块 | 功能 | 集成风险 |
 |------|------|----------|
 | `rtklib-core`（定位部分） | SPP/RTK/PPP/PPP-RTK 全模式定位 | **高** — 定位精度依赖算法实现正确性 |
+| `rtklib-joint` | 多基线观测层联合 RTK | **高** — 独立解算引擎，状态向量与大气维度划分仍在修正（§2.1.1 未落地） |
 
 涉及 `pntpos/`（SPP）、`rtkpos/`（RTK）、`ppp/`（PPP）、`ppprtk/`（PPP-RTK）、`kalman/`（EKF）、`ambiguity/`（LAMBDA）六个子模块。辅助模块（rtcm/rinex/ephemeris/coord/time/ionosphere/troposphere/common）属于第一类，无风险。
 
@@ -383,6 +472,10 @@ org.rtklib.java.otl
 | PPP-RTK 基础（SSR改正） | ✅ | SSR 解码→`nav.ssr`→`SsrCorrector`→`ppprtkos()` 链路；解码经公开 SSR 样本单测（`SsrDecodeSmokeTest`） |
 | Compact SSR / CLAS / HAS 解码 | ✅ | 单元测试（CLAS MT4073 子类型 1-12、HAS MT1~MT9）/ CSSRlib 交叉验证 |
 | 多基线间接平差 | ✅ | 真实RTCM实测数据 |
+| VRS 单基站生成 | ✅ | 真实双站 RTCM3（239 历元/15 s），VRS@基站位置 P/L 逐位一致 |
+| 网络 VRS 多基站 | 🟡 档 1 完成 | 真实三站 RTCM；档 2（网解引擎、误差分解、FKP）未实现 |
+| 联合 RTK（joint） | 🟡 实现中 | 设计定稿 v1.1；§2.1.1 大气维度划分修正未落地，真实数据测试 `JointRtkRealDataTest` |
+| IGS SSR 4076 解码 | 🟡 骨架 | 公共头部 + 子类型识别（含 IM201/202 头部）；球谐系数与卫星级改正数未解析 |
 | 因子图优化 FGO + IMU 预积分 | ✅ | FE-GUT 仿真数据集 |
 | 轨道模块 + 海潮负荷 | ✅ | Vallado/Fortran 参考对比 |
 | 自适应引擎框架 | ✅ | 14类实现，编译通过；待集成测试验证 |
