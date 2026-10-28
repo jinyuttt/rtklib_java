@@ -17,14 +17,14 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class VrsGeneratorTest {
 
-    private static final String DATA_ROOT = "D:\\tdengine-jetlinks\\jetlinks-data\\device_rtcmbin_storage";
-    private static final String BASE_STATION = "GS2025090017";
-    private static final String DATE = "2026-10-27";
-    private static final int TEST_HOUR = 8;
+    private static final String DATA_ROOT = System.getProperty("vrs.data.root", "");
+    private static final String BASE_STATION = System.getProperty("vrs.base.station", "");
+    private static final String DATE = System.getProperty("vrs.date", "2026-10-27");
+    private static final int TEST_HOUR = Integer.parseInt(System.getProperty("vrs.hour", "8"));
 
-    private static final double BASE_LAT = 28.910469588;
-    private static final double BASE_LON = 101.176917113;
-    private static final double BASE_HGT = 2165.3744;
+    private static final double BASE_LAT = Double.parseDouble(System.getProperty("vrs.base.lat", "0"));
+    private static final double BASE_LON = Double.parseDouble(System.getProperty("vrs.base.lon", "0"));
+    private static final double BASE_HGT = Double.parseDouble(System.getProperty("vrs.base.hgt", "0"));
 
     private static boolean dataAvailable;
 

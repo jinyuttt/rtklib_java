@@ -12,7 +12,7 @@ class RtkOptimizationsPartialARTest {
     @Test
     void testPartialAmbFixDefaultOff() {
         Rtk rtk = new Rtk();
-        rtk.rtkConfig.enablePartialAR = false;
+        rtk.rtkConfig.rtk.enablePartialAR = false;
         double[] bias = new double[10];
         double[] xa = new double[10];
         int[] ix = new int[10];
@@ -23,8 +23,8 @@ class RtkOptimizationsPartialARTest {
     @Test
     void testPartialAmbFixTooFewAmbiguities() {
         Rtk rtk = new Rtk();
-        rtk.rtkConfig.enablePartialAR = true;
-        rtk.rtkConfig.partialArMinSats = 4;
+        rtk.rtkConfig.rtk.enablePartialAR = true;
+        rtk.rtkConfig.rtk.partialArMinSats = 4;
         double[] bias = new double[10];
         double[] xa = new double[10];
         int[] ix = new int[10];
@@ -35,7 +35,7 @@ class RtkOptimizationsPartialARTest {
     @Test
     void testPartialAmbFixZeroAmbiguities() {
         Rtk rtk = new Rtk();
-        rtk.rtkConfig.enablePartialAR = true;
+        rtk.rtkConfig.rtk.enablePartialAR = true;
         double[] bias = new double[10];
         double[] xa = new double[10];
         int[] ix = new int[10];

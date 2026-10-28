@@ -43,15 +43,15 @@ public class SppEkfState implements Serializable {
         }
         for (int i = 0; i < 3 && i < pos.length; i++) {
             x[i] = pos[i];
-            P[i * nxF + i] = cfg.sppEkfVarPos;
+            P[i * nxF + i] = cfg.spp.ekfVarPos;
         }
         for (int i = 0; i < 3 && i < vel.length; i++) {
             x[i + 3] = vel[i];
-            P[(i + 3) * nxF + (i + 3)] = cfg.sppEkfVarVel;
+            P[(i + 3) * nxF + (i + 3)] = cfg.spp.ekfVarVel;
         }
         for (int i = 6; i < 9; i++) {
             x[i] = 1e-6;
-            P[i * nxF + i] = cfg.sppEkfVarAcc;
+            P[i * nxF + i] = cfg.spp.ekfVarAcc;
         }
         for (int i = 9; i < nxF; i++) {
             x[i] = 0.001;

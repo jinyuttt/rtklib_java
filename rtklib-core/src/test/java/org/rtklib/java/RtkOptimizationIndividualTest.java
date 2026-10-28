@@ -67,7 +67,7 @@ public class RtkOptimizationIndividualTest {
     @DisplayName("1. 滑动窗自适应Q矩阵 (enableAdaptiveQ)")
     void testAdaptiveQ() {
         RtkConfig config = createBaseConfig();
-        config.enableAdaptiveQ = true;
+        config.rtk.enableAdaptiveQ = true;
         runTestWithConfig("1_AdaptiveQ", config, "enableAdaptiveQ");
     }
 
@@ -76,7 +76,7 @@ public class RtkOptimizationIndividualTest {
     @DisplayName("2. IGGIII抗差估计 (enableIggiii)")
     void testIggiii() {
         RtkConfig config = createBaseConfig();
-        config.enableIggiii = true;
+        config.rtk.enableIggiii = true;
         runTestWithConfig("2_Iggiii", config, "enableIggiii");
     }
 
@@ -85,7 +85,7 @@ public class RtkOptimizationIndividualTest {
     @DisplayName("3. SNR中值参考星选择 (enableSnrMedian)")
     void testSnrMedian() {
         RtkConfig config = createBaseConfig();
-        config.enableSnrMedian = true;
+        config.rtk.enableSnrMedian = true;
         runTestWithConfig("3_SnrMedian", config, "enableSnrMedian");
     }
 
@@ -94,7 +94,7 @@ public class RtkOptimizationIndividualTest {
     @DisplayName("4. PAR参考星重选 (enableParRefReselect)")
     void testParRefReselect() {
         RtkConfig config = createBaseConfig();
-        config.enableParRefReselect = true;
+        config.common.enableParRefReselect = true;
         runTestWithConfig("4_ParRefReselect", config, "enableParRefReselect");
     }
 
@@ -103,7 +103,7 @@ public class RtkOptimizationIndividualTest {
     @DisplayName("5. 电离层/对流层梯度参数估计 (enableIonoTropGradient)")
     void testIonoTropGradient() {
         RtkConfig config = createBaseConfig();
-        config.enableIonoTropGradient = true;
+        config.rtk.enableIonoTropGradient = true;
         runTestWithConfig("5_IonoTropGradient", config, "enableIonoTropGradient");
     }
 
@@ -112,8 +112,8 @@ public class RtkOptimizationIndividualTest {
     @DisplayName("6. 模糊度子集锚固 (enableAmbAnchor)")
     void testAmbAnchor() {
         RtkConfig config = createBaseConfig();
-        config.enableAmbAnchor = true;
-        config.ambAnchorMinFixCount = 50;  // 降低阈值以便在1小时内看到效果
+        config.rtk.enableAmbAnchor = true;
+        config.rtk.ambAnchorMinFixCount = 50;  // 降低阈值以便在1小时内看到效果
         runTestWithConfig("6_AmbAnchor", config, "enableAmbAnchor");
     }
 
@@ -122,7 +122,7 @@ public class RtkOptimizationIndividualTest {
     @DisplayName("7. 大气参数自适应冻结 (atmFrozenNsThresh=5)")
     void testAtmFrozen() {
         RtkConfig config = createBaseConfig();
-        config.atmFrozenNsThresh = 5;  // 5颗卫星以下冻结大气参数
+        config.common.atmFrozenNsThresh = 5;  // 5颗卫星以下冻结大气参数
         runTestWithConfig("7_AtmFrozen", config, "atmFrozenNsThresh=5");
     }
 
@@ -131,8 +131,8 @@ public class RtkOptimizationIndividualTest {
     @DisplayName("8. AdaptiveQ + IGGIII 组合")
     void testAdaptiveQPlusIggiii() {
         RtkConfig config = createBaseConfig();
-        config.enableAdaptiveQ = true;
-        config.enableIggiii = true;
+        config.rtk.enableAdaptiveQ = true;
+        config.rtk.enableIggiii = true;
         runTestWithConfig("8_AdaptiveQ+Iggiii", config, "AdaptiveQ+Iggiii");
     }
 
@@ -141,14 +141,14 @@ public class RtkOptimizationIndividualTest {
     @DisplayName("9. 全部优化项组合")
     void testAllOptimizations() {
         RtkConfig config = createBaseConfig();
-        config.enableAdaptiveQ = true;
-        config.enableIggiii = true;
-        config.enableSnrMedian = true;
-        config.enableParRefReselect = true;
-        config.enableIonoTropGradient = true;
-        config.enableAmbAnchor = true;
-        config.atmFrozenNsThresh = 5;
-        config.ambAnchorMinFixCount = 50;
+        config.rtk.enableAdaptiveQ = true;
+        config.rtk.enableIggiii = true;
+        config.rtk.enableSnrMedian = true;
+        config.common.enableParRefReselect = true;
+        config.rtk.enableIonoTropGradient = true;
+        config.rtk.enableAmbAnchor = true;
+        config.common.atmFrozenNsThresh = 5;
+        config.rtk.ambAnchorMinFixCount = 50;
         runTestWithConfig("9_All_Optimizations", config, "ALL");
     }
 

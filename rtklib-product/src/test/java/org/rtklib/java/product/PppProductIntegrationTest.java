@@ -222,8 +222,8 @@ public class PppProductIntegrationTest {
                 opt.tidecorr = 1;
 
                 RtkConfig cfg = new RtkConfig();
-                cfg.enableGpt3Vmf3 = true;
-                cfg.enableIers2010 = true;
+                cfg.ppp.enableGpt3Vmf3 = true;
+                cfg.ppp.enableIers2010 = true;
 
                 PppProcessor ppp = new PppProcessor(opt);
                 ppp.setRtkConfig(cfg);
@@ -303,10 +303,10 @@ public class PppProductIntegrationTest {
         opt.tidecorr = 1;
 
         RtkConfig cfg = new RtkConfig();
-        cfg.enableGpt3Vmf3 = true;
-        cfg.enableIers2010 = true;
-        cfg.enableIsbIfcbIfb = true;
-        cfg.enablePppAR = true;
+        cfg.ppp.enableGpt3Vmf3 = true;
+        cfg.ppp.enableIers2010 = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
+        cfg.pppAr.enableAR = true;
 
         PppProcessor ppp = new PppProcessor(opt);
         ppp.setRtkConfig(cfg);
@@ -362,8 +362,8 @@ public class PppProductIntegrationTest {
             opt.tidecorr = 1;
 
             RtkConfig cfg = new RtkConfig();
-            cfg.enableGpt3Vmf3 = true;
-            cfg.enableIers2010 = true;
+            cfg.ppp.enableGpt3Vmf3 = true;
+            cfg.ppp.enableIers2010 = true;
 
             PppProcessor ppp = new PppProcessor(opt);
             ppp.setRtkConfig(cfg);
@@ -527,9 +527,9 @@ public class PppProductIntegrationTest {
         log.info("RTK default: {} solutions", solDefault);
 
         RtkConfig cfg = new RtkConfig();
-        cfg.enableBootstrapping = true;
-        cfg.enableBdsCodeBias = true;
-        cfg.enableResidualEdit = true;
+        cfg.rtk.enableBootstrapping = true;
+        cfg.rtk.enableBdsCodeBias = true;
+        cfg.rtk.enableResidualEdit = true;
 
         RtkProcessor rtkOpt = new RtkProcessor(opt);
         rtkOpt.setRtkConfig(cfg);
@@ -703,8 +703,8 @@ public class PppProductIntegrationTest {
 
         RtkConfig cfg = new RtkConfig();
         if (optimized) {
-            cfg.enableGpt3Vmf3 = true;
-            cfg.enableIers2010 = true;
+            cfg.ppp.enableGpt3Vmf3 = true;
+            cfg.ppp.enableIers2010 = true;
         }
 
         PppProcessor ppp = new PppProcessor(opt);
@@ -750,8 +750,8 @@ public class PppProductIntegrationTest {
 
         RtkConfig cfg = new RtkConfig();
         if (optimized) {
-            cfg.enableGpt3Vmf3 = true;
-            cfg.enableIers2010 = true;
+            cfg.ppp.enableGpt3Vmf3 = true;
+            cfg.ppp.enableIers2010 = true;
         }
 
         PppProcessor ppp = new PppProcessor(opt);
@@ -856,8 +856,8 @@ public class PppProductIntegrationTest {
 
         RtkConfig cfg = new RtkConfig();
         if (optimized) {
-            cfg.enableGpt3Vmf3 = true;
-            cfg.enableIers2010 = true;
+            cfg.ppp.enableGpt3Vmf3 = true;
+            cfg.ppp.enableIers2010 = true;
         }
 
         PppProcessor ppp = new PppProcessor(opt);
@@ -1005,8 +1005,8 @@ public class PppProductIntegrationTest {
 
         RtkConfig cfg = new RtkConfig();
         if (optimized) {
-            cfg.enableGpt3Vmf3 = true;
-            cfg.enableIers2010 = true;
+            cfg.ppp.enableGpt3Vmf3 = true;
+            cfg.ppp.enableIers2010 = true;
         }
 
         PppProcessor ppp = new PppProcessor(opt);

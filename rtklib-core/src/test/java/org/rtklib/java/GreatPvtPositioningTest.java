@@ -292,11 +292,11 @@ public class GreatPvtPositioningTest {
         opt.sateph = Constants.EPHOPT_PREC;
 
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppAR = true;
-        cfg.pppArRatioWl = 2.0;
-        cfg.pppArRatioNl = 3.0;
-        cfg.enablePppArFixHold = true;
-        cfg.pppArFixHoldMinEp = 10;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.arRatioWl = 2.0;
+        cfg.pppAr.arRatioNl = 3.0;
+        cfg.pppAr.enableFixHold = true;
+        cfg.pppAr.fixHoldMinEp = 10;
 
         Rtk rtk = new Rtk();
         rtk.opt = opt;
@@ -499,7 +499,7 @@ public class GreatPvtPositioningTest {
         opt.sateph = Constants.EPHOPT_PREC;
 
         RtkConfig cfg = new RtkConfig();
-        cfg.enableGpt3Vmf3 = true;
+        cfg.ppp.enableGpt3Vmf3 = true;
 
         Rtk rtk = new Rtk();
         rtk.opt = opt;
@@ -559,7 +559,7 @@ public class GreatPvtPositioningTest {
         opt.sateph = Constants.EPHOPT_PREC;
 
         RtkConfig cfg = new RtkConfig();
-        cfg.enableIers2010 = true;
+        cfg.ppp.enableIers2010 = true;
 
         Rtk rtk = new Rtk();
         rtk.opt = opt;
@@ -619,7 +619,7 @@ public class GreatPvtPositioningTest {
         opt.sateph = Constants.EPHOPT_PREC;
 
         RtkConfig cfg = new RtkConfig();
-        cfg.enableIsbIfcbIfb = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
 
         Rtk rtk = new Rtk();
         rtk.opt = opt;
@@ -682,11 +682,11 @@ public class GreatPvtPositioningTest {
         opt.sateph = Constants.EPHOPT_PREC;
 
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppAR = true;
-        cfg.enablePppArFixHold = true;
-        cfg.pppArRatioWl = 2.0;
-        cfg.pppArRatioNl = 3.0;
-        cfg.pppArFixHoldMinEp = 10;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.enableFixHold = true;
+        cfg.pppAr.arRatioWl = 2.0;
+        cfg.pppAr.arRatioNl = 3.0;
+        cfg.pppAr.fixHoldMinEp = 10;
 
         Rtk rtk = new Rtk();
         rtk.opt = opt;

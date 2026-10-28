@@ -50,7 +50,7 @@ public class IflcPairNegotiationTest {
         rtk.opt.mode = Constants.PMODE_KINEMA;
         rtk.opt.nf = nf;
         rtk.rtkConfig = new RtkConfig();
-        rtk.rtkConfig.enableIflcPairNegotiation = true;
+        rtk.rtkConfig.common.enableIflcPairNegotiation = true;
         return rtk;
     }
 
@@ -130,7 +130,7 @@ public class IflcPairNegotiationTest {
     @DisplayName("开关关闭：协商no-op，槽位保持{0,0}，读取点回退固定槽位（C版行为）")
     void disabledConfigIsNoOp() {
         Rtk rtk = rtk(2);
-        rtk.rtkConfig.enableIflcPairNegotiation = false;
+        rtk.rtkConfig.common.enableIflcPairNegotiation = false;
         int sat = bdsSat(6);
         Obsd[] obsArr = {obs(sat, 1, 0, 2), obs(sat, 2, 0, 1, 2)};
 

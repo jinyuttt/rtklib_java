@@ -127,8 +127,8 @@ public class PppRtkValidationTest {
 
     private static RtkConfig createPppRtkConfig() {
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppRtk = true;
-        cfg.enablePppRtkAR = true;
+        cfg.pppRtk.enable = true;
+        cfg.pppRtk.enableAR = true;
         return cfg;
     }
 

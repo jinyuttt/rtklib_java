@@ -144,3 +144,8 @@ cascade_epochs_*.csv
 
 # Local private validation tests (credentials + self-recorded streams, never commit)
 **/localtest/
+
+# Ad-hoc debug dumps and scratch classes at repo root (never commit)
+/tmp_*.txt
+/TimeCheck.java
+/data/

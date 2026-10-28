@@ -6,6 +6,30 @@
 
 ---
 
+## [Unreleased]
+
+### Changed（破坏性 API）
+
+- **`RtkConfig` 拆分为 7 个子配置**：原单一扁平类按归属拆为 `CommonOpts`（`cfg.common`）、`RtkOpts`（`cfg.rtk`）、`PppOpts`（`cfg.ppp`）、`PppArOpts`（`cfg.pppAr`）、`PppRtkOpts`（`cfg.pppRtk`）、`SppOpts`（`cfg.spp`）、`AdaptiveOpts`（`cfg.adaptive`）。子配置内字段名去掉原命名空间前缀，`RtkConfig` 保留 7 个 `public final` 子配置引用与拷贝构造函数
+- **字段重命名映射**（调用方需同步修改）：
+  - `enablePppRtk` / `enablePppRtkAR` / `enablePppRtkFixHold` → `cfg.pppRtk.enable` / `enableAR` / `enableFixHold`
+  - `enablePppAR` / `enablePppArFixHold` / `enablePppPartialAR` / `enableBds3PppAR` → `cfg.pppAr.enableAR` / `enableFixHold` / `enablePartialAR` / `enableBds3AR`；`enableMultiFreqAR` 不变
+  - `enableSppEkf` / `enableSppRobust` / `enableSppZeroVel` / `enableSppDopplerSnr` → `cfg.spp.enableEkf` / `enableRobust` / `enableZeroVel` / `enableDopplerSnr`
+  - `enableAdaptiveScene` → `cfg.adaptive.enableScene`
+  - `adaptiveWindowEpochs` / `adaptiveCooldownEpochs` → `cfg.adaptive.windowEpochs` / `cooldownEpochs`
+  - `adaptiveManagedParams` / `adaptiveLockedParams` → `cfg.adaptive.managedParams` / `lockedParams`
+  - `adaptiveNsatOpenToCanyon` / `adaptiveSnrOpenToCanyon` / `adaptiveNsatCanyonToOpen` / `adaptiveSnrCanyonToOpen` → `cfg.adaptive.nsatOpenToCanyon` / `snrOpenToCanyon` / `nsatCanyonToOpen` / `snrCanyonToOpen`
+  - `adaptiveAuditEnabled` / `adaptiveAuditDir` / `adaptiveAuditMaxSizeKB` / `adaptiveAuditMaxFiles` → `cfg.adaptive.auditEnabled` / `auditDir` / `auditMaxSizeKB` / `auditMaxFiles`
+  - `adaptiveVerbose` / `adaptiveTraceAll` / `adaptiveListener` → `cfg.adaptive.verbose` / `traceAll` / `listener`
+- **序列化不兼容**：`RtkConfig` 的 `serialVersionUID` 由 `1L` 提升为 `2L`，旧版本序列化的配置对象无法直接反序列化
+- **配置访问路径同步**：`RtkCore`、`RtkOptimizations`、`AdaptiveController`、`AdaptiveOverride`、`PresetManager` 及 `rtklib-joint`/`rtklib-vrs`/`rtklib-product` 等调用方全部改为按子配置命名空间访问
+
+### Docs
+
+- `docs/gnss-adaptive-design-v3.md`、`docs/CORE_OPTIMIZATION_MATRIX.md` 中的配置示例同步为 `cfg.<子配置>.<字段>` 新命名
+
+---
+
 ## [3.2.2] - 2026-10-27
 
 ### Added
@@ -40,7 +64,7 @@
 
 - 新增 `Rtcm3MsmEncoderTest`（5 例）：MSM4/MSM5 编码 → 解码闭环，GPS/BDS 双频，P/L/SNR/lock 逐项比对
 - 新增 `VrsGeneratorTest`（6 例）：输出 RTCM 消息顺序、端到端流程、双差模糊度自洽（改正后模糊度应保持不变）
-- 新增 `VrsRealDataTest`（6 例）：真实双站 RTCM3（基站 `GS2025090017` / 测站 `GS2025090003`，2026-10-27 08 时，239 历元 15 s）——VRS 改正、端到端输出、RTK 反向验证、VRS 设在基站位置时逐位一致性、原始信号集分析、VRS@基站分流诊断。数据缺失时自动跳过
+- 新增 `VrsRealDataTest`（6 例）：真实双站 RTCM3（基站 `<BASE_DEVICE_ID>` / 测站 `<ROVER_DEVICE_ID>`，2026-10-27 08 时，239 历元 15 s）——VRS 改正、端到端输出、RTK 反向验证、VRS 设在基站位置时逐位一致性、原始信号集分析、VRS@基站分流诊断。数据缺失时自动跳过
 - 新增 `CovAssemblerCovEcefTest`（3 例）：协方差符号保留、`qr[0]==0` 哨兵回退、`extractBaselineDxyz` 返回绝对位置
 - 新增 `CovAssemblerRTest`（4 例）：rho=0 块对角、rho=0.5 互块、rho 截断到 [0, 0.99]、k=3 正定
 - 新增 `DisplacementSeriesTest`（3 例）：2 mm/yr 速率恢复且显著、无趋势不显著、样本不足/零跨度失败

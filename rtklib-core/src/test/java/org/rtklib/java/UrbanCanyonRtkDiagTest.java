@@ -267,7 +267,7 @@ public class UrbanCanyonRtkDiagTest {
         RtkDiagResult base = runRtkAndDiagnose(cfg);
         // 实验：协商开启，流动站slot1缺失的BDS-3卫星应以{0,2}(B1I+B2a)参与
         RtkConfig negCfg = new RtkConfig();
-        negCfg.enableIflcPairNegotiation = true;
+        negCfg.common.enableIflcPairNegotiation = true;
         RtkDiagResult neg = runRtkAndDiagnose(cfg, negCfg);
 
         printDiagReport(neg, cfg);

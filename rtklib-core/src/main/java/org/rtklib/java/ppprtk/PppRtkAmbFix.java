@@ -18,7 +18,7 @@ public final class PppRtkAmbFix {
 
     public static void ppprtkAmbFix(Rtk rtk, Nav nav) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (cfg == null || !cfg.enablePppRtkAR) return;
+        if (cfg == null || !cfg.pppRtk.enableAR) return;
 
         PrcOpt opt = rtk.opt;
 
@@ -57,7 +57,7 @@ public final class PppRtkAmbFix {
 
         rtk.nfix++;
 
-        if (cfg.enablePppRtkFixHold && rtk.nfix >= cfg.pppRtkFixHoldMinEpoch) {
+        if (cfg.pppRtk.enableFixHold && rtk.nfix >= cfg.pppRtk.fixHoldMinEpoch) {
             PppAmbFix.pppArFixHold(rtk, nav);
         }
 
@@ -139,7 +139,7 @@ public final class PppRtkAmbFix {
         }
 
         double ratio = (s[1] > 0) ? s[0] / s[1] : 999.0;
-        double arRatio = cfg.pppRtkArRatio;
+        double arRatio = cfg.pppRtk.arRatio;
 
         LOG.debug("PPP-RTK AR: nb={} ratio={} threshold={}", nb, String.format("%.3f", ratio), String.format("%.3f", arRatio));
 
@@ -177,7 +177,7 @@ public final class PppRtkAmbFix {
         rtk.Pa = Pa;
         rtk.nfix++;
 
-        if (cfg.enablePppRtkFixHold && rtk.nfix >= cfg.pppRtkFixHoldMinEpoch) {
+        if (cfg.pppRtk.enableFixHold && rtk.nfix >= cfg.pppRtk.fixHoldMinEpoch) {
             fixAndHold(rtk, nav, satList, freqList, idxList, nb);
         }
 
@@ -192,7 +192,7 @@ public final class PppRtkAmbFix {
         RtkConfig cfg = rtk.rtkConfig;
         PrcOpt opt = rtk.opt;
         int nx = rtk.nx;
-        double holdVar = cfg.pppRtkFixHoldVar;
+        double holdVar = cfg.pppRtk.fixHoldVar;
 
         for (int i = 0; i < nb; i++) {
             int sat = satList[i];

@@ -250,7 +250,7 @@ public class PostPosProcessor {
         Sol bestSol = null;
         GTime bestTime = null;
         int[] pri = {6, 1, 2, 3, 4, 5, 1, 6};
-        SegmentSigmaFilter segmentSigmaFilter = (rtkConfig != null && rtkConfig.enableSegmentSigmaFilter)
+        SegmentSigmaFilter segmentSigmaFilter = (rtkConfig != null && rtkConfig.rtk.enableSegmentSigmaFilter)
                 ? new SegmentSigmaFilter(rtkConfig) : null;
 
         int[] iobsrF = {0}; /* persistent base epoch cursor, aligned with C inputobs() iobsr */
@@ -330,7 +330,7 @@ public class PostPosProcessor {
         Sol bestSol = null;
         GTime bestTime = null;
         int[] pri = {6, 1, 2, 3, 4, 5, 1, 6};
-        SegmentSigmaFilter backwardSigmaFilter = (rtkConfig != null && rtkConfig.enableSegmentSigmaFilter)
+        SegmentSigmaFilter backwardSigmaFilter = (rtkConfig != null && rtkConfig.rtk.enableSegmentSigmaFilter)
                 ? new SegmentSigmaFilter(rtkConfig) : null;
 
         List<List<Obsd>> reversedRover = new ArrayList<>(roverEpochs);

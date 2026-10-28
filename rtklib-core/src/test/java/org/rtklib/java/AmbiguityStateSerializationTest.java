@@ -39,8 +39,8 @@ public class AmbiguityStateSerializationTest {
         original.rb[0] = -2267749.0;
         original.rb[1] = 5009155.0;
         original.rb[2] = 3221290.0;
-        original.rtkConfig.enableAmbAnchor = true;
-        original.rtkConfig.ambAnchorMinFixCount = 50;
+        original.rtkConfig.rtk.enableAmbAnchor = true;
+        original.rtkConfig.rtk.ambAnchorMinFixCount = 50;
 
         byte[] data;
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -79,8 +79,8 @@ public class AmbiguityStateSerializationTest {
         assertEquals(-2267749.0, restored.rb[0], 1e-6);
         assertEquals(5009155.0, restored.rb[1], 1e-6);
         assertEquals(3221290.0, restored.rb[2], 1e-6);
-        assertTrue(restored.rtkConfig.enableAmbAnchor);
-        assertEquals(50, restored.rtkConfig.ambAnchorMinFixCount);
+        assertTrue(restored.rtkConfig.rtk.enableAmbAnchor);
+        assertEquals(50, restored.rtkConfig.rtk.ambAnchorMinFixCount);
     }
 
     @Test
@@ -110,7 +110,7 @@ public class AmbiguityStateSerializationTest {
         rtk.sol.prev_ratio1 = 2.5f;
         rtk.sol.prev_ratio2 = 3.0f;
         rtk.sol.thres = 3.0f;
-        rtk.rtkConfig.enableAmbAnchor = true;
+        rtk.rtkConfig.rtk.enableAmbAnchor = true;
 
         Rtk saved = processor.getRtk();
 
@@ -141,7 +141,7 @@ public class AmbiguityStateSerializationTest {
         assertEquals(2.5f, restored.sol.prev_ratio1, 1e-6);
         assertEquals(3.0f, restored.sol.prev_ratio2, 1e-6);
         assertEquals(3.0f, restored.sol.thres, 1e-6);
-        assertTrue(restored.rtkConfig.enableAmbAnchor);
+        assertTrue(restored.rtkConfig.rtk.enableAmbAnchor);
         assertEquals(opt.mode, restored.opt.mode);
         assertEquals(opt.nf, restored.opt.nf);
         assertEquals(opt.navsys, restored.opt.navsys);

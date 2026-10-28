@@ -597,8 +597,8 @@ public class PppProcessor {
         mergePreciseProducts(batchRtcm.nav, rtcm.nav);
 
         // 自动加载 GPT3 网格（RTCM 批处理历元使用 batchRtcm.nav）
-        if (rtk.rtkConfig != null && rtk.rtkConfig.gpt3GridFile != null && !rtk.rtkConfig.gpt3GridFile.isEmpty()) {
-            org.rtklib.java.ephemeris.Gpt3GridReader.readGpt3Grid(rtk.rtkConfig.gpt3GridFile, batchRtcm.nav);
+        if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.gpt3GridFile != null && !rtk.rtkConfig.ppp.gpt3GridFile.isEmpty()) {
+            org.rtklib.java.ephemeris.Gpt3GridReader.readGpt3Grid(rtk.rtkConfig.ppp.gpt3GridFile, batchRtcm.nav);
         }
 
         int ephWeek = findEphWeek(batchRtcm.nav);
@@ -674,8 +674,8 @@ public class PppProcessor {
         mergePreciseProducts(parser.nav, rtcm.nav);
 
         // 自动加载 GPT3 网格（RINEX 批处理历元使用 parser.nav）
-        if (rtk.rtkConfig != null && rtk.rtkConfig.gpt3GridFile != null && !rtk.rtkConfig.gpt3GridFile.isEmpty()) {
-            org.rtklib.java.ephemeris.Gpt3GridReader.readGpt3Grid(rtk.rtkConfig.gpt3GridFile, parser.nav);
+        if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.gpt3GridFile != null && !rtk.rtkConfig.ppp.gpt3GridFile.isEmpty()) {
+            org.rtklib.java.ephemeris.Gpt3GridReader.readGpt3Grid(rtk.rtkConfig.ppp.gpt3GridFile, parser.nav);
         }
 
         if (parser.obs.n == 0) {
@@ -844,14 +844,14 @@ public class PppProcessor {
                     fcbCount, osbCount, cbiasCount, nav.fcbFromOsb);
             if (rtk.rtkConfig != null) {
                 log.info("PPP rtkConfig: iers2010={}, gpt3Vmf3={}, isbIfcbIfb={}, pppAR={}, arFixHold={}, partialAR={}, bds3AR={}",
-                        rtk.rtkConfig.enableIers2010, rtk.rtkConfig.enableGpt3Vmf3,
-                        rtk.rtkConfig.enableIsbIfcbIfb, rtk.rtkConfig.enablePppAR,
-                        rtk.rtkConfig.enablePppArFixHold, rtk.rtkConfig.enablePppPartialAR,
-                        rtk.rtkConfig.enableBds3PppAR);
+                        rtk.rtkConfig.ppp.enableIers2010, rtk.rtkConfig.ppp.enableGpt3Vmf3,
+                        rtk.rtkConfig.ppp.enableIsbIfcbIfb, rtk.rtkConfig.pppAr.enableAR,
+                        rtk.rtkConfig.pppAr.enableFixHold, rtk.rtkConfig.pppAr.enablePartialAR,
+                        rtk.rtkConfig.pppAr.enableBds3AR);
             }
         }
 
-        if (rtk.rtkConfig != null && rtk.rtkConfig.enableIers2010 && opt.tidecorr == 0) {
+        if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableIers2010 && opt.tidecorr == 0) {
             opt.tidecorr = 1;
             rtk.opt.tidecorr = 1;
             log.info("enableIers2010=true but tidecorr=0, auto-set tidecorr=1");
@@ -904,16 +904,16 @@ public class PppProcessor {
         if (totalEpochs <= 3) {
             log.info("processEpoch[{}]: rtkConfig={}, pppRtk={}, pppAR={}", totalEpochs,
                     rtk.rtkConfig != null,
-                    rtk.rtkConfig != null && rtk.rtkConfig.enablePppRtk,
-                    rtk.rtkConfig != null && rtk.rtkConfig.enablePppAR);
+                    rtk.rtkConfig != null && rtk.rtkConfig.pppRtk.enable,
+                    rtk.rtkConfig != null && rtk.rtkConfig.pppAr.enableAR);
         }
 
-        if (rtk.rtkConfig != null && rtk.rtkConfig.enablePppRtk) {
+        if (rtk.rtkConfig != null && rtk.rtkConfig.pppRtk.enable) {
             PppRtkCore.ppprtkos(rtk, obsData, n, nav);
-        } else if (rtk.rtkConfig != null && (rtk.rtkConfig.enableIsbIfcbIfb || rtk.rtkConfig.enablePppAR
-                || rtk.rtkConfig.enablePppArFixHold || rtk.rtkConfig.enablePppPartialAR
-                || rtk.rtkConfig.enableBds3PppAR || rtk.rtkConfig.enableOsb
-                || rtk.rtkConfig.enableAt1S2 || rtk.rtkConfig.useGpt3Grid)) {
+        } else if (rtk.rtkConfig != null && (rtk.rtkConfig.ppp.enableIsbIfcbIfb || rtk.rtkConfig.pppAr.enableAR
+                || rtk.rtkConfig.pppAr.enableFixHold || rtk.rtkConfig.pppAr.enablePartialAR
+                || rtk.rtkConfig.pppAr.enableBds3AR || rtk.rtkConfig.ppp.enableOsb
+                || rtk.rtkConfig.ppp.enableAt1S2 || rtk.rtkConfig.ppp.useGpt3Grid)) {
             PppCoreEx.ppos(rtk, obsData, n, nav, rtk.rtkConfig);
         } else {
             PppCore.pppos(rtk, obsData, n, nav);
@@ -926,7 +926,7 @@ public class PppProcessor {
         if (false && rtk.sol.stat != Constants.SOLQ_NONE && opt.tidecorr != 0) {
             double[] dispOut = new double[3];
             double[] rrOut = new double[]{rtk.sol.rr[0], rtk.sol.rr[1], rtk.sol.rr[2]};
-            if (rtk.rtkConfig != null && rtk.rtkConfig.enableIers2010) {
+            if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableIers2010) {
                 double[] disp2010 = PppOptimizations.tideDisplacementIers2010(
                         TimeSystem.gpst2utc(obsData[0].time), rrOut, opt.tidecorr, nav.erp, opt.odisp[0], rtk.rtkConfig);
                 if (disp2010 != null) {
@@ -1246,10 +1246,10 @@ public class PppProcessor {
                 rtkB.tt = 0.0;
             }
 
-            if (rtkB.rtkConfig != null && (rtkB.rtkConfig.enableIsbIfcbIfb || rtkB.rtkConfig.enablePppAR
-                    || rtkB.rtkConfig.enablePppArFixHold || rtkB.rtkConfig.enablePppPartialAR
-                    || rtkB.rtkConfig.enableBds3PppAR || rtkB.rtkConfig.enableOsb
-                    || rtkB.rtkConfig.enableAt1S2 || rtkB.rtkConfig.useGpt3Grid)) {
+            if (rtkB.rtkConfig != null && (rtkB.rtkConfig.ppp.enableIsbIfcbIfb || rtkB.rtkConfig.pppAr.enableAR
+                    || rtkB.rtkConfig.pppAr.enableFixHold || rtkB.rtkConfig.pppAr.enablePartialAR
+                    || rtkB.rtkConfig.pppAr.enableBds3AR || rtkB.rtkConfig.ppp.enableOsb
+                    || rtkB.rtkConfig.ppp.enableAt1S2 || rtkB.rtkConfig.ppp.useGpt3Grid)) {
                 PppCoreEx.ppos(rtkB, obsData, n, nav, rtkB.rtkConfig);
             } else {
                 PppCore.pppos(rtkB, obsData, n, nav);

@@ -18,14 +18,14 @@ public final class RtkOptimizationsPartialAR {
     public static int partialAmbFix(Rtk rtk, double[] bias, double[] xa,
                                      int[] ix, int nb, int gps, int glo, int sbs) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enablePartialAR) return -1;
+        if (!cfg.rtk.enablePartialAR) return -1;
 
         PrcOpt opt = rtk.opt;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
         int nx = rtk.nx;
         int na = rtk.na;
-        int minSats = cfg.partialArMinSats;
-        int maxTries = cfg.partialArMaxSubsetTries;
+        int minSats = cfg.rtk.partialArMinSats;
+        int maxTries = cfg.rtk.partialArMaxSubsetTries;
 
         if (nb < minSats) return -1;
 
@@ -115,13 +115,13 @@ public final class RtkOptimizationsPartialAR {
             if (info != 0 || s[0] <= 0.0) continue;
 
             double ratio = s[1] / s[0];
-            if (ratio < cfg.partialArMinRatio) continue;
+            if (ratio < cfg.rtk.partialArMinRatio) continue;
 
-            if (cfg.enableBootstrapping) {
+            if (cfg.rtk.enableBootstrapping) {
                 double[] subBias = new double[subNb];
                 for (int i = 0; i < subNb; i++) subBias[i] = b[i * 2];
                 double successRate = RtkOptimizationsBootstrap.computeSuccessRate(subBias, Qb, subNb);
-                if (successRate < cfg.partialArMinBootstrapping) continue;
+                if (successRate < cfg.rtk.partialArMinBootstrapping) continue;
             }
 
             LOG.info("PartialAR fixed: drop={} subNb={} ratio={:.2f}", drop, subNb, ratio);

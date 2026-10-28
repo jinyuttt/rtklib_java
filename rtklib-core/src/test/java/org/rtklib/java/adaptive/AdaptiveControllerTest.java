@@ -20,9 +20,9 @@ class AdaptiveControllerTest {
 
     private RtkConfig newCfg() {
         RtkConfig cfg = new RtkConfig();
-        cfg.enableAdaptiveScene = true;
-        cfg.adaptiveVerbose = false;
-        cfg.adaptiveAuditEnabled = false;
+        cfg.adaptive.enableScene = true;
+        cfg.adaptive.verbose = false;
+        cfg.adaptive.auditEnabled = false;
         return cfg;
     }
 
@@ -53,16 +53,16 @@ class AdaptiveControllerTest {
         ctl.activate();
         assertEquals(GnssScene.URBAN_CANYON, ctl.getCurrentScene());
         assertEquals(0.10, opt.thresslip, 1e-12);
-        assertTrue(cfg.enableIggiii);
-        assertTrue(cfg.enableSnrMedian);
+        assertTrue(cfg.rtk.enableIggiii);
+        assertTrue(cfg.rtk.enableSnrMedian);
         ctl.deactivate();
     }
 
     @Test
     void sceneSwitchAndCooldownEpochSemantics() {
         RtkConfig cfg = newCfg();
-        cfg.adaptiveWindowEpochs = 10;
-        cfg.adaptiveCooldownEpochs = 3;
+        cfg.adaptive.windowEpochs = 10;
+        cfg.adaptive.cooldownEpochs = 3;
         PrcOpt opt = newOpt(Constants.PMODE_KINEMA, 1);
         AdaptiveController ctl = new AdaptiveController(Constants.PMODE_KINEMA, cfg, opt);
         ctl.activate();
@@ -119,7 +119,7 @@ class AdaptiveControllerTest {
     void configurableThresholdsControlSwitch() {
         // 默认阈值 34: 20星/36dBHz 应切 OPEN
         RtkConfig cfgDefault = newCfg();
-        cfgDefault.adaptiveWindowEpochs = 10;
+        cfgDefault.adaptive.windowEpochs = 10;
         PrcOpt optA = newOpt(Constants.PMODE_KINEMA, 1);
         AdaptiveController a = new AdaptiveController(Constants.PMODE_KINEMA, cfgDefault, optA);
         a.activate();
@@ -129,8 +129,8 @@ class AdaptiveControllerTest {
 
         // 抬高阈值到 40: 同样信号不切换
         RtkConfig cfgHigh = newCfg();
-        cfgHigh.adaptiveWindowEpochs = 10;
-        cfgHigh.adaptiveSnrCanyonToOpen = 40.0;
+        cfgHigh.adaptive.windowEpochs = 10;
+        cfgHigh.adaptive.snrCanyonToOpen = 40.0;
         PrcOpt optB = newOpt(Constants.PMODE_KINEMA, 1);
         AdaptiveController b = new AdaptiveController(Constants.PMODE_KINEMA, cfgHigh, optB);
         b.activate();
@@ -145,25 +145,25 @@ class AdaptiveControllerTest {
         PrcOpt opt = newOpt(Constants.PMODE_KINEMA, 1);
         double origThresslip = opt.thresslip;
         double origElmin = opt.elmin;
-        boolean origIggiii = cfg.enableIggiii;
-        boolean origSnrMedian = cfg.enableSnrMedian;
+        boolean origIggiii = cfg.rtk.enableIggiii;
+        boolean origSnrMedian = cfg.rtk.enableSnrMedian;
         AdaptiveController ctl = new AdaptiveController(Constants.PMODE_KINEMA, cfg, opt);
         ctl.activate();
         for (long e = 1; e <= 50; e++) ctl.onEpoch(e, 100000.0 + e, 6, 25.0, null);
         ctl.deactivate();
         assertEquals(origThresslip, opt.thresslip, 1e-12);
         assertEquals(origElmin, opt.elmin, 1e-12);
-        assertEquals(origIggiii, cfg.enableIggiii);
-        assertEquals(origSnrMedian, cfg.enableSnrMedian);
+        assertEquals(origIggiii, cfg.rtk.enableIggiii);
+        assertEquals(origSnrMedian, cfg.rtk.enableSnrMedian);
     }
 
     @Test
     void auditFileGenerated() throws Exception {
         RtkConfig cfg = newCfg();
-        cfg.adaptiveAuditEnabled = true;
-        cfg.adaptiveAuditDir = tempDir.toString();
-        cfg.adaptiveWindowEpochs = 10;
-        cfg.adaptiveCooldownEpochs = 3;
+        cfg.adaptive.auditEnabled = true;
+        cfg.adaptive.auditDir = tempDir.toString();
+        cfg.adaptive.windowEpochs = 10;
+        cfg.adaptive.cooldownEpochs = 3;
         PrcOpt opt = newOpt(Constants.PMODE_KINEMA, 1);
         AdaptiveController ctl = new AdaptiveController(Constants.PMODE_KINEMA, cfg, opt);
         ctl.activate();
@@ -194,9 +194,9 @@ class AdaptiveControllerTest {
         assertEquals(AdaptiveMode.PPP_RTK, AdaptiveController.resolveMode(Constants.PMODE_PPPRTK_STATIC, cfg));
         assertEquals(AdaptiveMode.PPP, AdaptiveController.resolveMode(Constants.PMODE_PPP_KINEMA, cfg));
         assertEquals(AdaptiveMode.PPP, AdaptiveController.resolveMode(Constants.PMODE_PPP_STATIC, cfg));
-        cfg.enablePppAR = true;
+        cfg.pppAr.enableAR = true;
         assertEquals(AdaptiveMode.PPP_AR, AdaptiveController.resolveMode(Constants.PMODE_PPP_KINEMA, cfg));
-        cfg.enablePppAR = false; cfg.enablePppPartialAR = true;
+        cfg.pppAr.enableAR = false; cfg.pppAr.enablePartialAR = true;
         assertEquals(AdaptiveMode.PPP_AR, AdaptiveController.resolveMode(Constants.PMODE_PPP_STATIC, cfg));
     }
 
@@ -206,7 +206,7 @@ class AdaptiveControllerTest {
         PrcOpt opt = newOpt(Constants.PMODE_KINEMA, 1);
         AdaptiveController ctl = new AdaptiveController(Constants.PMODE_KINEMA, cfg, opt);
         ctl.activate();
-        assertTrue(cfg.enableIggiii, "初始 CANYON 预设应开启 IGGIII");
+        assertTrue(cfg.rtk.enableIggiii, "初始 CANYON 预设应开启 IGGIII");
         // 模拟: IGGIII 降权率 100% + 位置方差连续增长 → 自动关闭
         Rtk rtk = new Rtk();
         rtk.nx = 10;
@@ -218,7 +218,7 @@ class AdaptiveControllerTest {
             trace *= 1.5;  // 持续增长
             ctl.onEpoch(e, 400000.0 + e, 10, 35.0, rtk);
         }
-        assertFalse(cfg.enableIggiii, "过度降权+解发散应自动关闭 enableIggiii");
+        assertFalse(cfg.rtk.enableIggiii, "过度降权+解发散应自动关闭 enableIggiii");
         ctl.deactivate();
     }
 }

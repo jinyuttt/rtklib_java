@@ -40,8 +40,8 @@ class PresetManagerTest {
         assertEquals(0.05, (double) pppar.get("thresslip"), 1e-12);
         assertEquals(7.0, (double) pppar.get("maxinno0"), 1e-12);
         // SPP 含 enableSppInnovChisq
-        assertEquals(true, PresetManager.getPreset(AdaptiveMode.SPP, GnssScene.OPEN_SKY).get("enableSppInnovChisq"));
-        assertEquals(true, PresetManager.getPreset(AdaptiveMode.SPP, GnssScene.URBAN_CANYON).get("enableSppInnovChisq"));
+        assertEquals(true, PresetManager.getPreset(AdaptiveMode.SPP, GnssScene.OPEN_SKY).get("spp.enableInnovChisq"));
+        assertEquals(true, PresetManager.getPreset(AdaptiveMode.SPP, GnssScene.URBAN_CANYON).get("spp.enableInnovChisq"));
     }
 
     @Test

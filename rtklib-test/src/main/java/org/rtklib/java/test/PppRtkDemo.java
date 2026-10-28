@@ -102,8 +102,8 @@ public class PppRtkDemo {
         if (dcb != null && new File(dcb).exists()) p.loadDcb(dcb);
 
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppRtk = enablePppRtk;
-        cfg.enablePppRtkAR = enablePppRtkAR;
+        cfg.pppRtk.enable = enablePppRtk;
+        cfg.pppRtk.enableAR = enablePppRtkAR;
         p.setRtkConfig(cfg);
 
         try {

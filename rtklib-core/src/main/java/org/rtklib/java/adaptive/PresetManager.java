@@ -6,13 +6,13 @@ import java.util.Map;
 public class PresetManager {
     private static final Map<String, Object> SPP_OPEN = Map.of(
             "thresslip", 0.05, "maxinno0", 30.0, "maxinno1", 30.0,
-            "elmin", Math.toRadians(15), "enableSppEkf", false, "enableSppRobust", false,
-            "sppInnovOutlierThresh", 5.0, "enableSppInnovChisq", true
+            "elmin", Math.toRadians(15), "spp.enableEkf", false, "spp.enableRobust", false,
+            "spp.innovOutlierThresh", 5.0, "spp.enableInnovChisq", true
     );
     private static final Map<String, Object> SPP_CANYON = Map.of(
             "thresslip", 0.10, "maxinno0", 50.0, "maxinno1", 50.0,
-            "elmin", Math.toRadians(20), "enableSppEkf", true, "enableSppRobust", true,
-            "sppInnovOutlierThresh", 7.0, "enableSppInnovChisq", true
+            "elmin", Math.toRadians(20), "spp.enableEkf", true, "spp.enableRobust", true,
+            "spp.innovOutlierThresh", 7.0, "spp.enableInnovChisq", true
     );
     private static final Map<String, Object> RTK_OPEN = Map.of(
             "thresslip", 0.05, "maxinno0", 30.0, "maxinno1", 30.0,

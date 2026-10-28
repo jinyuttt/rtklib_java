@@ -77,20 +77,20 @@
 | **QZSS CLAS** | `CompactSsrDecoder` 已实现 MT4073 子类型 1-12 解码；`enableCompactSsr` 开关就位 | 缺公开 L6 二进制样本做端到端冒烟；区域改正覆盖日本及周边 | 解码结果写入 `nav.ssr` 后走 `ppprtkos()`，与 RTCM SSR 同构 | 高（唯一可立即验证） |
 | **Galileo HAS** | `HasSsrDecoder` 已实现 COMPACT-SSR（MT1~MT9）→ `nav.ssr`；互联网 IDD 接入未实现 | IDD 为专有二进制，需补帧同步层；互联网 IDD 需注册审批；无公开事后存档 | 新增 IDD 读取层 → `HasSsrDecoder` → 复用现有 SsrCorrector | 中 |
 | **IMU 紧组合** | 无实现，当前为纯 GNSS | 缺 IMU 数据与标定；EKF 状态需扩姿态/速度/零偏，动力学模型改动最大 | 扩展 `PppCore` 状态向量与过程噪声，天线杆臂纳入观测模型 | 低 |
-| **SSR 权限接入**（前置） | CAS 观测流可用，SSRA*/SSRC* 未授权；北航 2025 数据集待申请 | 账号权限与凭据（详见 [ROADMAP.md](ROADMAP.md) §8.8） | 仅需改 Caster 地址 + `enablePppRtk = true` | 中 |
+| **SSR 权限接入**（前置） | ✅ 已接入：CAS `SSRA01CAS0`/`SSRC01CAS0` 可用，录制/回放闭环验证通过（FIX-ALG-035/036） | 无（后续其他源如 HAS/CLAS 见上两行） | 改 Caster 地址 + `cfg.pppRtk.enable = true` | ✅ |
 
 ---
 
 ## 封存说明
 
-本版为**代码封存版**：算法能力冻结，仅接受 bug 修复，不再新增特性。SSR 数据源权限到位后，接入成本被压缩到两处改动——
+本版为**代码封存版**：算法能力冻结，仅接受 bug 修复，不再新增特性。SSR 数据源（CAS `SSRA01CAS0`/`SSRC01CAS0`）已接入并完成录制/回放闭环验证，接入成本被压缩到两处改动——
 
 ```java
 // 1. 改 Caster 地址与挂载点
 NtripClient client = new NtripClient(host, port, mountpoint, username, password, listener);
 
 // 2. 打开 PPP-RTK 路由
-cfg.enablePppRtk = true;
+cfg.pppRtk.enable = true;
 ```
 
 底层链路（RTCM/SSR 解码 → `nav.ssr` → SsrCorrector → ppprtkos）已全程贯通并有离线单测覆盖，无需再改算法代码。

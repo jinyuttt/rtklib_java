@@ -33,7 +33,7 @@ import java.util.Optional;
  *   <li>整数反推恢复每频率 DD 整数：N1=b_NL、N2=N1−b_WL、N5=N2−b_EWL（周单位），
  *       不可成链的行降级为 float（fix=1），保证 restamb 语义一致。</li>
  *   <li>NL 级门限对齐标准路径动态调整（C rtkpos.c ar_poly_coeffs 多项式），
- *       并以 cfg.cascadeArRatioNl 作为下限，修复旧实现固定阈值缺陷。</li>
+ *       并以 cfg.rtk.cascadeArRatioNl 作为下限，修复旧实现固定阈值缺陷。</li>
  *   <li>成功路径完整复刻标准路径：条件更新 rtk.xa/rtk.Pa + restamb 恢复单差模糊度，
  *       修复旧实现缺失 restamb 导致 xa 恒零（输出基站坐标）的假 Fix 问题。</li>
  * </ol>
@@ -93,7 +93,7 @@ public final class RtkOptimizationsCascadeAR {
     public static int cascadeAmbFix(Rtk rtk, double[] bias, double[] xa,
                                     int gps, int glo, int sbs, Nav nav) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enableCascadeAR) return -1;
+        if (!cfg.rtk.enableCascadeAR) return -1;
 
         PrcOpt opt = rtk.opt;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
@@ -120,7 +120,7 @@ public final class RtkOptimizationsCascadeAR {
         int freeCount = 0;
         int anchorCount = 0;
 
-        if (cfg.enableAmbAnchor) {
+        if (cfg.rtk.enableAmbAnchor) {
             for (int i = 0; i < nb; i++) {
                 int ambIdx = ix[i * 2 + 1] - na;
                 int satIdx = ambIdx % Constants.MAXSAT;
@@ -247,10 +247,10 @@ public final class RtkOptimizationsCascadeAR {
                 CEwl.set(i, ewlR2[i], 1.0);
                 CEwl.set(i, ewlR5[i], -1.0);
             }
-            int rc = fixLevel(CEwl, y, Q, cfg.cascadeArRatioEwl, bEwl, ratioOut);
+            int rc = fixLevel(CEwl, y, Q, cfg.rtk.cascadeArRatioEwl, bEwl, ratioOut);
             rtk.cascadeArLastRatio[0] = ratioOut[0];
             if (rc != 0) {
-                LOG.debug("CascadeAR EWL failed: rc={} ratio={} thresh={}", rc, ratioOut[0], cfg.cascadeArRatioEwl);
+                LOG.debug("CascadeAR EWL failed: rc={} ratio={} thresh={}", rc, ratioOut[0], cfg.rtk.cascadeArRatioEwl);
                 return -1;
             }
             rtk.diagCascadeArEwlFixCount++;
@@ -264,10 +264,10 @@ public final class RtkOptimizationsCascadeAR {
                 CWl.set(i, wlR1[i], 1.0);
                 CWl.set(i, wlR2[i], -1.0);
             }
-            int rc = fixLevel(CWl, y, Q, cfg.cascadeArRatioWl, bWl, ratioOut);
+            int rc = fixLevel(CWl, y, Q, cfg.rtk.cascadeArRatioWl, bWl, ratioOut);
             rtk.cascadeArLastRatio[1] = ratioOut[0];
             if (rc != 0) {
-                LOG.debug("CascadeAR WL failed: rc={} ratio={} thresh={}", rc, ratioOut[0], cfg.cascadeArRatioWl);
+                LOG.debug("CascadeAR WL failed: rc={} ratio={} thresh={}", rc, ratioOut[0], cfg.rtk.cascadeArRatioWl);
                 return -1;
             }
             rtk.diagCascadeArWlFixCount++;
@@ -298,7 +298,7 @@ public final class RtkOptimizationsCascadeAR {
         if (rtk.sol.ratio > 999.9f) rtk.sol.ratio = 999.9f;
 
         // 动态 ratio 门限（对齐标准路径 C rtkpos.c resamb_LAMBDA 多项式调整），
-        // cfg.cascadeArRatioNl 作为下限（修复旧实现固定阈值缺陷）
+        // cfg.rtk.cascadeArRatioNl 作为下限（修复旧实现固定阈值缺陷）
         float dynThres;
         if (opt.thresar[5] != opt.thresar[6]) {
             int nb1 = nNl < 50 ? nNl : 50; /* poly only fitted for upto 50 sat pairs */
@@ -319,13 +319,13 @@ public final class RtkOptimizationsCascadeAR {
         }
         rtk.sol.thres = dynThres;
 
-        double nlThres = Math.max(dynThres, cfg.cascadeArRatioNl);
+        double nlThres = Math.max(dynThres, cfg.rtk.cascadeArRatioNl);
         if (nlRatio < nlThres) {
             LOG.debug("CascadeAR NL failed: ratio={} < thresh={}", String.format("%.2f", nlRatio), String.format("%.2f", nlThres));
             return -1;
         }
 
-        if (cfg.cascadeArBootstrapping && cfg.enableBootstrapping) {
+        if (cfg.rtk.cascadeArBootstrapping && cfg.rtk.enableBootstrapping) {
             if (!RtkOptimizationsBootstrap.validateFix(rtk, bNl, nNl)) {
                 LOG.debug("CascadeAR NL Bootstrapping rejected");
                 rtk.sol.ratio = 0.0f;

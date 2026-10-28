@@ -174,14 +174,14 @@ public class RtkOptimizationTest {
 
     private RtkConfig createAllOptConfig() {
         RtkConfig cfg = new RtkConfig();
-        cfg.enableAdaptiveQ = true;
-        cfg.enableIggiii = true;
-        cfg.enableSnrMedian = true;
-        cfg.snrMedianMinLockTime = 0;
-        cfg.enableParRefReselect = true;
-        cfg.enableAmbAnchor = true;
-        cfg.ambAnchorMinFixCount = 20;
-        cfg.enableIonoTropGradient = true;
+        cfg.rtk.enableAdaptiveQ = true;
+        cfg.rtk.enableIggiii = true;
+        cfg.rtk.enableSnrMedian = true;
+        cfg.rtk.snrMedianMinLockTime = 0;
+        cfg.common.enableParRefReselect = true;
+        cfg.rtk.enableAmbAnchor = true;
+        cfg.rtk.ambAnchorMinFixCount = 20;
+        cfg.rtk.enableIonoTropGradient = true;
         return cfg;
     }
 
@@ -201,32 +201,32 @@ public class RtkOptimizationTest {
         s1.print(); results.add(s1);
 
         System.out.println("\n--- 2. 自适应Q ---");
-        RtkConfig cfgAQ = new RtkConfig(); cfgAQ.enableAdaptiveQ = true;
+        RtkConfig cfgAQ = new RtkConfig(); cfgAQ.rtk.enableAdaptiveQ = true;
         RtkStats s2 = new RtkStats("自适应Q", runRtk(baseOpt, cfgAQ, base, rover, date, startHour, endHour));
         s2.print(); results.add(s2);
 
         System.out.println("\n--- 3. IGGIII抗差 ---");
-        RtkConfig cfgIG = new RtkConfig(); cfgIG.enableIggiii = true;
+        RtkConfig cfgIG = new RtkConfig(); cfgIG.rtk.enableIggiii = true;
         RtkStats s3 = new RtkStats("IGGIII抗差", runRtk(baseOpt, cfgIG, base, rover, date, startHour, endHour));
         s3.print(); results.add(s3);
 
         System.out.println("\n--- 4. SNR中位数定权 ---");
-        RtkConfig cfgSNR = new RtkConfig(); cfgSNR.enableSnrMedian = true; cfgSNR.snrMedianMinLockTime = 0;
+        RtkConfig cfgSNR = new RtkConfig(); cfgSNR.rtk.enableSnrMedian = true; cfgSNR.rtk.snrMedianMinLockTime = 0;
         RtkStats s4 = new RtkStats("SNR中位数定权", runRtk(baseOpt, cfgSNR, base, rover, date, startHour, endHour));
         s4.print(); results.add(s4);
 
         System.out.println("\n--- 5. 参考星重选 ---");
-        RtkConfig cfgPR = new RtkConfig(); cfgPR.enableParRefReselect = true;
+        RtkConfig cfgPR = new RtkConfig(); cfgPR.common.enableParRefReselect = true;
         RtkStats s5 = new RtkStats("参考星重选", runRtk(baseOpt, cfgPR, base, rover, date, startHour, endHour));
         s5.print(); results.add(s5);
 
         System.out.println("\n--- 6. 模糊度锚定 ---");
-        RtkConfig cfgAA = new RtkConfig(); cfgAA.enableAmbAnchor = true; cfgAA.ambAnchorMinFixCount = 20;
+        RtkConfig cfgAA = new RtkConfig(); cfgAA.rtk.enableAmbAnchor = true; cfgAA.rtk.ambAnchorMinFixCount = 20;
         RtkStats s6 = new RtkStats("模糊度锚定", runRtk(baseOpt, cfgAA, base, rover, date, startHour, endHour));
         s6.print(); results.add(s6);
 
         System.out.println("\n--- 7. 电离层/对流层梯度 ---");
-        RtkConfig cfgGR = new RtkConfig(); cfgGR.enableIonoTropGradient = true;
+        RtkConfig cfgGR = new RtkConfig(); cfgGR.rtk.enableIonoTropGradient = true;
         RtkStats s7 = new RtkStats("电离层/对流层梯度", runRtk(baseOpt, cfgGR, base, rover, date, startHour, endHour));
         s7.print(); results.add(s7);
 
@@ -463,14 +463,14 @@ public class RtkOptimizationTest {
         PrcOpt opt = createBaseOpt();
 
         RtkConfig cfg = new RtkConfig();
-        cfg.enableAdaptiveQ = true;
-        cfg.enableIggiii = true;
-        cfg.enableSnrMedian = true;
-        cfg.snrMedianMinLockTime = 0;
-        cfg.enableParRefReselect = true;
-        cfg.enableAmbAnchor = true;
-        cfg.ambAnchorMinFixCount = 20;
-        cfg.enableIonoTropGradient = true;
+        cfg.rtk.enableAdaptiveQ = true;
+        cfg.rtk.enableIggiii = true;
+        cfg.rtk.enableSnrMedian = true;
+        cfg.rtk.snrMedianMinLockTime = 0;
+        cfg.common.enableParRefReselect = true;
+        cfg.rtk.enableAmbAnchor = true;
+        cfg.rtk.ambAnchorMinFixCount = 20;
+        cfg.rtk.enableIonoTropGradient = true;
 
         RtkProcessor rtk = new RtkProcessor(opt);
         rtk.setRtkConfig(cfg);
@@ -537,7 +537,7 @@ public class RtkOptimizationTest {
         System.out.printf("  已锚定模糊度: %d / %d%n", anchoredCount, rtkObj.ambAnchored.length);
         System.out.printf("  等待锚定(已有部分FIX): %d%n", anchorPendingCount);
         System.out.printf("  holdamb执行次数(FIX时): %d%n", rtkObj.diagAmbAnchorAttemptCount);
-        System.out.printf("  ambAnchorMinFixCount=%d (需要连续FIX这么多次才锚定)%n", cfg.ambAnchorMinFixCount);
+        System.out.printf("  ambAnchorMinFixCount=%d (需要连续FIX这么多次才锚定)%n", cfg.rtk.ambAnchorMinFixCount);
 
         System.out.println("\n  --- 参考星重选 ---");
         System.out.printf("  重选事件次数: %d%n", rtkObj.diagRefReselectCount);

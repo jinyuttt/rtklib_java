@@ -59,12 +59,12 @@ public class RtkArDebugTest {
 
         // 先测试基础配置（无优化）
         RtkConfig config = new RtkConfig();
-        config.enableParRefReselect = false;
-        config.enableAdaptiveQ = false;
-        config.enableIggiii = false;
-        config.enableSnrMedian = false;
-        config.enableIonoTropGradient = false;
-        config.enableAmbAnchor = false;
+        config.common.enableParRefReselect = false;
+        config.rtk.enableAdaptiveQ = false;
+        config.rtk.enableIggiii = false;
+        config.rtk.enableSnrMedian = false;
+        config.rtk.enableIonoTropGradient = false;
+        config.rtk.enableAmbAnchor = false;
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         RtkProcessor processor = new RtkProcessor(opt, null, baos);

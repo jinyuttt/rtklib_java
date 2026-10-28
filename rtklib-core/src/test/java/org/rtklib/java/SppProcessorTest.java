@@ -504,10 +504,10 @@ public class SppProcessorTest {
 
         // ==== optimized: EKF + robust + zero-vel + Doppler/SNR ====
         RtkConfig cfg = new RtkConfig();
-        cfg.enableSppEkf = true;
-        cfg.enableSppRobust = true;
-        cfg.enableSppZeroVel = true;
-        cfg.enableSppDopplerSnr = true;
+        cfg.spp.enableEkf = true;
+        cfg.spp.enableRobust = true;
+        cfg.spp.enableZeroVel = true;
+        cfg.spp.enableDopplerSnr = true;
 
         List<Sol> optSols = new ArrayList<>();
         SppProcessor sppOpt = new SppProcessor(opt, new PosHandler() {

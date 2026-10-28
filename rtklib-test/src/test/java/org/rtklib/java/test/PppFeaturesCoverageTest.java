@@ -95,7 +95,7 @@ public class PppFeaturesCoverageTest {
 
         PrcOpt opt = bdsOnlyPppOpt();
         RtkConfig cfg = new RtkConfig();
-        cfg.enableGpt3Vmf3 = true;
+        cfg.ppp.enableGpt3Vmf3 = true;
         PppProcessor ppp = new PppProcessor(opt);
         ppp.setRtkConfig(cfg);
 

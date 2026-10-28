@@ -262,7 +262,7 @@ public class RtkValidationTest {
 
     private static RtkConfig createRtkConfig() {
         RtkConfig cfg = new RtkConfig();
-        cfg.enableSnrMedian = true;
+        cfg.rtk.enableSnrMedian = true;
         return cfg;
     }
 
@@ -297,10 +297,10 @@ public class RtkValidationTest {
 
     private static RtkConfig createLongRtkConfig() {
         RtkConfig cfg = new RtkConfig();
-        cfg.enableSnrMedian = true;
-        cfg.enableIggiii = true;
-        cfg.enableParamTypeNoise = true;
-        cfg.atmFrozenNsThresh = 7;
+        cfg.rtk.enableSnrMedian = true;
+        cfg.rtk.enableIggiii = true;
+        cfg.common.enableParamTypeNoise = true;
+        cfg.common.atmFrozenNsThresh = 7;
         return cfg;
     }
 

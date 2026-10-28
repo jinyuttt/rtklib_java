@@ -150,7 +150,7 @@ public class UrbanCanyonSppOptTest {
         List<SppResult> results = new ArrayList<>();
         SppEkfState ekfState = null;
 
-        if (cfg != null && cfg.enableSppEkf) {
+        if (cfg != null && cfg.spp.enableEkf) {
             int nxF = SppEkfState.computeNxF(opt);
             ekfState = new SppEkfState(nxF);
         }
@@ -231,21 +231,21 @@ public class UrbanCanyonSppOptTest {
         List<SppResult> baseline = runSpp(epochs, nav, opt, null);
 
         RtkConfig cfgEkf = new RtkConfig();
-        cfgEkf.enableSppEkf = true;
+        cfgEkf.spp.enableEkf = true;
         log.info("--- EKF-SPP ---");
         List<SppResult> ekf = runSpp(epochs, nav, opt, cfgEkf);
 
         RtkConfig cfgEkfRobust = new RtkConfig();
-        cfgEkfRobust.enableSppEkf = true;
-        cfgEkfRobust.enableSppRobust = true;
+        cfgEkfRobust.spp.enableEkf = true;
+        cfgEkfRobust.spp.enableRobust = true;
         log.info("--- EKF-SPP + 抗差 ---");
         List<SppResult> ekfRobust = runSpp(epochs, nav, opt, cfgEkfRobust);
 
         RtkConfig cfgFull = new RtkConfig();
-        cfgFull.enableSppEkf = true;
-        cfgFull.enableSppRobust = true;
-        cfgFull.enableSppZeroVel = true;
-        cfgFull.enableSppDopplerSnr = true;
+        cfgFull.spp.enableEkf = true;
+        cfgFull.spp.enableRobust = true;
+        cfgFull.spp.enableZeroVel = true;
+        cfgFull.spp.enableDopplerSnr = true;
         log.info("--- EKF + 抗差 + 零速 + SNR ---");
         List<SppResult> full = runSpp(epochs, nav, opt, cfgFull);
 
@@ -350,26 +350,26 @@ public class UrbanCanyonSppOptTest {
         PrcOpt opt = createOpt();
 
         RtkConfig cfgBase = new RtkConfig();
-        cfgBase.enableSppEkf = true;
-        cfgBase.enableSppRobust = true;
+        cfgBase.spp.enableEkf = true;
+        cfgBase.spp.enableRobust = true;
         List<SppResult> base = runSpp(epochs, nav, opt, cfgBase);
 
         RtkConfig cfgNoInnov = new RtkConfig();
-        cfgNoInnov.enableSppEkf = true;
-        cfgNoInnov.enableSppRobust = true;
-        cfgNoInnov.enableSppInnovChisq = false;
+        cfgNoInnov.spp.enableEkf = true;
+        cfgNoInnov.spp.enableRobust = true;
+        cfgNoInnov.spp.enableInnovChisq = false;
         List<SppResult> noInnov = runSpp(epochs, nav, opt, cfgNoInnov);
 
         RtkConfig cfgZeroVel = new RtkConfig();
-        cfgZeroVel.enableSppEkf = true;
-        cfgZeroVel.enableSppRobust = true;
-        cfgZeroVel.enableSppZeroVel = true;
+        cfgZeroVel.spp.enableEkf = true;
+        cfgZeroVel.spp.enableRobust = true;
+        cfgZeroVel.spp.enableZeroVel = true;
         List<SppResult> withZeroVel = runSpp(epochs, nav, opt, cfgZeroVel);
 
         RtkConfig cfgDopplerSnr = new RtkConfig();
-        cfgDopplerSnr.enableSppEkf = true;
-        cfgDopplerSnr.enableSppRobust = true;
-        cfgDopplerSnr.enableSppDopplerSnr = true;
+        cfgDopplerSnr.spp.enableEkf = true;
+        cfgDopplerSnr.spp.enableRobust = true;
+        cfgDopplerSnr.spp.enableDopplerSnr = true;
         List<SppResult> withDopplerSnr = runSpp(epochs, nav, opt, cfgDopplerSnr);
 
         double[] sBase = computeRms(base, ds.refLat, ds.refLon);

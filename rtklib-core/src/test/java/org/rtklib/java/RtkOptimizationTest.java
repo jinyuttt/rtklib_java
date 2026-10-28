@@ -76,82 +76,82 @@ public class RtkOptimizationTest {
 
         // 0. 基准（无优化，AR开启）
         optimizations.add(new AbstractMap.SimpleEntry<>("0_Base_AR", cfg -> {
-            cfg.enableParRefReselect = false;
-            cfg.enableAdaptiveQ = false;
-            cfg.enableIggiii = false;
-            cfg.enableSnrMedian = false;
-            cfg.enableIonoTropGradient = false;
-            cfg.enableAmbAnchor = false;
+            cfg.common.enableParRefReselect = false;
+            cfg.rtk.enableAdaptiveQ = false;
+            cfg.rtk.enableIggiii = false;
+            cfg.rtk.enableSnrMedian = false;
+            cfg.rtk.enableIonoTropGradient = false;
+            cfg.rtk.enableAmbAnchor = false;
         }));
 
         // 1. PAR重选
         optimizations.add(new AbstractMap.SimpleEntry<>("1_PAR_RefReselect", cfg -> {
-            cfg.enableParRefReselect = true;
-            cfg.enableAdaptiveQ = false;
-            cfg.enableIggiii = false;
-            cfg.enableSnrMedian = false;
-            cfg.enableIonoTropGradient = false;
-            cfg.enableAmbAnchor = false;
+            cfg.common.enableParRefReselect = true;
+            cfg.rtk.enableAdaptiveQ = false;
+            cfg.rtk.enableIggiii = false;
+            cfg.rtk.enableSnrMedian = false;
+            cfg.rtk.enableIonoTropGradient = false;
+            cfg.rtk.enableAmbAnchor = false;
         }));
 
         // 2. 自适应Q矩阵
         optimizations.add(new AbstractMap.SimpleEntry<>("2_AdaptiveQ", cfg -> {
-            cfg.enableParRefReselect = false;
-            cfg.enableAdaptiveQ = true;
-            cfg.enableIggiii = false;
-            cfg.enableSnrMedian = false;
-            cfg.enableIonoTropGradient = false;
-            cfg.enableAmbAnchor = false;
+            cfg.common.enableParRefReselect = false;
+            cfg.rtk.enableAdaptiveQ = true;
+            cfg.rtk.enableIggiii = false;
+            cfg.rtk.enableSnrMedian = false;
+            cfg.rtk.enableIonoTropGradient = false;
+            cfg.rtk.enableAmbAnchor = false;
         }));
 
         // 3. IGGIII抗差估计
         optimizations.add(new AbstractMap.SimpleEntry<>("3_IGGIII", cfg -> {
-            cfg.enableParRefReselect = false;
-            cfg.enableAdaptiveQ = false;
-            cfg.enableIggiii = true;
-            cfg.enableSnrMedian = false;
-            cfg.enableIonoTropGradient = false;
-            cfg.enableAmbAnchor = false;
+            cfg.common.enableParRefReselect = false;
+            cfg.rtk.enableAdaptiveQ = false;
+            cfg.rtk.enableIggiii = true;
+            cfg.rtk.enableSnrMedian = false;
+            cfg.rtk.enableIonoTropGradient = false;
+            cfg.rtk.enableAmbAnchor = false;
         }));
 
         // 4. SNR中值滤波
         optimizations.add(new AbstractMap.SimpleEntry<>("4_SNR_Median", cfg -> {
-            cfg.enableParRefReselect = false;
-            cfg.enableAdaptiveQ = false;
-            cfg.enableIggiii = false;
-            cfg.enableSnrMedian = true;
-            cfg.enableIonoTropGradient = false;
-            cfg.enableAmbAnchor = false;
+            cfg.common.enableParRefReselect = false;
+            cfg.rtk.enableAdaptiveQ = false;
+            cfg.rtk.enableIggiii = false;
+            cfg.rtk.enableSnrMedian = true;
+            cfg.rtk.enableIonoTropGradient = false;
+            cfg.rtk.enableAmbAnchor = false;
         }));
 
         // 5. 电离层/对流层梯度
         optimizations.add(new AbstractMap.SimpleEntry<>("5_IonoTropGradient", cfg -> {
-            cfg.enableParRefReselect = false;
-            cfg.enableAdaptiveQ = false;
-            cfg.enableIggiii = false;
-            cfg.enableSnrMedian = false;
-            cfg.enableIonoTropGradient = true;
-            cfg.enableAmbAnchor = false;
+            cfg.common.enableParRefReselect = false;
+            cfg.rtk.enableAdaptiveQ = false;
+            cfg.rtk.enableIggiii = false;
+            cfg.rtk.enableSnrMedian = false;
+            cfg.rtk.enableIonoTropGradient = true;
+            cfg.rtk.enableAmbAnchor = false;
         }));
 
         // 6. 模糊度锚定
         optimizations.add(new AbstractMap.SimpleEntry<>("6_AmbAnchor", cfg -> {
-            cfg.enableParRefReselect = false;
-            cfg.enableAdaptiveQ = false;
-            cfg.enableIggiii = false;
-            cfg.enableSnrMedian = false;
-            cfg.enableIonoTropGradient = false;
-            cfg.enableAmbAnchor = true;
+            cfg.common.enableParRefReselect = false;
+            cfg.rtk.enableAdaptiveQ = false;
+            cfg.rtk.enableIggiii = false;
+            cfg.rtk.enableSnrMedian = false;
+            cfg.rtk.enableIonoTropGradient = false;
+            cfg.rtk.enableAmbAnchor = true;
         }));
 
         // 7. 全部优化
         optimizations.add(new AbstractMap.SimpleEntry<>("7_AllOptimizations", cfg -> {
-            cfg.enableParRefReselect = true;
-            cfg.enableAdaptiveQ = true;
-            cfg.enableIggiii = true;
-            cfg.enableSnrMedian = true;
-            cfg.enableIonoTropGradient = true;
-            cfg.enableAmbAnchor = true;
+            cfg.common.enableParRefReselect = true;
+            cfg.rtk.enableAdaptiveQ = true;
+            cfg.rtk.enableIggiii = true;
+            cfg.rtk.enableSnrMedian = true;
+            cfg.rtk.enableIonoTropGradient = true;
+            cfg.rtk.enableAmbAnchor = true;
         }));
 
         List<OptResult> results = new ArrayList<>();

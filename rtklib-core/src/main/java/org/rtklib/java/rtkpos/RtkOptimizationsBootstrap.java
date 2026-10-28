@@ -35,7 +35,7 @@ public final class RtkOptimizationsBootstrap {
 
     public static boolean validateFix(Rtk rtk, double[] bias, int nb) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enableBootstrapping) return true;
+        if (!cfg.rtk.enableBootstrapping) return true;
 
         if (nb < 1) return false;
 
@@ -48,10 +48,10 @@ public final class RtkOptimizationsBootstrap {
 
         double successRate = computeSuccessRate(a, Qb, nb);
 
-        boolean passed = successRate >= cfg.bootstrappingMinSuccess;
+        boolean passed = successRate >= cfg.rtk.bootstrappingMinSuccess;
         if (!passed) {
             LOG.debug("Bootstrap rejected: successRate={:.4f} < min={:.4f} nb={}",
-                    successRate, cfg.bootstrappingMinSuccess, nb);
+                    successRate, cfg.rtk.bootstrappingMinSuccess, nb);
         }
         return passed;
     }

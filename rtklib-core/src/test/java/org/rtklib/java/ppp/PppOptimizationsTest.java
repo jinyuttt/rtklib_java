@@ -18,22 +18,22 @@ public class PppOptimizationsTest {
 
     @Test
     void testGpt3Vmf3DisabledByDefault() {
-        assertFalse(cfg.enableGpt3Vmf3);
+        assertFalse(cfg.ppp.enableGpt3Vmf3);
     }
 
     @Test
     void testIers2010DisabledByDefault() {
-        assertFalse(cfg.enableIers2010);
+        assertFalse(cfg.ppp.enableIers2010);
     }
 
     @Test
     void testIsbIfcbIfbDisabledByDefault() {
-        assertFalse(cfg.enableIsbIfcbIfb);
+        assertFalse(cfg.ppp.enableIsbIfcbIfb);
     }
 
     @Test
     void testPppArDisabledByDefault() {
-        assertFalse(cfg.enablePppAR);
+        assertFalse(cfg.pppAr.enableAR);
     }
 
     @Test
@@ -54,7 +54,7 @@ public class PppOptimizationsTest {
 
     @Test
     void testGpt3Vmf3ReturnsValueWhenEnabled() {
-        cfg.enableGpt3Vmf3 = true;
+        cfg.ppp.enableGpt3Vmf3 = true;
 
         GTime time = new GTime();
         time.time = 1000000;
@@ -85,7 +85,7 @@ public class PppOptimizationsTest {
 
     @Test
     void testIers2010ReturnsValueWhenEnabled() {
-        cfg.enableIers2010 = true;
+        cfg.ppp.enableIers2010 = true;
 
         GTime time = new GTime();
         time.time = 1000000;
@@ -102,28 +102,28 @@ public class PppOptimizationsTest {
 
     @Test
     void testConfigCopyConstructor() {
-        cfg.enableGpt3Vmf3 = true;
-        cfg.enableIers2010 = true;
-        cfg.enableIsbIfcbIfb = true;
-        cfg.enablePppAR = true;
-        cfg.gpt3GridFile = "/path/to/gpt3.dat";
-        cfg.pppArRatioWl = 3.0;
-        cfg.pppArRatioNl = 4.0;
-        cfg.estimateIsb = false;
-        cfg.estimateIfcb = false;
-        cfg.estimateIfb = false;
+        cfg.ppp.enableGpt3Vmf3 = true;
+        cfg.ppp.enableIers2010 = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
+        cfg.pppAr.enableAR = true;
+        cfg.ppp.gpt3GridFile = "/path/to/gpt3.dat";
+        cfg.pppAr.arRatioWl = 3.0;
+        cfg.pppAr.arRatioNl = 4.0;
+        cfg.ppp.estimateIsb = false;
+        cfg.ppp.estimateIfcb = false;
+        cfg.ppp.estimateIfb = false;
 
         RtkConfig copy = new RtkConfig(cfg);
-        assertTrue(copy.enableGpt3Vmf3);
-        assertTrue(copy.enableIers2010);
-        assertTrue(copy.enableIsbIfcbIfb);
-        assertTrue(copy.enablePppAR);
-        assertEquals("/path/to/gpt3.dat", copy.gpt3GridFile);
-        assertEquals(3.0, copy.pppArRatioWl);
-        assertEquals(4.0, copy.pppArRatioNl);
-        assertFalse(copy.estimateIsb);
-        assertFalse(copy.estimateIfcb);
-        assertFalse(copy.estimateIfb);
+        assertTrue(copy.ppp.enableGpt3Vmf3);
+        assertTrue(copy.ppp.enableIers2010);
+        assertTrue(copy.ppp.enableIsbIfcbIfb);
+        assertTrue(copy.pppAr.enableAR);
+        assertEquals("/path/to/gpt3.dat", copy.ppp.gpt3GridFile);
+        assertEquals(3.0, copy.pppAr.arRatioWl);
+        assertEquals(4.0, copy.pppAr.arRatioNl);
+        assertFalse(copy.ppp.estimateIsb);
+        assertFalse(copy.ppp.estimateIfcb);
+        assertFalse(copy.ppp.estimateIfb);
     }
 
     @Test
@@ -133,7 +133,7 @@ public class PppOptimizationsTest {
 
     @Test
     void testPppBiasModelExtraDimWhenEnabled() {
-        cfg.enableIsbIfcbIfb = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
         int dim = PppBiasModel.extraDim(cfg);
         int expected = 3 + Constants.MAXSAT + 4;
         assertEquals(expected, dim, "Extra dim should be ISB(3) + IFCB(MAXSAT) + IFB(4)");
@@ -141,20 +141,20 @@ public class PppOptimizationsTest {
 
     @Test
     void testPppBiasModelExtraDimPartial() {
-        cfg.enableIsbIfcbIfb = true;
-        cfg.estimateIsb = true;
-        cfg.estimateIfcb = false;
-        cfg.estimateIfb = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
+        cfg.ppp.estimateIsb = true;
+        cfg.ppp.estimateIfcb = false;
+        cfg.ppp.estimateIfb = true;
         int dim = PppBiasModel.extraDim(cfg);
         assertEquals(3 + 4, dim, "Extra dim should be ISB(3) + IFB(4)");
     }
 
     @Test
     void testPppBiasModelExtraDimIsbOnly() {
-        cfg.enableIsbIfcbIfb = true;
-        cfg.estimateIsb = true;
-        cfg.estimateIfcb = false;
-        cfg.estimateIfb = false;
+        cfg.ppp.enableIsbIfcbIfb = true;
+        cfg.ppp.estimateIsb = true;
+        cfg.ppp.estimateIfcb = false;
+        cfg.ppp.estimateIfb = false;
         int dim = PppBiasModel.extraDim(cfg);
         assertEquals(3, dim, "Extra dim should be ISB(3)");
     }
@@ -170,13 +170,13 @@ public class PppOptimizationsTest {
         rtk.rtkConfig = cfg;
 
         RtkConfig disabledCfg = new RtkConfig();
-        assertFalse(disabledCfg.enableIsbIfcbIfb);
-        assertFalse(disabledCfg.enablePppAR);
+        assertFalse(disabledCfg.ppp.enableIsbIfcbIfb);
+        assertFalse(disabledCfg.pppAr.enableAR);
     }
 
     @Test
     void testPppArRatioDefaults() {
-        assertEquals(2.0, cfg.pppArRatioWl, 1e-10);
-        assertEquals(3.0, cfg.pppArRatioNl, 1e-10);
+        assertEquals(2.0, cfg.pppAr.arRatioWl, 1e-10);
+        assertEquals(3.0, cfg.pppAr.arRatioNl, 1e-10);
     }
 }

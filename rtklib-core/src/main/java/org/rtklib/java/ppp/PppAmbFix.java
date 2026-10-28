@@ -21,7 +21,7 @@ public class PppAmbFix {
     public static int pppAmbFixWlNl(Rtk rtk, double[] bias, double[] xa,
                                      int gps, int glo, int sbs, Nav nav) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enablePppAR) return -1;
+        if (!cfg.pppAr.enableAR) return -1;
         LOG.info("PPP-AR: pppAmbFixWlNl called, epoch={}, nx={}", rtk.epoch, rtk.nx);
 
         PrcOpt opt = rtk.opt;
@@ -223,7 +223,7 @@ public class PppAmbFix {
         for (int i = 0; i < nbWl; i++) {
             double dev = fracs[i] - medFracOf[i];
             dev -= Math.round(dev);
-            if (Math.abs(dev) >= cfg.pppArWlMaxdev) {
+            if (Math.abs(dev) >= cfg.pppAr.arWlMaxdev) {
                 nSkipDev++;
                 continue;
             }
@@ -244,7 +244,7 @@ public class PppAmbFix {
             }
             LOG.info(String.format(Locale.US,
                 "PPP-AR: WL dev gate: maxdev=%.2f rejected=%d med:%s",
-                cfg.pppArWlMaxdev, nSkipDev, medTxt));
+                cfg.pppAr.arWlMaxdev, nSkipDev, medTxt));
         }
         if (nbKeep < 4) {
             LOG.info(String.format(Locale.US,
@@ -316,8 +316,8 @@ public class PppAmbFix {
             wlRatio = sWl[0] > 0 ? sWl[1] / sWl[0] : 0.0;
             LOG.info("PPP-AR: WL nb={} ratio={}", nbWl, String.format("%.2f", wlRatio));
 
-            if (wlRatio < cfg.pppArRatioWl) {
-                LOG.info("PPP-AR: WL ratio too low: {} < {}", String.format("%.2f", wlRatio), cfg.pppArRatioWl);
+            if (wlRatio < cfg.pppAr.arRatioWl) {
+                LOG.info("PPP-AR: WL ratio too low: {} < {}", String.format("%.2f", wlRatio), cfg.pppAr.arRatioWl);
                 return -1;
             }
 
@@ -422,7 +422,7 @@ public class PppAmbFix {
             // shifts the reconstruction by ~3.5 NL cycles, a wrong NL integer by
             // ~1 cycle, while clean satellites stay within ~0.3 cycles — the frac
             // gates are blind to whole-cycle OSB biases (PRN 23/25/26 evidence).
-            if (cfg.enablePppArDeltaGate) {
+            if (cfg.pppAr.enableDeltaGate) {
                 double[] deltas = new double[nbNl];
                 for (int i = 0; i < nbNl; i++) {
                     int sat = satList[i];
@@ -446,16 +446,16 @@ public class PppAmbFix {
                 // Datum self-check (half-cycle bound): the median grid offset must
                 // be small before any fix is applied — applying with a shifted
                 // datum freezes wrong integers (var=0) and poisons the series.
-                if (Math.abs(medDelta) > cfg.pppArDeltaMax) {
+                if (Math.abs(medDelta) > cfg.pppAr.deltaMax) {
                     LOG.info(String.format(Locale.US,
                         "PPP-AR: delta gate datum offset %+.4f > %.2f, skip fix",
-                        medDelta, cfg.pppArDeltaMax));
+                        medDelta, cfg.pppAr.deltaMax));
                     return -1;
                 }
                 int nKeepDelta = 0;
                 for (int i = 0; i < nbNl; i++) {
                     double dev = deltas[i] - medDelta;
-                    if (Math.abs(dev) > cfg.pppArDeltaMax) {
+                    if (Math.abs(dev) > cfg.pppAr.deltaMax) {
                         LOG.info(String.format(Locale.US,
                             "PPP-AR delta gate reject: sat=%d dev=%+.4f cyc",
                             satList[i], dev));
@@ -490,8 +490,8 @@ public class PppAmbFix {
             rtk.sol.ratio = (float) nlRatio;
             LOG.info("PPP-AR: NL nb={} ratio={}", nbNl, String.format("%.2f", nlRatio));
 
-            if (nlRatio < cfg.pppArRatioNl) {
-                LOG.info("PPP-AR: NL ratio too low: {} < {}", String.format("%.2f", nlRatio), cfg.pppArRatioNl);
+            if (nlRatio < cfg.pppAr.arRatioNl) {
+                LOG.info("PPP-AR: NL ratio too low: {} < {}", String.format("%.2f", nlRatio), cfg.pppAr.arRatioNl);
                 return -1;
             }
 
@@ -548,8 +548,8 @@ public class PppAmbFix {
      */
     public static void pppArFixHold(Rtk rtk, Nav nav) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enablePppArFixHold) return;
-        if (rtk.nfix < cfg.pppArFixHoldMinEp) return;
+        if (!cfg.pppAr.enableFixHold) return;
+        if (rtk.nfix < cfg.pppAr.fixHoldMinEp) return;
 
         PrcOpt opt = rtk.opt;
         int nx = rtk.nx;
@@ -564,8 +564,8 @@ public class PppAmbFix {
                 if (idx >= nx) continue;
 
                 double ambVar = rtk.P[idx * nx + idx];
-                if (ambVar > cfg.pppArFixHoldVar) {
-                    PppCore.initx(rtk.x, rtk.P, nx, rtk.x[idx], cfg.pppArFixHoldVar, idx);
+                if (ambVar > cfg.pppAr.fixHoldVar) {
+                    PppCore.initx(rtk.x, rtk.P, nx, rtk.x[idx], cfg.pppAr.fixHoldVar, idx);
                     nFixed++;
                 }
             }
@@ -595,7 +595,7 @@ public class PppAmbFix {
     public static int pppPartialAR(Rtk rtk, double[] bias, double[] xa,
                                     int gps, int glo, int sbs, Nav nav) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enablePppPartialAR) return -1;
+        if (!cfg.pppAr.enablePartialAR) return -1;
 
         PrcOpt opt = rtk.opt;
         int nf = PppCore.NF(opt);
@@ -636,7 +636,7 @@ public class PppAmbFix {
             // sigma): an arc shorter than pppArNlMinsav epochs, or whose weighted
             // arc mean has too large a standard error, is not statistically mature
             // for narrow-lane fixing — the satellite stays in the float solution.
-            if (rtk.ssat[sat - 1].ninl < cfg.pppArNlMinsav || rtk.ssat[sat - 1].rn <= 0.0) {
+            if (rtk.ssat[sat - 1].ninl < cfg.pppAr.arNlMinsav || rtk.ssat[sat - 1].rn <= 0.0) {
                 nSkipNlArc++;
                 continue;
             }
@@ -644,7 +644,7 @@ public class PppAmbFix {
                 double nlMeanArc = rtk.ssat[sat - 1].xrnl / rtk.ssat[sat - 1].rn;
                 double nlVarArc = rtk.ssat[sat - 1].xsnl / rtk.ssat[sat - 1].rn - nlMeanArc * nlMeanArc;
                 if (nlVarArc > 0.0 && Math.sqrt(nlVarArc) / Math.sqrt(rtk.ssat[sat - 1].ninl - 1)
-                    > cfg.pppArNlMaxsig) {
+                    > cfg.pppAr.arNlMaxsig) {
                     nSkipNlSig++;
                     continue;
                 }
@@ -671,7 +671,7 @@ public class PppAmbFix {
             LOG.info(String.format(Locale.US,
                 "PPP Partial AR: NL arc gates: skipArc=%d skipSig=%d", nSkipNlArc, nSkipNlSig));
         }
-        if (nb < cfg.pppPartialArMinSats) {
+        if (nb < cfg.pppAr.partialArMinSats) {
             LOG.info("PPP Partial AR: too few candidates: nb={}", nb);
             return -1;
         }
@@ -737,10 +737,10 @@ public class PppAmbFix {
         for (int i = 0; i < nb; i++) {
             double dev = fracsCand[i] - medCand;
             dev -= Math.round(dev);
-            if (Math.abs(dev) >= cfg.pppArWlMaxdev) continue;
+            if (Math.abs(dev) >= cfg.pppAr.arWlMaxdev) continue;
             double devNl = frNl[i] - medNl;
             devNl -= Math.round(devNl);
-            if (Math.abs(devNl) >= cfg.pppArNlMaxdev) {
+            if (Math.abs(devNl) >= cfg.pppAr.arNlMaxdev) {
                 nSkipNlDev++;
                 continue;
             }
@@ -753,10 +753,10 @@ public class PppAmbFix {
         if (nbKeep < nb) {
             LOG.info(String.format(Locale.US,
                 "PPP Partial AR: WL/NL dev gates: med=%+.3f/%+.3f maxdev=%.2f/%.2f rejected=%d (nl=%d)",
-                medCand, medNl, cfg.pppArWlMaxdev, cfg.pppArNlMaxdev,
+                medCand, medNl, cfg.pppAr.arWlMaxdev, cfg.pppAr.arNlMaxdev,
                 nb - nbKeep, nSkipNlDev));
         }
-        if (nbKeep < cfg.pppPartialArMinSats) {
+        if (nbKeep < cfg.pppAr.partialArMinSats) {
             LOG.info("PPP Partial AR: too few candidates after dev gate: kept={}", nbKeep);
             return -1;
         }
@@ -788,7 +788,7 @@ public class PppAmbFix {
             LOG.info(String.format(Locale.US,
                 "PPP Partial AR: WL rounding nb=%d nFixed=%d maxFrac=%.4f",
                 nb, nbWlKeep, maxFracWl));
-            if (nbWlKeep < cfg.pppPartialArMinSats) {
+            if (nbWlKeep < cfg.pppAr.partialArMinSats) {
                 LOG.info("PPP Partial AR: too few WL fixed (rounding): {}", nbWlKeep);
                 return -1;
             }
@@ -841,7 +841,7 @@ public class PppAmbFix {
             LOG.info(String.format(Locale.US,
                 "PPP Partial AR: NL rounding nb=%d nFixed=%d medNl=%+.4f maxFrac=%.4f",
                 nbWlKeep, nNlFixed, medNl2, maxFracNl));
-            if (nNlFixed < cfg.pppPartialArMinSats) {
+            if (nNlFixed < cfg.pppAr.partialArMinSats) {
                 LOG.info("PPP Partial AR: too few NL fixed (rounding): {}", nNlFixed);
                 return -1;
             }
@@ -853,7 +853,7 @@ public class PppAmbFix {
             // reconstructed ambiguity deviates from the float state by more than
             // pppArDeltaMax NL cycles from the ensemble median (whole-cycle WL/NL
             // integer errors are invisible to the frac gates).
-            if (cfg.enablePppArDeltaGate) {
+            if (cfg.pppAr.enableDeltaGate) {
                 double[] deltas = new double[nNlFixed];
                 for (int i = 0; i < nNlFixed; i++) {
                     int sat = satList[i];
@@ -876,16 +876,16 @@ public class PppAmbFix {
                     : 0.5 * (sortedDelta[nNlFixed / 2 - 1] + sortedDelta[nNlFixed / 2]);
                 // Datum self-check (half-cycle bound), same rationale as the
                 // main path IFLC branch: never fix with a shifted datum.
-                if (Math.abs(medDelta) > cfg.pppArDeltaMax) {
+                if (Math.abs(medDelta) > cfg.pppAr.deltaMax) {
                     LOG.info(String.format(Locale.US,
                         "PPP Partial AR: delta gate datum offset %+.4f > %.2f, skip fix",
-                        medDelta, cfg.pppArDeltaMax));
+                        medDelta, cfg.pppAr.deltaMax));
                     return -1;
                 }
                 int nKeepDelta = 0;
                 for (int i = 0; i < nNlFixed; i++) {
                     double dev = deltas[i] - medDelta;
-                    if (Math.abs(dev) > cfg.pppArDeltaMax) {
+                    if (Math.abs(dev) > cfg.pppAr.deltaMax) {
                         LOG.info(String.format(Locale.US,
                             "PPP Partial AR delta gate reject: sat=%d dev=%+.4f cyc",
                             satList[i], dev));
@@ -901,7 +901,7 @@ public class PppAmbFix {
                 LOG.info(String.format(Locale.US,
                     "PPP Partial AR: delta gate nb=%d nKeep=%d medDelta=%+.4f",
                     nNlFixed, nKeepDelta, medDelta));
-                if (nKeepDelta < cfg.pppPartialArMinSats) {
+                if (nKeepDelta < cfg.pppAr.partialArMinSats) {
                     LOG.info("PPP Partial AR: too few ambiguities after delta gate: {}",
                         nKeepDelta);
                     return -1;
@@ -944,8 +944,8 @@ public class PppAmbFix {
         int[] bestPerm = new int[nb];
         double bestNlRatio = 0.0;
 
-        for (int nTry = nb; nTry >= cfg.pppPartialArMinSats; nTry--) {
-            if (nb - nTry > cfg.pppPartialArMaxTries) break;
+        for (int nTry = nb; nTry >= cfg.pppAr.partialArMinSats; nTry--) {
+            if (nb - nTry > cfg.pppAr.partialArMaxTries) break;
 
             int[] subIdx = new int[nTry];
             for (int i = 0; i < nTry; i++) subIdx[i] = perm[i];
@@ -996,7 +996,7 @@ public class PppAmbFix {
             if (info != 0) continue;
 
             double wlRatio = sWl[0] > 0 ? sWl[1] / sWl[0] : 0.0;
-            if (wlRatio < cfg.pppPartialArMinRatio) continue;
+            if (wlRatio < cfg.pppAr.partialArMinRatio) continue;
 
             int[] wlFixed = new int[nTry];
             int nWlOk = 0;
@@ -1041,7 +1041,7 @@ public class PppAmbFix {
             if (info != 0) continue;
 
             double nlRatio = sNl[0] > 0 ? sNl[1] / sNl[0] : 0.0;
-            if (nlRatio < cfg.pppPartialArMinRatio) continue;
+            if (nlRatio < cfg.pppAr.partialArMinRatio) continue;
 
             int[] nlFixed = new int[nTry];
             for (int i = 0; i < nTry; i++) nlFixed[i] = (int) Math.round(bNl[i * 2]);
@@ -1059,7 +1059,7 @@ public class PppAmbFix {
             break;
         }
 
-        if (nBestTotal < cfg.pppPartialArMinSats) {
+        if (nBestTotal < cfg.pppAr.partialArMinSats) {
             LOG.info("PPP Partial AR: no valid subset found (best={})", nBestTotal);
             return -1;
         }
@@ -1312,7 +1312,7 @@ public class PppAmbFix {
     public static int pppAmbFixEwlWlNl(Rtk rtk, double[] bias, double[] xa,
                                          int gps, int glo, int sbs, Nav nav) {
         RtkConfig cfg = rtk.rtkConfig;
-        if (!cfg.enableMultiFreqAR) return -1;
+        if (!cfg.pppAr.enableMultiFreqAR) return -1;
         LOG.info("PPP-AR: pppAmbFixEwlWlNl called, epoch={}, nx={}", rtk.epoch, rtk.nx);
 
         PrcOpt opt = rtk.opt;
@@ -1539,8 +1539,8 @@ public class PppAmbFix {
             wlRatio = sWl[0] > 0 ? sWl[1] / sWl[0] : 0.0;
             LOG.info("PPP-AR 3F: WL nb={} ratio={}", nb, String.format("%.2f", wlRatio));
 
-            if (wlRatio < cfg.pppArRatioWl) {
-                LOG.info("PPP-AR 3F: WL ratio too low: {} < {}", String.format("%.2f", wlRatio), cfg.pppArRatioWl);
+            if (wlRatio < cfg.pppAr.arRatioWl) {
+                LOG.info("PPP-AR 3F: WL ratio too low: {} < {}", String.format("%.2f", wlRatio), cfg.pppAr.arRatioWl);
                 return -1;
             }
 
@@ -1658,8 +1658,8 @@ public class PppAmbFix {
             rtk.sol.ratio = (float) nlRatio;
             LOG.info("PPP-AR 3F: NL nb={} ratio={}", nb, String.format("%.2f", nlRatio));
 
-            if (nlRatio < cfg.pppArRatioNl) {
-                LOG.info("PPP-AR 3F: NL ratio too low: {} < {}", String.format("%.2f", nlRatio), cfg.pppArRatioNl);
+            if (nlRatio < cfg.pppAr.arRatioNl) {
+                LOG.info("PPP-AR 3F: NL ratio too low: {} < {}", String.format("%.2f", nlRatio), cfg.pppAr.arRatioNl);
                 return -1;
             }
 
@@ -1705,7 +1705,7 @@ public class PppAmbFix {
         // reconstruction by ~1-3.5 NL cycles and would be frozen into the
         // filter via initx(var=0). Guarded to the IFLC reconstruction (the
         // dual-freq sub-path keeps its ratio tests), off by default.
-        if (cfg.enablePppArDeltaGate && opt.ionoopt == Constants.IONOOPT_IFLC) {
+        if (cfg.pppAr.enableDeltaGate && opt.ionoopt == Constants.IONOOPT_IFLC) {
             double[] deltas = new double[nb];
             for (int i = 0; i < nb; i++) {
                 int sat = satList[i];
@@ -1728,16 +1728,16 @@ public class PppAmbFix {
                 : 0.5 * (sortedDelta[nb / 2 - 1] + sortedDelta[nb / 2]);
             // Datum self-check (half-cycle bound): applying with a shifted
             // datum freezes wrong integers (var=0) and poisons the series.
-            if (Math.abs(medDelta) > cfg.pppArDeltaMax) {
+            if (Math.abs(medDelta) > cfg.pppAr.deltaMax) {
                 LOG.info(String.format(Locale.US,
                     "PPP-AR 3F: delta gate datum offset %+.4f > %.2f, skip fix",
-                    medDelta, cfg.pppArDeltaMax));
+                    medDelta, cfg.pppAr.deltaMax));
                 return -1;
             }
             int nKeepDelta = 0;
             for (int i = 0; i < nb; i++) {
                 double dev = deltas[i] - medDelta;
-                if (Math.abs(dev) > cfg.pppArDeltaMax) {
+                if (Math.abs(dev) > cfg.pppAr.deltaMax) {
                     LOG.info(String.format(Locale.US,
                         "PPP-AR 3F delta gate reject: sat=%d dev=%+.4f cyc",
                         satList[i], dev));

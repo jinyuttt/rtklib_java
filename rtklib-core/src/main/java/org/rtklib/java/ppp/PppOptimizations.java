@@ -25,7 +25,7 @@ public class PppOptimizations {
     public static double tropoDelayGpt3Vmf3(GTime time, double[] pos, double[] azel,
                                              double[] x, double[] dtdx, double[] var,
                                              RtkConfig cfg, Nav nav) {
-        if (!cfg.enableGpt3Vmf3) {
+        if (!cfg.ppp.enableGpt3Vmf3) {
             return Double.NaN;
         }
 
@@ -286,7 +286,7 @@ public class PppOptimizations {
     public static double[] tideDisplacementIers2010(GTime tutc, double[] rr, int opt,
                                                      Erp erp, double[][][] odisp,
                                                      RtkConfig cfg) {
-        if (!cfg.enableIers2010) {
+        if (!cfg.ppp.enableIers2010) {
             return null;
         }
 

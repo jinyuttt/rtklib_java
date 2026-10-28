@@ -206,7 +206,7 @@ public class JointRtkRealDataTest {
                 result.solutions.size(), fix, flt, sng, result.successCount, result.failCount);
 
         System.out.println("\n--- 3. 联合RTK 双基线（基站A坐标外部修正） [FIX-ALG-042验证] ---");
-        // GS2025090017 的 RTCM 1005 坐标存在 4.77m 误差（诊断器静态解），外部注入修正坐标
+        // 基站的 RTCM 1005 坐标存在 4.77m 误差（诊断器静态解），外部注入修正坐标
         // 验证双基线 FIX=0% 的根因是否为基站坐标矛盾
         PrcOpt optFixed = createJointOpt();
         optFixed.refpos = Constants.POSOPT_POS_XYZ;

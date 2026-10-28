@@ -16,106 +16,106 @@ class RtkOptimizationsConfigTest {
     @DisplayName("R2: Ambiguity anchor default disabled")
     void testAmbAnchorDefaultOff() {
         RtkConfig cfg = new RtkConfig();
-        assertFalse(cfg.enableAmbAnchor, "enableAmbAnchor should be false by default");
+        assertFalse(cfg.rtk.enableAmbAnchor, "enableAmbAnchor should be false by default");
     }
 
     @Test
     @DisplayName("R2: Ambiguity anchor can be enabled")
     void testAmbAnchorEnabled() {
         RtkConfig cfg = new RtkConfig();
-        cfg.enableAmbAnchor = true;
-        assertTrue(cfg.enableAmbAnchor);
+        cfg.rtk.enableAmbAnchor = true;
+        assertTrue(cfg.rtk.enableAmbAnchor);
 
         Rtk rtk = new Rtk();
         rtk.rtkConfig = cfg;
         rtk.opt = new PrcOpt();
         rtk.opt.modear = Constants.ARMODE_FIXHOLD;
 
-        assertTrue(rtk.rtkConfig.enableAmbAnchor);
+        assertTrue(rtk.rtkConfig.rtk.enableAmbAnchor);
     }
 
     @Test
     @DisplayName("R3: Atmosphere frozen threshold default")
     void testAtmFrozenDefault() {
         RtkConfig cfg = new RtkConfig();
-        assertEquals(7, cfg.atmFrozenNsThresh, "atmFrozenNsThresh default should be 7");
+        assertEquals(7, cfg.common.atmFrozenNsThresh, "atmFrozenNsThresh default should be 7");
     }
 
     @Test
     @DisplayName("R3: Atmosphere frozen threshold can be configured")
     void testAtmFrozenConfigurable() {
         RtkConfig cfg = new RtkConfig();
-        cfg.atmFrozenNsThresh = 5;
-        assertEquals(5, cfg.atmFrozenNsThresh);
+        cfg.common.atmFrozenNsThresh = 5;
+        assertEquals(5, cfg.common.atmFrozenNsThresh);
 
-        cfg.atmFrozenNsThresh = 0;
-        assertEquals(0, cfg.atmFrozenNsThresh, "0 means disabled");
+        cfg.common.atmFrozenNsThresh = 0;
+        assertEquals(0, cfg.common.atmFrozenNsThresh, "0 means disabled");
     }
 
     @Test
     @DisplayName("R3: Atmosphere frozen triggers when ns < threshold")
     void testAtmFrozenTriggerCondition() {
         RtkConfig cfg = new RtkConfig();
-        cfg.atmFrozenNsThresh = 5;
+        cfg.common.atmFrozenNsThresh = 5;
 
         Rtk rtk = new Rtk();
         rtk.rtkConfig = cfg;
         rtk.opt = new PrcOpt();
 
-        assertTrue(4 < cfg.atmFrozenNsThresh, "ns=4 < thresh=5 should trigger frozen");
-        assertFalse(6 < cfg.atmFrozenNsThresh, "ns=6 >= thresh=5 should not trigger frozen");
+        assertTrue(4 < cfg.common.atmFrozenNsThresh, "ns=4 < thresh=5 should trigger frozen");
+        assertFalse(6 < cfg.common.atmFrozenNsThresh, "ns=6 >= thresh=5 should not trigger frozen");
     }
 
     @Test
     @DisplayName("R6: PAR reference reselect default disabled")
     void testParRefReselectDefaultOff() {
         RtkConfig cfg = new RtkConfig();
-        assertFalse(cfg.enableParRefReselect, "enableParRefReselect should be false by default");
+        assertFalse(cfg.common.enableParRefReselect, "enableParRefReselect should be false by default");
     }
 
     @Test
     @DisplayName("R6: PAR reference reselect can be enabled")
     void testParRefReselectEnabled() {
         RtkConfig cfg = new RtkConfig();
-        cfg.enableParRefReselect = true;
-        assertTrue(cfg.enableParRefReselect);
+        cfg.common.enableParRefReselect = true;
+        assertTrue(cfg.common.enableParRefReselect);
     }
 
     @Test
     @DisplayName("R7: Iono/Trop gradient default disabled")
     void testIonoTropGradientDefaultOff() {
         RtkConfig cfg = new RtkConfig();
-        assertFalse(cfg.enableIonoTropGradient, "enableIonoTropGradient should be false by default");
+        assertFalse(cfg.rtk.enableIonoTropGradient, "enableIonoTropGradient should be false by default");
     }
 
     @Test
     @DisplayName("R7: Iono/Trop gradient can be enabled for long baseline")
     void testIonoTropGradientEnabled() {
         RtkConfig cfg = new RtkConfig();
-        cfg.enableIonoTropGradient = true;
-        assertTrue(cfg.enableIonoTropGradient);
+        cfg.rtk.enableIonoTropGradient = true;
+        assertTrue(cfg.rtk.enableIonoTropGradient);
     }
 
     @Test
     @DisplayName("R13: Parameter type noise default disabled")
     void testParamTypeNoiseDefaultOff() {
         RtkConfig cfg = new RtkConfig();
-        assertFalse(cfg.enableParamTypeNoise, "enableParamTypeNoise should be false by default");
+        assertFalse(cfg.common.enableParamTypeNoise, "enableParamTypeNoise should be false by default");
     }
 
     @Test
     @DisplayName("R13: Parameter type noise can be enabled")
     void testParamTypeNoiseEnabled() {
         RtkConfig cfg = new RtkConfig();
-        cfg.enableParamTypeNoise = true;
-        assertTrue(cfg.enableParamTypeNoise);
+        cfg.common.enableParamTypeNoise = true;
+        assertTrue(cfg.common.enableParamTypeNoise);
     }
 
     @Test
     @DisplayName("R13: applyParamTypeNoise with identity-like P should not crash")
     void testParamTypeNoiseIdentityP() {
         RtkConfig cfg = new RtkConfig();
-        cfg.enableParamTypeNoise = true;
+        cfg.common.enableParamTypeNoise = true;
 
         Rtk rtk = new Rtk();
         rtk.rtkConfig = cfg;

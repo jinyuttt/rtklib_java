@@ -131,7 +131,7 @@ public class PppValidationTest {
      * 实际仅 GPS 参与解算；开启后多系统 PPP 可用性显著改善，见 FIX-ALG-011） */
     private static RtkConfig createPppConfig() {
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppIsbClockInit = true;
+        cfg.ppp.enableIsbClockInit = true;
         return cfg;
     }
 
@@ -176,7 +176,7 @@ public class PppValidationTest {
      * 首历元对刚初始化的 bias/ion 状态跳过相位 prefit 剔除，解除 C 固有死锁） */
     private static RtkConfig createPppConfigIonoEstRobust() {
         RtkConfig cfg = createPppConfig();
-        cfg.enableIonoEstRobust = true;
+        cfg.ppp.enableIonoEstRobust = true;
         log.info("[调参配置] enableIonoEstRobust=true (EST 首历元健壮初始化)");
         return cfg;
     }
@@ -191,15 +191,15 @@ public class PppValidationTest {
 
     private static RtkConfig createPppConfigIsb() {
         RtkConfig cfg = createPppConfig();
-        cfg.enableIsbIfcbIfb = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
         log.info("[调参配置] enableIsbIfcbIfb=true (ISB/IFCB/IFB偏差估计)");
         return cfg;
     }
 
     private static RtkConfig createPppConfigIers2010() {
         RtkConfig cfg = createPppConfig();
-        cfg.enableIers2010 = true;
-        cfg.enableAt1S2 = true;
+        cfg.ppp.enableIers2010 = true;
+        cfg.ppp.enableAt1S2 = true;
         log.info("[调参配置] enableIers2010=true, enableAt1S2=true");
         return cfg;
     }
@@ -480,7 +480,7 @@ public class PppValidationTest {
     @DisplayName("3.8 优化项: ISB/IFCB/IFB偏差估计 (IFLC+ISB耦合恶化N/U, 改用EST)")
     void testOptIsb() {
         RtkConfig cfg = createPppConfigIsb();
-        cfg.enableIonoEstRobust = true;
+        cfg.ppp.enableIonoEstRobust = true;
         evaluatePppAccuracy(createPppOptIonEst(), cfg, "ISB+EST");
     }
 
@@ -488,7 +488,7 @@ public class PppValidationTest {
     @DisplayName("3.9 优化项: ISB + 非组合PPP + 多系统")
     void testOptIsbIonEst() {
         RtkConfig cfg = createPppConfigIsb();
-        cfg.enableIonoEstRobust = true;
+        cfg.ppp.enableIonoEstRobust = true;
         evaluatePppAccuracy(createPppOptIonEstMultiSys(), cfg, "ISB+EST+Multi");
     }
 
@@ -509,7 +509,7 @@ public class PppValidationTest {
     @DisplayName("3.12 优化项: IERS2010 + 非组合PPP + 多系统")
     void testOptIers2010IonEstMultiSys() {
         RtkConfig cfg = createPppConfigIers2010();
-        cfg.enableIonoEstRobust = true;
+        cfg.ppp.enableIonoEstRobust = true;
         evaluatePppAccuracy(createPppOptIonEstMultiSys(), cfg, "IERS2010+EST+Multi");
     }
 
@@ -517,10 +517,10 @@ public class PppValidationTest {
     @DisplayName("3.13 优化项: 全量最优组合 (ISB+IERS2010+EST+MultiSys)")
     void testOptAllCombined() {
         RtkConfig cfg = createPppConfig();
-        cfg.enableIsbIfcbIfb = true;
-        cfg.enableIers2010 = true;
-        cfg.enableAt1S2 = true;
-        cfg.enableIonoEstRobust = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
+        cfg.ppp.enableIers2010 = true;
+        cfg.ppp.enableAt1S2 = true;
+        cfg.ppp.enableIonoEstRobust = true;
         evaluatePppAccuracy(createPppOptIonEstMultiSys(), cfg, "ALL-COMBINED");
     }
 
@@ -528,7 +528,7 @@ public class PppValidationTest {
     @DisplayName("3.14 优化项: 非组合PPP + WUM DCB 产品 + enableIonoEstRobust")
     void testOptIonEstWithDcb() {
         RtkConfig cfg = createPppConfig();
-        cfg.enableIonoEstRobust = true;
+        cfg.ppp.enableIonoEstRobust = true;
         evaluatePppAccuracy(createPppOptIonEst(), cfg, "EST+DCB+Robust", dcbFile);
     }
 
@@ -536,7 +536,7 @@ public class PppValidationTest {
     @DisplayName("3.15 优化项: 非组合PPP+多系统 + WUM DCB 产品 + enableIonoEstRobust")
     void testOptIonEstMultiSysWithDcb() {
         RtkConfig cfg = createPppConfig();
-        cfg.enableIonoEstRobust = true;
+        cfg.ppp.enableIonoEstRobust = true;
         evaluatePppAccuracy(createPppOptIonEstMultiSys(), cfg, "EST+MultiSys+DCB+Robust", dcbFile);
     }
 }

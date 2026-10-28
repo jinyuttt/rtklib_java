@@ -1,9 +1,23 @@
 # rtklib-core 优化功能矩阵
 
-> **版本**：v1.1  
-> **日期**：2026-10-08  
+> **版本**：v1.2  
+> **日期**：2026-10-08（2026-10-28 字段命名修订）  
 > **目标模块**：`rtklib-core`  
 > **编码规则**：代码真实默认值（非文档描述值），以 `RtkConfig.java` 实际字段值为准  
+
+> **字段命名（2026-10-28 起）**：`RtkConfig` 已拆分为 7 个子配置，下表与 §4 中的开关名均为**子配置字段**，引用时需带命名空间前缀：
+>
+> | 所属子配置 | 覆盖的优化项 | 访问方式 |
+> |---|---|---|
+> | `CommonOpts` | R3 `atmFrozenNsThresh`、R6 `enableParRefReselect`、R13 `enableParamTypeNoise` | `cfg.common.*` |
+> | `RtkOpts` | R1/R2/R4/R5/R7/R8/R9/R10/R11/R12 | `cfg.rtk.*` |
+> | `PppOpts` | P1/P2/P3/P4/P5/P14、T6 `enableAt1S2` | `cfg.ppp.*` |
+> | `PppArOpts` | P6~P10（原 `enablePppAR` → `enableAR`，`enablePppArFixHold` → `enableFixHold`，`enablePppPartialAR` → `enablePartialAR`，`enableBds3PppAR` → `enableBds3AR`，`enableMultiFreqAR` 不变） | `cfg.pppAr.*` |
+> | `PppRtkOpts` | P11~P13（原 `enablePppRtk` → `enable`，`enablePppRtkAR` → `enableAR`，`enablePppRtkFixHold` → `enableFixHold`） | `cfg.pppRtk.*` |
+> | `SppOpts` | S1~S4（原 `enableSppEkf` → `enableEkf`，`enableSppRobust` → `enableRobust`，`enableSppZeroVel` → `enableZeroVel`，`enableSppDopplerSnr` → `enableDopplerSnr`） | `cfg.spp.*` |
+> | `AdaptiveOpts` | 自适应引擎 | `cfg.adaptive.*` |
+>
+> 例：R1 滑动窗自适应Q矩阵写作 `cfg.rtk.enableAdaptiveQ`，P6 PPP-AR 写作 `cfg.pppAr.enableAR`，S1 EKF 写作 `cfg.spp.enableEkf`。
 
 ---
 
@@ -82,7 +96,7 @@
 | S4 | 多普勒+SNR加权 | `enableSppDopplerSnr` | false | ✅ | ✅ | **通用**：多普勒平滑伪距+SNR 自适应观测权，降低高频噪声 |
 
 > **图例**：✅ = 适用且推荐  |  ⚠️ = 可开但效果弱  |  — = 不适用  
-> **开关控制**：通过 `SppProcessor.setRtkConfig(cfg)` 传入，基准 RTKLIB 代码通过 `if (cfg != null && cfg.enableSppXxx)` 保护，不影响默认流程  
+> **开关控制**：通过 `SppProcessor.setRtkConfig(cfg)` 传入，基准 RTKLIB 代码通过 `if (cfg != null && cfg.spp.enableXxx)` 保护，不影响默认流程  
 > **参考项目**：[MobileGNSS-SPP](https://github.com/ebhual/MobileGNSS-SPP)（C语言，基于 RTKLIB 2.4.3 的 SPP 优化）
 
 ### 1.4 处理阶段特性（非RtkConfig开关）
@@ -170,7 +184,7 @@
 ### 4.1 静态短基线 RTK（形变/滑坡监测）
 
 ```
-RtkConfig: enableAdaptiveQ + enableAmbAnchor + atmFrozenNsThresh=5
+RtkConfig: cfg.rtk.enableAdaptiveQ + cfg.rtk.enableAmbAnchor + cfg.common.atmFrozenNsThresh=5
 PrcOpt:    PMODE_STATIC, dynamics=0, ARMODE_FIXHOLD, IONOOPT_IFLC
 特点:      零速压制Q→高精度，锚固保护稳定模糊度，少星冻结防漂移
 实测:      LandslideMonitorTest通过
@@ -179,8 +193,8 @@ PrcOpt:    PMODE_STATIC, dynamics=0, ARMODE_FIXHOLD, IONOOPT_IFLC
 ### 4.2 静态长基线 RTK
 
 ```
-RtkConfig: enableAdaptiveQ + enableAmbAnchor + enableIonoTropGradient
-           + enableParamTypeNoise + atmFrozenNsThresh=7
+RtkConfig: cfg.rtk.enableAdaptiveQ + cfg.rtk.enableAmbAnchor + cfg.rtk.enableIonoTropGradient
+           + cfg.common.enableParamTypeNoise + cfg.common.atmFrozenNsThresh=7
 PrcOpt:    PMODE_STATIC, IONOOPT_EST, TROPOPT_EST/ESTG
 特点:      梯度建模电离层空间不均匀性，参数类型噪声精细建模
 注:        更依赖实际调试，无完整长基线验证数据
@@ -189,8 +203,8 @@ PrcOpt:    PMODE_STATIC, IONOOPT_EST, TROPOPT_EST/ESTG
 ### 4.3 动态短基线 RTK（车载/无人机）
 
 ```
-RtkConfig: enableAdaptiveQ + enableIggiii + enableSnrMedian 
-           + enableCascadeAR + enablePartialAR + enableBootstrapping
+RtkConfig: cfg.rtk.enableAdaptiveQ + cfg.rtk.enableIggiii + cfg.rtk.enableSnrMedian 
+           + cfg.rtk.enableCascadeAR + cfg.rtk.enablePartialAR + cfg.rtk.enableBootstrapping
 PrcOpt:    PMODE_KINEMA, dynamics=1, ARMODE_FIXHOLD
 特点:      自适应Q区分运动/静止，IGGIII抗NLOS，逐级+部分AR最大化固定率
 ```
@@ -198,8 +212,8 @@ PrcOpt:    PMODE_KINEMA, dynamics=1, ARMODE_FIXHOLD
 ### 4.4 静态PPP（科研/基准站）
 
 ```
-RtkConfig: enableGpt3Vmf3 + enableIers2010 + enableIsbIfcbIfb 
-           + enablePppAR + enablePppArFixHold + enablePppPartialAR
+RtkConfig: cfg.ppp.enableGpt3Vmf3 + cfg.ppp.enableIers2010 + cfg.ppp.enableIsbIfcbIfb 
+           + cfg.pppAr.enableAR + cfg.pppAr.enableFixHold + cfg.pppAr.enablePartialAR
 PrcOpt:    PMODE_PPP_STATIC
 特点:      精密对流层/潮汐模型+多系统偏差+PPP-AR固定解
 ```
@@ -207,7 +221,7 @@ PrcOpt:    PMODE_PPP_STATIC
 ### 4.5 PPP-RTK（实时精密定位）
 
 ```
-RtkConfig: enablePppRtk + enablePppRtkAR + enablePppRtkFixHold
+RtkConfig: cfg.pppRtk.enable + cfg.pppRtk.enableAR + cfg.pppRtk.enableFixHold
 PrcOpt:    PMODE_PPPRTK_KINEMA/STATIC
 前提:      SSR数据源（RTCM SSR / QZSS CLAS）
 ```
@@ -215,7 +229,7 @@ PrcOpt:    PMODE_PPPRTK_KINEMA/STATIC
 ### 4.6 SPP 标准定位（多系统、开放天空）
 
 ```
-RtkConfig: enableSppEkf + enableSppDopplerSnr
+RtkConfig: cfg.spp.enableEkf + cfg.spp.enableDopplerSnr
 PrcOpt:    PMODE_SINGLE, navsys=SYS_ALL (GPS+GAL+QZS+BDS+etc)
 特点:      EKF平滑高程跳动 + 多普勒+SNR降噪，稳定可靠
 实测:      Street 1256/1256, OpenSky 1603/1603, BDS-only 230/230
@@ -224,7 +238,7 @@ PrcOpt:    PMODE_SINGLE, navsys=SYS_ALL (GPS+GAL+QZS+BDS+etc)
 ### 4.7 SPP 城市峡谷/恶劣环境
 
 ```
-RtkConfig: enableSppEkf + enableSppRobust + enableSppDopplerSnr
+RtkConfig: cfg.spp.enableEkf + cfg.spp.enableRobust + cfg.spp.enableDopplerSnr
 PrcOpt:    PMODE_SINGLE, elmin=15°, navsys=SYS_ALL
 特点:      IGGIII抗NLOS多路径粗差 + EKF平滑 + SNR自适应降权
 ```
@@ -232,8 +246,8 @@ PrcOpt:    PMODE_SINGLE, elmin=15°, navsys=SYS_ALL
 ### 4.8 SPP 静态基准站/滑坡监测
 
 ```
-RtkConfig: enableSppEkf + enableSppRobust + enableSppZeroVel 
-           + enableSppDopplerSnr
+RtkConfig: cfg.spp.enableEkf + cfg.spp.enableRobust + cfg.spp.enableZeroVel 
+           + cfg.spp.enableDopplerSnr
 PrcOpt:    PMODE_SINGLE, dynamics=1 (需要速度状态), navsys=SYS_ALL
 特点:      全开模式：零速压制Q + 抗差 + 多普勒平滑，最大化静态精度
 实测:      BDS-only RTCM EKF高程稳定度 <0.5m（LSQ ~3m跳动）

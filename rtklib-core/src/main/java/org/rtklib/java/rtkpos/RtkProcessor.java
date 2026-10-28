@@ -1216,7 +1216,7 @@ public class RtkProcessor implements Serializable {
         totalEpochs = 0;
         successCount = 0;
         failCount = 0;
-        if (rtk.rtkConfig != null && rtk.rtkConfig.enableSegmentSigmaFilter) {
+        if (rtk.rtkConfig != null && rtk.rtkConfig.rtk.enableSegmentSigmaFilter) {
             segmentSigmaFilter = new SegmentSigmaFilter(rtk.rtkConfig);
         } else {
             segmentSigmaFilter = null;
@@ -1246,7 +1246,7 @@ public class RtkProcessor implements Serializable {
         successCount = 0;
         failCount = 0;
         outputCount = 0;
-        if (rtk.rtkConfig != null && rtk.rtkConfig.enableSegmentSigmaFilter) {
+        if (rtk.rtkConfig != null && rtk.rtkConfig.rtk.enableSegmentSigmaFilter) {
             segmentSigmaFilter = new SegmentSigmaFilter(rtk.rtkConfig);
         } else {
             segmentSigmaFilter = null;

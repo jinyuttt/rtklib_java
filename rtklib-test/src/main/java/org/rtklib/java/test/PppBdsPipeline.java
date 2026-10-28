@@ -304,7 +304,7 @@ public class PppBdsPipeline {
         p.loadGpt3Grid(gpt3File);
         if (ensureVmf3() != null) p.loadVmf3Op(vmf3File);
         RtkConfig cfg = new RtkConfig();
-        cfg.enableGpt3Vmf3 = true;
+        cfg.ppp.enableGpt3Vmf3 = true;
         p.setRtkConfig(cfg);
         runTest("GPT3", p);
     }
@@ -315,7 +315,7 @@ public class PppBdsPipeline {
         if (ensureErp() == null) log.warn("ERP not available, IERS2010 may be incomplete");
         PppProcessor p = createBdsPpp(true);
         RtkConfig cfg = new RtkConfig();
-        cfg.enableIers2010 = true;
+        cfg.ppp.enableIers2010 = true;
         p.setRtkConfig(cfg);
         runTest("IERS", p);
     }
@@ -327,7 +327,7 @@ public class PppBdsPipeline {
         if (ensureBia() != null) p.loadOsb(biaFile);
         if (ensureDcb() != null) p.loadDcb(dcbFile);
         RtkConfig cfg = new RtkConfig();
-        cfg.enableIsbIfcbIfb = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
         p.setRtkConfig(cfg);
         runTest("BIAS", p);
     }
@@ -338,7 +338,7 @@ public class PppBdsPipeline {
         PppProcessor p = createBdsPpp(true);
         if (ensureFcb() != null) p.loadOsb(fcbFile);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppAR = true;
+        cfg.pppAr.enableAR = true;
         p.setRtkConfig(cfg);
         runTest("AR", p);
     }
@@ -349,8 +349,8 @@ public class PppBdsPipeline {
         PppProcessor p = createBdsPpp(true);
         if (ensureFcb() != null) p.loadOsb(fcbFile);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppAR = true;
-        cfg.enablePppArFixHold = true;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.enableFixHold = true;
         p.setRtkConfig(cfg);
         runTest("AR+FH", p);
     }
@@ -361,8 +361,8 @@ public class PppBdsPipeline {
         PppProcessor p = createBdsPpp(true);
         if (ensureFcb() != null) p.loadOsb(fcbFile);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppAR = true;
-        cfg.enablePppPartialAR = true;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.enablePartialAR = true;
         p.setRtkConfig(cfg);
         runTest("AR+PAR", p);
     }
@@ -373,8 +373,8 @@ public class PppBdsPipeline {
         PppProcessor p = createBdsPpp(true);
         if (ensureFcb() != null) p.loadOsb(fcbFile);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppAR = true;
-        cfg.enableBds3PppAR = true;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.enableBds3AR = true;
         p.setRtkConfig(cfg);
         runTest("BDS3-AR", p);
     }
@@ -392,7 +392,7 @@ public class PppBdsPipeline {
             log.warn("BLQ file not found: {} (ocean tide loading disabled)", blqFile);
         }
         RtkConfig cfg = new RtkConfig();
-        cfg.enableIers2010 = true;
+        cfg.ppp.enableIers2010 = true;
         p.setRtkConfig(cfg);
         p.getRtk().opt.tidecorr = 7;
         runTest("IERS-TC7", p);
@@ -408,11 +408,11 @@ public class PppBdsPipeline {
         if (ensureFcb() != null) p.loadOsb(fcbFile);
         if (ensureDcb() != null) p.loadDcb(dcbFile);
         RtkConfig cfg = new RtkConfig();
-        cfg.enableGpt3Vmf3 = hasGpt3;
-        cfg.enableIers2010 = true;
-        cfg.enableIsbIfcbIfb = true;
-        cfg.enablePppAR = true;
-        cfg.enablePppArFixHold = true;
+        cfg.ppp.enableGpt3Vmf3 = hasGpt3;
+        cfg.ppp.enableIers2010 = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.enableFixHold = true;
         p.setRtkConfig(cfg);
         runTest("COMBO", p);
     }
@@ -430,13 +430,13 @@ public class PppBdsPipeline {
             OtlReader.readblq(blqFile, STATION, p.getRtk().opt.odisp[0]);
         }
         RtkConfig cfg = new RtkConfig();
-        cfg.enableGpt3Vmf3 = true;
-        cfg.enableIers2010 = true;
-        cfg.enableIsbIfcbIfb = true;
-        cfg.enablePppAR = true;
-        cfg.enablePppArFixHold = true;
-        cfg.enablePppPartialAR = true;
-        cfg.enableBds3PppAR = true;
+        cfg.ppp.enableGpt3Vmf3 = true;
+        cfg.ppp.enableIers2010 = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.enableFixHold = true;
+        cfg.pppAr.enablePartialAR = true;
+        cfg.pppAr.enableBds3AR = true;
         p.setRtkConfig(cfg);
         p.getRtk().opt.tidecorr = 7;
         runTest("ALL-ON", p);

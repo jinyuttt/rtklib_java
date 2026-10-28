@@ -409,8 +409,4 @@ public final class JointDdRes {
         }
         P[i * nx + i] = var;
     }
-
-    static double SQR(double x) {
-        return x * x;
-    }
 }

@@ -155,7 +155,7 @@ public class PppBdsComprehensiveTest {
         p.loadGpt3Grid(GPT3_FILE);
         if (new File(VMF3_FILE).exists()) p.loadVmf3Op(VMF3_FILE);
         RtkConfig cfg = new RtkConfig();
-        cfg.enableGpt3Vmf3 = true;
+        cfg.ppp.enableGpt3Vmf3 = true;
         p.setRtkConfig(cfg);
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);
         logResult("BDS-PPP-GPT3VMF3", r);
@@ -168,7 +168,7 @@ public class PppBdsComprehensiveTest {
         assumeTrue(sp3Exists, "SP3/CLK not found");
         PppProcessor p = createBdsPrecPppProcessor();
         RtkConfig cfg = new RtkConfig();
-        cfg.enableIers2010 = true;
+        cfg.ppp.enableIers2010 = true;
         p.setRtkConfig(cfg);
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);
         logResult("BDS-PPP-IERS2010", r);
@@ -181,7 +181,7 @@ public class PppBdsComprehensiveTest {
         assumeTrue(sp3Exists, "SP3/CLK not found");
         PppProcessor p = createBdsPrecPppProcessor();
         RtkConfig cfg = new RtkConfig();
-        cfg.enableIsbIfcbIfb = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
         p.setRtkConfig(cfg);
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);
         logResult("BDS-PPP-BIAS", r);
@@ -195,7 +195,7 @@ public class PppBdsComprehensiveTest {
         PppProcessor p = createBdsPrecPppProcessor();
         if (fcbExists) p.loadFcb(FCB_FILE);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppAR = true;
+        cfg.pppAr.enableAR = true;
         p.setRtkConfig(cfg);
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);
         logResult("BDS-PPP-AR", r);
@@ -209,8 +209,8 @@ public class PppBdsComprehensiveTest {
         PppProcessor p = createBdsPrecPppProcessor();
         if (fcbExists) p.loadFcb(FCB_FILE);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppAR = true;
-        cfg.enablePppArFixHold = true;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.enableFixHold = true;
         p.setRtkConfig(cfg);
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);
         logResult("BDS-PPP-AR-FH", r);
@@ -224,8 +224,8 @@ public class PppBdsComprehensiveTest {
         PppProcessor p = createBdsPrecPppProcessor();
         if (fcbExists) p.loadFcb(FCB_FILE);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppAR = true;
-        cfg.enablePppPartialAR = true;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.enablePartialAR = true;
         p.setRtkConfig(cfg);
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);
         logResult("BDS-PPP-AR-PAR", r);
@@ -239,8 +239,8 @@ public class PppBdsComprehensiveTest {
         PppProcessor p = createBdsPrecPppProcessor();
         if (fcbExists) p.loadFcb(FCB_FILE);
         RtkConfig cfg = new RtkConfig();
-        cfg.enablePppAR = true;
-        cfg.enableBds3PppAR = true;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.enableBds3AR = true;
         p.setRtkConfig(cfg);
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);
         logResult("BDS3-PPP-AR", r);
@@ -257,11 +257,11 @@ public class PppBdsComprehensiveTest {
         if (fcbExists) p.loadFcb(FCB_FILE);
         if (new File(DCB_FILE).exists()) p.loadDcb(DCB_FILE);
         RtkConfig cfg = new RtkConfig();
-        cfg.enableGpt3Vmf3 = gpt3Exists;
-        cfg.enableIers2010 = true;
-        cfg.enableIsbIfcbIfb = true;
-        cfg.enablePppAR = true;
-        cfg.enablePppArFixHold = true;
+        cfg.ppp.enableGpt3Vmf3 = gpt3Exists;
+        cfg.ppp.enableIers2010 = true;
+        cfg.ppp.enableIsbIfcbIfb = true;
+        cfg.pppAr.enableAR = true;
+        cfg.pppAr.enableFixHold = true;
         p.setRtkConfig(cfg);
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);
         logResult("BDS-PPP-FULL", r);
@@ -277,7 +277,7 @@ public class PppBdsComprehensiveTest {
             OtlReader.readblq(BLQ_FILE, STATION, p.getRtk().opt.odisp[0]);
         }
         RtkConfig cfg = new RtkConfig();
-        cfg.enableIers2010 = true;
+        cfg.ppp.enableIers2010 = true;
         p.setRtkConfig(cfg);
         p.getRtk().opt.tidecorr = 7;
         PppProcessor.PppResult r = p.processRinex(obsFile, navFile, null, null);

@@ -20,8 +20,8 @@ public class SegmentSigmaFilter {
     private final double[] posBuf = new double[3];
 
     public SegmentSigmaFilter(RtkConfig cfg) {
-        this.threshold = cfg.segmentSigmaThreshold;
-        this.minLen = cfg.segmentSigmaMinLen;
+        this.threshold = cfg.rtk.segmentSigmaThreshold;
+        this.minLen = cfg.rtk.segmentSigmaMinLen;
     }
 
     public void reset() {
