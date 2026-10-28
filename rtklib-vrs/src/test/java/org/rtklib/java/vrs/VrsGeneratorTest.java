@@ -9,6 +9,8 @@ import org.rtklib.java.data.*;
 import org.rtklib.java.rtcm.*;
 import org.rtklib.java.vrs.config.VrsOptionalConfig;
 import org.rtklib.java.vrs.config.VrsRequiredConfig;
+import org.rtklib.java.vrs.rtcm.Rtcm3Encoder;
+import org.rtklib.java.vrs.rtcm.RtcmSinks;
 
 import java.nio.file.*;
 import java.util.*;
@@ -37,6 +39,92 @@ public class VrsGeneratorTest {
         } else {
             System.out.println("VRS测试数据不可用");
         }
+    }
+
+    @Test
+    @DisplayName("1033 接线：站坐标后紧跟天线描述，字段可解码回原值；关闭开关后不再输出")
+    void testAntennaDescriptorWiring() {
+        double[] pos = {30.0 * Math.PI / 180.0, 95.0 * Math.PI / 180.0, 100.0};
+        Sta base = new Sta();
+        base.name = "BASE";
+        base.marker = "BASE";
+        base.pos = new double[3];
+        CoordTransform.pos2ecef(pos, base.pos);
+
+        VrsOptionalConfig opt = new VrsOptionalConfig();
+        opt.antType = "ADVNULLANTENNA";
+        opt.antSerial = "ANT001";
+        opt.antSetupId = 7;
+        opt.recType = "NETVRS RECEIVER";
+        opt.recVersion = "1.0";
+        opt.recSerial = "REC001";
+
+        List<Integer> types = collectTypes(pos, base, opt);
+        assertEquals(List.of(1005, 1033), types, "站坐标后应紧跟 1033 天线描述");
+
+        Rtcm rtcm = new Rtcm();
+        byte[] antenna = lastFrame(pos, base, opt, 1033);
+        assertEquals(antenna.length, rtcm.input(antenna, antenna.length));
+        assertEquals("ADVNULLANTENNA", rtcm.sta.antdes);
+        assertEquals("ANT001", rtcm.sta.antsno);
+        assertEquals(7, rtcm.sta.antSetupId);
+        assertEquals("NETVRS RECEIVER", rtcm.sta.rectype);
+        assertEquals("1.0", rtcm.sta.recver);
+        assertEquals("REC001", rtcm.sta.recsno);
+
+        opt.antennaMsgType = 0;
+        assertEquals(List.of(1005), collectTypes(pos, base, opt),
+                "antennaMsgType=0 时不应输出 1033");
+    }
+
+    private static List<Integer> collectTypes(double[] pos, Sta base, VrsOptionalConfig opt) {
+        RtcmSinks.Collector sink = RtcmSinks.collect();
+        VrsGenerator generator = new VrsGenerator(pos, "NETVRS", opt,
+                new Rtcm3Encoder(), sink, new Nav(), null, null, null);
+        generator.onStation(base);
+        generator.onObservationEpoch(new ObservationEpoch(new GTime(1000L, 0.0), "BASE"));
+        return frameTypes(sink.toByteArray());
+    }
+
+    private static byte[] lastFrame(double[] pos, Sta base, VrsOptionalConfig opt, int type) {
+        RtcmSinks.Collector sink = RtcmSinks.collect();
+        VrsGenerator generator = new VrsGenerator(pos, "NETVRS", opt,
+                new Rtcm3Encoder(), sink, new Nav(), null, null, null);
+        generator.onStation(base);
+        generator.onObservationEpoch(new ObservationEpoch(new GTime(1000L, 0.0), "BASE"));
+        byte[] data = sink.toByteArray();
+        byte[] last = null;
+        int i = 0;
+        while (i + 3 <= data.length) {
+            if ((data[i] & 0xFF) != 0xD3) {
+                i++;
+                continue;
+            }
+            int len = ((data[i + 1] & 0x03) << 8) | (data[i + 2] & 0xFF);
+            int end = i + 3 + len + 3;
+            int msgType = ((data[i + 3] & 0xFF) << 4) | ((data[i + 4] & 0xF0) >> 4);
+            if (msgType == type) {
+                last = Arrays.copyOfRange(data, i, end);
+            }
+            i = end;
+        }
+        assertNotNull(last, "输出中未找到消息 " + type);
+        return last;
+    }
+
+    private static List<Integer> frameTypes(byte[] data) {
+        List<Integer> types = new ArrayList<>();
+        int i = 0;
+        while (i + 3 <= data.length) {
+            if ((data[i] & 0xFF) != 0xD3) {
+                i++;
+                continue;
+            }
+            int len = ((data[i + 1] & 0x03) << 8) | (data[i + 2] & 0xFF);
+            types.add(((data[i + 3] & 0xFF) << 4) | ((data[i + 4] & 0xF0) >> 4));
+            i += 3 + len + 3;
+        }
+        return types;
     }
 
     @Test
