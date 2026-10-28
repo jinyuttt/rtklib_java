@@ -1141,7 +1141,64 @@ public class Rtcm implements Serializable {
     private boolean decodeType1030() { return true; }  // GPS residuals
     private boolean decodeType1031() { return true; }  // GLONASS residuals
     private boolean decodeType1032() { return true; }  // Physical reference station coords
-    private boolean decodeType1033() { return true; }  // Receiver and antenna descriptor
+    /**
+     * 1033 Receiver and Antenna Descriptors。
+     *
+     * <p>字段顺序：站 ID(12) → 天线描述(8+8n) → 天线设置 ID(8) → 天线序列号(8+8n)
+     * → 接收机类型(8+8n) → 接收机固件版本(8+8n) → 接收机序列号(8+8n)，
+     * 全部为变长字符串，无保留位/扩展字段。</p>
+     */
+    private boolean decodeType1033() {
+        int i = 24 + 12;
+        if (i + 20 > this.len * 8) {
+            log.warn("rtcm3 1033 length error: len={}", this.len);
+            return false;
+        }
+        int staid = (int) BitUtils.getbitu(buff, i, 12); i += 12;
+
+        int n = (int) BitUtils.getbitu(buff, i, 8); i += 8;
+        String antdes = readDescriptor(i, n); i += n * 8;
+
+        int antSetupId = (int) BitUtils.getbitu(buff, i, 8); i += 8;
+
+        n = (int) BitUtils.getbitu(buff, i, 8); i += 8;
+        String antsno = readDescriptor(i, n); i += n * 8;
+
+        n = (int) BitUtils.getbitu(buff, i, 8); i += 8;
+        String rectype = readDescriptor(i, n); i += n * 8;
+
+        n = (int) BitUtils.getbitu(buff, i, 8); i += 8;
+        String recver = readDescriptor(i, n); i += n * 8;
+
+        n = (int) BitUtils.getbitu(buff, i, 8); i += 8;
+        String recsno = readDescriptor(i, n); i += n * 8;
+
+        if (i > this.len * 8) {
+            log.warn("rtcm3 1033 truncated: len={}, used={} bits", this.len, i);
+            return false;
+        }
+        if (!testStaid(staid)) return false;
+
+        this.sta.antdes = antdes;
+        this.sta.antSetupId = antSetupId;
+        this.sta.antsno = antsno;
+        this.sta.rectype = rectype;
+        this.sta.recver = recver;
+        this.sta.recsno = recsno;
+        return true;
+    }
+
+    /** 读取 RTCM 变长描述符（n 个 8 bit 字符，遇 NUL 提前结束）。 */
+    private String readDescriptor(int pos, int n) {
+        StringBuilder sb = new StringBuilder(n);
+        for (int k = 0; k < n && pos + (k + 1) * 8 <= this.len * 8; k++) {
+            int c = (int) BitUtils.getbitu(buff, pos + k * 8, 8);
+            if (c == 0) break;
+            sb.append((char) c);
+        }
+        return sb.toString();
+    }
+
     private boolean decodeType1034() { return true; }  // GPS network residuals
     private boolean decodeType1035() { return true; }  // GLONASS network residuals
     private boolean decodeType1037() { return true; }  // GLONASS network RTK
