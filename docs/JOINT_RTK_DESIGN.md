@@ -1,8 +1,51 @@
 # rtklib-joint 联合 RTK 解算模块设计文档
 
-> 版本：v1.1  
-> 日期：2026-10-26（2026-10-28 核实修订：2.1.1 待实施状态、Phase 0/1 工时、13.11.6 缺陷状态；13.7 改为中性路径区分表述）  
-> 状态：定稿
+> 版本：v1.2  
+> 日期：2026-10-26（2026-10-28 核实修订：2.1.1 待实施状态、Phase 0/1 工时、13.11.6 缺陷状态；13.7 改为中性路径区分表述；2026-10-29 状态对齐：新增 §0 实现状态总表，修正 §3.3 模块结构 / §4.5 配置开关 / §7 Phase 进度 / §13.8 落地状态的"已实现·未实现"标注）  
+> 状态：定稿（设计与实现并存：§2.1.1 大气维度修正、§13 基站位移监测属未实施设计项）
+
+---
+
+## 0. 实现状态总表（2026-10-29 核实）
+
+> 本章是**唯一的实现状态权威表**。第 2/3/4/7/13 章写的是设计意图与数学模型，
+> 与本章冲突时以本章为准（各章正文已就地补注差异）。
+
+### 0.1 已实现并实测
+
+| 能力 | 代码落点 | 实测/依据 |
+|---|---|---|
+| 联合 rtkpos 主循环（SPP 初始化 → 逐基线 zdres/selsat → 历元对齐 → 迭代 Kalman 更新 → AR → holdamb） | `JointCore.rtkpos()` | — |
+| 多基线状态向量：rover 位置共享 + 每基线模糊度 | `JointCore.rtkpos()`（`nx`/`baselineOffset` 计算）、`JointRtk.IB()` | 2 基线 |
+| 同系统内全局统一参考星（§9） | `EpochAligner.selectGlobalRefSatBySys()` | — |
+| 各基线独立 LAMBDA 固定 + FIX 后 holdamb 强约束 + 模糊度 P 压缩 | `JointCore.resolveAmbiguity()` | FIX-ALG-042，单/双基线 FIX 91.5%（236 历元，BDS 双频） |
+| 模糊度浮点初值（载波-伪距组合）、模糊度过程噪声、周跳分支状态归零 | `JointCore.udstate()` / `carrierBiasInit()` | FIX-ALG-042 P2/P3 |
+| 输入双模式：RTCM3 字节流（`feedRover`/`feedBase`/`process(byte[])`）与文件（`process(path)`/`processRinex()`） | `JointRtkProcessor` | 实测走 RTCM3 字节流 |
+| 基站坐标外部覆盖（绕过 RTCM 1005 播发坐标） | `JointConfig.baseCoordOverride` | FIX-ALG-042 验证项 3 |
+| 两层入口：`JointRtkProcessor`（外壳：解码/历元匹配/输出）→ `JointProcessor`（内核直调）→ `JointCore.rtkpos()` | 两类均调 `JointCore.rtkpos()` | — |
+
+### 0.2 未实现（含"配置项存在但无代码消费"）
+
+| 项 | 现状 | 影响 |
+|---|---|---|
+| 大气参数维度修正（§2.1.1） | 仍是"每基线一份大气"（`II()/IT()` 的 `baseline` 在最外层） | 大气层面等效退回 SBS，多耗 k 倍冗余度 |
+| `JointConfig.sharedIono` / `sharedTrop` / `sharedIonoMaxDist` | **声明后无任何读取**；`JointRtk.toState()` 每次新建 `RtkConfig`，joint 配置不进入 core | 改开关无行为变化 |
+| `JointConfig.independentAmbFix` / `jointAmbFix` | 无读取；实际固定为"各基线独立 LAMBDA"，联合固定（§2.7 后续增强）未做 | — |
+| `JointConfig.blockDiagonalR` / `modelCrossCorrelation` | 无读取；R 实际按基线分块构造 | 跨基线相关性未建模 |
+| `JointConfig.jointCycleSlip` | 无读取；joint **未调用** `RtkCore.detslp*`，`ssat.slip` 从未被写入 | 周跳不会被检出/重置，长时段可靠性存疑 |
+| `JointConfig.useNetworkAdjustment` | 无读取 | — |
+| 电离层/对流层过程噪声与初值（`prn[1]`/`prn[2]`、`initx`） | 未接线 | EST 大气状态为无效维度（P 恒 0，不吸收误差） |
+| `BaseStabilityMonitor`（§13 三道闸） | **仅设计**，模块内无此类 | 基站位移不可检测 |
+| k>2 基线 / GLONASS、Galileo / 三频 | 代码结构通用，**但实测仅覆盖 BDS 双频 2 基线** | 未验证 |
+
+### 0.3 测试现状
+
+| 项 | 现状 |
+|---|---|
+| 测试类 | `JointRtkRealDataTest`（4 个用例） |
+| 数据来源 | 本地设备存储 RTCM3（`joint-test-data.properties` 不入库，仅 template 入库） |
+| 断言强度 | 仅 `totalEpochs > 0`；FIX 率、精度、与 SBS 对照均为**打印**而非断言 |
+| 覆盖缺口 | 主用例 `maxBaseline=1`（只喂基站 A，标题"2基站"名不符实）；双基线仅在单小时用例（固定第 8 小时）中运行；无参考坐标→无 ENU RMS |
 
 ---
 
@@ -404,25 +447,25 @@ RtkCore.zdres(jrtk.toState(), base, obs, ...);
 
 ### 3.3 模块结构
 
+> 2026-10-29 按实际代码树修订。原设计的 `JointRelPos/JointUdState/JointUdBias/JointAmbFix`
+> 与 `config/`、`model/` 子包**未拆出**：这些职责目前内联在 `JointCore`（`udstate`/`resolveAmbiguity`）
+> 与扁平包 `org.rtklib.java.joint` 中，属后续重构项，不影响功能。
+
 ```
 rtklib-joint/
   ├── pom.xml
   └── src/main/java/org/rtklib/java/joint/
-      ├── JointProcessor.java           ← 入口，数据流管理
-      ├── JointCore.java                ← 联合 rtkpos 主循环
-      ├── JointRelPos.java              ← 联合 relpos
-      ├── JointDdRes.java               ← 联合双差观测方程（核心重写）
-      ├── JointUdState.java             ← 联合状态预测
-      ├── JointUdBias.java              ← 联合模糊度状态更新
-      ├── JointAmbFix.java              ← 模糊度固定策略
-      ├── EpochAligner.java             ← 多基站历元对齐
-      ├── config/
-      │   └── JointConfig.java          ← 联合解算配置
-      └── model/
-          ├── JointRtk.java             ← 联合滤波器状态（含 toState() 方法）
-          ├── BaseStation.java          ← 基站标识 + 坐标 + 观测缓冲
-          ├── BaselineGroup.java        ← 同一历元的多基线观测集合
-          └── JointSol.java             ← 联合解输出
+      ├── JointRtkProcessor.java        ← 外壳：RTCM/RINEX 数据流、历元匹配、结果输出
+      ├── JointProcessor.java           ← 内核入口，多基线数据流管理
+      ├── JointCore.java                ← 联合 rtkpos 主循环 + udstate + 模糊度固定
+      ├── JointDdRes.java               ← 联合双差观测方程（含 initx）
+      ├── EpochAligner.java             ← 多基站历元对齐 + 全局参考星选择
+      ├── JointConfig.java              ← 联合解算配置（见 §4.5 存根说明）
+      ├── JointRtk.java                 ← 联合滤波器状态（含 toState() 与 II/IT/IB 索引）
+      ├── BaseStation.java             ← 基站标识 + 坐标 + 观测缓冲
+      ├── BaselineGroup.java            ← 同一历元的多基线观测集合
+      ├── BaselineObs.java              ← 单基线观测/残差容器
+      └── BaselineSolution.java         ← 单基线解（中间量）
 ```
 
 ---
@@ -545,6 +588,11 @@ public class JointConfig implements Serializable {
     public boolean jointCycleSlip = true;  // 联合周跳检测（Rover 周跳在所有基线共模）
 }
 ```
+
+> **实现状态（2026-10-29 核实）**：上表除 `maxBaseline`、`maxTimeDiff`、`baseCoordOverride`
+> 外，**全部为存根字段**——`JointCore`/`JointProcessor` 未读取任何一个，且 `JointRtk.toState()`
+> 每次新建 `RtkConfig`，joint 配置不会流入 core。因此"共享电离层/共享对流层/联合固定/
+> 跨基线 R 建模/联合周跳"这些开关**改动后无任何行为变化**。详见 §0.2。
 
 ---
 
@@ -715,7 +763,16 @@ Step 4: joint Phase 2 + 3                                        13d
 - 2 基线联合解的固定率 ≥ 单基线
 - 固定解精度 ≈ 单基线（天花板验证）
 
+> **执行状态（2026-10-29）**：**基本完成，唯一未落地项是"大气参数维度修正（2.1.1）"**。
+> 实际实现为"每基线一份大气"，其余任务（骨架、JointRtk/BaseStation、JointDdRes、
+> udstate、JointCore 主循环、独立 LAMBDA、EpochAligner、JointProcessor、测试）均已落地。
+> 验证结果：双基站双基线 FIX 91.5% vs 单基线 91.2%（BDS 双频，236 历元），
+> 三条验证标准均满足。FIX-ALG-042 的 7 处修复详见 `ALGORITHM_FIX_LOG.md`。
+
 ### Phase 2：通用化（k 基线 + 多系统）
+
+> **执行状态（2026-10-29）**：**部分完成**。k 基线通用化与事后 RINEX 流程（`processRinex()`）
+> 代码已具备，但**实测只覆盖 BDS 双频 2 基线**；GLO/GAL 与三频未验证。
 
 | 任务 | 估计 |
 |------|------|
@@ -726,6 +783,8 @@ Step 4: joint Phase 2 + 3                                        13d
 | **合计** | **~7d** |
 
 ### Phase 3：增强
+
+> **执行状态（2026-10-29）**：**未开始**（四项全部未实现，见 §0.2）。
 
 | 任务 | 估计 |
 |------|------|
@@ -1280,6 +1339,9 @@ UNKNOWN ──→ STABLE ──→ DRIFTING ──→ DISPLACED ──→ REJECT
 **实现说明**：本节只保留"多站互检、基准可靠性优先"这一通用工程思想，代码为独立实现；对外部资料的任何引用与比对均不纳入本仓库。
 
 ### 13.8 实现落点
+
+> **实现状态（2026-10-29）**：**未实现**。以下为设计稿，`rtklib-joint` 中无 `BaseStabilityMonitor`
+> 类，`JointCore.rtkpos()` 中也无对应调用点。本章属后续迭代（Phase 3 之后）。
 
 新增类 `org.rtklib.java.joint.BaseStabilityMonitor`：
 
