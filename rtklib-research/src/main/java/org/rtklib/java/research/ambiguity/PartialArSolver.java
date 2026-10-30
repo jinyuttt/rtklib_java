@@ -83,7 +83,7 @@ public class PartialArSolver {
 
             LambdaSolver.LambdaResult lambdaResult = LambdaSolver.solve(subAmb, subCov, 2);
 
-            if (lambdaResult.fixed && lambdaResult.ratio < 1.0 / ratioThreshold) {
+            if (lambdaResult.fixed && lambdaResult.ratio > ratioThreshold) {
                 result.fixedIndices = new ArrayList<>(subset);
                 result.fixedAmbiguity = lambdaResult.fixedAmbiguity;
                 result.ratio = lambdaResult.ratio;

@@ -9,13 +9,21 @@ import org.rtklib.java.research.common.MatrixOps;
  * <p>实现 LAMBDA（Least-squares AMBiguity Decorrelation Adjustment）算法：
  * 1. LDLᵀ 分解 + 整数高斯变换去相关
  * 2. MLAMBDA 树搜索（支持 n≥1 的全整数最小二乘搜索）
- * 3. Ratio 检验</p>
+ * 3. Ratio 检验（ratio = 次优代价 / 最优代价，与 RTKLIB 口径一致，ratio &gt; 3.0 固定）</p>
  *
  * <p>去相关 → Zᵀ 变换 → 搜索 → Z⁻ᵀ 逆变换。</p>
  */
 public final class LambdaSolver {
 
     private static final double CHI2_FACTOR = 9999.0;
+
+    private static final long MAX_SEARCH_NODES = 500_000L;
+
+    private static final double MAX_LAYER_SPAN = 100.0;
+
+    private static final double RATIO_FIX_THRESHOLD = 3.0;
+
+    private static final double RATIO_MAX = 999.0;
 
     private LambdaSolver() {}
 
@@ -47,9 +55,13 @@ public final class LambdaSolver {
         result.numAmbiguities = n;
 
         SimpleMatrix fixedDecorrelated = mlambdaSearch(zFloat, L, D, numCandidates, result);
-        result.fixedAmbiguity = Z.invert().transpose().mult(fixedDecorrelated);
-
-        computeRatio(result, floatAmb, ambCov);
+        try {
+            result.fixedAmbiguity = Z.invert().transpose().mult(fixedDecorrelated);
+        } catch (RuntimeException e) {
+            result.fixedAmbiguity = fixedDecorrelated.copy();
+            result.fixed = false;
+            result.ratio = 0.0;
+        }
 
         return result;
     }
@@ -136,9 +148,13 @@ public final class LambdaSolver {
         ctx.L = extractLMatrix(L, n);
         ctx.D = Ddiag;
 
+        ctx.bootstrap();
         ctx.startSearch();
 
         if (ctx.bestCost == Double.MAX_VALUE) {
+            result.success = false;
+            result.fixed = false;
+            result.ratio = 0.0;
             SimpleMatrix fallback = new SimpleMatrix(n, 1);
             for (int i = 0; i < n; i++) {
                 fallback.set(i, 0, Math.round(zFlat[i]));
@@ -146,8 +162,8 @@ public final class LambdaSolver {
             return fallback;
         }
 
-        result.ratio = computeRatioFromSearch(ctx);
-        result.fixed = result.ratio < 0.333;
+        result.ratio = ctx.aborted ? 0.0 : computeRatioFromSearch(ctx);
+        result.fixed = !ctx.aborted && result.ratio > RATIO_FIX_THRESHOLD;
 
         SimpleMatrix best = new SimpleMatrix(n, 1);
         for (int i = 0; i < n; i++) {
@@ -166,31 +182,22 @@ public final class LambdaSolver {
         return l;
     }
 
+    /**
+     * RTKLIB 口径的 ratio：次优代价 / 最优代价（越大越可信）。
+     *
+     * <p>与 RTKLIB lambda.c 中 {@code ratio = s[1] / s[0]} 一致。
+     * 当最优代价为 0（浮点解恰为整数）或未搜索到次优解时，返回上限 {@link #RATIO_MAX}。</p>
+     */
     private static double computeRatioFromSearch(SearchContext ctx) {
-        double sumFixed = ctx.bestCost;
-        double best2 = ctx.secondBestCost;
-        if (best2 <= 0 || sumFixed <= 0) return 999.0;
-        return sumFixed / best2;
-    }
-
-    private static void computeRatio(LambdaResult result, SimpleMatrix floatAmb, SimpleMatrix ambCov) {
-        int n = result.numAmbiguities;
-        SimpleMatrix diff = floatAmb.minus(result.fixedAmbiguity);
-        SimpleMatrix Qinv = ambCov.invert();
-        SimpleMatrix dT = diff.transpose();
-        double sq1 = dT.mult(Qinv).mult(diff).get(0, 0);
-
-        SimpleMatrix secondBest = new SimpleMatrix(n, 1);
-        for (int i = 0; i < n; i++) {
-            double fi = result.fixedAmbiguity.get(i, 0);
-            double fl = floatAmb.get(i, 0);
-            secondBest.set(i, 0, fl - fi > 0 ? fi - 1 : fi + 1);
+        double best = ctx.bestCost;
+        double second = ctx.secondBestCost;
+        if (!(best > 0.0)) {
+            return RATIO_MAX;
         }
-        SimpleMatrix diff2 = floatAmb.minus(secondBest);
-        double sq2 = diff2.transpose().mult(Qinv).mult(diff2).get(0, 0);
-
-        result.ratio = sq2 > 0 ? sq1 / sq2 : 0.0;
-        result.fixed = result.ratio < 1.0 / 3.0;
+        if (!(second > 0.0) || second >= Double.MAX_VALUE) {
+            return RATIO_MAX;
+        }
+        return Math.min(second / best, RATIO_MAX);
     }
 
     /**
@@ -216,6 +223,8 @@ public final class LambdaSolver {
         double bestCost;
         double secondBestCost;
         int[] bestSolution;
+        long nodes;
+        boolean aborted;
 
         int[] zCurr;
         double[] zCond;
@@ -232,8 +241,40 @@ public final class LambdaSolver {
             this.secondBestCost = Double.MAX_VALUE;
         }
 
+        void bootstrap() {
+            int[] z = new int[n];
+            for (int i = 0; i < n; i++) {
+                z[i] = (int) Math.round(zFloat[i]);
+            }
+            double cost = evaluateCost(z);
+            if (Double.isFinite(cost)) {
+                bestCost = cost;
+                bestSolution = z;
+            }
+        }
+
+        double evaluateCost(int[] z) {
+            double cost = 0.0;
+            for (int i = n - 1; i >= 0; i--) {
+                double zBar = zFloat[i];
+                for (int j = i + 1; j < n; j++) {
+                    zBar -= L[j][i] * (z[j] - zFloat[j]);
+                }
+                double delta = z[i] - zBar;
+                cost += D[i] * delta * delta;
+                if (!Double.isFinite(cost)) {
+                    return Double.MAX_VALUE;
+                }
+            }
+            return cost;
+        }
+
         void startSearch() {
             double chi2 = CHI2_FACTOR * n;
+            if (!Double.isFinite(chi2) || chi2 <= 0.0) {
+                chi2 = Double.MAX_VALUE;
+            }
+            secondBestCost = chi2;
             searchLevel(n - 1, 0.0, chi2);
         }
 
@@ -245,13 +286,20 @@ public final class LambdaSolver {
          * @param remaining 剩余可用的代价预算
          */
         void searchLevel(int level, double costBelow, double remaining) {
+            if (aborted) {
+                return;
+            }
+            if (++nodes > MAX_SEARCH_NODES) {
+                aborted = true;
+                return;
+            }
             if (level < 0) {
                 double totalCost = costBelow;
-                if (totalCost < bestCost) {
+                if (totalCost < bestCost - 1e-12) {
                     secondBestCost = bestCost;
                     bestCost = totalCost;
                     bestSolution = zCurr.clone();
-                } else if (totalCost < secondBestCost && totalCost > bestCost + 1e-12) {
+                } else if (totalCost > bestCost + 1e-12 && totalCost < secondBestCost) {
                     secondBestCost = totalCost;
                 }
                 return;
@@ -263,27 +311,49 @@ public final class LambdaSolver {
             }
             zCond[level] = zBar;
 
+            if (!Double.isFinite(zBar)) {
+                return;
+            }
+
             double d = D[level];
+            if (!(d > 0.0) || !Double.isFinite(d)) {
+                zCurr[level] = (int) Math.round(zBar);
+                searchLevel(level - 1, costBelow, remaining);
+                return;
+            }
             double step = Math.sqrt(Math.max(remaining / d, 0.0));
+            if (!Double.isFinite(step)) {
+                step = MAX_LAYER_SPAN;
+            }
+            step = Math.min(step, MAX_LAYER_SPAN);
 
             int lo = (int) Math.ceil(zBar - step);
             int hi = (int) Math.floor(zBar + step);
 
-            for (int candidate = lo; candidate <= hi; candidate++) {
-                double delta = candidate - zBar;
-                double newCost = costBelow + d * delta * delta;
+            int center = (int) Math.round(zBar);
+            if (center < lo) center = lo;
+            if (center > hi) center = hi;
+            int maxOffset = Math.max(center - lo, hi - center);
 
-                if (newCost >= bestCost) continue;
+            for (int offset = 0; offset <= maxOffset; offset++) {
+                for (int dir = 0; dir < 2; dir++) {
+                    if (offset == 0 && dir == 1) continue;
+                    int candidate = dir == 0 ? center + offset : center - offset;
+                    if (candidate < lo || candidate > hi) continue;
 
-                zCurr[level] = candidate;
-                sAccum[level] = newCost;
+                    double delta = candidate - zBar;
+                    double newCost = costBelow + d * delta * delta;
 
-                double newRemaining = remaining - d * delta * delta;
-                searchLevel(level - 1, newCost, Math.max(newRemaining, 0.0));
+                    if (newCost >= secondBestCost) continue;
 
-                if (bestCost < Double.MAX_VALUE) {
-                    double bestDelta = bestCost - costBelow;
-                    remaining = Math.min(remaining, bestDelta);
+                    zCurr[level] = candidate;
+                    sAccum[level] = newCost;
+
+                    double newRemaining = Math.min(remaining - d * delta * delta,
+                            secondBestCost - newCost);
+                    searchLevel(level - 1, newCost, Math.max(newRemaining, 0.0));
+
+                    remaining = Math.min(remaining, secondBestCost - costBelow);
                 }
             }
         }
