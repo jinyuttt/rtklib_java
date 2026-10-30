@@ -2273,10 +2273,8 @@ public class Rtcm implements Serializable {
         String[] sig = new String[32];
         double tt, freq;
         int[] code = new int[32];
-        int i, j, k, type, prn, sat, fcn, index = 0;
+        int i, j, k, prn, sat, fcn, index = 0;
         int[] idx = new int[32];
-
-        type = (int) BitUtils.getbitu(this.buff, 24, 12);
 
         for (i = 0; i < h.nsig; i++) {
             switch (sys) {
@@ -2294,14 +2292,6 @@ public class Rtcm implements Serializable {
         }
 
         ObsCode.sigindex(sys, code, h.nsig, idx);
-
-        if (sys == Constants.SYS_CMP && log.isInfoEnabled()) {
-            StringBuilder sbBds = new StringBuilder("[MSM-BDS-SIG] type=" + type + " nsat=" + h.nsat + " nsig=" + h.nsig + " ");
-            for (int si = 0; si < h.nsig; si++) {
-                sbBds.append(String.format("[%d]sig=%s code=%d idx=%d ", si, sig[si], code[si], idx[si]));
-            }
-            log.info(sbBds.toString());
-        }
 
         for (i = j = 0; i < h.nsat; i++) {
             prn = h.sats[i];
@@ -2361,15 +2351,6 @@ public class Rtcm implements Serializable {
             }
             if (sat != 0 && index >= 0) {
                 promoteExtSig(this.obs.data[index], sys);
-                /* TEMP-DIAG: print BDS obs.code after saveMsmObs */
-                if (sys == Constants.SYS_CMP && log.isInfoEnabled()) {
-                    StringBuilder sb = new StringBuilder("[BDS-OBS] prn=" + prn + " sat=" + sat + " code=[");
-                    for (int fc = 0; fc < Constants.NFREQ; fc++) {
-                        sb.append(this.obs.data[index].code[fc]).append(fc < Constants.NFREQ - 1 ? "," : "");
-                    }
-                    sb.append("]");
-                    log.info(sb.toString());
-                }
             }
         }
     }

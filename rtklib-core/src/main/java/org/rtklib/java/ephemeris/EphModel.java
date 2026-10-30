@@ -253,12 +253,6 @@ public final class EphModel {
             x[i] = geph.pos[i];
             x[i + 3] = geph.vel[i];
         }
-        if (Math.abs(t) > 300.0 || geph.sat == 37 || geph.sat == 39) {
-            LOG.info("geph2pos: sat={} t={:.1f}s toe.time={}.toe.sec={:.6f} time.time={}.time.sec={:.6f} pos=({:.0f},{:.0f},{:.0f})".replace("{:.1f}", "{}").replace("{:.6f}", "{}").replace("{:.0f}", "{}"),
-                geph.sat, String.format("%.1f", t), geph.toe.time, String.format("%.6f", geph.toe.sec),
-                time.time, String.format("%.6f", time.sec),
-                String.format("%.0f", geph.pos[0]), String.format("%.0f", geph.pos[1]), String.format("%.0f", geph.pos[2]));
-        }
         for (double tt = t < 0.0 ? -TSTEP : TSTEP; Math.abs(t) > 1E-9; t -= tt) {
             if (Math.abs(t) < TSTEP) tt = t;
             glorbit(tt, x, geph.acc);

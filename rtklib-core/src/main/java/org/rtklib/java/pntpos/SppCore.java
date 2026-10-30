@@ -408,7 +408,6 @@ public final class SppCore {
         double[] H = new double[NX * m];
         double[] var = new double[m];
         for (int i = 0; i < 3; i++) x[i] = sol.rr[i];
-        LOG.info("estpos init: sol.rr=({},{},{}), x=({},{},{})", String.format("%.3f",sol.rr[0]), String.format("%.3f",sol.rr[1]), String.format("%.3f",sol.rr[2]), String.format("%.3f",x[0]), String.format("%.3f",x[1]), String.format("%.3f",x[2]));
         for (int it = 0; it < MAXITR; it++) {
             int[] ns = new int[1];
             int nv = rescode(it, obs, n, rs, dts, vare, svh, nav, x, opt, ssat,
@@ -430,11 +429,6 @@ public final class SppCore {
             }
             for (int j = 0; j < NX; j++) x[j] += dx[j];
             double normDx = RtklibCommon.norm(dx, NX);
-            if (it <= 2) {
-                StringBuilder dxSb = new StringBuilder();
-                for (int j = 0; j < NX; j++) dxSb.append(String.format(" dx[%d]=%.3f", j, dx[j]));
-                LOG.info("SPP iter={} dx_norm={} nv={} ns={}{} x=({},{},{}) clk={}", it, String.format("%.6f", normDx), nv, ns[0], dxSb, String.format("%.3f", x[0]), String.format("%.3f", x[1]), String.format("%.3f", x[2]), String.format("%.6f", x[3]));
-            }
             if (normDx < 1E-4) {
                 sol.type = 0;
                 sol.time = TimeSystem.timeadd(obs[0].time, -x[3] / Constants.CLIGHT);
@@ -449,11 +443,6 @@ public final class SppCore {
                 sol.dtr[3] = cmpIdx >= 0 ? x[cmpIdx] / Constants.CLIGHT : 0.0;
                 sol.dtr[4] = irnIdx >= 0 ? x[irnIdx] / Constants.CLIGHT : 0.0;
                 sol.dtr[5] = qzsIdx >= 0 ? x[qzsIdx] / Constants.CLIGHT : 0.0;
-                LOG.info(String.format("SPP-CLK: x[3]=%.3f dtr0=%.12e gloIdx=%d x[glo]=%.3f dtr1=%.12e dtr0+dtr1=%.3f galIdx=%d x[gal]=%.3f dtr2=%.12e dtr0+dtr2=%.3f",
-                        x[3], sol.dtr[0], gloIdx, gloIdx >= 0 ? x[gloIdx] : 0.0, sol.dtr[1],
-                        Constants.CLIGHT * (sol.dtr[0] + sol.dtr[1]),
-                        galIdx, galIdx >= 0 ? x[galIdx] : 0.0, sol.dtr[2],
-                        Constants.CLIGHT * (sol.dtr[0] + sol.dtr[2])));
                 for (int j = 0; j < 6; j++) sol.rr[j] = (j < 3) ? x[j] : 0.0;
                 for (int j = 0; j < 3; j++) sol.qr[j] = (float) Q[j * NX + j];
                 sol.qr[3] = (float) Q[1];
