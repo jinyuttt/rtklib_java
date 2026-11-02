@@ -27,11 +27,65 @@ public record MultiBaselineConfig(
          * 近期状态，超长时段的单次大平差既无必要也浪费内存。观测按 GPS 时间
          * 从队列头部淘汰。设为 {@code <= 0} 关闭时间窗（仅受观测条数上限约束）。</p>
          */
-        double networkWindowSeconds
+        double networkWindowSeconds,
+        /**
+         * 解状态准入策略：只吃 FIX，还是允许 FLOAT 补位。
+         *
+         * <p>开阔短基线下 FIX 率接近 100%，网平差本身收益有限；真正需要网平差的是
+         * 长基线、遮挡、城市峡谷这类 FIX 率低的场景，而恰恰在这些场景里，
+         * "仅 FIX" 会把整段历元全部丢掉——平差在它最该发挥作用的场合反而没数据可用。</p>
+         *
+         * <p>因此准入策略做成配置项：{@code allowFloat=false} 为历史行为（仅 FIX），
+         * {@code allowFloat=true} 时 FIX 优先、FLOAT 补位。默认关闭，保持既有语义不变。</p>
+         */
+        SolutionAdmissionConfig solutionAdmission
 ) {
 
     public static Builder builder() {
         return new Builder();
+    }
+
+    /**
+     * 解状态准入策略。
+     *
+     * @param allowFloat             是否允许 FLOAT 基线进入平差。false = 仅 FIX（历史行为）。
+     * @param floatCovInflate        FLOAT 基线协方差的膨胀倍数（按方差计）。
+     *                               FLOAT 的误差通常在分米级、FIX 在厘米级，
+     *                               方差比约 100~10000，默认 1000（即 1σ 放大 31.6 倍），
+     *                               使 FLOAT 在 WLS 中只占极小权重，融合位置基本由 FIX 决定。
+     * @param floatAgreementThreshold FLOAT 与 FIX 位置较差的一致性判定阈值 (m)，
+     *                               是<b>准入前置条件</b>而非事后判级：仅 1 条 FIX 时，
+     *                               超过该值的 FLOAT 不进入 WLS 并被记入
+     *                               {@code AdjustResult.rejectedFloats}；准入的历元判
+     *                               {@code SINGLE_VERIFIED}，被拒的历元只剩 1 条 FIX、
+     *                               判 {@code UNVERIFIED} 且 {@code crossValidationDist} 为 NaN。
+     */
+    public record SolutionAdmissionConfig(
+            boolean allowFloat,
+            double floatCovInflate,
+            double floatAgreementThreshold
+    ) {
+        public static Builder builder() {
+            return new Builder();
+        }
+
+        public static class Builder {
+            private boolean allowFloat = false;
+            private double floatCovInflate = 1000.0;
+            private double floatAgreementThreshold = 0.20;
+
+            public Builder allowFloat(boolean v) { this.allowFloat = v; return this; }
+            public Builder floatCovInflate(double v) { this.floatCovInflate = v; return this; }
+            public Builder floatAgreementThreshold(double v) { this.floatAgreementThreshold = v; return this; }
+
+            public SolutionAdmissionConfig build() {
+                return new SolutionAdmissionConfig(allowFloat, floatCovInflate, floatAgreementThreshold);
+            }
+        }
+
+        public static SolutionAdmissionConfig defaults() {
+            return builder().build();
+        }
     }
 
     public record CrossValidationConfig(
@@ -146,6 +200,7 @@ public record MultiBaselineConfig(
         private DiagnosisConfig diagnosis = DiagnosisConfig.defaults();
         private double baseCoordinateSigma = 0.0;
         private double networkWindowSeconds = 3600.0;
+        private SolutionAdmissionConfig solutionAdmission = SolutionAdmissionConfig.defaults();
 
         public Builder baseStationIds(String... ids) { this.baseStationIds = List.of(ids); return this; }
         public Builder baseStationIds(List<String> ids) { this.baseStationIds = ids; return this; }
@@ -155,10 +210,21 @@ public record MultiBaselineConfig(
         public Builder diagnosis(DiagnosisConfig v) { this.diagnosis = v; return this; }
         public Builder baseCoordinateSigma(double v) { this.baseCoordinateSigma = v; return this; }
         public Builder networkWindowSeconds(double v) { this.networkWindowSeconds = v; return this; }
+        public Builder solutionAdmission(SolutionAdmissionConfig v) { this.solutionAdmission = v; return this; }
+
+        public Builder allowFloat(boolean v) {
+            this.solutionAdmission = SolutionAdmissionConfig.builder()
+                    .allowFloat(v)
+                    .floatCovInflate(solutionAdmission.floatCovInflate())
+                    .floatAgreementThreshold(solutionAdmission.floatAgreementThreshold())
+                    .build();
+            return this;
+        }
 
         public MultiBaselineConfig build() {
             return new MultiBaselineConfig(baseStationIds, qualityWeight, crossValidation, batch,
-                    diagnosis, baseCoordinateSigma, networkWindowSeconds);
+                    diagnosis, baseCoordinateSigma, networkWindowSeconds,
+                    solutionAdmission != null ? solutionAdmission : SolutionAdmissionConfig.defaults());
         }
     }
 

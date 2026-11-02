@@ -70,11 +70,23 @@ public class Sol implements Serializable {
     public float vdop;
 
     /**
-     * [Java扩展] H矩阵位置分量等效设计矩阵(3x3，行优先9个元素)。
+     * [Java扩展] H矩阵位置分量等效设计矩阵(3×nv，行优先)。
      * 由relpos()中H[:,0:3]和R计算得到，diagMask & DIAG_HPOS时有效。
+     * 行数为3（位置分量），列数为该历元双差观测数nv。
      * null表示未计算或计算失败。
      */
     public double[] hPos = null;
+
+    /**
+     * [Java扩展] 单历元归约法方程位置协方差(3×3，行优先9元素)。
+     * 由relpos()中H和R(原始ddcov版本)构造 N_A = H_A^T R^-1 H_A 后求逆取位置块，
+     * diagMask & DIAG_QPOS时有效。
+     * FIX：列集为活跃列与[0,NR)求交(剔除已固定的模糊度)；
+     * FLOAT：列集保留模糊度列。
+     * 与Kalman后验Pa不同，该矩阵不含跨历元相关性。
+     * null表示未计算或计算失败。
+     */
+    public double[] qPos = null;
 
     /**
      * [Java扩展] 新息向量RMS = sqrt(v^T R^{-1} v / nv)。
@@ -144,6 +156,7 @@ public class Sol implements Serializable {
         this.hdop = other.hdop;
         this.vdop = other.vdop;
         this.hPos = other.hPos != null ? other.hPos.clone() : null;
+        this.qPos = other.qPos != null ? other.qPos.clone() : null;
         this.innovRms = other.innovRms;
         this.innovMax = other.innovMax;
         this.ddObsCount = other.ddObsCount;

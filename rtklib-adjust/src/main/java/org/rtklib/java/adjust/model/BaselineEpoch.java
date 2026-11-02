@@ -19,6 +19,12 @@ public class BaselineEpoch {
     /** 有效基线数量 */
     public final int count;
 
+    /** 其中 FIX 状态基线数量 */
+    public final int fixCount;
+
+    /** 其中 FLOAT 状态基线数量（仅准入策略允许 FLOAT 时可能非 0） */
+    public final int floatCount;
+
     /**
      * 单条基线数据。
      */
@@ -102,17 +108,37 @@ public class BaselineEpoch {
      * @param baselines 原始基线数组（最多3条），非FIX的会被剔除
      */
     public BaselineEpoch(String epochTag, BaselineEntry[] baselines) {
+        this(epochTag, baselines, false);
+    }
+
+    /**
+     * 构造BaselineEpoch，可选是否接纳 FLOAT 基线。
+     *
+     * @param epochTag   历元标识
+     * @param baselines  原始基线数组（最多3条）
+     * @param allowFloat true 时 FLOAT 基线也被接纳（其余状态仍剔除）
+     */
+    public BaselineEpoch(String epochTag, BaselineEntry[] baselines, boolean allowFloat) {
         this.epochTag = epochTag;
         BaselineEntry[] valid = new BaselineEntry[baselines.length];
         int n = 0;
+        int nFix = 0;
+        int nFloat = 0;
         for (BaselineEntry b : baselines) {
-            if (b != null && b.solData != null
-                    && b.solData.status == org.rtklib.java.data.SolutionStatus.FIX) {
+            if (b == null || b.solData == null) continue;
+            if (b.solData.status == org.rtklib.java.data.SolutionStatus.FIX) {
                 valid[n++] = b;
+                nFix++;
+            } else if (allowFloat
+                    && b.solData.status == org.rtklib.java.data.SolutionStatus.FLOAT) {
+                valid[n++] = b;
+                nFloat++;
             }
         }
         this.baselines = new BaselineEntry[n];
         System.arraycopy(valid, 0, this.baselines, 0, n);
         this.count = n;
+        this.fixCount = nFix;
+        this.floatCount = nFloat;
     }
 }

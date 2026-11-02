@@ -16,6 +16,8 @@
 - **rtklib-stream GGA 解析**（新包 `org.rtklib.java.stream.nmea`）：`NmeaGga`、`NmeaGgaParser`。支持任意 talker ID（GP/GN/GL/GA/GB/BD），强制校验和，坏行返回 `Optional.empty()` 不抛异常。`ellipsoidHeight()` 按 `h = H + N` 把 GGA 的正高换算为椭球高，`toVrsPosition()` 直接输出 `[lat(rad), lon(rad), h(m)]`
 - **VRS 1033 天线描述播发接线**：`VrsGenerator.writeVrsStation()` 在站坐标后追加天线描述消息；`VrsOptionalConfig` 新增 `antennaMsgType`（默认 1033，0 关闭）、`antSerial`、`antSetupId`、`recVersion`、`recSerial`。编码器 `Rtcm3StationEncoder` 的 1032/1033 支持此前已存在，本次仅完成配置到输出的接线
 - **rtklib-networkvrs 档 1（多基站网络 VRS）**：多站输入同步、IDW 插值、相对主站改正、复用 vrs 输出（`output/VrsOutputBridge`）；真实三站 RTCM 数据验证通过
+- **adjust FLOAT 补位开关**：`MultiBaselineConfig` 新增 `SolutionAdmissionConfig`（`solutionAdmission`，Builder 快捷方法 `allowFloat(boolean)`），`allowFloat` 默认 `false` = 仅 FIX，与历史行为完全一致。开启后**仅在 FIX 基线不足 2 条时**由 FLOAT 补位（FIX 足量时 FLOAT 一律丢弃），FLOAT 协方差按 `floatCovInflate`（默认 1000，按方差计）膨胀降权，融合位置基本由 FIX 决定；基站一致性检核、网平差观测累积、基站诊断仍只消费 FIX，避免 FLOAT 分米级偏差污染基站位移与 σ₀
+- **adjust FLOAT 准入前门限**：`floatAgreementThreshold`（默认 0.20 m）从"事后判级"前移为**准入前置条件**。仅 1 条 FIX 时，FLOAT 与 FIX 的位置较差超过阈值则**不进入 WLS**，而非进入后再降级判定。由此"准入"与"等级"成为同一单调映射：较差 ≤ 阈值 → 准入 → `SINGLE_VERIFIED`；较差 > 阈值 → 拒绝 → `UNVERIFIED`（零自由度、`crossValidationDist` 为 NaN），消除"FLOAT 既拉坐标、等级又说不可信"的中间态。被拒 FLOAT 经 `AdjustResult.rejectedFloats`（`RejectedFloat(baseId, distanceToFix, threshold)`）显式透传，不再静默丢弃。距离口径由 `GnssBaselineAdjust.floatDistancesToFix` 单点提供，准入判定与判级共用；`fixCount != 1` 时返回空 Map 表示"无参照物"，调用方须读作"无法判定"而非"较差为 0"
 
 ### Changed（破坏性 API）
 

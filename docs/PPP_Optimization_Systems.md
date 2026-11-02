@@ -197,7 +197,7 @@
 |--------|------|------|
 | SSR 改正 | `enablePppRtk` | 总闸：轨道/钟差/高频钟差/码偏差/相位偏差改正 |
 | PPP-RTK AR | `enablePppRtkAR` | LAMBDA + ratio test（`pppRtkArRatio`，默认 3.0） |
-| Fix-and-Hold | `enablePppRtkFixHold` | 锁定固定解 |
+| Fix-and-Hold | `cfg.pppRtk.enableFixHold` | 锁定固定解 |
 
 ### 3.4 限制
 
@@ -271,7 +271,7 @@ PPP-RTK 专属优化项（SSR 改正 → AR → Fix-and-Hold）
 | 开关 | 实时 SSR 流 | 静态 RINEX 事后 |
 |------|:---:|:---:|
 | enablePppRtk | ✅ | **不可测**（无流） |
-| enablePppRtkAR / enablePppRtkFixHold | ✅（产品链路验证后） | 不可测 |
+| enablePppRtkAR / cfg.pppRtk.enableFixHold | ✅（产品链路验证后） | 不可测 |
 
 ---
 

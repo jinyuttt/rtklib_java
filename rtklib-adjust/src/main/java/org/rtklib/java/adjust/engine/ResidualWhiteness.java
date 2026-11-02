@@ -68,8 +68,18 @@ public final class ResidualWhiteness {
     /**
      * 喂入一个历元的平差残差。
      *
+     * <p>{@code v == null} <b>不是</b>异常，而是"本历元无残差可用"的正常情形：
+     * 当参与平差的基线数 {@code k == 1}（{@code m = 3k = 3 = n}，自由度
+     * {@code df = 0}）时，平差恰好定解，残差恒为 0，{@code AdjustResult.v}
+     * 因此为 null。该历元直接跳过，不写入任何序列，不影响后续判定。</p>
+     *
+     * <p>此类 {@code df = 0} 历元在"仅 FIX"管线里本就存在（单 FIX 补位历元），
+     * 准入规则拒绝 FLOAT 后（{@code k} 由 2 降为 1）也只是走到同一路径，
+     * 不引入新的 null 语义。</p>
+     *
      * @param entries 该历元的基线条目（顺序须与 {@code v} 的分块顺序一致）
-     * @param v       平差残差向量（长度 3k，每基线连续 3 个坐标轴分量）
+     * @param v       平差残差向量（长度 3k，每基线连续 3 个坐标轴分量）；
+     *                {@code df = 0} 时为 null
      */
     public void feed(List<BaselineEpoch.BaselineEntry> entries, double[] v) {
         if (entries == null || v == null || v.length < 3 * entries.size()) return;

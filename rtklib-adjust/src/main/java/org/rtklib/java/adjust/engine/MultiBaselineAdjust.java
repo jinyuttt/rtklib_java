@@ -16,6 +16,12 @@ public class MultiBaselineAdjust {
 
     /** 交叉验证阈值与保护级系数（由 config.crossValidation() 映射）。 */
     private final GnssBaselineAdjust.Policy adjustPolicy;
+
+    /** 是否允许 FLOAT 基线补位（由 config.solutionAdmission() 映射，默认 false = 仅 FIX）。 */
+    private final boolean allowFloat;
+
+    /** FLOAT 基线协方差膨胀倍数（按方差计）。 */
+    private final double floatCovInflate;
     private final Map<String, SolData> pendingBaselines;
     private String currentEpochTag;
     private int epochIndex;
@@ -87,6 +93,11 @@ public class MultiBaselineAdjust {
     private MultiBaselineAdjust(MultiBaselineConfig config) {
         this.config = config;
         this.adjustPolicy = GnssBaselineAdjust.Policy.fromConfig(config);
+        MultiBaselineConfig.SolutionAdmissionConfig admission = config.solutionAdmission() != null
+                ? config.solutionAdmission()
+                : MultiBaselineConfig.SolutionAdmissionConfig.defaults();
+        this.allowFloat = admission.allowFloat();
+        this.floatCovInflate = admission.floatCovInflate();
         this.pendingBaselines = new LinkedHashMap<>();
         this.windowCoords = new ArrayList<>();
         this.windowCount = 0;
@@ -130,6 +141,12 @@ public class MultiBaselineAdjust {
 
         if (solData.status == SolutionStatus.FIX) {
             pendingBaselines.put(baseId, solData);
+        } else if (allowFloat && solData.status == SolutionStatus.FLOAT) {
+            // FIX 优先：同一基站在同一历元已收到 FIX 时，后来的 FLOAT 不再覆盖它。
+            SolData existing = pendingBaselines.get(baseId);
+            if (existing == null || existing.status != SolutionStatus.FIX) {
+                pendingBaselines.put(baseId, solData);
+            }
         }
     }
 
@@ -369,21 +386,38 @@ public class MultiBaselineAdjust {
 
         if (entries.isEmpty()) return;
 
-        Map<String, double[]> baseToRover = new LinkedHashMap<>();
-        String[] baseIds = new String[entries.size()];
-        for (int i = 0; i < entries.size(); i++) {
-            BaselineEpoch.BaselineEntry e = entries.get(i);
-            baseIds[i] = e.baseId;
-            baseToRover.put(e.baseId, e.dXyz);
+        Admission admission = selectAdmitted(entries);
+        List<BaselineEpoch.BaselineEntry> admitted = admission.admitted();
+        if (admitted.isEmpty()) return;
+
+        // 一致性检核与网平差观测只吃 FIX：FLOAT 的位置偏差是分米级，
+        // 会直接污染基站间漂移与真基线向量。
+        List<BaselineEpoch.BaselineEntry> fixOnly = new ArrayList<>();
+        for (BaselineEpoch.BaselineEntry e : admitted) {
+            if (e.solData != null && e.solData.status == SolutionStatus.FIX) {
+                fixOnly.add(e);
+            }
         }
-        consistency.feed(currentEpochTag, baseToRover);
-        accumulateNetworkObs(currentEpochTag, entries);
+
+        String[] baseIds = new String[admitted.size()];
+        for (int i = 0; i < admitted.size(); i++) {
+            baseIds[i] = admitted.get(i).baseId;
+        }
+        if (!fixOnly.isEmpty()) {
+            Map<String, double[]> fixToRover = new LinkedHashMap<>();
+            for (BaselineEpoch.BaselineEntry e : fixOnly) {
+                fixToRover.put(e.baseId, e.dXyz);
+            }
+            consistency.feed(currentEpochTag, fixToRover);
+            accumulateNetworkObs(currentEpochTag, fixOnly);
+        }
         checkConsistency();
 
         BaselineEpoch epoch = new BaselineEpoch(currentEpochTag,
-                entries.toArray(new BaselineEpoch.BaselineEntry[0]));
+                admitted.toArray(new BaselineEpoch.BaselineEntry[0]), allowFloat);
 
-        AdjustResult result = GnssBaselineAdjust.adjust(epoch, config.qualityWeight(), adjustPolicy);
+        AdjustResult result = GnssBaselineAdjust.adjust(epoch, config.qualityWeight(),
+                adjustPolicy, admission.rejected());
         lastAdjustResult = result;
 
         if (!result.success) return;
@@ -391,10 +425,10 @@ public class MultiBaselineAdjust {
         // 白度检验的残差序列必须与"实际参与平差"的基线一一对应：
         // SUSPECT 且嫌疑基线被剔除时，result.v 只含剩余基线的残差，
         // 需同步剔除对应条目，否则长度不匹配会被静默丢弃。
-        List<BaselineEpoch.BaselineEntry> whitenedEntries = entries;
-        if (result.suspectBaseId != null && result.usedBaselineCount < entries.size()) {
+        List<BaselineEpoch.BaselineEntry> whitenedEntries = admitted;
+        if (result.suspectBaseId != null && result.usedBaselineCount < admitted.size()) {
             whitenedEntries = new ArrayList<>();
-            for (BaselineEpoch.BaselineEntry e : entries) {
+            for (BaselineEpoch.BaselineEntry e : admitted) {
                 if (!e.baseId.equals(result.suspectBaseId)) {
                     whitenedEntries.add(e);
                 }
@@ -404,9 +438,9 @@ public class MultiBaselineAdjust {
 
         // 嫌疑基线被剔除的历元（df=0）没有有效平差残差，改喂该基线相对
         // 融合解的交叉检核残差——这是此类历元唯一有信息量的残差序列。
-        if (result.suspectBaseId != null && result.usedBaselineCount < entries.size()
+        if (result.suspectBaseId != null && result.usedBaselineCount < admitted.size()
                 && result.p01Xyz != null) {
-            for (BaselineEpoch.BaselineEntry e : entries) {
+            for (BaselineEpoch.BaselineEntry e : admitted) {
                 if (e.baseId.equals(result.suspectBaseId) && e.dXyz != null && e.dXyz.length >= 3) {
                     residualWhiteness.feedSingle(e.baseId, new double[]{
                             result.p01Xyz[0] - e.dXyz[0],
@@ -426,7 +460,8 @@ public class MultiBaselineAdjust {
             }
         }
 
-        if (diagnoser != null) {
+        // 基站诊断基于 FIX 质量，纯 FLOAT 历元的 σ₀ 不代表基站状态，不喂入。
+        if (diagnoser != null && !fixOnly.isEmpty()) {
             diagnoser.feedAdjustResult(result, baseIds);
         }
 
@@ -458,6 +493,8 @@ public class MultiBaselineAdjust {
         int suspectCount = 0;
         double plSum = 0;
         double crossValSum = 0;
+        int plCount = 0;
+        int crossValCount = 0;
         String firstTag = null;
         String lastTag = null;
 
@@ -475,8 +512,14 @@ public class MultiBaselineAdjust {
             else if (c.grade() == ReliabilityGrade.CROSS_CHECKED) crossCheckedCount++;
             else if (c.grade() == ReliabilityGrade.SUSPECT) suspectCount++;
 
-            if (!Double.isNaN(c.protectionLevel())) plSum += c.protectionLevel();
-            if (!Double.isNaN(c.crossValidationDist())) crossValSum += c.crossValidationDist();
+            if (!Double.isNaN(c.protectionLevel())) {
+                plSum += c.protectionLevel();
+                plCount++;
+            }
+            if (!Double.isNaN(c.crossValidationDist())) {
+                crossValSum += c.crossValidationDist();
+                crossValCount++;
+            }
         }
 
         double[] xyz = new double[3];
@@ -504,8 +547,8 @@ public class MultiBaselineAdjust {
         else if (reliableRatio >= 20) batchGrade = ReliabilityGrade.UNVERIFIED;
         else batchGrade = ReliabilityGrade.SUSPECT;
 
-        double plAvg = plSum / coords.size();
-        double crossValAvg = crossValSum / coords.size();
+        double plAvg = plCount > 0 ? plSum / plCount : Double.NaN;
+        double crossValAvg = crossValCount > 0 ? crossValSum / crossValCount : Double.NaN;
 
         return new BatchCoordinate(
                 xyz, sigma, batchGrade,
@@ -530,11 +573,98 @@ public class MultiBaselineAdjust {
             double[] dXyz = extractBaselineVector(solData);
             double[][] cBaseline = extractBaselineCov(solData);
             double[][] pRover = extractRoverCov(solData);
+            if (solData.status == SolutionStatus.FLOAT && floatCovInflate > 1.0) {
+                cBaseline = inflateCovariance(cBaseline, floatCovInflate);
+                pRover = inflateCovariance(pRover, floatCovInflate);
+            }
             double qf = BaselineEpoch.BaselineEntry.computeQualityFactor(solData);
             return new BaselineEpoch.BaselineEntry(baseId, solData, dXyz, cBaseline, pRover, qf);
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * 决定本历元哪些基线参与平差。
+     *
+     * <p>FIX 优先：FIX 达到两条及以上时丢弃 FLOAT——双 FIX 交叉验证是最可靠的判据，
+     * 掺入分米级的 FLOAT 只会把基线间较差推过 SUSPECT 阈值、错误剔除真 FIX。
+     * FIX 不足两条时才由 FLOAT 补位，避免历元断档。{@code allowFloat=false}
+     * 时退化为"仅 FIX"，与历史行为一致。</p>
+     *
+     * <p>仅 1 条 FIX 时，FLOAT 的准入取决于"FLOAT 与 FIX 的位置较差"：
+     * 超过 {@code floatAgreementThreshold} 的 FLOAT <b>不进入 WLS</b>。
+     * 这样"准入"与"等级"成为同一个单调映射——较差 ≤ 阈值 → 准入 →
+     * {@code SINGLE_VERIFIED}；较差 &gt; 阈值 → 拒绝 → {@code UNVERIFIED}，
+     * 消除了"FLOAT 既拉坐标、等级又说不可信"的矛盾中间态。</p>
+     *
+     * <p>被拒绝的 FLOAT 必须通过 {@link Admission#rejected()} 带出去：它们已不在
+     * {@code admitted} 内，平差看不到，若不上报就变成"静默丢弃"。</p>
+     *
+     * <p>0 条 FIX 时没有参照物，规则不适用，FLOAT 仍按原样补位
+     * （此时无 FIX 可参照，其保护级由 {@code plKUnverified} 承担）。</p>
+     */
+    private Admission selectAdmitted(List<BaselineEpoch.BaselineEntry> entries) {
+        List<BaselineEpoch.BaselineEntry> fixEntries = new ArrayList<>();
+        List<BaselineEpoch.BaselineEntry> floatEntries = new ArrayList<>();
+        for (BaselineEpoch.BaselineEntry e : entries) {
+            if (e.solData != null && e.solData.status == SolutionStatus.FIX) {
+                fixEntries.add(e);
+            } else {
+                floatEntries.add(e);
+            }
+        }
+
+        if (!allowFloat || fixEntries.size() >= 2) {
+            return new Admission(fixEntries, List.of());
+        }
+
+        if (fixEntries.size() == 1 && !floatEntries.isEmpty()) {
+            double threshold = adjustPolicy.floatAgreementThreshold();
+            Map<String, Double> dists = GnssBaselineAdjust.floatDistancesToFix(entries);
+            List<BaselineEpoch.BaselineEntry> keptFloats = new ArrayList<>();
+            List<AdjustResult.RejectedFloat> rejected = new ArrayList<>();
+            for (BaselineEpoch.BaselineEntry f : floatEntries) {
+                Double d = dists.get(f.baseId);
+                if (d != null && d > threshold) {
+                    rejected.add(new AdjustResult.RejectedFloat(f.baseId, d, threshold));
+                } else {
+                    keptFloats.add(f);
+                }
+            }
+            if (!rejected.isEmpty()) {
+                List<BaselineEpoch.BaselineEntry> out =
+                        new ArrayList<>(fixEntries.size() + keptFloats.size());
+                out.addAll(fixEntries);
+                out.addAll(keptFloats);
+                return new Admission(out, rejected);
+            }
+        }
+
+        List<BaselineEpoch.BaselineEntry> out = new ArrayList<>(fixEntries.size() + floatEntries.size());
+        out.addAll(fixEntries);
+        out.addAll(floatEntries);
+        return new Admission(out, List.of());
+    }
+
+    /**
+     * 准入结果：实际进入平差的基线 + 被准入规则拒绝的 FLOAT。
+     *
+     * <p>两者互补，且 {@code admitted} 与 {@code rejected} 不重叠。</p>
+     */
+    private record Admission(List<BaselineEpoch.BaselineEntry> admitted,
+                             List<AdjustResult.RejectedFloat> rejected) {}
+
+    private static double[][] inflateCovariance(double[][] cov, double inflate) {
+        if (cov == null) return null;
+        double[][] out = new double[cov.length][];
+        for (int i = 0; i < cov.length; i++) {
+            out[i] = new double[cov[i].length];
+            for (int j = 0; j < cov[i].length; j++) {
+                out[i][j] = cov[i][j] * inflate;
+            }
+        }
+        return out;
     }
 
     private double[] extractBaselineVector(SolData solData) {

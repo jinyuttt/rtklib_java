@@ -10,6 +10,12 @@ import org.rtklib.java.adjust.model.MultiBaselineConfig;
 import org.rtklib.java.adjust.model.ReliabilityGrade;
 import org.rtklib.java.data.CoordType;
 import org.rtklib.java.data.Position;
+import org.rtklib.java.data.SolutionStatus;
+
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 public class GnssBaselineAdjust {
 
@@ -24,9 +30,12 @@ public class GnssBaselineAdjust {
      * @param suspectThreshold         达到此值判为可疑 (m)
      * @param plKVerified              一致时的保护级系数
      * @param plKCrossChecked          可交叉验证时的保护级系数
-     * @param plKUnverified            未验证时的保护级系数
+     * @param plKUnverified            未验证时的保护级系数；
+     *                                 {@code SINGLE_VERIFIED}（1 FIX + FLOAT 佐证）同样取该系数
+     *                                 —— FLOAT 佐证不足以降低保护级，二者共享同一保守取值
      * @param plKSuspect               可疑时的保护级系数
      * @param crossCheckedCovInflate   可交叉验证档的协方差膨胀倍数
+     * @param floatAgreementThreshold  FLOAT 与 FIX 位置较差的一致性判定阈值 (m)
      */
     public record Policy(
             double verifiedThreshold,
@@ -36,18 +45,23 @@ public class GnssBaselineAdjust {
             double plKCrossChecked,
             double plKUnverified,
             double plKSuspect,
-            double crossCheckedCovInflate
+            double crossCheckedCovInflate,
+            double floatAgreementThreshold
     ) {
         public static Policy defaults() {
-            return new Policy(0.02, 0.05, 0.05, 2.0, 3.0, 6.0, 10.0, 4.0);
+            return new Policy(0.02, 0.05, 0.05, 2.0, 3.0, 6.0, 10.0, 4.0, 0.20);
         }
 
         public static Policy fromConfig(MultiBaselineConfig config) {
             if (config == null || config.crossValidation() == null) return defaults();
             MultiBaselineConfig.CrossValidationConfig c = config.crossValidation();
+            double floatThreshold = config.solutionAdmission() != null
+                    ? config.solutionAdmission().floatAgreementThreshold()
+                    : 0.20;
             return new Policy(c.verifiedThreshold(), c.crossCheckedThreshold(),
                     c.suspectThreshold(), c.plKVerified(), c.plKCrossChecked(),
-                    c.plKUnverified(), c.plKSuspect(), c.crossCheckedCovInflate());
+                    c.plKUnverified(), c.plKSuspect(), c.crossCheckedCovInflate(),
+                    floatThreshold);
         }
 
         public double plK(ReliabilityGrade grade) {
@@ -55,7 +69,8 @@ public class GnssBaselineAdjust {
                 case VERIFIED -> plKVerified;
                 case CROSS_CHECKED -> plKCrossChecked;
                 case SUSPECT -> plKSuspect;
-                default -> plKUnverified;
+                case SINGLE_VERIFIED -> plKUnverified;
+                case UNVERIFIED -> plKUnverified;
             };
         }
     }
@@ -75,6 +90,10 @@ public class GnssBaselineAdjust {
             return AdjustResult.failure(epoch.epochTag, 0, "无有效FIX基线");
         }
 
+        if (epoch.floatCount > 0) {
+            return adjustWithFloat(epoch, qualityWeight, p);
+        }
+
         if (k == 1) {
             return adjustSingle(epoch, qualityWeight, p);
         }
@@ -86,6 +105,22 @@ public class GnssBaselineAdjust {
             case SUSPECT -> adjustSuspect(epoch, qualityWeight, cv, p);
             default -> adjustSingle(epoch, qualityWeight, p);
         };
+    }
+
+    /**
+     * 平差，并附带"准入阶段被拒绝的 FLOAT 基线"。
+     *
+     * <p>被拒绝的 FLOAT 已不在 {@code epoch} 内，平差本身看不到它们，
+     * 因此 FIX/FLOAT 较差无法由 {@link #adjustWithFloat} 产生。若不在结果上
+     * 显式携带，粗差 FLOAT 会被<b>静默丢弃</b>——比"报 0.0 较差"更糟。
+     * 本重载把该信息透传到 {@link AdjustResult#rejectedFloats}。</p>
+     *
+     * @param rejected 准入阶段被拒绝的 FLOAT；null 或空表示无拒绝
+     */
+    public static AdjustResult adjust(BaselineEpoch epoch, boolean qualityWeight,
+                                      Policy policy, List<AdjustResult.RejectedFloat> rejected) {
+        AdjustResult r = adjust(epoch, qualityWeight, policy);
+        return r == null ? null : r.withRejectedFloats(rejected);
     }
 
     private static AdjustResult adjustSingle(BaselineEpoch epoch, boolean qualityWeight, Policy p) {
@@ -163,11 +198,101 @@ public class GnssBaselineAdjust {
 
             return AdjustResult.success(epoch.epochTag, dx, Dx, v,
                     sigma0, df, Qv, baardaT, p01Xyz, k,
-                    ReliabilityGrade.UNVERIFIED, 0.0, pl, null);
+                    ReliabilityGrade.UNVERIFIED, Double.NaN, pl, null);
 
         } catch (RuntimeException e) {
             return AdjustResult.failure(epoch.epochTag, k, "平差计算异常: " + e.getMessage());
         }
+    }
+
+    /**
+     * 含 FLOAT 基线历元的平差。
+     *
+     * <p>FLOAT 基线的协方差已在装配阶段按 {@code floatCovInflate} 膨胀，
+     * 因此在 WLS 中只占极小权重，融合位置基本由 FIX 决定，不会把坐标明显拉偏。</p>
+     *
+     * <p>等级判定：</p>
+     * <ul>
+     *   <li>恰好 1 条 FIX + FLOAT，且 FLOAT 与 FIX 位置较差 ≤ {@code floatAgreementThreshold}
+     *       → {@link ReliabilityGrade#SINGLE_VERIFIED}（FLOAT 作佐证）；</li>
+     *   <li>其余含 FLOAT 的情形 → {@link ReliabilityGrade#UNVERIFIED}：
+     *       FLOAT 只能补位，不能自证。</li>
+     * </ul>
+     *
+     * <p>这里不做 FIX/FLOAT 之间的交叉验证：两者精度量级差一个数量级，
+     * 用同一阈值必然判 SUSPECT，反而会错误剔除真 FIX。</p>
+     */
+    private static AdjustResult adjustWithFloat(BaselineEpoch epoch, boolean qualityWeight, Policy p) {
+        AdjustResult base = adjustSingle(epoch, qualityWeight, p);
+        if (!base.success) return base;
+
+        ReliabilityGrade grade = ReliabilityGrade.UNVERIFIED;
+        double maxDist = Double.NaN;
+
+        if (epoch.fixCount == 1 && epoch.floatCount >= 1) {
+            maxDist = maxDistanceToFix(epoch);
+            if (!Double.isNaN(maxDist) && maxDist <= p.floatAgreementThreshold()) {
+                grade = ReliabilityGrade.SINGLE_VERIFIED;
+            }
+        }
+
+        double pl = computeProtectionLevel(base.Dx, p.plK(grade));
+        return AdjustResult.success(epoch.epochTag, base.dx, base.Dx, base.v,
+                base.sigma0, base.dof, base.Qv, base.baardaT, base.p01Xyz,
+                base.usedBaselineCount, grade, maxDist, pl, null);
+    }
+
+    /**
+     * 每条 FLOAT 基线相对<b>唯一</b> FIX 基线的位置较差 (m)，按 {@code baseId} 索引。
+     *
+     * <p>这是 FLOAT 与 FIX 位置一致性的<b>唯一</b>口径：准入判定
+     * （{@code MultiBaselineAdjust.selectAdmitted}）与事后判级
+     * （{@link #adjustWithFloat}）都调用本方法，避免同一口径出现两份实现。</p>
+     *
+     * <p>返回空 Map 表示不存在参照物——FIX 条数不为 1（0 条无参照、≥2 条
+     * 应以 FIX 间交叉验证为准）或 FLOAT 无 ECEF 位置。调用方须把"空"读作
+     * "无法判定"，不能读作"较差为 0"。</p>
+     *
+     * @param entries 候选基线条目（含 FIX 与 FLOAT）
+     * @return baseId → 相对唯一 FIX 的距离 (m)；无参照物时为空 Map
+     */
+    public static Map<String, Double> floatDistancesToFix(
+            List<BaselineEpoch.BaselineEntry> entries) {
+        if (entries == null || entries.isEmpty()) return Map.of();
+
+        Position fixPos = null;
+        int fixCount = 0;
+        for (BaselineEpoch.BaselineEntry b : entries) {
+            if (b.solData != null && b.solData.status == SolutionStatus.FIX) {
+                fixCount++;
+                if (fixPos == null) fixPos = b.solData.getPosition(CoordType.ECEF);
+            }
+        }
+        if (fixCount != 1 || fixPos == null) return Map.of();
+
+        Map<String, Double> out = new LinkedHashMap<>();
+        for (BaselineEpoch.BaselineEntry b : entries) {
+            if (b.solData == null || b.solData.status != SolutionStatus.FLOAT) continue;
+            Position floatPos = b.solData.getPosition(CoordType.ECEF);
+            if (floatPos == null) continue;
+            out.put(b.baseId, ecefDistance(fixPos, floatPos));
+        }
+        return out;
+    }
+
+    /**
+     * 本历元所有 FLOAT 基线中，相对唯一 FIX 基线位置的最大距离 (m)。
+     *
+     * @return 最大距离；无参照物（FIX 条数不为 1）时为 {@link Double#NaN}
+     */
+    private static double maxDistanceToFix(BaselineEpoch epoch) {
+        Map<String, Double> dists = floatDistancesToFix(Arrays.asList(epoch.baselines));
+        if (dists.isEmpty()) return Double.NaN;
+        double maxDist = 0.0;
+        for (double d : dists.values()) {
+            maxDist = Math.max(maxDist, d);
+        }
+        return maxDist;
     }
 
     private static AdjustResult adjustSuspect(BaselineEpoch epoch, boolean qualityWeight,
