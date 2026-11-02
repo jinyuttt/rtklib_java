@@ -23,8 +23,9 @@ public class PrcOpt implements Serializable {
     public static final int DIAG_SAT_RESIDUAL  = 1;  // 逐卫星伪距/载波残差(resp/resc)
     public static final int DIAG_SAT_AMBIGUITY = 2;  // 逐卫星模糊度浮点值及标准差(amb/stdA)
     public static final int DIAG_SAT_CYCLESLIP = 4;  // 逐卫星周跳标志及GF/MW组合(slip/gf/mw/rejc)
-    public static final int DIAG_HPOS          = 8;  // H矩阵位置分量等效设计矩阵(3x3 hPos)
+    public static final int DIAG_HPOS          = 8;  // H矩阵位置分量等效设计矩阵(3×nv hPos)
     public static final int DIAG_INNOVATION    = 16; // 新息向量摘要(innovRms/innovMax/ddObsCount)
+    public static final int DIAG_QPOS          = 32; // 单历元归约法方程位置协方差(3×3 qPos)
 
     /** Positioning mode (PMODE_???) */
     public int mode;

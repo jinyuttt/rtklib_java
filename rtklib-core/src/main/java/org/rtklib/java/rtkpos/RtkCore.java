@@ -146,6 +146,9 @@ public final class RtkCore {
 
     private static int relpos(Rtk rtk, Obsd[] obs, int nu, int nr, Nav nav) {
         PrcOpt opt = rtk.opt;
+        /* [Java扩展] 每历元先清空上一历元的 qPos，避免早期 return 时残留旧值。
+         * 注意：rtk.sol 在 reset() 中只 new 一次，之后逐历元复用同一实例。 */
+        rtk.sol.qPos = null;
         int nf = (opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : opt.nf;
         int i, j, f, ns, nv = 0;
         int n = nu + nr;
@@ -303,6 +306,9 @@ public final class RtkCore {
 
         int stat = opt.mode <= Constants.PMODE_DGPS ? Constants.SOLQ_DGPS : Constants.SOLQ_FLOAT;
 
+        /* [Java扩展] DIAG_QPOS：保留最后一次迭代的归约法方程，供 stat 确定后取块 */
+        QposSolver.ReducedNormal qposRn = null;
+
 
         double[] rr_rover = wb.rr_rover;
 
@@ -318,6 +324,13 @@ public final class RtkCore {
                     iu, ir, ns, nf, nav, v, H, R, vflg)) < 4) {
                 stat = Constants.SOLQ_NONE;
                 break;
+            }
+
+            /* [Java扩展] DIAG_QPOS：此处 H 与 R 是同一次 ddres 的原始 ddcov 产物，
+             * 且尚未被 applyIggiii 改写，二者严格对齐。放到 IGGIII 之后会拿到
+             * 块结构被破坏的 R，法方程不再对应真实观测权重。 */
+            if ((opt.diagMask & PrcOpt.DIAG_QPOS) != 0) {
+                qposRn = QposSolver.build(H, R, nv, nx);
             }
 
             RtkTrace.traceStage3(v1ctrl, v1cb, rtk.epoch, obs[0].time,
@@ -540,6 +553,19 @@ public final class RtkCore {
          * (SOLQ_SINGLE when outsingle, else SOLQ_NONE) */
         if (stat != Constants.SOLQ_NONE) {
             rtk.sol.stat = (byte) stat;
+        }
+
+        /* [Java扩展] DIAG_QPOS：stat 确定后才能区分 FIX/FLOAT 的列集口径。
+         * FIX 分支用 A ∩ [0,NR)（剔除已固定为整数的模糊度列），位置块由 NR×NR
+         * 法方程求逆后取 [0:3,0:3] 得到；只要 NR>3（ionoopt=EST / tropopt>=EST /
+         * GLONASS autocal / dynamics!=0），电离层/对流层/速度等状态的不确定性
+         * 会自然传播进位置块，而硬编码 {0,1,2} 会系统性偏乐观。
+         * FLOAT 分支保留模糊度列，取全活跃列法方程的位置块。 */
+        if ((opt.diagMask & PrcOpt.DIAG_QPOS) != 0 && qposRn != null
+                && stat != Constants.SOLQ_NONE) {
+            rtk.sol.qPos = (stat == Constants.SOLQ_FIX)
+                    ? QposSolver.fixCov(qposRn, NR(rtk.toState()))
+                    : QposSolver.floatCov(qposRn);
         }
 
         RtkTrace.traceStage6(v1ctrl, v1cb, rtk.epoch, obs[0].time, rtk.sol, opt.niter);
@@ -2601,10 +2627,10 @@ public final class RtkCore {
      * @param R  观测噪声矩阵（行优先，nv×nv）
      * @param nv 双差观测数
      * @param nx 状态向量维度
-     * @return hPos[9]（3×3行优先），null如果计算失败
+     * @return hPos[3*nv]（3×nv行优先），null如果计算失败
      */
     private static double[] computeHPos(double[] H, double[] R, int nv, int nx) {
-        double[] hPos = new double[9];
+        double[] hPos = new double[3 * nv];
 
         double[] HposT_W = new double[3 * nv];
         for (int j = 0; j < nv; j++) {
@@ -2645,12 +2671,12 @@ public final class RtkCore {
         NInv[8] = (N[0] * N[4] - N[1] * N[1]) / det;
 
         for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
+            for (int j = 0; j < nv; j++) {
                 double sum = 0.0;
-                for (int k = 0; k < nv; k++) {
+                for (int k = 0; k < 3; k++) {
                     sum += NInv[i * 3 + k] * HposT_W[k * nv + j];
                 }
-                hPos[i * 3 + j] = sum;
+                hPos[i * nv + j] = sum;
             }
         }
 

@@ -138,6 +138,71 @@ public class GnssBaselineAdjustTest {
     }
 
     @Test
+    @DisplayName("准入策略: allowFloat=true 接纳FLOAT，默认只留FIX")
+    void testFloatAdmission() {
+        BaselineEpoch.BaselineEntry[] entries = {buildEntry(0, 0.0), buildFloatEntry(1)};
+
+        BaselineEpoch fixOnly = new BaselineEpoch("2026-01-01 00:00:00", entries);
+        assertEquals(1, fixOnly.count);
+        assertEquals(1, fixOnly.fixCount);
+        assertEquals(0, fixOnly.floatCount);
+
+        BaselineEpoch withFloat = new BaselineEpoch("2026-01-01 00:00:00", entries, true);
+        assertEquals(2, withFloat.count);
+        assertEquals(1, withFloat.fixCount);
+        assertEquals(1, withFloat.floatCount);
+    }
+
+    @Test
+    @DisplayName("1FIX+FLOAT且位置一致: 判 SINGLE_VERIFIED")
+    void testSingleVerifiedWithFloat() {
+        BaselineEpoch.BaselineEntry[] entries = {buildEntry(0, 0.0), buildFloatEntry(1)};
+        BaselineEpoch epoch = new BaselineEpoch("2026-01-01 00:00:00", entries, true);
+
+        AdjustResult result = GnssBaselineAdjust.adjust(epoch, false, GnssBaselineAdjust.Policy.defaults());
+        assertTrue(result.success);
+        assertEquals(3, result.dof);
+        assertEquals(ReliabilityGrade.SINGLE_VERIFIED, result.reliabilityGrade);
+        assertEquals(0.0, result.crossValidationDist, 1e-9);
+
+        assertEquals(P01_X, result.p01Xyz[0], 0.01, "P01 X");
+        assertEquals(P01_Y, result.p01Xyz[1], 0.01, "P01 Y");
+        assertEquals(P01_Z, result.p01Xyz[2], 0.01, "P01 Z");
+    }
+
+    @Test
+    @DisplayName("1FIX+FLOAT但FLOAT偏离0.5m: 判 UNVERIFIED，位置仍由FIX主导")
+    void testFloatDisagreement() {
+        BaselineEpoch.BaselineEntry[] entries = {buildEntry(0, 0.0), buildFloatEntry(1, 0.5)};
+        BaselineEpoch epoch = new BaselineEpoch("2026-01-01 00:00:00", entries, true);
+
+        AdjustResult result = GnssBaselineAdjust.adjust(epoch, false, GnssBaselineAdjust.Policy.defaults());
+        assertTrue(result.success);
+        assertEquals(ReliabilityGrade.UNVERIFIED, result.reliabilityGrade);
+        assertEquals(0.5, result.crossValidationDist, 1e-6);
+
+        assertEquals(P01_X, result.p01Xyz[0], 0.05, "FLOAT降权后不应把坐标拉偏");
+        assertEquals(P01_Y, result.p01Xyz[1], 0.05, "P01 Y");
+        assertEquals(P01_Z, result.p01Xyz[2], 0.05, "P01 Z");
+    }
+
+    @Test
+    @DisplayName("纯FLOAT历元: 可解但只判 UNVERIFIED")
+    void testFloatOnlyEpoch() {
+        BaselineEpoch.BaselineEntry[] entries = {buildFloatEntry(0), buildFloatEntry(1)};
+        BaselineEpoch epoch = new BaselineEpoch("2026-01-01 00:00:00", entries, true);
+        assertEquals(0, epoch.fixCount);
+        assertEquals(2, epoch.floatCount);
+
+        AdjustResult result = GnssBaselineAdjust.adjust(epoch, false, GnssBaselineAdjust.Policy.defaults());
+        assertTrue(result.success);
+        assertEquals(3, result.dof);
+        assertEquals(2, result.usedBaselineCount);
+        assertEquals(ReliabilityGrade.UNVERIFIED, result.reliabilityGrade);
+        assertTrue(Double.isNaN(result.crossValidationDist));
+    }
+
+    @Test
     @DisplayName("CovAssembler: 加权融合Rover协方差验证")
     void testFusedRoverCovariance() {
         double[][] p1 = buildCov3x3(COV_DIAG, COV_OFF);
@@ -189,6 +254,19 @@ public class GnssBaselineAdjustTest {
         assertEquals(P01_Z, result.p01Xyz[2], 1e-6, "P01 Z");
     }
 
+    @Test
+    @DisplayName("保护级系数映射: SINGLE_VERIFIED 与 UNVERIFIED 共用保守系数")
+    void testProtectionLevelCoefficients() {
+        GnssBaselineAdjust.Policy p = GnssBaselineAdjust.Policy.defaults();
+
+        assertEquals(2.0, p.plK(ReliabilityGrade.VERIFIED), 1e-12);
+        assertEquals(3.0, p.plK(ReliabilityGrade.CROSS_CHECKED), 1e-12);
+        assertEquals(6.0, p.plK(ReliabilityGrade.UNVERIFIED), 1e-12);
+        assertEquals(6.0, p.plK(ReliabilityGrade.SINGLE_VERIFIED), 1e-12,
+                "SINGLE_VERIFIED 仅凭 FLOAT 佐证，保护级系数不得低于 UNVERIFIED");
+        assertEquals(10.0, p.plK(ReliabilityGrade.SUSPECT), 1e-12);
+    }
+
     private BaselineEpoch buildEpoch(int k, double noise) {
         BaselineEpoch.BaselineEntry[] entries = new BaselineEpoch.BaselineEntry[k];
         for (int i = 0; i < k; i++) {
@@ -215,17 +293,22 @@ public class GnssBaselineAdjustTest {
     }
 
     private BaselineEpoch.BaselineEntry buildFloatEntry(int baseIdx) {
+        return buildFloatEntry(baseIdx, 0.0);
+    }
+
+    /**
+     * 构造 FLOAT 基线：位置按 offset 偏移，协方差按 floatCovInflate 同口径膨胀，
+     * 以模拟 FLOAT 在平差中占极小权重。
+     */
+    private BaselineEpoch.BaselineEntry buildFloatEntry(int baseIdx, double offset) {
         double[] base = BASE_COORDS[baseIdx];
-        double dX = P01_X - base[0];
-        double dY = P01_Y - base[1];
-        double dZ = P01_Z - base[2];
-        double roverX = base[0] + dX;
-        double roverY = base[1] + dY;
-        double roverZ = base[2] + dZ;
+        double roverX = P01_X + offset;
+        double roverY = P01_Y;
+        double roverZ = P01_Z;
 
         SolData solData = buildMockSolData(roverX, roverY, roverZ, SolutionStatus.FLOAT);
-        double[] dXyz = {dX, dY, dZ};
-        double[][] cov = buildCov3x3(COV_DIAG, COV_OFF);
+        double[] dXyz = {roverX - base[0], roverY - base[1], roverZ - base[2]};
+        double[][] cov = buildCov3x3(COV_DIAG * 1000.0, COV_OFF * 1000.0);
 
         return new BaselineEpoch.BaselineEntry(BASE_IDS[baseIdx], solData, dXyz, cov, cov);
     }
@@ -299,7 +382,9 @@ public class GnssBaselineAdjustTest {
         AdjustResult result = GnssBaselineAdjust.adjust(epoch);
         assertTrue(result.success);
         assertEquals(ReliabilityGrade.UNVERIFIED, result.reliabilityGrade);
-        assertEquals(0.0, result.crossValidationDist, 1e-10);
+        assertTrue(Double.isNaN(result.crossValidationDist),
+                "k=1 时无交叉验证，Rover差应为 NaN（无值）而非 0.0（毫无较差），实际="
+                        + result.crossValidationDist);
         assertNull(result.suspectBaseId);
     }
 

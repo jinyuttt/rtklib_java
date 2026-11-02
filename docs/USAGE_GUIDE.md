@@ -393,6 +393,43 @@ opt.maxtdiff = 30.0;                      // 最大时间差 (s)
 opt.outsingle = 1;                        // RTK失败时输出SPP解
 ```
 
+### 4.5 重置与复用
+
+RTK 的滤波器状态包含位置/速度、双差模糊度、ZTD/电离层等参数。`RtkProcessor` 提供两级重置：
+
+| 方法 | 清除内容 | 保留内容 | 适用场景 |
+|------|----------|----------|----------|
+| `resetForNextBatch()` | 本批输出（`solutions`/`solStaticOutputs`）、pending 缓冲、历元计数 | `rtk.x`/`rtk.P`/`nfix` 等滤波状态、已解码星历 | 同一基线连续批处理，跨批保持模糊度（推荐） |
+| `reset()` | 上述全部 + 滤波状态（`sol`/`x`/`P`/`xa`/`Pa`/`nfix`/`ssat`/`tt`/`epoch`）+ 自适应控制器 | 已解码星历（内部 `nav` 不清空） | 更换基站/测站、长时间中断后冷启动 |
+
+两个方法都会把 `finished` 置回 `false`。`process()` / `finish()` 之后必须调用其中之一才能继续投喂或再次 `process()`（详见 §9.2）。
+
+```java
+PrcOpt opt = RtkProcessor.createDefaultOpt();
+opt.modear = Constants.ARMODE_FIXHOLD;
+
+RtkProcessor rtk = new RtkProcessor(opt, handler, outputStream);
+
+// 场景A：同一基线连续批处理（保留模糊度，跨批不重新收敛）
+rtk.process("rover_10.rtcm3", "base_10.rtcm3");
+rtk.resetForNextBatch();                       // 热复用：只清本批结果
+rtk.process("rover_11.rtcm3", "base_11.rtcm3"); // 首历元即沿用上一批模糊度
+
+// 场景B：更换基准站/测站，或中断数小时后（冷启动）
+rtk.reset();                                   // 清空模糊度与全部滤波状态
+rtk.process("rover_other.rtcm3", "base_other.rtcm3"); // 从 SINGLE/FLOAT 重新收敛
+
+// 场景C：流式模式中途重置
+rtk.feedRover(roverChunk);
+rtk.feedBase(baseChunk);
+rtk.reset();                                   // 之后可继续 feedRover/feedBase
+```
+
+**注意**：
+- `reset()` 是真正的冷启动，前 5~15 分钟会回到 FLOAT/SINGLE，无法保留模糊度；若需跨进程/跨重启保留，使用 §11 的模糊度状态缓存（`getRtk()` / `applyRtkState()`）。
+- `opt.initrst != 0` 时，`reset()` 会同时清零 SPP 初值滑动平均（`nave`/`rbAve`）。
+- 星历无需重新等待：`reset()` 不清空内部 `nav`，重置后可立即参与解算。
+
 ---
 
 ## 5. SPP 实时定位
@@ -449,10 +486,10 @@ opt.navsys = Constants.SYS_ALL;
 opt.dynamics = 1;  // EKF 需要速度状态
 
 RtkConfig cfg = new RtkConfig();
-cfg.enableSppEkf = true;           // EKF 时间传播（历元间平滑）
-cfg.enableSppRobust = true;        // IGGIII 抗差估计
-cfg.enableSppZeroVel = true;       // 零速约束（静态/低速场景）
-cfg.enableSppDopplerSnr = true;    // 多普勒+SNR 加权
+cfg.spp.enableEkf = true;          // EKF 时间传播（历元间平滑）
+cfg.spp.enableRobust = true;       // IGGIII 抗差估计
+cfg.spp.enableZeroVel = true;      // 零速约束（静态/低速场景）
+cfg.spp.enableDopplerSnr = true;   // 多普勒+SNR 加权
 
 SppProcessor spp = new SppProcessor(opt, handler);
 spp.setRtkConfig(cfg);             // 注入配置
@@ -463,16 +500,19 @@ SppProcessor.SppResult result = spp.process("data.rtcm3");
 
 | 场景 | 开关配置 |
 |------|----------|
-| 多系统开放天空 | `enableSppEkf` + `enableSppDopplerSnr` |
-| 城市峡谷/恶劣环境 | `enableSppEkf` + `enableSppRobust` + `enableSppDopplerSnr` |
+| 多系统开放天空 | `enableEkf` + `enableDopplerSnr` |
+| 城市峡谷/恶劣环境 | `enableEkf` + `enableRobust` + `enableDopplerSnr` |
 | 静态基准站/滑坡监测 | 全开 (Ekf + Robust + ZeroVel + DopplerSnr) |
 | 仅北斗 (BDS-only) | 同上述场景，设置 `navsys = SYS_CMP` |
 
-> **注意**：`enableSppZeroVel` 需 `dynamics=1` 使能速度状态。基准 RTKLIB 代码通过 `if (cfg != null && cfg.enableSppXxx)` 保护，不传入 `RtkConfig` 时完全等同于原始行为。
+> **注意**：`enableZeroVel` 需 `dynamics=1` 使能速度状态。基准 RTKLIB 代码通过 `if (cfg != null && cfg.spp.enableXxx)` 保护，不传入 `RtkConfig` 时完全等同于原始行为。
 
 ---
 
 ## 6. PPP 精密单点定位
+
+PPP 家族包含三种解算模式：普通 PPP（§6.1~§6.4）、PPP-AR（§6.5）、PPP-RTK（§6.6）。
+后两者是独立解算模式而非普通 PPP 的优化开关，使用前请先确认 §6.5 / §6.6 的**使用条件**（产品、模式常量、内核开关缺一不可）。
 
 ### 6.1 RTCM 文件 + 精密星历
 
@@ -539,6 +579,96 @@ ppp.finish();
 ```
 
 bestSol 选择逻辑与 RTK 相同（§4.3.3），双向合并时同样使用 `COMBINED_SOL_PRIO`（FIX=7）。
+
+### 6.5 PPP-AR 解算模式（使用条件）
+
+PPP-AR 不是 PPP 的附属优化项，而是**独立解算模式**：PPP 家族模式 + 模糊度固定开关即进入 PPP-AR 路径（自适应引擎归类为 `AdaptiveMode.PPP_AR`，模式速查见 [CORE_OPTIMIZATION_MATRIX.md](CORE_OPTIMIZATION_MATRIX.md) 第 0 节）。
+
+**使用条件（缺一不可）：**
+
+| 条件 | 配置 / 调用 | 说明 |
+|------|-------------|------|
+| PPP 家族模式 | `opt.mode = PMODE_PPP_STATIC` / `PMODE_PPP_KINEMA` / `PMODE_PPP_FIXED` | 必须走 PPP 解算器；RTK/SPP 模式不适用（RTK 模糊度固定用 `opt.modear`） |
+| 开启 AR | `cfg.pppAr.enableAR = true` | 关闭时等同普通 PPP |
+| 注入配置 | `ppp.setRtkConfig(cfg)` | 未注入则 `rtk.rtkConfig == null`，直接走标准 `PppCore.pppos()` |
+| 精密产品 | `loadSp3()` + `loadClk()`，`opt.sateph = EPHOPT_PREC` | 星历/钟差精度不足时 WL/NL 无法固定 |
+| 模糊度产品 | `loadFcb()` / `loadUpd()` / `loadOsb()` 任一 | 无 FCB/UPD/OSB 时 WL/NL 固定必然失败（`nFixed<=0`，静默回退浮点解） |
+| 观测频点 | `opt.nf = 2` 且 `opt.ionoopt = IONOOPT_IFLC` | WL+NL 两步固定依赖双频；非组合多频需 `cfg.pppAr.enableMultiFreqAR = true` |
+
+```java
+PrcOpt opt = PppProcessor.createDefaultOpt();
+opt.mode = Constants.PMODE_PPP_STATIC;   // PPP 家族模式（进入 PPP-AR）
+opt.nf = 2;
+opt.ionoopt = Constants.IONOOPT_IFLC;
+
+RtkConfig cfg = new RtkConfig();
+cfg.pppAr.enableAR = true;               // 解算模式升级为 PPP-AR
+cfg.pppAr.arRatioWl = 2.0;               // WL ratio 阈值
+cfg.pppAr.arRatioNl = 3.0;               // NL ratio 阈值
+
+PppProcessor ppp = new PppProcessor(opt, handler, null);
+ppp.setRtkConfig(cfg);                   // 必须注入
+ppp.loadSp3("igs.sp3");
+ppp.loadClk("igs.clk");
+ppp.loadFcb("igs.fcb");                  // FCB/UPD/OSB 任一即可
+PppProcessor.PppResult result = ppp.process("rover.rtcm3");
+```
+
+**可选增强（均属 `cfg.pppAr`）：**
+
+| 开关 | 默认 | 作用 |
+|------|------|------|
+| `enableFixHold` | false | 连续 FIX ≥ `fixHoldMinEp`（默认 50）后收紧方差至 `fixHoldVar`（默认 1e-6），防回浮点 |
+| `enablePartialAR` | false | 全局 ratio 失败时剔除方差大的模糊度做子集固定 |
+| `enableBds3AR` | false | BDS-3 B1C/B2a 单独固定 |
+| `enableMultiFreqAR` | false | 非组合多频 EWL→WL→NL 逐级固定 |
+
+**限制**：`solstatic` 仅对 `PMODE_PPP_STATIC` 生效（§6.4）；PPP-AR 在 `cfg.pppRtk.enable = true` 时不会生效——派发优先级为 PPP-RTK > PPP 扩展 > PPP。
+
+### 6.6 PPP-RTK 解算模式（使用条件）
+
+PPP-RTK 同样是**独立解算模式**（`PMODE_PPPRTK_KINEMA = 10`、`PMODE_PPPRTK_STATIC = 11`），核心由 `PppRtkCore.ppprtkos()` 实现，与普通 PPP 的 `PppCore.pppos()` 完全分离。
+
+**使用条件（两项必须同时满足）：**
+
+| 条件 | 配置 / 调用 | 说明 |
+|------|-------------|------|
+| 模式常量 | `opt.mode = PMODE_PPPRTK_KINEMA` / `PMODE_PPPRTK_STATIC` | 决定 dynamics、输出语义与自适应分类（`AdaptiveMode.PPP_RTK`） |
+| 内核开关 | `cfg.pppRtk.enable = true` + `ppp.setRtkConfig(cfg)` | **真正决定派发**：`PppProcessor` 按此开关选择 `PppRtkCore`，只改 `opt.mode` 不会切换内核 |
+| SSR 改正 | 实时 SSR 流 / SSR 产品写入 `nav.ssr` | 有 SSR 才应用轨道/钟差/高频钟差改正；无 SSR 自动回退广播星历（等同普通 PPP，不报错） |
+
+**派发优先级**：`cfg.pppRtk.enable` > `PppCoreEx`（PPP 扩展）> `PppCore`。PPP-RTK 模式下 `cfg.pppAr.*` 的 Fix-and-Hold / Partial AR **不参与**（该链路属于 `PppCoreEx`），PPP-RTK 使用自己的 `cfg.pppRtk.enableAR` / `enableFixHold`。
+
+**PPP-RTK AR 条件**：`cfg.pppRtk.enableAR = true`。IFLC 路径复用 `PppAmbFix` 的 WL+NL 两步固定，因此仍需 FCB/UPD/OSB 模糊度产品（`loadFcb/loadUpd/loadOsb`）；非 IFLC 路径直接对模糊度状态做 LAMBDA，需要 SSR 相位偏差（`pbias`）改正。`enableFixHold` 需连续 FIX ≥ `fixHoldMinEpoch`（默认 10）后收紧至 `fixHoldVar`（默认 1e-4）。
+
+**SSR 时效**：`cfg.ppp.ssrMaxAge`（默认 60 s）控制改正数最大龄期。
+
+```java
+PrcOpt opt = PppProcessor.createDefaultOpt();
+opt.mode = Constants.PMODE_PPPRTK_STATIC;   // 或 PMODE_PPPRTK_KINEMA
+opt.nf = 2;
+opt.ionoopt = Constants.IONOOPT_IFLC;
+
+RtkConfig cfg = new RtkConfig();
+cfg.pppRtk.enable = true;                   // 必须：切换到 PPP-RTK 内核
+cfg.pppRtk.enableAR = true;                 // 可选：AR（IFLC 需 FCB 产品）
+cfg.ppp.ssrMaxAge = 60.0;                   // SSR 改正数最大龄期 (s)
+
+PppProcessor ppp = new PppProcessor(opt, handler, null);
+ppp.setRtkConfig(cfg);                      // 必须注入
+ppp.loadSp3("igs.sp3");                     // 备用星历（SSR 缺失时回退）
+ppp.loadClk("igs.clk");
+ppp.loadFcb("igs.fcb");                     // IFLC 下 AR 必需（FCB/UPD/OSB 任一）
+
+// SSR 与观测同路径进入：实时流中的 SSR 消息写入 nav.ssr
+ppp.feed(ssrOrObsChunk);
+PppProcessor.PppResult result = ppp.finish();
+```
+
+**限制与注意**：
+- `solstatic` 仅对 `PMODE_PPP_STATIC` 生效，`PMODE_PPPRTK_STATIC` 不会单解输出（构造时按 `opt.mode == PMODE_PPP_STATIC` 判定）。
+- SSR 未覆盖的卫星自动跳过改正，仍以广播星历参与解算；SSR 中断时退化为广播星历 PPP，恢复后自动重新应用改正。
+- PPP-RTK 的收敛依赖 SSR 覆盖与相位偏差质量，无相位偏差时只能得到浮点解。
 
 ---
 
@@ -1153,14 +1283,22 @@ newProcessor.applyRtkState(saved);  // 将缓存的状态应用到新处理器
 
 | 常量 | 值 | 说明 |
 |------|---|------|
-| `PMODE_SINGLE` | 0 | 单点定位 |
+| `PMODE_SINGLE` | 0 | 单点定位（SPP） |
 | `PMODE_DGPS` | 1 | 差分 GPS |
-| `PMODE_KINEMA` | 3 | 动态相对定位 |
-| `PMODE_STATIC` | 2 | 静态相对定位 |
-| `PMODE_MOVEB` | 4 | 移动基线 |
-| `PMODE_FIXED` | 5 | 固定位置 |
-| `PMODE_PPP_KINEMA` | 6 | PPP 动态 |
-| `PMODE_PPP_STATIC` | 7 | PPP 静态 |
+| `PMODE_KINEMA` | 2 | 动态相对定位（RTK） |
+| `PMODE_STATIC` | 3 | 静态相对定位（RTK） |
+| `PMODE_STATIC_START` | 4 | 静态（起始） |
+| `PMODE_MOVEB` | 5 | 移动基线 |
+| `PMODE_FIXED` | 6 | 固定位置 |
+| `PMODE_PPP_KINEMA` | 7 | PPP 动态 |
+| `PMODE_PPP_STATIC` | 8 | PPP 静态 |
+| `PMODE_PPP_FIXED` | 9 | PPP 固定 |
+| `PMODE_PPPRTK_KINEMA` | 10 | PPP-RTK 动态 |
+| `PMODE_PPPRTK_STATIC` | 11 | PPP-RTK 静态 |
+
+> **PPP-AR / PPP-RTK 的解算模式说明**：
+> - PPP-AR **没有独立 mode 常量**，由 PPP 家族模式（7/8/9）+ `cfg.pppAr.enableAR` 派生，自适应引擎归类为 `AdaptiveMode.PPP_AR`；使用条件见 §6.5。
+> - PPP-RTK 是**独立 mode 常量**（10/11），但必须同时设置 `cfg.pppRtk.enable = true` 才会切换到 `PppRtkCore` 内核，只设 `opt.mode` 不生效；使用条件见 §6.6。
 
 ### 模糊度固定模式 (PrcOpt.modear)
 
@@ -1237,40 +1375,42 @@ newProcessor.applyRtkState(saved);  // 将缓存的状态应用到新处理器
 
 v2.2.1新增6项RTK高级模糊度固定优化，借鉴GREAT-PVT/PRIDE PPP-AR，通过`RtkConfig`独立开关控制，默认全部关闭。详细算法说明见 [RTK_Extra_Optimizations.md](RTK_Extra_Optimizations.md) 第10~15节。
 
+> `RtkConfig` 已拆分为 7 个子配置，本节开关位于 `cfg.rtk`（`RtkOpts`）与 `cfg.common`（`CommonOpts`）下，须带命名空间前缀访问。
+
 ### 12.1 启用方式
 
 ```java
 RtkConfig cfg = new RtkConfig();
 
 // 逐级模糊度固定（多频RTK推荐开启）
-cfg.enableCascadeAR = true;
-cfg.cascadeArRatioEwl = 1.5;   // EWL级Ratio阈值
-cfg.cascadeArRatioWl = 2.0;    // WL级Ratio阈值
-cfg.cascadeArRatioNl = 3.0;    // NL级Ratio阈值
+cfg.rtk.enableCascadeAR = true;
+cfg.rtk.cascadeArRatioEwl = 1.5;   // EWL级Ratio阈值
+cfg.rtk.cascadeArRatioWl = 2.0;    // WL级Ratio阈值
+cfg.rtk.cascadeArRatioNl = 3.0;    // NL级Ratio阈值
 
 // 精细化残差编辑与周跳检测
-cfg.enableResidualEdit = true;
-cfg.residEditJumpThresh = 4.0;       // 残差跳变阈值(σ)
-cfg.residEditMinArcLen = 10;          // 最小弧段长度(epoch)
-cfg.residEditPcConsistThresh = 3.0;   // P-C一致性阈值(σ)
+cfg.rtk.enableResidualEdit = true;
+cfg.rtk.residEditJumpThresh = 4.0;       // 残差跳变阈值(σ)
+cfg.rtk.residEditMinArcLen = 10;          // 最小弧段长度(epoch)
+cfg.rtk.residEditPcConsistThresh = 3.0;   // P-C一致性阈值(σ)
 
 // 部分模糊度固定
-cfg.enablePartialAR = true;
-cfg.partialArMinRatio = 2.0;         // 部分AR最小Ratio
-cfg.partialArMinSats = 4;            // 最小保留卫星数
+cfg.rtk.enablePartialAR = true;
+cfg.rtk.partialArMinRatio = 2.0;         // 部分AR最小Ratio
+cfg.rtk.partialArMinSats = 4;            // 最小保留卫星数
 
 // Bootstrapping成功率联合判据
-cfg.enableBootstrapping = true;
-cfg.bootstrappingMinSuccess = 0.99;  // 最小成功率阈值
+cfg.rtk.enableBootstrapping = true;
+cfg.rtk.bootstrappingMinSuccess = 0.99;  // 最小成功率阈值
 
 // BDS码偏差改正
-cfg.enableBdsCodeBias = true;
-cfg.bdsCodeBiasElThresh = 30.0;      // 高度角阈值(度)
+cfg.rtk.enableBdsCodeBias = true;
+cfg.rtk.bdsCodeBiasElThresh = 30.0;      // 高度角阈值(度)
 
 // 参数类型级自适应过程噪声
-cfg.enableParamTypeNoise = true;
-cfg.noiseZtdRw = 1e-4;               // ZTD随机游走(m/√s)
-cfg.noiseIonoRw = 1e-3;              // 电离层随机游走(m/√s)
+cfg.common.enableParamTypeNoise = true;
+cfg.common.noiseZtdRw = 1e-4;            // ZTD随机游走(m/√s)
+cfg.common.noiseIonoRw = 1e-4;           // 电离层随机游走(m/√s)
 
 // 传入RtkProcessor
 RtkProcessor processor = new RtkProcessor(opt, cfg);
@@ -1280,12 +1420,12 @@ RtkProcessor processor = new RtkProcessor(opt, cfg);
 
 | 优化项 | 开关 | 来源 | 适用场景 | 优先级 |
 |--------|------|------|----------|--------|
-| 逐级模糊度固定(EWL→WL→NL) | `enableCascadeAR` | GREAT-PVT | 多频(≥2)RTK | P0 |
-| 精细化残差编辑与周跳检测 | `enableResidualEdit` | PRIDE | 所有RTK | P0 |
-| 部分模糊度固定(Partial AR) | `enablePartialAR` | GREAT-PVT | Ratio经常失败 | P1 |
-| Bootstrapping成功率联合判据 | `enableBootstrapping` | GREAT-PVT | 防止假固定 | P1 |
-| BDS码偏差改正(Wanninger) | `enableBdsCodeBias` | PRIDE | 含BDS卫星 | P2 |
-| 参数类型级自适应过程噪声 | `enableParamTypeNoise` | PRIDE | 中长基线 | P2 |
+| 逐级模糊度固定(EWL→WL→NL) | `cfg.rtk.enableCascadeAR` | GREAT-PVT | 多频(≥2)RTK | P0 |
+| 精细化残差编辑与周跳检测 | `cfg.rtk.enableResidualEdit` | PRIDE | 所有RTK | P0 |
+| 部分模糊度固定(Partial AR) | `cfg.rtk.enablePartialAR` | GREAT-PVT | Ratio经常失败 | P1 |
+| Bootstrapping成功率联合判据 | `cfg.rtk.enableBootstrapping` | GREAT-PVT | 防止假固定 | P1 |
+| BDS码偏差改正(Wanninger) | `cfg.rtk.enableBdsCodeBias` | PRIDE | 含BDS卫星 | P2 |
+| 参数类型级自适应过程噪声 | `cfg.common.enableParamTypeNoise` | PRIDE | 中长基线 | P2 |
 
 ### 12.3 推荐组合
 

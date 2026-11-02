@@ -1,7 +1,9 @@
 # Java版SPP额外优化项详细文档
 
 本文档记录Java版RTKLIB中SPP（Single Point Positioning）的额外优化项。
-这些优化通过 `RtkConfig` 独立开关控制，默认全部关闭（`enableSppInnovChisq`除外），不影响默认行为。
+这些优化通过 `RtkConfig` 独立开关控制，默认全部关闭（`enableInnovChisq`除外），不影响默认行为。
+
+> **字段命名（2026-10-28 起）**：`RtkConfig` 已拆分为 7 个子配置，本文所有开关与参数均位于 `cfg.spp`（`SppOpts`），访问时须带命名空间前缀，例如 `cfg.spp.enableEkf`、`cfg.spp.ekfVarPos`。字段名已去掉原 `spp` 前缀（`enableSppEkf` → `enableEkf`，`sppEkfVarPos` → `ekfVarPos`，以此类推）。
 
 参考项目：[MobileGNSS-SPP](https://github.com/ebhual/MobileGNSS-SPP)（C语言，基于RTKLIB 2.4.3的SPP优化）
 
@@ -11,11 +13,11 @@
 
 ## 目录
 
-1. [EKF时间传播](#1-ekf时间传播enablesppekf)
-2. [M-估计抗差](#2-m-估计抗差enablespprobust)
-3. [零速约束](#3-零速约束enablesppzerovel)
-4. [多普勒+SNR加权](#4-多普勒snr加权enablesppdopplersnr)
-5. [新息卡方检验](#5-新息卡方检验enablesppinnovchisq)
+1. [EKF时间传播](#1-ekf时间传播enableekf)
+2. [M-估计抗差](#2-m-估计抗差enablerobust)
+3. [零速约束](#3-零速约束enablezerovel)
+4. [多普勒+SNR加权](#4-多普勒snr加权enabledopplersnr)
+5. [新息卡方检验](#5-新息卡方检验enableinnovchisq)
 6. [P膨胀保护与diverged恢复](#6-p膨胀保护与diverged恢复)
 7. [优化项依赖关系与调用顺序](#7-优化项依赖关系与调用顺序)
 8. [RtkConfig字段与优化项对应表](#8-rtkconfig字段与优化项对应表)
@@ -26,7 +28,7 @@
 
 ---
 
-## 1. EKF时间传播（enableSppEkf）
+## 1. EKF时间传播（enableEkf）
 
 ### 1.1 问题背景
 
@@ -78,13 +80,13 @@ P_pred = F * P * Fᵀ + Q
 ```
 Q_enu = diag(σ_acc1², σ_acc1², σ_acc2²) * |dt|
 
-σ_acc1 = sppEkfAccPrn1 = 10.0 m/s²
-σ_acc2 = sppEkfAccPrn2 = 10.0 m/s²
+σ_acc1 = ekfAccPrn1 = 10.0 m/s²
+σ_acc2 = ekfAccPrn2 = 10.0 m/s²
 
 Q_ecef = R * Q_enu * Rᵀ    (R为LLH→ECEF旋转矩阵)
 ```
 
-diverged状态下Q放大`sppEkfDivergedQscale`倍。
+diverged状态下Q放大`ekfDivergedQscale`倍。
 
 #### 1.3.3 观测方程
 
@@ -114,7 +116,7 @@ P = (I - K*H) * P * (I - K*H)ᵀ + K * R * Kᵀ   (Joseph形式)
 | 条件 | 行为 |
 |------|------|
 | 首次历元或`!initialized` | 用LS解初始化：`pos=LS.rr, vel=[0.01,0.01,0.01], acc=[1e-6,1e-6,1e-6]` |
-| 时间间隔`dt >= sppEkfDtGap` | 重新初始化（防止长时间间断后状态过时） |
+| 时间间隔`dt >= ekfDtGap` | 重新初始化（防止长时间间断后状态过时） |
 | `norm(x,3) < 1000` | 位置异常，重新初始化 |
 
 ### 1.5 P膨胀检测与重置
@@ -122,12 +124,12 @@ P = (I - K*H) * P * (I - K*H)ᵀ + K * R * Kᵀ   (Joseph形式)
 ```
 var = mean(P[0:3]对角线)
 
-if var > sppEkfVarResetThresh && LS成功:
+if var > ekfVarResetThresh && LS成功:
     重置位置/速度/加速度到LS解
     清除diverged标记
 
-if var > sppEkfVarResetThresh && LS失败:
-    P对角线封顶到sppEkfVarCap
+if var > ekfVarResetThresh && LS失败:
+    P对角线封顶到ekfVarCap
     标记diverged=true, divergedEpochs++
 ```
 
@@ -135,24 +137,24 @@ if var > sppEkfVarResetThresh && LS失败:
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `enableSppEkf` | false | EKF开关 |
-| `sppEkfVarPos` | 2500 m² | 位置初始方差（50m） |
-| `sppEkfVarVel` | 100 m² | 速度初始方差（10m/s） |
-| `sppEkfVarAcc` | 100 m² | 加速度初始方差 |
-| `sppEkfClkProcessNoise` | 10000 m | 钟差过程噪声 |
-| `sppEkfAccPrn1` | 10.0 m/s² | 水平加速度过程噪声 |
-| `sppEkfAccPrn2` | 10.0 m/s² | 垂直加速度过程噪声 |
-| `sppEkfVelResidScale` | 1.0 | 速度残差注入P的缩放因子 |
-| `sppEkfVarResetThresh` | 2500 m² | P膨胀重置阈值 |
-| `sppEkfDtGap` | 10.0 s | 时间间断重置阈值 |
-| `sppEkfVarCap` | 625 m² | P对角线封顶值 |
-| `sppEkfMinSat` | 0 | EKF最低卫星数（0=不降级） |
-| `sppEkfLowSatThresh` | 7 | 低卫星数阈值 |
-| `sppEkfDivergedRecoverEpochs` | 5 | diverged恢复所需连续LS成功历元数 |
-| `sppEkfDivergedRscaleBase` | 100.0 | diverged时R放大基数 |
-| `sppEkfDivergedRscaleMax` | 1000.0 | 自适应R放大上限 |
-| `sppEkfDivergedMaxEpochs` | 20 | diverged持续超过此数强制R=1解锁 |
-| `sppEkfDivergedQscale` | 1.0 | diverged时Q放大倍数 |
+| `enableEkf` | false | EKF开关 |
+| `ekfVarPos` | 2500 m² | 位置初始方差（50m） |
+| `ekfVarVel` | 100 m² | 速度初始方差（10m/s） |
+| `ekfVarAcc` | 100 m² | 加速度初始方差 |
+| `ekfClkProcessNoise` | 10000 m | 钟差过程噪声 |
+| `ekfAccPrn1` | 10.0 m/s² | 水平加速度过程噪声 |
+| `ekfAccPrn2` | 10.0 m/s² | 垂直加速度过程噪声 |
+| `ekfVelResidScale` | 1.0 | 速度残差注入P的缩放因子 |
+| `ekfVarResetThresh` | 2500 m² | P膨胀重置阈值 |
+| `ekfDtGap` | 10.0 s | 时间间断重置阈值 |
+| `ekfVarCap` | 625 m² | P对角线封顶值 |
+| `ekfMinSat` | 0 | EKF最低卫星数（0=不降级） |
+| `ekfLowSatThresh` | 7 | 低卫星数阈值 |
+| `ekfDivergedRecoverEpochs` | 5 | diverged恢复所需连续LS成功历元数 |
+| `ekfDivergedRscaleBase` | 100.0 | diverged时R放大基数 |
+| `ekfDivergedRscaleMax` | 1000.0 | 自适应R放大上限 |
+| `ekfDivergedMaxEpochs` | 20 | diverged持续超过此数强制R=1解锁 |
+| `ekfDivergedQscale` | 1.0 | diverged时Q放大倍数 |
 
 ### 1.7 实现位置
 
@@ -162,7 +164,7 @@ if var > sppEkfVarResetThresh && LS失败:
 | 时间传播 | `SppOptimizations.udposSpp()` | F矩阵构建、P预测、Q注入 |
 | 多普勒观测 | `SppOptimizations.resdopFilter()` | 多普勒残差+设计矩阵 |
 | EKF状态 | `SppEkfState` | x/P/diverged等状态管理 |
-| 入口分发 | `PntPos.pntpos()` | enableSppEkf→estposFilter，否则→estpos |
+| 入口分发 | `PntPos.pntpos()` | enableEkf→estposFilter，否则→estpos |
 
 ### 1.8 实测效果
 
@@ -177,7 +179,7 @@ if var > sppEkfVarResetThresh && LS失败:
 
 ---
 
-## 2. M-估计抗差（enableSppRobust）
+## 2. M-估计抗差（enableRobust）
 
 ### 2.1 问题背景
 
@@ -205,7 +207,7 @@ if var > sppEkfVarResetThresh && LS失败:
 用于独立位置/速度估计的抗差迭代：
 
 ```
-for iter = 1..sppRobustMaxIter:
+for iter = 1..robustMaxIter:
     对每个观测i:
         resid_i = |v_i - H_i * dx|
         w_i = robustWeight(resid_i, σ_i, mode)
@@ -220,7 +222,7 @@ for iter = 1..sppRobustMaxIter:
 在EKF更新前对观测方差进行抗差调整：
 
 ```
-for iter = 1..sppRobustMaxIter:
+for iter = 1..robustMaxIter:
     计算抗差权重 → 调整H和v
     lsq求解增量dx
     if收敛: break
@@ -233,12 +235,12 @@ for iter = 1..sppRobustMaxIter:
 
 | 参数 | 默认值 | MobileGNSS-SPP(C) | 说明 |
 |------|--------|-------------------|------|
-| `sppRobustKPos` | 1.345 | 1.345 | 位置Huber阈值（标准值） |
-| `sppRobustKVel` | 5.0 | 5.0 | 速度Huber阈值 |
-| `sppRobustMaxIter` | 15 | 15 | 最大迭代次数 |
-| `sppRobustPosOutlier` | **100.0** m | **30.0** m | 位置outlier阈值（C更激进） |
-| `sppRobustVelOutlier` | **20.0** m/s | **2.0** m/s | 速度outlier阈值（C更激进） |
-| `sppRobustMinW` | 0.0001 | 0.0001 | 淘汰段最小权重 |
+| `robustKPos` | 1.345 | 1.345 | 位置Huber阈值（标准值） |
+| `robustKVel` | 5.0 | 5.0 | 速度Huber阈值 |
+| `robustMaxIter` | 15 | 15 | 最大迭代次数 |
+| `robustPosOutlier` | **100.0** m | **30.0** m | 位置outlier阈值（C更激进） |
+| `robustVelOutlier` | **20.0** m/s | **2.0** m/s | 速度outlier阈值（C更激进） |
+| `robustMinW` | 0.0001 | 0.0001 | 淘汰段最小权重 |
 
 > C代码的outlier阈值更激进（30m vs 100m），后续可调优验证
 
@@ -264,7 +266,7 @@ for iter = 1..sppRobustMaxIter:
 
 ---
 
-## 3. 零速约束（enableSppZeroVel）
+## 3. 零速约束（enableZeroVel）
 
 ### 3.1 问题背景
 
@@ -295,9 +297,9 @@ else:
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `enableSppZeroVel` | **false** | 零速约束开关（**动态场景必须关闭**） |
-| `sppZeroVelSpeedThresh` | 0.5 m/s | 零速检测速度阈值 |
-| `sppZeroVelMinEpochs` | 1 | 最少连续零速历元数 |
+| `enableZeroVel` | **false** | 零速约束开关（**动态场景必须关闭**） |
+| `zeroVelSpeedThresh` | 0.5 m/s | 零速检测速度阈值 |
+| `zeroVelMinEpochs` | 1 | 最少连续零速历元数 |
 
 ### 3.4 逐项对照实测效果
 
@@ -321,7 +323,7 @@ else:
 
 ---
 
-## 4. 多普勒+SNR加权（enableSppDopplerSnr）
+## 4. 多普勒+SNR加权（enableDopplerSnr）
 
 ### 4.1 问题背景
 
@@ -362,7 +364,7 @@ v = [v_pseudorange; v_doppler]
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `enableSppDopplerSnr` | false | 多普勒SNR加权开关 |
+| `enableDopplerSnr` | false | 多普勒SNR加权开关 |
 
 > 无独立参数，SNR模型参数复用`PrcOpt.err[5]`(参考SNR)和`PrcOpt.err[6]`(SNR系数)
 
@@ -391,7 +393,7 @@ v = [v_pseudorange; v_doppler]
 
 ---
 
-## 5. 新息卡方检验（enableSppInnovChisq）
+## 5. 新息卡方检验（enableInnovChisq）
 
 ### 5.1 问题背景
 
@@ -425,7 +427,7 @@ else:                           (正常，≤3σ)
 
 ### 5.4 低卫星数保护
 
-卫星数<`sppEkfLowSatThresh`(7)时放宽阈值：
+卫星数<`ekfLowSatThresh`(7)时放宽阈值：
 
 | 条件 | 剔除阈值 | 降权阈值 | 原因 |
 |------|---------|---------|------|
@@ -436,12 +438,12 @@ else:                           (正常，≤3σ)
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `enableSppInnovChisq` | **true** | 新息检验开关（**唯一默认开启的SPP优化**） |
-| `sppInnovOutlierThresh` | 5.0 σ | 极端异常剔除阈值 |
-| `sppInnovDownweightThresh` | 3.0 σ | 中等异常降权阈值 |
-| `sppInnovOutlierThreshLowSat` | 7.0 σ | 低卫星数时剔除阈值 |
-| `sppInnovDownweightThreshLowSat` | 5.0 σ | 低卫星数时降权阈值 |
-| `sppInnovDownweightRscale` | 10.0 | 降权R放大倍数 |
+| `enableInnovChisq` | **true** | 新息检验开关（**唯一默认开启的SPP优化**） |
+| `innovOutlierThresh` | 5.0 σ | 极端异常剔除阈值 |
+| `innovDownweightThresh` | 3.0 σ | 中等异常降权阈值 |
+| `innovOutlierThreshLowSat` | 7.0 σ | 低卫星数时剔除阈值 |
+| `innovDownweightThreshLowSat` | 5.0 σ | 低卫星数时降权阈值 |
+| `innovDownweightRscale` | 10.0 | 降权R放大倍数 |
 
 ### 5.6 降权实现
 
@@ -452,7 +454,7 @@ double[] R = new double[nv * nv];
 for (int j = 0; j < nv; j++) {
     R[j * nv + j] = var[j];
     if (downweight[j]) {
-        R[j * nv + j] *= cfg.sppInnovDownweightRscale;  // R放大10倍
+        R[j * nv + j] *= cfg.spp.innovDownweightRscale;  // R放大10倍
     }
 }
 ```
@@ -498,9 +500,9 @@ MobileGNSS-SPP C代码同样存在此问题（检测到P膨胀但LS失败时不�
 ```
 var = mean(P[0:3]对角线)
 
-if var > sppEkfVarResetThresh:
+if var > ekfVarResetThresh:
     if LS成功:  重置位置/速度/加速度到LS解
-    if LS失败:  P对角线封顶到sppEkfVarCap，标记diverged
+    if LS失败:  P对角线封顶到ekfVarCap，标记diverged
 ```
 
 #### 6.2.2 diverged状态下的自适应R放大
@@ -509,13 +511,13 @@ diverged时放大观测方差R，降低KF增益，减少对不可靠观测的信
 
 ```
 if diverged:
-    if nSat < sppEkfLowSatThresh:     (低卫星)
-        rscale = sppEkfDivergedRscaleBase    (固定100)
-    elif divergedEpochs > sppEkfDivergedMaxEpochs:  (长期diverged)
+    if nSat < ekfLowSatThresh:     (低卫星)
+        rscale = ekfDivergedRscaleBase    (固定100)
+    elif divergedEpochs > ekfDivergedMaxEpochs:  (长期diverged)
         rscale = 1.0                          (强制解锁)
     else:                              (高卫星，自适应)
-        rscale = min(sppEkfDivergedRscaleMax,
-                     sppEkfDivergedRscaleBase × 2^divergedEpochs)
+        rscale = min(ekfDivergedRscaleMax,
+                     ekfDivergedRscaleBase × 2^divergedEpochs)
 
     R *= rscale
 ```
@@ -533,13 +535,13 @@ if diverged:
 
 #### 6.2.3 diverged恢复重初始化
 
-连续` sppEkfDivergedRecoverEpochs`(5)个历元LS成功后，重初始化EKF状态：
+连续` ekfDivergedRecoverEpochs`(5)个历元LS成功后，重初始化EKF状态：
 
 ```java
-if (state.diverged && consecutiveLsSuccess >= sppEkfDivergedRecoverEpochs) {
-    for (int i = 0; i < 3; i++) initx(state, solLsq.rr[i], sppEkfVarPos, i);
-    for (int i = 3; i < 6; i++) initx(state, solLsq.rr[i], sppEkfVarVel, i);
-    for (int i = 6; i < 9; i++) initx(state, 0.0, sppEkfVarAcc, i);
+if (state.diverged && consecutiveLsSuccess >= ekfDivergedRecoverEpochs) {
+    for (int i = 0; i < 3; i++) initx(state, solLsq.rr[i], ekfVarPos, i);
+    for (int i = 3; i < 6; i++) initx(state, solLsq.rr[i], ekfVarVel, i);
+    for (int i = 6; i < 9; i++) initx(state, 0.0, ekfVarAcc, i);
     state.diverged = false;
     state.divergedEpochs = 0;
 }
@@ -553,9 +555,9 @@ if (state.diverged && consecutiveLsSuccess >= sppEkfDivergedRecoverEpochs) {
 
 ```java
 if (state.diverged) {
-    Q[0] *= sppEkfDivergedQscale;
-    Q[4] *= sppEkfDivergedQscale;
-    Q[8] *= sppEkfDivergedQscale;
+    Q[0] *= ekfDivergedQscale;
+    Q[4] *= ekfDivergedQscale;
+    Q[8] *= ekfDivergedQscale;
 }
 ```
 
@@ -563,7 +565,7 @@ Q放大→P预测更大→K增大（倾向观测），R放大→K减小（不信
 - 观测质量好时K仍较大（Q放大主导）
 - 观测质量差时K很小（R放大主导）
 
-当前`sppEkfDivergedQscale=1.0`即不放大，待调优。
+当前`ekfDivergedQscale=1.0`即不放大，待调优。
 
 ### 6.3 配置参数
 
@@ -586,22 +588,22 @@ Q放大→P预测更大→K增大（倾向观测），R放大→K减小（不信
 
 ```
 PntPos.pntpos()
-  ├─ if enableSppEkf:
+  ├─ if enableEkf:
   │    └─ SppOptimizations.estposFilter()
   │         ├─ SppCore.estpos()           (LS解作为观测/初始化)
   │         ├─ udposSpp()                 (时间传播：F*x, F*P*Fᵀ+Q)
   │         │    ├─ P膨胀检测与封顶
   │         │    └─ diverged时Q放大
   │         ├─ SppCore.rescode()          (伪距观测方程)
-  │         ├─ resdopFilter()             (多普勒观测方程，if enableSppDopplerSnr)
-  │         ├─ if enableSppRobust:
+  │         ├─ resdopFilter()             (多普勒观测方程，if enableDopplerSnr)
+  │         ├─ if enableRobust:
   │         │    └─ robustFilter()        (抗差方差调整)
-  │         ├─ if enableSppInnovChisq:
+  │         ├─ if enableInnovChisq:
   │         │    └─ 新息两级检验           (剔除极端+降权中等)
   │         ├─ R矩阵构建                   (降权标记→R放大)
   │         ├─ diverged时R自适应放大
   │         ├─ KalmanFilter.update()      (KF更新，Joseph形式)
-  │         ├─ if enableSppZeroVel:
+  │         ├─ if enableZeroVel:
   │         │    └─ 零速检测与位置修正
   │         └─ diverged恢复检测
   │
@@ -614,64 +616,66 @@ PntPos.pntpos()
 ### 7.2 优化项之间的依赖
 
 ```
-enableSppEkf (前提)
-  ├── enableSppRobust      (抗差调整EKF观测方差)
-  ├── enableSppInnovChisq  (新息检验剔除/降权观测)
-  ├── enableSppZeroVel     (零速修正EKF位置/速度)
-  └── enableSppDopplerSnr  (多普勒SNR加权加入EKF观测方程)
+enableEkf (前提)
+  ├── enableRobust      (抗差调整EKF观测方差)
+  ├── enableInnovChisq  (新息检验剔除/降权观测)
+  ├── enableZeroVel     (零速修正EKF位置/速度)
+  └── enableDopplerSnr  (多普勒SNR加权加入EKF观测方程)
 ```
 
-> **enableSppEkf是所有其他SPP优化的前提**。不开启EKF时，其他SPP优化无效。
+> **enableEkf是所有其他SPP优化的前提**。不开启EKF时，其他SPP优化无效。
 
 ### 7.3 优化项互斥关系
 
 | 组合 | 兼容性 | 说明 |
 |------|--------|------|
-| enableSppRobust + enableSppInnovChisq | ✅ 兼容 | 抗差先调整方差，新息检验再剔除/降权 |
-| enableSppZeroVel + 动态场景 | ❌ 不兼容 | 零速误判导致位置锁死漂移 |
-| enableSppEkf + 卫星<5 | ⚠️ 风险 | EKF可能发散，需配合抗差+新息检验 |
+| enableRobust + enableInnovChisq | ✅ 兼容 | 抗差先调整方差，新息检验再剔除/降权 |
+| enableZeroVel + 动态场景 | ❌ 不兼容 | 零速误判导致位置锁死漂移 |
+| enableEkf + 卫星<5 | ⚠️ 风险 | EKF可能发散，需配合抗差+新息检验 |
 
 ---
 
 ## 8. RtkConfig字段与优化项对应表
 
+> 下表字段均属 `cfg.spp`（`SppOpts`），引用时写作 `cfg.spp.<字段名>`。
+
 | 字段 | 类型 | 默认值 | 优化项 | 说明 |
 |------|------|--------|--------|------|
-| `enableSppEkf` | boolean | false | §1 EKF | EKF时间传播开关 |
-| `enableSppRobust` | boolean | false | §2 抗差 | M-估计抗差开关 |
-| `enableSppZeroVel` | boolean | false | §3 零速 | 零速约束开关 |
-| `enableSppDopplerSnr` | boolean | false | §4 多普勒SNR | 多普勒SNR加权开关 |
-| `enableSppInnovChisq` | boolean | **true** | §5 新息检验 | 新息卡方检验开关 |
-| `sppEkfMinSat` | int | 0 | §1 | EKF最低卫星数 |
-| `sppEkfLowSatThresh` | int | 7 | §1/§5/§6 | 低卫星数阈值 |
-| `sppEkfVarPos` | double | 2500 | §1 | 位置初始方差 |
-| `sppEkfVarVel` | double | 100 | §1 | 速度初始方差 |
-| `sppEkfVarAcc` | double | 100 | §1 | 加速度初始方差 |
-| `sppEkfClkProcessNoise` | double | 10000 | §1 | 钟差过程噪声 |
-| `sppEkfAccPrn1` | double | 10.0 | §1 | 水平加速度过程噪声 |
-| `sppEkfAccPrn2` | double | 10.0 | §1 | 垂直加速度过程噪声 |
-| `sppEkfVelResidScale` | double | 1.0 | §1 | 速度残差P注入缩放 |
-| `sppEkfVarResetThresh` | double | 2500 | §6 | P膨胀重置阈值 |
-| `sppEkfDtGap` | double | 10.0 | §1 | 时间间断重置阈值 |
-| `sppEkfVarCap` | double | 625 | §6 | P对角线封顶值 |
-| `sppEkfDivergedRecoverEpochs` | int | 5 | §6 | diverged恢复历元数 |
-| `sppEkfDivergedRscaleBase` | double | 100.0 | §6 | diverged R放大基数 |
-| `sppEkfDivergedRscaleMax` | double | 1000.0 | §6 | 自适应R放大上限 |
-| `sppEkfDivergedMaxEpochs` | double | 20 | §6 | diverged最大持续历元 |
-| `sppEkfDivergedQscale` | double | 1.0 | §6 | diverged Q放大倍数 |
-| `sppInnovOutlierThresh` | double | 5.0 | §5 | 极端异常剔除阈值(σ) |
-| `sppInnovDownweightThresh` | double | 3.0 | §5 | 中等异常降权阈值(σ) |
-| `sppInnovOutlierThreshLowSat` | double | 7.0 | §5 | 低卫星剔除阈值(σ) |
-| `sppInnovDownweightThreshLowSat` | double | 5.0 | §5 | 低卫星降权阈值(σ) |
-| `sppInnovDownweightRscale` | double | 10.0 | §5 | 降权R放大倍数 |
-| `sppRobustKPos` | double | 1.345 | §2 | 位置Huber阈值 |
-| `sppRobustKVel` | double | 5.0 | §2 | 速度Huber阈值 |
-| `sppRobustMaxIter` | int | 15 | §2 | 抗差最大迭代 |
-| `sppRobustPosOutlier` | double | 100.0 | §2 | 位置outlier阈值(m) |
-| `sppRobustVelOutlier` | double | 20.0 | §2 | 速度outlier阈值(m/s) |
-| `sppRobustMinW` | double | 0.0001 | §2 | 淘汰段最小权重 |
-| `sppZeroVelSpeedThresh` | double | 0.5 | §3 | 零速速度阈值(m/s) |
-| `sppZeroVelMinEpochs` | int | 1 | §3 | 最少零速历元数 |
+| `enableEkf` | boolean | false | §1 EKF | EKF时间传播开关 |
+| `enableRobust` | boolean | false | §2 抗差 | M-估计抗差开关 |
+| `enableZeroVel` | boolean | false | §3 零速 | 零速约束开关 |
+| `enableDopplerSnr` | boolean | false | §4 多普勒SNR | 多普勒SNR加权开关 |
+| `enableInnovChisq` | boolean | **true** | §5 新息检验 | 新息卡方检验开关 |
+| `ekfMinSat` | int | 0 | §1 | EKF最低卫星数 |
+| `ekfLowSatThresh` | int | 7 | §1/§5/§6 | 低卫星数阈值 |
+| `ekfVarPos` | double | 2500 | §1 | 位置初始方差 |
+| `ekfVarVel` | double | 100 | §1 | 速度初始方差 |
+| `ekfVarAcc` | double | 100 | §1 | 加速度初始方差 |
+| `ekfClkProcessNoise` | double | 10000 | §1 | 钟差过程噪声 |
+| `ekfAccPrn1` | double | 10.0 | §1 | 水平加速度过程噪声 |
+| `ekfAccPrn2` | double | 10.0 | §1 | 垂直加速度过程噪声 |
+| `ekfVelResidScale` | double | 1.0 | §1 | 速度残差P注入缩放 |
+| `ekfVarResetThresh` | double | 2500 | §6 | P膨胀重置阈值 |
+| `ekfDtGap` | double | 10.0 | §1 | 时间间断重置阈值 |
+| `ekfVarCap` | double | 625 | §6 | P对角线封顶值 |
+| `ekfDivergedRecoverEpochs` | int | 5 | §6 | diverged恢复历元数 |
+| `ekfDivergedRscaleBase` | double | 100.0 | §6 | diverged R放大基数 |
+| `ekfDivergedRscaleMax` | double | 1000.0 | §6 | 自适应R放大上限 |
+| `ekfDivergedMaxEpochs` | double | 20 | §6 | diverged最大持续历元 |
+| `ekfDivergedQscale` | double | 1.0 | §6 | diverged Q放大倍数 |
+| `innovOutlierThresh` | double | 5.0 | §5 | 极端异常剔除阈值(σ) |
+| `innovDownweightThresh` | double | 3.0 | §5 | 中等异常降权阈值(σ) |
+| `innovOutlierThreshLowSat` | double | 7.0 | §5 | 低卫星剔除阈值(σ) |
+| `innovDownweightThreshLowSat` | double | 5.0 | §5 | 低卫星降权阈值(σ) |
+| `innovDownweightRscale` | double | 10.0 | §5 | 降权R放大倍数 |
+| `robustKPos` | double | 1.345 | §2 | 位置Huber阈值 |
+| `robustKVel` | double | 5.0 | §2 | 速度Huber阈值 |
+| `robustMaxIter` | int | 15 | §2 | 抗差最大迭代 |
+| `robustPosOutlier` | double | 100.0 | §2 | 位置outlier阈值(m) |
+| `robustVelOutlier` | double | 20.0 | §2 | 速度outlier阈值(m/s) |
+| `robustMinW` | double | 0.0001 | §2 | 淘汰段最小权重 |
+| `zeroVelSpeedThresh` | double | 0.5 | §3 | 零速速度阈值(m/s) |
+| `zeroVelMinEpochs` | int | 1 | §3 | 最少零速历元数 |
 
 ---
 
@@ -681,11 +685,11 @@ enableSppEkf (前提)
 
 | 优化项 | 开关 | 静态<br>开阔 | 静态<br>遮挡 | 动态<br>开阔 | 动态<br>遮挡 | 测试状态 |
 |--------|------|------------|------------|------------|------------|---------|
-| **EKF时间传播** | `enableSppEkf` | ✅ 平滑 | ✅ 成功率↑ | ✅ 平滑 | ⚠️ 需配合抗差 | ✅ 16组逐项对照 |
-| **M-估计抗差** | `enableSppRobust` | ≈ 无影响 | ✅ 抑制NLOS | ≈ 无影响 | ✅ 抑制NLOS | ✅ 16组逐项对照 |
-| **零速约束** | `enableSppZeroVel` | ✅ 精度↑ | ✅ 精度↑ | ❌ 误判风险 | ❌ 无收益 | ✅ 7组逐项对照 |
-| **多普勒+SNR** | `enableSppDopplerSnr` | ≈ 0% | ≈ -0.5% | ≈ 0% | ≈ -0.1% | ✅ 7组逐项对照 |
-| **新息检验** | `enableSppInnovChisq` | ≈ 0% | ≈ 0% | ≈ 0% | ≈ 0% | ✅ 7组逐项对照 |
+| **EKF时间传播** | `enableEkf` | ✅ 平滑 | ✅ 成功率↑ | ✅ 平滑 | ⚠️ 需配合抗差 | ✅ 16组逐项对照 |
+| **M-估计抗差** | `enableRobust` | ≈ 无影响 | ✅ 抑制NLOS | ≈ 无影响 | ✅ 抑制NLOS | ✅ 16组逐项对照 |
+| **零速约束** | `enableZeroVel` | ✅ 精度↑ | ✅ 精度↑ | ❌ 误判风险 | ❌ 无收益 | ✅ 7组逐项对照 |
+| **多普勒+SNR** | `enableDopplerSnr` | ≈ 0% | ≈ -0.5% | ≈ 0% | ≈ -0.1% | ✅ 7组逐项对照 |
+| **新息检验** | `enableInnovChisq` | ≈ 0% | ≈ 0% | ≈ 0% | ≈ 0% | ✅ 7组逐项对照 |
 | **P膨胀保护** | (内建) | — | ✅ 防发散 | — | ✅ 防发散 | ✅ EKF隐含覆盖 |
 
 > ✅ = 适用且推荐 | ⚠️ = 需配合其他优化 | ≈ = 无实质影响 | ❌ = 不适用/有害 | — = 不需要
@@ -726,9 +730,9 @@ enableSppEkf (前提)
 
 ```java
 RtkConfig cfg = new RtkConfig();
-cfg.enableSppEkf = true;
-cfg.enableSppDopplerSnr = true;
-// enableSppInnovChisq 默认已开启
+cfg.spp.enableEkf = true;
+cfg.spp.enableDopplerSnr = true;
+// enableInnovChisq 默认已开启
 ```
 
 特点：EKF平滑高程跳动 + 多普勒SNR降噪，稳定可靠
@@ -737,11 +741,11 @@ cfg.enableSppDopplerSnr = true;
 
 ```java
 RtkConfig cfg = new RtkConfig();
-cfg.enableSppEkf = true;
-cfg.enableSppRobust = true;
-cfg.enableSppDopplerSnr = true;
-// enableSppInnovChisq 默认已开启
-// enableSppZeroVel 必须关闭！
+cfg.spp.enableEkf = true;
+cfg.spp.enableRobust = true;
+cfg.spp.enableDopplerSnr = true;
+// enableInnovChisq 默认已开启
+// enableZeroVel 必须关闭！
 ```
 
 特点：IGGIII抗NLOS多路径粗差 + EKF平滑 + 新息检验兜底
@@ -750,10 +754,10 @@ cfg.enableSppDopplerSnr = true;
 
 ```java
 RtkConfig cfg = new RtkConfig();
-cfg.enableSppEkf = true;
-cfg.enableSppRobust = true;
-cfg.enableSppZeroVel = true;    // 静态场景可以开启
-cfg.enableSppDopplerSnr = true;
+cfg.spp.enableEkf = true;
+cfg.spp.enableRobust = true;
+cfg.spp.enableZeroVel = true;    // 静态场景可以开启
+cfg.spp.enableDopplerSnr = true;
 ```
 
 特点：全开模式，零速压制Q + 抗差 + 多普勒平滑，最大化静态精度
@@ -762,7 +766,7 @@ cfg.enableSppDopplerSnr = true;
 
 ```java
 RtkConfig cfg = new RtkConfig();
-// 不开启enableSppEkf，使用标准LS-SPP
+// 不开启enableEkf，使用标准LS-SPP
 ```
 
 特点：卫星太少时EKF必然发散，LS-SPP虽成功率低但不发散
@@ -789,12 +793,12 @@ RTK运行：Float解 → 等待ratio>3.0 → Fix解
 - **待改进**：
   - [ ] EKF初始化质量门控：卫星数≥5且HDOP≤5才初始化
   - [ ] 自适应Q矩阵：根据可见卫星数动态调整过程噪声
-  - [ ] 卫星数<5时自动降级到LS-SPP（当前`sppEkfMinSat=0`不触发）
+  - [ ] 卫星数<5时自动降级到LS-SPP（当前`ekfMinSat=0`不触发）
 
 ### 11.2 零速约束误判
 
 - **现象**：车载动态场景零速约束误触发，2D RMS恶化（PPC Tokyo 7.8→15km）
-- **根因**：`sppZeroVelSpeedThresh=0.5m/s`阈值太低，低速行驶时误判
+- **根因**：`zeroVelSpeedThresh=0.5m/s`阈值太低，低速行驶时误判
 - **待改进**：
   - [ ] 提高默认阈值至1.0~2.0 m/s
   - [ ] 增加零速持续时间要求（连续N个历元才启用）
@@ -802,7 +806,7 @@ RTK运行：Float解 → 等待ratio>3.0 → Fix解
 
 ### 11.3 抗差outlier阈值调优
 
-- **现状**：Java默认`sppRobustPosOutlier=100m`，C代码用30m
+- **现状**：Java默认`robustPosOutlier=100m`，C代码用30m
 - **C代码更激进**：30m以上即几乎零权，100m以上才零权可能放过中等异常
 - **待改进**：
   - [ ] 对照实验：30m vs 50m vs 100m outlier阈值

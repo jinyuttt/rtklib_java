@@ -98,8 +98,17 @@ public class SolData implements Serializable {
     public final double hdop;
     public final double vdop;
 
-    /** [Java扩展] H矩阵位置分量等效设计矩阵(3x3行优先)，null=未启用 */
+    /** [Java扩展] H矩阵位置分量等效设计矩阵(3×nv行优先)，null=未启用 */
     public final double[] hPos;
+
+    /**
+     * [Java扩展] 单历元归约法方程位置协方差（3×3，行优先9元素），null=未启用。
+     *
+     * <p>与 {@link #covEcef} 的区别：{@code qPos} 只反映当前历元双差观测，
+     * 不含跨历元相关性；{@code covEcef} 默认来自 Kalman 后验 {@link Sol#qr}。
+     * 两者同时可用时，{@code covEcef} 优先取 {@code qPos}（见 buildCovEcef）。</p>
+     */
+    public final double[] qPos;
 
     /** [Java扩展] 新息向量RMS，NaN=未启用 */
     public final double innovRms;
@@ -113,9 +122,13 @@ public class SolData implements Serializable {
     /**
      * [Java扩展] ECEF 三维完整协方差（m²，行优先，含符号）。
      *
-     * <p>由 {@link Sol#qr} 解包而来（上三角 6 值对称展开），是网平差等后处理
-     * 使用的真值来源。{@link Accuracy} 中的 c12/c23/c31 只保留了绝对值开方
-     * （源自 .pos 输出格式约定），仅供显示，不能用于还原协方差。</p>
+     * <p>数据来源按优先级：{@link #qPos}（DIAG_QPOS 开启且计算成功时，单历元归约
+     * 法方程协方差，不含跨历元相关性）→ {@link Sol#qr}（上三角 6 值对称展开，
+     * Kalman 后验）。两者都是网平差等后处理使用的真值来源。</p>
+     *
+     * <p>{@link Accuracy} 中的 c12/c23/c31 只保留了绝对值开方（源自 .pos 输出格式
+     * 约定），且<b>始终</b>读 {@link Sol#qr}，不随本字段的数据源切换而改变——这是
+     * 刻意设计：显示口径与后处理口径分离。</p>
      *
      * <p>null 表示该历元无有效协方差（RTKLIB 约定 qr[0]==0 为哨兵）。</p>
      */
@@ -176,18 +189,24 @@ public class SolData implements Serializable {
         this.hdop = sol.hdop;
         this.vdop = sol.vdop;
         this.hPos = sol.hPos;
+        this.qPos = sol.qPos;
         this.innovRms = sol.innovRms;
         this.innovMax = sol.innovMax;
         this.ddObsCount = sol.ddObsCount;
-        this.covEcef = buildCovEcef(sol.qr);
+        this.covEcef = buildCovEcef(sol);
     }
 
     /**
-     * 解包 {@link Sol#qr} 为 ECEF 完整 3x3 协方差（行优先，含符号）。
+     * 构造 ECEF 完整 3x3 协方差（行优先，含符号）。
+     *
+     * <p>优先级：{@link Sol#qPos}（3×3 单历元归约法方程协方差，行优先 9 元素，
+     * 已是 ECEF 顺序，无需转换）→ {@link Sol#qr}（上三角 6 值对称展开）。</p>
      *
      * @return 9 元素协方差；无有效协方差时返回 null
      */
-    private static double[] buildCovEcef(float[] qr) {
+    private static double[] buildCovEcef(Sol sol) {
+        if (sol.qPos != null && sol.qPos.length == 9) return sol.qPos.clone();
+        float[] qr = sol.qr;
         if (qr == null || qr.length < 6 || qr[0] == 0.0f) return null;
         return soltocov(qr);
     }

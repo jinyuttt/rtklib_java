@@ -5,6 +5,10 @@
 > 基于：rtklib-java v3.1.0  
 > 对标：PRIDE-PPPAR / GAMP / RTKLIB-demo5  
 
+> **字段命名（2026-10-28 起）**：`RtkConfig` 已拆分为 7 个子配置，本文所有开关与参数均带命名空间前缀：
+> 大气/潮汐/偏差/OSB/SSR 类 → `cfg.ppp`（`PppOpts`）；PPP-AR 类 → `cfg.pppAr`（`PppArOpts`）；PPP-RTK 类 → `cfg.pppRtk`（`PppRtkOpts`）。
+> 字段名已去掉原命名空间前缀，例如 `enablePppAR` → `cfg.pppAr.enableAR`、`enablePppArFixHold` → `cfg.pppAr.enableFixHold`、`enablePppPartialAR` → `cfg.pppAr.enablePartialAR`、`enableBds3PppAR` → `cfg.pppAr.enableBds3AR`、`enablePppRtk` → `cfg.pppRtk.enable`、`enablePppRtkAR` → `cfg.pppRtk.enableAR`、`enablePppRtkFixHold` → `cfg.pppRtk.enableFixHold`。
+
 ---
 
 ## 1. 概述
@@ -34,19 +38,19 @@
 
 | 模块 | 开关 | 实现类 | 精度贡献 | 收敛贡献 |
 |------|------|--------|----------|----------|
-| GPT3+VMF3 对流层 | `enableGpt3Vmf3` | `PppOptimizations` | 毫米~厘米级（先验ZTD） | 间接（更准的先验加速收敛） |
-| GPT3 网格插值 | `useGpt3Grid` | `Gpt3GridReader` + `PppOptimizations` | 毫米级（5°×5°网格） | 间接 |
+| GPT3+VMF3 对流层 | `cfg.ppp.enableGpt3Vmf3` | `PppOptimizations` | 毫米~厘米级（先验ZTD） | 间接（更准的先验加速收敛） |
+| GPT3 网格插值 | `cfg.ppp.useGpt3Grid` | `Gpt3GridReader` + `PppOptimizations` | 毫米级（5°×5°网格） | 间接 |
 | VMF3 OP 集成 | （自动） | `Vmf3OpReader` + `PppOptimizations` | 毫米级（站特异性映射函数系数） | 间接 |
-| IERS2010 潮汐 | `enableIers2010` | `PppOptimizations` | 毫米级（长周期潮+极潮） | 无 |
-| ISB/IFCB/IFB 偏差 | `enableIsbIfcbIfb` | `PppBiasModel` + `PppCoreEx` | 厘米~分米级（多系统偏差） | 显著（消除系统间偏差） |
-| OSB 偏差改正 | `enableOsb` | `PppOsbModel` + `PppCore` | 毫米~厘米级（观测值特异性偏差） | 间接（改善残差一致性） |
-| PPP-AR 模糊度固定 | `enablePppAR` | `PppAmbFix` + `PppCoreEx` | 厘米级（固定→浮点） | 显著（10~20min→固定） |
-| PPP-AR Fix-and-Hold | `enablePppArFixHold` | `PppAmbFix.pppArFixHold()` | 提升固定连续性 | 减少fix→float跳变 |
-| Partial AR | `enablePppPartialAR` | `PppAmbFix.pppPartialAR()` | 提升弱条件下固定率 | 子集固定加速收敛 |
-| BDS-3 PPP-AR | `enableBds3PppAR` | `PppAmbFixBds3` | BDS-3 B1C/B2a固定解 | BDS-3收敛加速 |
+| IERS2010 潮汐 | `cfg.ppp.enableIers2010` | `PppOptimizations` | 毫米级（长周期潮+极潮） | 无 |
+| ISB/IFCB/IFB 偏差 | `cfg.ppp.enableIsbIfcbIfb` | `PppBiasModel` + `PppCoreEx` | 厘米~分米级（多系统偏差） | 显著（消除系统间偏差） |
+| OSB 偏差改正 | `cfg.ppp.enableOsb` | `PppOsbModel` + `PppCore` | 毫米~厘米级（观测值特异性偏差） | 间接（改善残差一致性） |
+| PPP-AR 模糊度固定 | `cfg.pppAr.enableAR` | `PppAmbFix` + `PppCoreEx` | 厘米级（固定→浮点） | 显著（10~20min→固定） |
+| PPP-AR Fix-and-Hold | `cfg.pppAr.enableFixHold` | `PppAmbFix.pppArFixHold()` | 提升固定连续性 | 减少fix→float跳变 |
+| Partial AR | `cfg.pppAr.enablePartialAR` | `PppAmbFix.pppPartialAR()` | 提升弱条件下固定率 | 子集固定加速收敛 |
+| BDS-3 PPP-AR | `cfg.pppAr.enableBds3AR` | `PppAmbFixBds3` | BDS-3 B1C/B2a固定解 | BDS-3收敛加速 |
 | MW组合DCB校正 | （自动） | `PppCore.mwmeas()` | 提升WL浮点值整数性 | 间接（提升WL固定可靠性） |
-| PPP-RTK | `enablePppRtk` | `PppRtkCore` + `SsrCorrector` | cm级（SSR改正） | 显著（SSR快速收敛） |
-| PPP-RTK AR | `enablePppRtkAR` | `PppRtkAmbFix` | mm~cm级（固定解） | 显著（LAMBDA+Fix-and-Hold） |
+| PPP-RTK | `cfg.pppRtk.enable` | `PppRtkCore` + `SsrCorrector` | cm级（SSR改正） | 显著（SSR快速收敛） |
+| PPP-RTK AR | `cfg.pppRtk.enableAR` | `PppRtkAmbFix` | mm~cm级（固定解） | 显著（LAMBDA+Fix-and-Hold） |
 | 非组合PPP | `ionoopt=EST/SSR` | `PppCore.pppRes()` + `PppRtkCore` | 电离层建模精度 | 区域电离层增强 |
 
 ---
@@ -74,7 +78,7 @@
 **调用位置**：[PppCore.java:973-975](file:///d:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L973-L975) — `modelTrop()` 方法中
 
 ```java
-if (rtk.rtkConfig != null && rtk.rtkConfig.enableGpt3Vmf3) {
+if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableGpt3Vmf3) {
     dtrp[0] = PppOptimizations.tropoDelayGpt3Vmf3(time, pos, azel, trp, dtdx, var, rtk.rtkConfig, nav);
     if (!Double.isNaN(dtrp[0])) return true;
 }
@@ -119,9 +123,9 @@ ZHD/ZWD 按 Saastamoinen 公式与网格气象参数计算：`ZHD = 0.0022768·p
 
 ```java
 RtkConfig cfg = new RtkConfig();
-cfg.enableGpt3Vmf3 = true;              // 启用 GPT3+VMF3
-cfg.gpt3GridFile = "test-data/product/gpt3/gpt3_5.grd"; // 官方网格，设置后自动加载（推荐）
-cfg.useGpt3Grid = false;                // 启用扩展状态维度（默认 false，仅与状态布局配套时开启）
+cfg.ppp.enableGpt3Vmf3 = true;              // 启用 GPT3+VMF3
+cfg.ppp.gpt3GridFile = "test-data/product/gpt3/gpt3_5.grd"; // 官方网格，设置后自动加载（推荐）
+cfg.ppp.useGpt3Grid = false;                // 启用扩展状态维度（默认 false，仅与状态布局配套时开启）
 ```
 
 ### 2.6 限制
@@ -156,7 +160,7 @@ IERS2010潮汐模型在IERS1996（RTKLIB标准）基础上增加三项改正：
 **调用位置**：[PppCore.java:698-706](file:///d:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L698-L706) — `pppRes()` 方法中
 
 ```java
-if (rtk.rtkConfig != null && rtk.rtkConfig.enableIers2010) {
+if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableIers2010) {
     double[] disp2010 = PppOptimizations.tideDisplacementIers2010(
             TimeSystem.gpst2utc(obs[0].time), rr, opt.tidecorr, nav.erp, opt.odisp[0], rtk.rtkConfig);
     if (disp2010 != null) {
@@ -192,8 +196,8 @@ dr_E = -9mm * m1,  dr_N = -9mm * m2,  dr_U = +33mm * m1
 
 ```java
 RtkConfig cfg = new RtkConfig();
-cfg.enableIers2010 = true;   // 启用IERS2010潮汐模型
-cfg.enableAt1S2 = true;      // S1/S2大气潮开关（已实现，由AtmosphericTideS1S2计算）
+cfg.ppp.enableIers2010 = true;   // 启用IERS2010潮汐模型
+cfg.ppp.enableAt1S2 = true;      // S1/S2大气潮开关（已实现，由AtmosphericTideS1S2计算）
 // 同时需要 opt.tidecorr = 1 或 7 以启用潮汐改正
 ```
 
@@ -230,9 +234,9 @@ x = [pos(3), clk(1), ztd(1~3), amb(N*nf), ISB(3), IFCB(MAXSAT), IFB(4)]
 
 ```java
 int dim = 0;
-if (cfg.estimateIsb)  dim += 3;           // GLO/GAL/BDS
-if (cfg.estimateIfcb) dim += MAXSAT;       // 每卫星1个
-if (cfg.estimateIfb)  dim += 4;           // GPS/GLO/GAL/BDS
+if (cfg.ppp.estimateIsb)  dim += 3;           // GLO/GAL/BDS
+if (cfg.ppp.estimateIfcb) dim += MAXSAT;       // 每卫星1个
+if (cfg.ppp.estimateIfb)  dim += 4;           // GPS/GLO/GAL/BDS
 ```
 
 ### 4.3 实现细节
@@ -240,10 +244,10 @@ if (cfg.estimateIfb)  dim += 4;           // GPS/GLO/GAL/BDS
 **调用入口**：[PppProcessor.java:829-836](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppProcessor.java#L829-L836)
 
 ```java
-if (rtk.rtkConfig != null && (rtk.rtkConfig.enableIsbIfcbIfb || rtk.rtkConfig.enablePppAR
-        || rtk.rtkConfig.enablePppArFixHold || rtk.rtkConfig.enablePppPartialAR
-        || rtk.rtkConfig.enableBds3PppAR || rtk.rtkConfig.enableOsb
-        || rtk.rtkConfig.enableAt1S2 || rtk.rtkConfig.useGpt3Grid)) {
+if (rtk.rtkConfig != null && (rtk.rtkConfig.ppp.enableIsbIfcbIfb || rtk.rtkConfig.pppAr.enableAR
+        || rtk.rtkConfig.pppAr.enableFixHold || rtk.rtkConfig.pppAr.enablePartialAR
+        || rtk.rtkConfig.pppAr.enableBds3AR || rtk.rtkConfig.ppp.enableOsb
+        || rtk.rtkConfig.ppp.enableAt1S2 || rtk.rtkConfig.ppp.useGpt3Grid)) {
     PppCoreEx.ppos(rtk, obsData, n, nav, rtk.rtkConfig);
 } else {
     PppCore.pppos(rtk, obsData, n, nav);
@@ -282,9 +286,9 @@ PNew[idx * nxNew + idx] = varIfb;   // IFB: 60² = 3600 m²
 
 ```java
 // ISB/IFCB/IFB参数采用随机游走模型
-P[idx * nx + idx] += SQR(cfg.isbPrn) * Math.abs(rtk.tt);    // ISB: prn=0.01 m/√s
-P[idx * nx + idx] += SQR(cfg.ifcbPrn) * Math.abs(rtk.tt);   // IFCB: prn=0.01 m/√s
-P[idx * nx + idx] += SQR(cfg.ifbPrn) * Math.abs(rtk.tt);    // IFB: prn=0.001 m/√s
+P[idx * nx + idx] += SQR(cfg.ppp.isbPrn) * Math.abs(rtk.tt);    // ISB: prn=0.01 m/√s
+P[idx * nx + idx] += SQR(cfg.ppp.ifcbPrn) * Math.abs(rtk.tt);   // IFCB: prn=0.01 m/√s
+P[idx * nx + idx] += SQR(cfg.ppp.ifbPrn) * Math.abs(rtk.tt);    // IFB: prn=0.001 m/√s
 ```
 
 ### 4.4 参数索引计算
@@ -308,13 +312,13 @@ int pppBaseDim(PrcOpt opt) {
 
 ```java
 RtkConfig cfg = new RtkConfig();
-cfg.enableIsbIfcbIfb = true;   // 启用偏差模型总开关
-cfg.estimateIsb = true;         // 估计ISB（默认true）
-cfg.estimateIfcb = true;        // 估计IFCB（默认true）
-cfg.estimateIfb = true;         // 估计IFB（默认true）
-cfg.isbPrn = 0.01;             // ISB过程噪声（m/√s）
-cfg.ifcbPrn = 0.01;            // IFCB过程噪声（m/√s）
-cfg.ifbPrn = 0.001;            // IFB过程噪声（m/√s）
+cfg.ppp.enableIsbIfcbIfb = true;   // 启用偏差模型总开关
+cfg.ppp.estimateIsb = true;         // 估计ISB（默认true）
+cfg.ppp.estimateIfcb = true;        // 估计IFCB（默认true）
+cfg.ppp.estimateIfb = true;         // 估计IFB（默认true）
+cfg.ppp.isbPrn = 0.01;             // ISB过程噪声（m/√s）
+cfg.ppp.ifcbPrn = 0.01;            // IFCB过程噪声（m/√s）
+cfg.ppp.ifbPrn = 0.001;            // IFB过程噪声（m/√s）
 ```
 
 ### 4.6 限制
@@ -352,11 +356,11 @@ PPP-AR（Ambiguity Resolution）通过固定整周模糊度，将PPP从浮点解
 
 ```java
 // 三频分支优先（enableMultiFreqAR）
-if (cfg.enableMultiFreqAR) {
+if (cfg.pppAr.enableMultiFreqAR) {
     int nb = PppAmbFix.pppAmbFixEwlWlNl(rtk, null, rtk.xa, 1, 0, 0, nav);
     if (nb > 1) rtk.sol.stat = Constants.SOLQ_FIX;
 }
-if (cfg.enablePppAR && rtk.sol.stat != Constants.SOLQ_FIX) {
+if (cfg.pppAr.enableAR && rtk.sol.stat != Constants.SOLQ_FIX) {
     int nb = PppAmbFix.pppAmbFixWlNl(rtk, null, rtk.xa, 1, 0, 0, nav);
     if (nb > 1) {
         rtk.sol.stat = Constants.SOLQ_FIX;
@@ -369,14 +373,14 @@ if (cfg.enablePppAR && rtk.sol.stat != Constants.SOLQ_FIX) {
 1. 遍历所有卫星和频率，收集方差 < 1.0 cycle² 的模糊度
 2. 保留GPS、Galileo和BDS卫星（`SYS_GPS | SYS_GAL | SYS_CMP`）
 3. 计算WL浮点模糊度和协方差，应用FCB/OSB改正
-4. LAMBDA搜索，检查ratio > `pppArRatioWl`（默认2.0）
+4. LAMBDA搜索，检查ratio > `cfg.pppAr.arRatioWl`（默认2.0）
 5. 若WL ratio不足，返回失败
 
 **NL固定流程**：
 
 1. 从浮点模糊度扣除WL固定值，得到NL模糊度
 2. 应用FCB/OSB NL改正
-3. LAMBDA搜索，检查ratio > `pppArRatioNl`（默认3.0）
+3. LAMBDA搜索，检查ratio > `cfg.pppAr.arRatioNl`（默认3.0）
 4. 若NL ratio不足，返回失败
 
 **FCB/OSB产品支持**（[PppAmbFix.getWlFcb()/getNlFcb()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFix.java#L1237-L1256)）：
@@ -410,17 +414,17 @@ rtk.ssat[sat - 1].fix[f] = 1;
 
 **调用位置**：[PppCoreEx.java:245-247](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L245-L247)
 
-模糊度固定后，将其协方差从浮点值(~1.0)收紧到`pppArFixHoldVar`(默认1e-6)，使后续历元中该模糊度不会被重新浮点化，从而"锁定"固定解。
+模糊度固定后，将其协方差从浮点值(~1.0)收紧到`fixHoldVar`(默认1e-6)，使后续历元中该模糊度不会被重新浮点化，从而"锁定"固定解。
 
-**安全守卫**：需连续FIX历元数 ≥ `pppArFixHoldMinEp`（默认50）才触发收紧，避免首次固定即锁定导致发散。`PppCoreEx`在每历元结束时管理`rtk.nfix`计数器（FIX递增，非FIX归零）。
+**安全守卫**：需连续FIX历元数 ≥ `fixHoldMinEp`（默认50）才触发收紧，避免首次固定即锁定导致发散。`PppCoreEx`在每历元结束时管理`rtk.nfix`计数器（FIX递增，非FIX归零）。
 
 ```java
-if (cfg.enablePppArFixHold && rtk.sol.stat == Constants.SOLQ_FIX) {
+if (cfg.pppAr.enableFixHold && rtk.sol.stat == Constants.SOLQ_FIX) {
     PppAmbFix.pppArFixHold(rtk, nav);
 }
 ```
 
-仅收紧方差 > `pppArFixHoldVar` 的模糊度，避免重复收紧。
+仅收紧方差 > `fixHoldVar` 的模糊度，避免重复收紧。
 
 ### 5.5 Partial AR（pppPartialAR）
 
@@ -435,10 +439,10 @@ if (cfg.enablePppArFixHold && rtk.sol.stat == Constants.SOLQ_FIX) {
 
 **单位空间**：LAMBDA搜索在 **L1循环（cycle）空间** 执行。浮点模糊度和协方差从米空间转换到L1循环空间（`y[i] /= λ₁`, `Q[i][j] /= (λ₁_i × λ₁_j)`），固定后转回米空间（`Math.round(b[i]) × λ₁`）。这确保不同波长卫星的整数约束正确。
 
-约束：子集大小 >= `pppPartialArMinSats`（默认4），搜索次数 <= `pppPartialArMaxTries`（默认10），比率 >= `pppPartialArMinRatio`（默认2.0）。
+约束：子集大小 >= `partialArMinSats`（默认4），搜索次数 <= `partialArMaxTries`（默认10），比率 >= `partialArMinRatio`（默认2.0）。
 
 ```java
-if (cfg.enablePppPartialAR && rtk.sol.stat != Constants.SOLQ_FIX) {
+if (cfg.pppAr.enablePartialAR && rtk.sol.stat != Constants.SOLQ_FIX) {
     int nb = PppAmbFix.pppPartialAR(rtk, null, rtk.xa, 1, 0, 0, nav);
     if (nb > 1) {
         rtk.sol.stat = Constants.SOLQ_FIX;
@@ -455,7 +459,7 @@ BDS-3新信号B1C(1575.42MHz)和B2a(1176.45MHz)的模糊度固定，仅针对PRN
 实现类：[PppAmbFixBds3.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFixBds3.java)
 
 ```java
-if (cfg.enableBds3PppAR) {
+if (cfg.pppAr.enableBds3AR) {
     int nb = PppAmbFixBds3.pppAmbFixBds3(rtk, null, rtk.xa, nav);
     if (nb > 1) {
         LOG.debug("PppCoreEx: BDS-3 PPP-AR fixed {} ambiguities", nb);
@@ -468,22 +472,22 @@ if (cfg.enableBds3PppAR) {
 ```java
 RtkConfig cfg = new RtkConfig();
 // PPP-AR 基础
-cfg.enablePppAR = true;            // 启用PPP-AR（WL+NL）
-cfg.pppArRatioWl = 2.0;            // WL LAMBDA ratio阈值
-cfg.pppArRatioNl = 3.0;            // NL LAMBDA ratio阈值
+cfg.pppAr.enableAR = true;            // 启用PPP-AR（WL+NL）
+cfg.pppAr.arRatioWl = 2.0;            // WL LAMBDA ratio阈值
+cfg.pppAr.arRatioNl = 3.0;            // NL LAMBDA ratio阈值
 
 // Fix-and-Hold
-cfg.enablePppArFixHold = false;    // 启用Fix-and-Hold
-cfg.pppArFixHoldVar = 1e-6;        // 固定后方差收紧值
+cfg.pppAr.enableFixHold = false;      // 启用Fix-and-Hold
+cfg.pppAr.fixHoldVar = 1e-6;          // 固定后方差收紧值
 
 // Partial AR
-cfg.enablePppPartialAR = false;    // 启用部分模糊度固定
-cfg.pppPartialArMinRatio = 2.0;    // Partial AR最小ratio
-cfg.pppPartialArMinSats = 4;       // Partial AR最少卫星数
-cfg.pppPartialArMaxTries = 10;     // Partial AR最大搜索次数
+cfg.pppAr.enablePartialAR = false;    // 启用部分模糊度固定
+cfg.pppAr.partialArMinRatio = 2.0;    // Partial AR最小ratio
+cfg.pppAr.partialArMinSats = 4;       // Partial AR最少卫星数
+cfg.pppAr.partialArMaxTries = 10;     // Partial AR最大搜索次数
 
 // BDS-3
-cfg.enableBds3PppAR = false;       // 启用BDS-3 PPP-AR
+cfg.pppAr.enableBds3AR = false;       // 启用BDS-3 PPP-AR
 ```
 
 ### 5.8 限制
@@ -501,45 +505,45 @@ cfg.enableBds3PppAR = false;       // 启用BDS-3 PPP-AR
 ```
 PppProcessor.process()
   └─ 每历元:
-       ├─ [enableGpt3Vmf3] PppOptimizations.tropoDelayGpt3Vmf3()  ← 在PppCore.tropoDelayPrec()中
-       ├─ [enableIers2010] PppOptimizations.tideDisplacementIers2010()  ← 在PppCore.pppos()中
-       ├─ [enablePppRtk] PppRtkCore.ppprtk()  ← PPP-RTK处理器
+       ├─ [cfg.ppp.enableGpt3Vmf3] PppOptimizations.tropoDelayGpt3Vmf3()  ← 在PppCore.tropoDelayPrec()中
+       ├─ [cfg.ppp.enableIers2010] PppOptimizations.tideDisplacementIers2010()  ← 在PppCore.pppos()中
+       ├─ [cfg.pppRtk.enable] PppRtkCore.ppprtk()  ← PPP-RTK处理器
        │     ├─ SsrCorrector.applyXxxCorr()  ← SSR轨道/钟差/高频钟差/码偏差/相位偏差
        │     ├─ ppprtkRes() × MAX_ITER  ← 迭代滤波（支持非组合模式）
-       │     ├─ [enablePppRtkAR] PppRtkAmbFix.pppRtkAmbFix()  ← LAMBDA AR
-       │     └─ [enablePppRtkFixHold] PppRtkAmbFix.pppRtkFixHold()
+       │     ├─ [cfg.pppRtk.enableAR] PppRtkAmbFix.pppRtkAmbFix()  ← LAMBDA AR
+       │     └─ [cfg.pppRtk.enableFixHold] PppRtkAmbFix.pppRtkFixHold()
        ├─ [任意扩展开关] PppCoreEx.ppos()
        │     ├─ udstateEx()  ← 状态时间更新 + ISB/IFCB/IFB过程噪声
        │     ├─ pppResEx() × MAX_ITER  ← 迭代滤波（支持非组合模式）
        │     │     ├─ PppCore.pppRes()  ← 标准PPP残差
        │     │     └─ ISB/IFCB/IFB H矩阵扩展
-       │     ├─ [enablePppAR] PppAmbFix.pppAmbFixWlNl()
-       │     ├─ [enablePppPartialAR] PppAmbFix.pppPartialAR()
-       │     ├─ [enableBds3PppAR] PppAmbFixBds3.pppAmbFixBds3()
-       │     └─ [enablePppArFixHold] PppAmbFix.pppArFixHold()
+       │     ├─ [cfg.pppAr.enableAR] PppAmbFix.pppAmbFixWlNl()
+       │     ├─ [cfg.pppAr.enablePartialAR] PppAmbFix.pppPartialAR()
+       │     ├─ [cfg.pppAr.enableBds3AR] PppAmbFixBds3.pppAmbFixBds3()
+       │     └─ [cfg.pppAr.enableFixHold] PppAmbFix.pppArFixHold()
        └─ [默认] PppCore.pppos()  ← 标准PPP滤波（无优化）
 ```
 
 ### 6.2 PppCore中的侵入点
 
-PppCore中通过 `if(rtk.rtkConfig != null && rtk.rtkConfig.enableXxx)` 分支实现优化侵入：
+PppCore中通过 `if(rtk.rtkConfig != null && rtk.rtkConfig.<子配置>.enableXxx)` 分支实现优化侵入：
 
 | 侵入点 | 行号 | 条件 | 替代逻辑 |
 |--------|------|------|----------|
-| 潮汐改正 | L621 | `enableIers2010` | `Tides.tidedisp()` → `PppOptimizations.tideDisplacementIers2010()` |
-| 对流层延迟 | L846 | `enableGpt3Vmf3` | `tropModelPrec()` → `PppOptimizations.tropoDelayGpt3Vmf3()` |
+| 潮汐改正 | L621 | `cfg.ppp.enableIers2010` | `Tides.tidedisp()` → `PppOptimizations.tideDisplacementIers2010()` |
+| 对流层延迟 | L846 | `cfg.ppp.enableGpt3Vmf3` | `tropModelPrec()` → `PppOptimizations.tropoDelayGpt3Vmf3()` |
 
 ### 6.3 PppProcessor中的侵入点
 
 | 侵入点 | 行号 | 条件 | 替代逻辑 |
 |--------|------|------|----------|
-| 历元处理（Rover） | L756 | `enablePppRtk` | `PppCore.pppos()` → `PppRtkCore.ppprtk()` |
+| 历元处理（Rover） | L756 | `cfg.pppRtk.enable` | `PppCore.pppos()` → `PppRtkCore.ppprtk()` |
 | 历元处理（Rover） | L756 | 其他扩展开关 | `PppCore.pppos()` → `PppCoreEx.ppos()` |
 | 历元处理（Base） | L1068 | 任意扩展开关 | `PppCore.pppos()` → `PppCoreEx.ppos()` |
 
-PPP-RTK扩展开关：`enablePppRtk`
+PPP-RTK扩展开关：`cfg.pppRtk.enable`
 
-其他扩展开关条件：`enableIsbIfcbIfb || enablePppAR || enablePppArFixHold || enablePppPartialAR || enableBds3PppAR || enableOsb || enableAt1S2 || useGpt3Grid`
+其他扩展开关条件：`cfg.ppp.enableIsbIfcbIfb || cfg.pppAr.enableAR || cfg.pppAr.enableFixHold || cfg.pppAr.enablePartialAR || cfg.pppAr.enableBds3AR || cfg.ppp.enableOsb || cfg.ppp.enableAt1S2 || cfg.ppp.useGpt3Grid`
 
 ---
 
@@ -687,12 +691,16 @@ PPP-RTK扩展开关：`enablePppRtk`
 | `useGpt3Grid` | boolean | false | 使用GPT3 5°×5°网格插值（需提前加载到Nav） |
 | `gpt3GridFile` | String | "" | GPT3网格文件路径 |
 
+> 以上字段均属 `cfg.ppp`（`PppOpts`），引用时写作 `cfg.ppp.<字段名>`。
+
 ### 8.2 潮汐相关
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `enableIers2010` | boolean | false | IERS2010潮汐模型 |
 | `enableAt1S2` | boolean | false | S1/S2大气潮（已实现，由AtmosphericTideS1S2计算） |
+
+> 以上字段均属 `cfg.ppp`（`PppOpts`）。
 
 ### 8.3 偏差模型相关
 
@@ -707,29 +715,35 @@ PPP-RTK扩展开关：`enablePppRtk`
 | `ifbPrn` | double | 0.001 | IFB过程噪声（m/√s） |
 | `enableOsb` | boolean | false | OSB偏差模型（已实现，IF组合+单频改正） |
 
+> 以上字段均属 `cfg.ppp`（`PppOpts`），引用时写作 `cfg.ppp.<字段名>`。
+
 ### 8.4 PPP-AR相关
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `enablePppAR` | boolean | false | PPP-AR模糊度固定（WL+NL） |
-| `pppArRatioWl` | double | 2.0 | WL LAMBDA ratio阈值 |
-| `pppArRatioNl` | double | 3.0 | NL LAMBDA ratio阈值 |
-| `enablePppArFixHold` | boolean | false | Fix-and-Hold策略 |
-| `pppArFixHoldVar` | double | 1e-6 | 固定后方差收紧值 |
-| `enablePppPartialAR` | boolean | false | 部分模糊度固定 |
-| `pppPartialArMinRatio` | double | 2.0 | Partial AR最小ratio |
-| `pppPartialArMinSats` | int | 4 | Partial AR最少卫星数 |
-| `pppPartialArMaxTries` | int | 10 | Partial AR最大搜索次数 |
-| `enableBds3PppAR` | boolean | false | BDS-3 PPP-AR（B1C/B2a） |
+| `enableAR` | boolean | false | PPP-AR模糊度固定（WL+NL） |
+| `arRatioWl` | double | 2.0 | WL LAMBDA ratio阈值 |
+| `arRatioNl` | double | 3.0 | NL LAMBDA ratio阈值 |
+| `enableFixHold` | boolean | false | Fix-and-Hold策略 |
+| `fixHoldVar` | double | 1e-6 | 固定后方差收紧值 |
+| `enablePartialAR` | boolean | false | 部分模糊度固定 |
+| `partialArMinRatio` | double | 2.0 | Partial AR最小ratio |
+| `partialArMinSats` | int | 4 | Partial AR最少卫星数 |
+| `partialArMaxTries` | int | 10 | Partial AR最大搜索次数 |
+| `enableBds3AR` | boolean | false | BDS-3 PPP-AR（B1C/B2a） |
+
+> 以上字段均属 `cfg.pppAr`（`PppArOpts`），引用时写作 `cfg.pppAr.<字段名>`。
 
 ### 8.5 PPP-RTK相关
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `enablePppRtk` | boolean | false | PPP-RTK处理器（SSR改正） |
-| `enablePppRtkAR` | boolean | false | PPP-RTK模糊度固定（LAMBDA） |
-| `pppRtkArRatio` | double | 3.0 | PPP-RTK AR ratio阈值 |
-| `enablePppRtkFixHold` | boolean | false | PPP-RTK Fix-and-Hold |
+| `enable` | boolean | false | PPP-RTK处理器（SSR改正） |
+| `enableAR` | boolean | false | PPP-RTK模糊度固定（LAMBDA） |
+| `arRatio` | double | 3.0 | PPP-RTK AR ratio阈值 |
+| `enableFixHold` | boolean | false | PPP-RTK Fix-and-Hold |
+
+> 以上字段均属 `cfg.pppRtk`（`PppRtkOpts`），引用时写作 `cfg.pppRtk.<字段名>`。
 
 ### 8.6 非组合PPP相关
 
@@ -745,17 +759,17 @@ PPP-RTK扩展开关：`enablePppRtk`
 
 ### 9.1 已完成（v2.3.0）
 
-- [x] GPT3 5°×5°网格插值（`Gpt3GridReader`，`useGpt3Grid`开关）
-- [x] 偏差参数过程噪声更新（随机游走模型，`isbPrn`/`ifcbPrn`/`ifbPrn`）
+- [x] GPT3 5°×5°网格插值（`Gpt3GridReader`，`cfg.ppp.useGpt3Grid`开关）
+- [x] 偏差参数过程噪声更新（随机游走模型，`cfg.ppp.isbPrn`/`ifcbPrn`/`ifbPrn`）
 - [x] FCB/OSB产品读取（`FcbReader` + `nav.fcbFromOsb`）
-- [x] PPP-AR Fix-and-Hold策略（`pppArFixHold`）
-- [x] PPP-AR 部分模糊度固定（`pppPartialAR`）
+- [x] PPP-AR Fix-and-Hold策略（`cfg.pppAr.enableFixHold`）
+- [x] PPP-AR 部分模糊度固定（`cfg.pppAr.enablePartialAR`）
 - [x] BDS-3 PPP-AR（B1C/B2a频率，`PppAmbFixBds3`）
 
 ### 9.2 已完成（v3.0.0新增）
 
 - [x] VMF3 OP文件读取与集成（`Vmf3OpReader`，按MJD线性插值ah/aw/bH/bW）
-- [x] IERS2010 S1/S2大气潮实现（`AtmosphericTideS1S2`，`enableAt1S2`开关）
+- [x] IERS2010 S1/S2大气潮实现（`AtmosphericTideS1S2`，`cfg.ppp.enableAt1S2`开关）
 - [x] IERS2010完整极潮（`Tides.tidePole()`，IERS标准9mm/9mm/-33mm公式）
 - [x] IONEX电离层网格读取与STEC内插（`IonexReader`，`IONOOPT_TEC`）
 - [x] OSB模型观测方程集成（`PppOsbModel`，IF组合+单频改正，注入`pppRes()`）
@@ -829,10 +843,10 @@ LAMBDA搜索 + ratio test + Fix-and-Hold，与标准PPP-AR类似但使用SSR相�
 
 ```java
 RtkConfig cfg = new RtkConfig();
-cfg.enablePppRtk = true;         // 启用PPP-RTK处理器
-cfg.enablePppRtkAR = true;       // 启用PPP-RTK AR
-cfg.pppRtkArRatio = 3.0;         // AR ratio阈值
-cfg.enablePppRtkFixHold = true;  // 启用Fix-and-Hold
+cfg.pppRtk.enable = true;         // 启用PPP-RTK处理器
+cfg.pppRtk.enableAR = true;       // 启用PPP-RTK AR
+cfg.pppRtk.arRatio = 3.0;         // AR ratio阈值
+cfg.pppRtk.enableFixHold = true;  // 启用Fix-and-Hold
 ```
 
 ### 10.4 限制

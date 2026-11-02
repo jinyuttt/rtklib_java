@@ -3,6 +3,10 @@
 本文档记录Java版RTKLIB中**RTKLIB C版没有的**额外优化项。
 这些优化通过 `RtkConfig` 独立开关控制，默认全部关闭，不影响默认行为。
 
+> **字段命名（2026-10-28 起）**：`RtkConfig` 已拆分为 7 个子配置（`cfg.common` / `cfg.rtk` / `cfg.spp` / `cfg.ppp` / `cfg.pppAr` / `cfg.pppRtk` / `cfg.adaptive`），字段名已去掉原命名空间前缀。
+> 本文各章节的配置表与代码片段中，除特别标注为 `cfg.common`（`CommonOpts`）的字段外，其余字段均属 `cfg.rtk`（`RtkOpts`），引用时写作 `cfg.rtk.<字段名>`，例如 `cfg.rtk.enableCascadeAR`、`cfg.rtk.enablePartialAR`、`cfg.rtk.enableBootstrapping`。
+> 属 `cfg.common` 的字段：`enableParRefReselect`、`parElMask`、`parMaxConsecutiveReselect`、`atmFrozenNsThresh`、`enableParamTypeNoise`、`noiseZtdRw`、`noiseIonoRw`。
+
 与C版同功能的实现差异（如矩阵存储、状态向量表示等）见 `RTKLIB_Differences.md`。
 
 ---
@@ -117,7 +121,7 @@ C版RTKLIB使用固定过程噪声 `Q = prn[3]² * |tt|`，不区分静态/动�
 
 `RtkCore.udstate()` → `udpos()` 中：
 ```java
-if (rtk.rtkConfig.enableAdaptiveQ && rtk.qScale != 1.0) {
+if (rtk.rtkConfig.rtk.enableAdaptiveQ && rtk.qScale != 1.0) {
     qh *= rtk.qScale * rtk.qScale;
     qv *= rtk.qScale * rtk.qScale;
 }
@@ -847,6 +851,8 @@ atmFrozenNsThresh → udion() (冻结检查)
 
 ### 8.3 RtkConfig字段与优化项对应表
 
+> `RtkConfig` 拆分为 7 个子配置后，下表中 `enableParRefReselect`、`parElMask`、`parMaxConsecutiveReselect`、`atmFrozenNsThresh` 属 `cfg.common`（`CommonOpts`），其余均属 `cfg.rtk`（`RtkOpts`）。
+
 | 字段 | 所属优化项 |
 |------|-----------|
 | `enableParRefReselect` | PAR参考星重选 |
@@ -1128,7 +1134,7 @@ DD 组合作用于**同一卫星对**（参考星按频率独立选取，跨频�
 
 4. NL 级为最终固定级：
    - ratio 阈值对齐标准路径动态多项式调整（C rtkpos.c ar_poly_coeffs），
-     并取 cfg.cascadeArRatioNl 为下限（修复旧Bug2）
+     并取 cfg.rtk.cascadeArRatioNl 为下限（修复旧Bug2）
    - sol.ratio/sol.thres 语义与标准路径一致（下游 arfilter/fix-and-hold 可用）
 
 5. 整数反推与降级（修复旧Bug3/Bug4）：
@@ -1157,7 +1163,7 @@ DD 组合作用于**同一卫星对**（参考星按频率独立选取，跨频�
 
 ```java
 int nfAr = (rtk.opt.ionoopt == Constants.IONOOPT_IFLC) ? 1 : rtk.opt.nf;
-if (rtk.rtkConfig.enableCascadeAR && nfAr >= 2) {
+if (rtk.rtkConfig.rtk.enableCascadeAR && nfAr >= 2) {
     int nbCas = RtkOptimizationsCascadeAR.cascadeAmbFix(rtk, bias, xa, gps, glo, sbs, nav);
     if (nbCas > 0) return nbCas;   // 级联成功直接返回；失败（≤0）回落标准 LAMBDA
 }
@@ -1343,7 +1349,7 @@ RtkOptimizationsResEdit.screenArcIntegrity(rtk);
 `RtkCore.resamb_LAMBDA()` Ratio失败后1行if分支：
 
 ```java
-if (nb <= 0 && rtk.rtkConfig.enablePartialAR) {
+if (nb <= 0 && rtk.rtkConfig.rtk.enablePartialAR) {
     int nbPar = RtkOptimizationsPartialAR.partialAmbFix(rtk, bias, xa, ix, rtk.nb_ar, gps, glo, sbs);
     if (nbPar > 1) return nbPar;
 }
@@ -1401,7 +1407,7 @@ erf(x)通过erfc(x) = 1 - erf(x)计算，erfc使用Horner有理逼近。
 `RtkCore.resamb_LAMBDA()` Ratio通过后1行if分支：
 
 ```java
-if (rtk.rtkConfig.enableBootstrapping) {
+if (rtk.rtkConfig.rtk.enableBootstrapping) {
     if (!RtkOptimizationsBootstrap.validateFix(rtk, b, nbLambda)) {
         rtk.sol.ratio = 0.0f;
         nb = 0;
