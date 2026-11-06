@@ -909,6 +909,8 @@ public class PppProcessor {
         }
 
         if (rtk.rtkConfig != null && rtk.rtkConfig.pppRtk.enable) {
+            /* ppprtkos 不再内部自增 epoch，PPP 路径由调用方按观测历元自增 */
+            rtk.epoch++;
             PppRtkCore.ppprtkos(rtk, obsData, n, nav);
         } else if (rtk.rtkConfig != null && (rtk.rtkConfig.ppp.enableIsbIfcbIfb || rtk.rtkConfig.pppAr.enableAR
                 || rtk.rtkConfig.pppAr.enableFixHold || rtk.rtkConfig.pppAr.enablePartialAR

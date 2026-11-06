@@ -331,21 +331,22 @@ public final class EphModel {
         }
     }
 
-    private static final double EPHEMERIS_MAX_AGE_S = 604800.0; // 7 days: covers BRDM validity while excluding stale ephs
-
     /**
      * Search ephemeris for GPS/GAL/QZS/CMP/IRN satellite.
+     * <p>
+     * tmax 按系统分档，复用 Constants.MAXDTOE_*，与 RTKLIB ephemeris.c seleph() 一致。
      */
     private static Eph searchEphemeris(Nav nav, int sat, GTime time) {
         int[] prn = new int[1];
-        SatUtils.satsys(sat, prn);
+        int sys = SatUtils.satsys(sat, prn);
         if (nav.eph == null) return null;
+        double tmax = maxdtoe(sys);
         double minT = 1E10;
         Eph best = null;
         for (Eph eph : nav.eph) {
             if (eph.sat == sat) {
                 double dt = Math.abs(TimeSystem.timediff(time, eph.toe));
-                if (dt < minT && dt < EPHEMERIS_MAX_AGE_S) {
+                if (dt < minT && dt <= tmax) {
                     minT = dt;
                     best = eph;
                 }
@@ -360,12 +361,29 @@ public final class EphModel {
     }
 
     /**
+     * 星历最大年龄（s），对齐 RTKLIB ephemeris.c seleph()/selgeph()。
+     * <p>
+     * seleph() 中 GPS/QZS/CMP/IRN/default 用 MAXDTOE_*+1.0，GAL 单独不加 1.0；
+     * selgeph() 用 MAXDTOE_GLO；SBS 不走 seleph，由 MAXDTOE_SBS 单独处理。
+     */
+    private static double maxdtoe(int sys) {
+        switch (sys) {
+            case Constants.SYS_GAL: return Constants.MAXDTOE_GAL;
+            case Constants.SYS_QZS: return Constants.MAXDTOE_QZS + 1.0;
+            case Constants.SYS_CMP: return Constants.MAXDTOE_CMP + 1.0;
+            case Constants.SYS_IRN: return Constants.MAXDTOE_IRN + 1.0;
+            case Constants.SYS_GLO: return Constants.MAXDTOE_GLO;
+            default: return Constants.MAXDTOE + 1.0;
+        }
+    }
+
+    /**
      * Search GLONASS ephemeris.
      */
     private static Geph searchGloEphemeris(Nav nav, int prn, GTime time) {
         if (nav.geph == null || prn < 1) return null;
         int sat = SatUtils.satno(Constants.SYS_GLO, prn);
-        double tmax = EPHEMERIS_MAX_AGE_S;
+        double tmax = maxdtoe(Constants.SYS_GLO);
         double tmin = tmax + 1.0;
         Geph best = null;
         for (int i = 0; i < nav.ng; i++) {
@@ -382,16 +400,24 @@ public final class EphModel {
 
     /**
      * Search SBAS ephemeris.
+     * Aligned with RTKLIB ephemeris.c seleph_sbs(): tmax=MAXDTOE_SBS, 取 t0 最近者。
      */
     private static Seph searchSbsEphemeris(Nav nav, int sat, GTime time) {
         if (nav.seph == null) return null;
+        double tmax = Constants.MAXDTOE_SBS;
+        double tmin = tmax + 1.0;
+        Seph best = null;
         for (Seph seph : nav.seph) {
             if (seph.sat == sat) {
                 double dt = Math.abs(TimeSystem.timediff(time, seph.t0));
-                if (dt < 3600.0) return seph;
+                if (dt > tmax) continue;
+                if (dt <= tmin) {
+                    best = seph;
+                    tmin = dt;
+                }
             }
         }
-        return null;
+        return best;
     }
 
     /**
@@ -466,9 +492,21 @@ public final class EphModel {
      * Aligned with RTKLIB preceph.c peph2pos().
      * No broadcast fallback: pephpos/pephclk failure drops the satellite
      * (C satpos EPHOPT_PREC branch: *svh=-1, return 0).
+     *
+     * <p>公开入口：供只做单星位置计算（如网解双差构造）的调用方使用，
+     * 需先由 {@code Sp3Reader.readsp3} / {@code ClkReader.readclk} 装载
+     * {@code nav.peph} 与 {@code nav.pclk}。</p>
+     *
+     * @param time 卫星信号发射时刻（gpst）
+     * @param sat  卫星号
+     * @param nav  导航数据（含 peph/pclk）
+     * @param rs   输出：位置(0..2) + 速度(3..5)
+     * @param dts  输出：钟差 + 钟漂
+     * @param vare 输出：位置/钟差方差
+     * @return true=成功；false=精密星历/钟差缺失
      */
-    private static boolean satposPrec(GTime time, int sat, Nav nav,
-                                      double[] rs, double[] dts, double[] vare) {
+    public static boolean satposPrec(GTime time, int sat, Nav nav,
+                                     double[] rs, double[] dts, double[] vare) {
         if (sat <= 0 || sat > Constants.MAXSAT) return false;
 
         double tt = 1E-3;
