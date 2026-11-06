@@ -1,6 +1,6 @@
 # SSR 接入手册（v3.1.0）
 
-> 定位：SSR 接入的**操作与验收手册**。CAS `SSRA01CAS0`/`SSRC01CAS0` 已接入并完成录制/回放闭环验证（2026-10-28）；算法已封存，接入不涉及算法改动。
+> 定位：SSR 接入的**操作与验收手册**。CAS `SSRA01CAS0`/`SSRC01CAS0` 已接入并完成录制/回放闭环验证（2026-10-28），2026-11-05 完成实时流复测并补入统一摄入入口 `SsrCorrectionProvider`（实时/文件同解码路径）；算法已封存，接入不涉及算法改动。
 > 相关：[archive/ROADMAP_v3.3.0.md](archive/ROADMAP_v3.3.0.md) §8.8（✅ 已闭环，历史记录） · [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) 表 3 · [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) FIX-ALG-026~028、035~036
 
 ## 一、一页结论：只改两行
@@ -28,7 +28,7 @@ HAS ──────► HasSsrDecoder ──────► Nav.ssr ─┘
 
 | 来源 | 当前状态 | 覆盖 / 内容 | 能否 AR | 接入动作 |
 |---|---|---|---|---|
-| **CAS IGS**（`igs.bdsmart.cn:2001`） | ✅ 已接入：`SSRA01CAS0`/`SSRC01CAS0` 可用，录制/回放闭环通过（FIX-ALG-035/036） | 亚太 | 是（含 1270 BDS 相位偏差） | 无需动作；换源时改挂载点即可 |
+| **CAS IGS**（`igs.bdsmart.cn:2001`） | ✅ 已接入：`SSRA01CAS0`/`SSRC01CAS0` 可用，录制/回放闭环通过（FIX-ALG-035/036）；2026-11-05 实时复测 `SSRC01CAS0` 60 s 收到 42,802 字节 / 87 帧，92 颗星可用，`max\|deph\|=2.66 m`、`max\|dclk\|=41.39 m` | 亚太 | 是（含 1270 BDS 相位偏差） | 无需动作；换源时改挂载点即可 |
 | **BDS PPP-B2b**（武汉大学 BDSet 公开归档） | 公开可用，可直接下载 | BDS 改正，**无相位偏差** | 否，仅浮点 | 先跑通 float，验证解码与改正链 |
 | **北航 2025 全球区域 SSR** | 需离线申请；元数据未明确含相位偏差与区域大气 | 全球区域 | 待确认 | 提交数据集申请，拿到元数据后判定 |
 | **Galileo HAS** | `HasSsrDecoder` 已实现 COMPACT-SSR（MT1~MT9）→ `Nav.ssr`；互联网 IDD 接入未实现；无公开事后存档 | 全球 | 是（MT8 相位偏差） | 获取 IDD 注册凭据 + 补 IDD 帧同步层 |
@@ -53,6 +53,7 @@ HAS ──────► HasSsrDecoder ──────► Nav.ssr ─┘
 1. **拉 Sourcetable**：`getSourcetable()` 已支持 NTRIP 1.0/2.0 状态行与 chunked/gzip 响应，确认目标挂载点在线、且有 SSR 标识。
 2. **录制 30 s**：统计帧数与 CRC；基线参考为 WUH20 观测流 74 KB / 262 帧全通过。
 3. **确认解码落库**：检查 `nav.ssr` 的轨道、钟差、码/相位偏差字段非空；RTCM 走 `Rtcm`，CLAS 走 `CompactSsrDecoder`，HAS 走 `HasSsrDecoder`。
+   库侧统一入口（实时流与文件回放共用一条解码路径）：`SsrCorrectionProvider.live(referenceTime, maxAgeSec)` + `ingest(byte[], offset, length)` 增量摄入（尾部未凑齐的电文自动缓冲续接，帧边界不必与块切分对齐），随后逐历元 `applyAt(nav, time, sats)`；文件回放用 `fromRtcm(path, referenceTime, maxAgeSec)`，内部委托同一 `live` + `ingest`，不存在两套解码实现。无当日 SSR 流时可退到 `fromPreciseProducts()`（SP3/CLK 反算 SSR 改正）。
 4. **先跑浮点**：`cfg.pppRtk.enable = true`，其余 AR 开关保持关闭，对照事后产品核对 ENU，确认改正链生效。
 5. **再开固定**：`cfg.pppRtk.enableAR = true`（可选 `cfg.pppRtk.enableFixHold`），统计 fix 率、固定解 RMS 与逐历元误差分布（p50/p90），排查假 Fix。
 
@@ -87,6 +88,7 @@ HAS ──────► HasSsrDecoder ──────► Nav.ssr ─┘
 6. **授权错误 6 误判为密码错误**：该码表示挂载点未授权，不是认证失败。
 7. **把 HAS IDD 当 RTCM 喂**：IDD 是专有二进制，须先帧同步再交给 `HasSsrDecoder`，不能直接进 `Rtcm`。
 8. **时间系统混用**：全链路按 GPST 处理，SSR 时标（IOD/参考时刻）过期会导致改正失效。
+9. **CAS 的 `CAS1` 挂载点当普通 SSR 拉**：`SSRC01CAS1` 走 4076 专有电文（IGS SSR v1 私有消息号），core `Rtcm` 只解 1057~1068 / 1265~1270，拉 CAS1 表现为「帧 CRC 通过但 `nav.ssr` 全空」。要标准 RTCM SSR 请用 `CAS0`；要用 4076 须走 `IgsSsr4076Decoder`（当前仅解析公共头与 IM201 电离层，卫星级改正数未实现）。
 
 ## 八、与其它文档的关系
 

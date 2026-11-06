@@ -2,7 +2,7 @@
 
 > **包路径**：`org.rtklib.java.otl`
 > **功能**：从FES2004全球海潮模型直接提取BLQ海潮负荷系数，或计算任意时刻的OTL位移时间序列
-> **算法来源**：球谐综合移植自PRIDE-PPPAR（Zhang Chuanyin）的OLoadDFlu.f90/LTideFlupnm.f90链；Legendre函数移植自Belikov改进递推（BelPnmdt.f90）；天文参数移植自ASTRO5（R.D. Ray, NASA/GSFC）
+> **算法来源**：整体移植自武汉大学 PRIDE-PPPAR（GNSS 研究中心）的海潮负荷模块 `src/otl`——球谐综合源自 OLoadDFlu.f90/LTideFlupnm.f90 链（Zhang Chuanyin）；Legendre 函数源自 Belikov 改进递推（BelPnmdt.f90）；天文参数源自 ASTRO5（R.D. Ray, NASA/GSFC）
 
 ---
 
@@ -243,9 +243,9 @@ for (int i = 0; i < names.length; i++) {
 
 ## 9. 验证结果
 
-### 9.1 Java vs Fortran对比（4站）
+### 9.1 Java vs 武汉大学 PRIDE-PPPAR OTL 模块对比（4站）
 
-对LHASA、LINZHI、CHENGDU、MENGDIGOU四站进行Java与Fortran（FES2004球谐综合参考实现）的完全对比：
+参考程序由武汉大学 PRIDE-PPPAR 的海潮负荷模块（`src/otl`）提取改造为独立 Fortran 程序 `test_blq`（源程序已随 3.3.0 Fortran 清理移除，二进制存于 `rtklib-otl/validate/`），输出与 Java 相同的 BLQ 振幅/相位。对LHASA、LINZHI、CHENGDU、MENGDIGOU四站进行完全对比：
 
 - **振幅差异**：0.0000 mm（全部4站 × 11分潮 × 3分量）
 - **相位差异**：0.0000 deg（全部4站 × 11分潮 × 3分量）

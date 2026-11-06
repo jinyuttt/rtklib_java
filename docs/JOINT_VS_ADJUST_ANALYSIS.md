@@ -69,7 +69,7 @@ jrtk.na  = npPerBaseline + nBaseline * (niPerBaseline + ntPerBaseline);
 | FLOAT 位置方差 1/N | 共享 pos，N 组观测同时约束 | FLOAT |
 | 模糊度收敛加速 | pos 方差小 → 模糊度方差小 → LAMBDA 搜索空间缩小 | FLOAT |
 | FIX 率提升 | 模糊度浮点解更紧 → ratio 更高 → 更易固定 | 收敛期 |
-| 共享大气参数 | `JointConfig.sharedIono/sharedTrop` 压制残余大气噪声 | 全过程 |
+| 共享大气参数 | 设计目标为跨基线共享大气以压制残余噪声；**当前实现仍是每基线一份大气**（§2.1.1 未实施，原 `sharedIono/sharedTrop` 存根字段已于 2026-11-04 删除） | 全过程（尚未兑现） |
 
 **关键**：joint 的精度优势主要在 **FLOAT 阶段和收敛期**。一旦模糊度全部 FIX，位置精度由几何和固定模糊度决定，与 adjust 等价。
 
@@ -174,7 +174,7 @@ joint 在观测层把 k 条基线并进同一个滤波器，输出时"多条独�
 
 ### 6.2 可行的组合方式
 
-当前 `JointConfig.useNetworkAdjustment=true` 预留了组合路径。实际可行的策略：
+当前 joint 未提供组合开关（原 `JointConfig.useNetworkAdjustment` 存根字段已于 2026-11-04 删除，因从未被读取）。实际可行的策略：
 
 1. **并行双轨**：同时跑 joint（提精度）和 SBS+adjust（保可靠），用 adjust 的可靠性分级来 gate joint 的输出。
 2. **环境自适应切换**：用 SNR、GDOP、残差 RMS 监测环境，开阔走 joint，恶劣降级到 adjust。

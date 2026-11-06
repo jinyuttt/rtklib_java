@@ -27,7 +27,7 @@ BaselineEpoch.BaselineEntry entryA = new BaselineEpoch.BaselineEntry(
     CovAssembler.extractCovariance3x3(solA)        // Rover位置协方差
 );
 
-// 3. 构建BaselineEpoch（自动剔除非FIX基线）
+// 3. 构建BaselineEpoch（默认自动剔除非FIX基线；allowFloat 见后文 FLOAT 补位）
 BaselineEpoch epoch = new BaselineEpoch(
     "2026-01-01 10:00:00",
     new BaselineEpoch.BaselineEntry[]{entryA, entryB, entryC}
@@ -63,7 +63,102 @@ if (result.success) {
 
 - **k=1**（单基线）：df=0，无法精度评定，sigma0=NaN，不计算Baarda
 - **k=0**（无有效基线）：返回失败结果
-- **非FIX基线**：构建BaselineEpoch时自动剔除
+- **非FIX基线**：默认（`allowFloat=false`）构建BaselineEpoch时自动剔除；开启 `allowFloat` 后按 §FLOAT 补位 的规则准入
+
+---
+
+## FLOAT 补位（allowFloat，可选）
+
+### 概述
+
+默认只吃 FIX 基线，某历元若 FIX 不足则该历元无输出。开启 `allowFloat` 后，FLOAT 基线可在 FIX 不足时补位，把出解覆盖率从 ~91% 提到 100%（实测 90.8% → 100.0%）。注意这提升的是**出解可用性**，不是把 FLOAT 变成 FIX。
+
+### 使用
+
+```java
+MultiBaselineConfig cfg = MultiBaselineConfig.builder()
+        .baseStationIds("BASE_A", "BASE_B")
+        .allowFloat(true)                 // 允许 FLOAT 补位
+        .floatCovInflate(1000.0)          // FLOAT 方差膨胀倍数（默认 1000）
+        .floatAgreementThreshold(0.20)    // 1 条 FIX 时的较差准入上限，单位 m
+        .build();
+
+MultiBaselineAdjust adjust = MultiBaselineAdjust.create(cfg);
+adjust.registerBasePosition("BASE_A", posA);
+adjust.registerBasePosition("BASE_B", posB);
+adjust.onEpochResult((coord, detail) -> {
+    // coord.grade()：补位历元为 UNVERIFIED，不会伪装成已验证结果
+    // detail.rejectedFloats：被准入门限拒绝的 FLOAT 明细
+});
+```
+
+### 准入规则
+
+| FIX 条数 | 行为 |
+|---|---|
+| ≥2 | 只留 FIX，FLOAT 全丢（双 FIX 交叉验证最可靠，掺入 FLOAT 会错误剔除真 FIX） |
+| =1 | FLOAT 需满足 `\|FLOAT - FIX\| ≤ floatAgreementThreshold` 才准入；否则拒绝并上报 |
+| =0 | FLOAT 全部补位（无参照物，门限不适用） |
+
+准入与判级是同一单调映射：较差 ≤ 阈值 → 准入 → `SINGLE_VERIFIED`；较差 > 阈值 → 拒绝 → `UNVERIFIED`，不存在"既拉坐标又标记不可信"的中间态。
+
+> **两处过滤不要混淆**：`BaselineEpoch(epochTag, baselines, true)` 只做**状态过滤**（保留 FIX 与 FLOAT，剔除其他状态），不施加准入门限；准入门限（`floatAgreementThreshold`）在 `MultiBaselineAdjust` 的 `selectAdmitted` 里。直接调用 `GnssBaselineAdjust.adjust(epoch, ...)` 且自己构造 `BaselineEpoch` 时，门限由调用方负责。
+
+### 参数说明
+
+| 参数 | 默认 | 含义 |
+|---|---|---|
+| `allowFloat` | `false` | 关闭时与历史行为逐位一致 |
+| `floatCovInflate` | `1000.0` | 按**方差**计，即 σ 放大 √1000 ≈ 31.6 倍 |
+| `floatAgreementThreshold` | `0.20` | 仅 1 条 FIX 时生效，单位 m |
+
+### 隔离性
+
+FLOAT 补位只影响**坐标输出**，不影响基站一致性检核、网平差观测累积、基站诊断——这些仍只消费 FIX，避免分米级偏差污染基站位移与 σ₀。
+
+### 被拒 FLOAT 的上报
+
+```java
+AdjustResult result = ...;
+for (AdjustResult.RejectedFloat r : result.rejectedFloats) {
+    System.out.printf("%s 距 FIX %.3fm > 门限 %.3fm%n",
+            r.baseId(), r.distanceToFix(), r.threshold());
+}
+```
+
+---
+
+## 协方差数据源（Q_pos / Pa）
+
+`CovAssembler.extractCovariance3x3(solData)` 读 `SolData.covEcef`，其数据源按优先级取：
+
+| 优先级 | 来源 | 说明 |
+|---|---|---|
+| 1 | `Sol.qPos` | 单历元归约法方程位置协方差，需 `PrcOpt.DIAG_QPOS` 开启；不含跨历元相关性 |
+| 2 | `Sol.qr` | Kalman 后验协方差位置块 `Pa`（默认） |
+
+切换方式：
+
+```java
+PrcOpt opt = RtkProcessor.createDefaultOpt();
+opt.diagMask |= PrcOpt.DIAG_QPOS;   // 位值 32
+```
+
+实测（215 个 FIX 历元）：两者 ENU σ 中位几乎一致（三轴和比值中位 1.0000，`Q_pos` 从不偏大、略保守）；FLOAT 历元 `Q_pos` 中位偏大 8.2 倍，因单历元信息量远小于滤波累积信息。开关只改协方差，**不改解算坐标与历元数**。
+
+### 三种协方差表现形式
+
+core 对同一位置方差提供了三种封装，平差只认第一种：
+
+| 形式 | 字段 | 元素数 | 非对角符号 | 用途 |
+|---|---|---|---|---|
+| 完整 3×3 行优先（**带符号**） | `SolData.covEcef` | 9 | **保留** | 平差/网平差真值来源（`CovAssembler` 直接使用） |
+| 上三角压缩（.pos 风格） | `Sol.qr` | 6 | 保留 | 滤波内部状态；`covEcef` 的默认来源 |
+| 精度摘要（**无符号**） | `SolData.accuracies` | 6 | **丢失**（`sqrt(|c_ij|)`） | 界面显示；仅作 `covEcef` 缺失时的降级回退 |
+
+- `covEcef` 是唯一保留完整符号的对外形式，平差用它才能正确反映三轴间的负相关
+- `Accuracy` 的 `c12/c23/c31` 只是 `sqrt(|c_ij|)`；`qr[0]==0`（无协方差哨兵）时 `CovAssembler` 才回退用它重构，此时非对角只能填正值，与真实符号可能相反
+- 速度协方差 `Sol.qv` 也是带符号的上三角形式，但平差不消费速度，忽略即可
 
 ---
 
@@ -113,10 +208,11 @@ opt.diagMask = PrcOpt.DIAG_SAT_RESIDUAL   // 1:  逐卫星伪距/载波残差
              | PrcOpt.DIAG_SAT_AMBIGUITY  // 2:  逐卫星模糊度及标准差
              | PrcOpt.DIAG_SAT_CYCLESLIP  // 4:  逐卫星周跳/GF/MW组合
              | PrcOpt.DIAG_HPOS           // 8:  H矩阵位置分量(3×3)
-             | PrcOpt.DIAG_INNOVATION;    // 16: 新息向量摘要
+             | PrcOpt.DIAG_INNOVATION     // 16: 新息向量摘要
+             | PrcOpt.DIAG_QPOS;          // 32: 单历元归约位置协方差 Q_pos
 
 // opt.diagMask = 0;  // 默认，不输出任何诊断数据
-// opt.diagMask = 31; // 全量启用
+// opt.diagMask = 63; // 全量启用
 ```
 
 ### 诊断字段
@@ -125,6 +221,7 @@ opt.diagMask = PrcOpt.DIAG_SAT_RESIDUAL   // 1:  逐卫星伪距/载波残差
 
 | 字段 | 类型 | diagMask | 含义 |
 |------|------|----------|------|
+| `qPos` | double[9] | DIAG_QPOS | 单历元归约位置协方差 3×3（行优先） |
 | `hPos` | double[9] | DIAG_HPOS | 3×3等效设计矩阵（行优先） |
 | `innovRms` | double | DIAG_INNOVATION | 新息RMS |
 | `innovMax` | double | DIAG_INNOVATION | 最大标准化新息 |
@@ -146,6 +243,7 @@ opt.diagMask = PrcOpt.DIAG_SAT_RESIDUAL   // 1:  逐卫星伪距/载波残差
 ### 向后兼容
 
 - `diagMask=0`（默认）：所有诊断字段为null/NaN/0，与修改前完全一致
+- `diagMask` 未含 `DIAG_QPOS`：`qPos=null`，`covEcef` 回退到 `Sol.qr`，与修改前逐位一致
 - `hPos=null`：设计矩阵退化为I₃，平差行为不变
 
 ---

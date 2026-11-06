@@ -75,8 +75,10 @@ kv      （自由字段）   → "sat=C08" / "ratio=3.2" ...
 ## 3. 日志格式
 
 ```
-TRACE|topic=POSITION|action=UPDATE|gpst=123456.0|epoch=91|lat=29.212409|lon=95.098123|h=699.123|ns=7|stat=PPP
+TRACE|topic=POSITION|action=UPDATE|gpst=123456.0|epoch=91|lat=12.34567|lon=123.45678|h=1234.56|ns=7|stat=PPP
 ```
+
+> 上例经纬度为虚构占位值，仅示意字段格式与小数位数；真实测站坐标不入库。
 
 **规则：**
 
@@ -481,8 +483,10 @@ V2 不替换 V1，两者共存：
 ### 13.1 PPP 位置 + 诊断
 
 ```
-TRACE|topic=POSITION|action=UPDATE|gpst=123456.0|epoch=91|lat=29.212409|lon=95.098123|h=699.123|ns=7|stat=PPP|d_dN=0.012|d_dE=-0.008|d_dU=0.045|d_d3D=0.048|d_conv=YES
+TRACE|topic=POSITION|action=UPDATE|gpst=123456.0|epoch=91|lat=12.34567|lon=123.45678|h=1234.56|ns=7|stat=PPP|d_dN=0.012|d_dE=-0.008|d_dU=0.045|d_d3D=0.048|d_conv=YES
 ```
+
+> 同上，经纬度为虚构占位值。
 
 ### 13.2 AR 固定 + 告警
 

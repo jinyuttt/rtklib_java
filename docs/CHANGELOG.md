@@ -6,6 +6,42 @@
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **rtklib-networkvrs 逐历元 SSR 改正注入 `SsrCorrectionProvider`**（`sync/SsrCorrectionProvider.java`）：统一 `byte[]` 摄入接口——`live(GTime, double)` 建实时通道、`ingest(byte[], int, int)` 增量解码（未凑齐的尾部电文缓存在 `pending` 续接，帧边界不必与块切分对齐）、`applyAt(Nav, GTime, Iterable<Integer>)` 逐历元写入 `nav.ssr[]`。`fromRtcm(Path, GTime, double)` 内部委托 `live` + `ingest`，**文件回放与 NTRIP 实时流走同一条解码路径**，不存在两套解码实现的分歧风险。一条 SSR 电文可携带多颗卫星，故不能只看 `Rtcm.ephsat`——按 `nav.ssr[].update` 位逐星快照并建立「卫星 → 时间线」（同一卫星同历元的轨道/钟差/偏差合并为一条记录），取最近记录后按 `ddeph` 线性项与钟差多项式外推到当前历元、并把 `t0` 归算到该历元
+- **`SsrCorrectionProvider.fromPreciseProducts()` 反算模式**：每次 `applyAt` 由已装载的 SP3/CLK 与广播星历实时求「精密 − 广播」差值（`deph` 取 RAC 分量、`dclk` 为钟差差），在无当日 SSR 录制流时事后回放整条 SSR 链路；与字节流模式完全隔离（该模式下 `decoder` 为 `null`，调用 `ingest` 抛 `IllegalArgumentException`）
+- **`PreciseEphemerisLoader`**（`sync/`）：把 SP3 精密轨道与 CLK 精密钟差装入 `Nav`（`nav.peph` / `nav.pclk`），只做文件 → `Nav` 的搬运，不参与解算决策
+- **`NetworkConfig.ephemerisOption`**：网解星历来源，与 core `ephopt` 同义——`EPHOPT_BRDC`（默认）/ `EPHOPT_PREC` / `EPHOPT_SSRAPC` / `EPHOPT_SSRCOM`
+- **`NetworkConfig.cycleSlipThresholdMeters`**（默认 0.05 m）：窗口内按卫星比较「相位 − 几何 − 模型」的相邻历元阶跃，超阈值即切分弧段、各弧段独立估模糊度。标定依据：单频 1 周失锁对应 IF 模糊度跳变 `λ_if ≈ 0.107 m`，相邻历元噪声约 2 cm，5 cm 可稳定区分失锁与噪声
+- **`EphModel.satposPrec` 转为 public**：供只做单星位置计算的调用方（网解双差构建按站坐标各自调 `satpos`）直接使用，不必绕过 `satpos` 的多系统分支
+
+### Changed
+
+- **`EphModel` 星历最大时效按系统分档**：移除 `rtklib.eph.wideage` 开关与 7 天统一上限，改为复用 `Constants.MAXDTOE_*`（GPS/GAL/QZS/SBS/GLO = 2 h、BDS = 6 h、IRN = 8 h），与 RTKLIB `seleph()` / `selgeph()` 对齐（GAL 与 GLO 不加 1.0 s 余量，GPS/QZS/BDS/IRN 加 1.0 s）；SBAS 选择改为「`t0` 最近且 ≤ `MAXDTOE_SBS`」，不再「首个命中即返回」。广播星历装订的旧数据不再被当作有效星历，`RinexSppTest` 相应改为按可用星数最多的历元做 SPP 验证
+
+### Fixed
+
+- **joint 闸3 骨架网固定数恒为 0**：`BaseSkeletonNetwork` 参考长度标定分支的状态判断写反——用 `stat < Constants.SOLQ_FLOAT` 判「非 FIX」，而 `SOLQ_FIX=1` 数值小于 `SOLQ_FLOAT=2`，所有 FIX 解被当成失败丢弃，235 历元无一次进入样本（`getFixSamples()=0`，测试 `fixes > 0` 断言失败）。修正为「**参考长度只接受 `SOLQ_FIX` 标定**」，FIX/FLOAT 均可进入长度变化监测。修复后 `fix=215/235`（91.5%）、基线长度 587.302 m 与两站坐标几何长度一致到 1 mm、σ 由 0.22 m 收敛到 0.0075 m
+
+### Tests
+
+- `SsrCorrectionProviderTest#testIncrementalIngestMatchesWholeFile`：137 字节非对齐块逐块喂入，与整文件解码结果逐字段一致
+- `JointRtkRealDataTest#testBaseSkeletonNetwork`：真实 2 基站 + 1 测站，闸3 开启后主解不受影响、静态骨架解可固定、健康小时 `maxChange < 5 cm` 且无误报
+
+### Docs
+
+- `docs/NETWORK_VRS_DESIGN.md`：新增 §3.1.1（RTCM 内容 UTC 与目录/文件名北京时间 UTC+8 的 −8 h 换算）、§4.3（星历来源开关 + `SsrCorrectionProvider` 统一接口 + 实测）；档 2 状态由「降级为宽巷固定」改为「窄巷固定已闭环」
+- `docs/ALGORITHM_FIX_LOG.md`：新增 FIX-ALG-046（网解双差几何）、FIX-ALG-047（星历时效分档）、FIX-ALG-048（骨架网状态判断）
+- `docs/JOINT_RTK_DESIGN.md` §13.9：补 Phase C（闸3 骨架网）实测与修复记录
+- `docs/DATA_GUIDE.md` §0.7：补时间系统（内容 UTC vs 目录北京时间）与私有 4 站数据集说明
+- `docs/ROADMAP.md`：rtklib-networkvrs 状态改为「窄巷固定已闭环 + SSR 链路贯通」；§1.2 新增「录制 SSR 流端到端复现」冻结项（缺时段匹配的数据）
+- `docs/SSR_ACCESS_PLAYBOOK.md`：补 2026-11-05 实时流复测数据、`SsrCorrectionProvider` 统一摄入入口用法；§七 新增已知坑 9（`CAS1` 挂载点为 4076 专有电文，core `Rtcm` 不识别）
+- `docs/README.md`：文档索引更新（`ALGORITHM_FIX_LOG` 覆盖至 048、补 `NETWORK_VRS_DESIGN` 条目、各文档最后更新日期）
+
+---
+
 ## [3.3.0] - 2026-10-28
 
 ### Added
@@ -18,6 +54,7 @@
 - **rtklib-networkvrs 档 1（多基站网络 VRS）**：多站输入同步、IDW 插值、相对主站改正、复用 vrs 输出（`output/VrsOutputBridge`）；真实三站 RTCM 数据验证通过
 - **adjust FLOAT 补位开关**：`MultiBaselineConfig` 新增 `SolutionAdmissionConfig`（`solutionAdmission`，Builder 快捷方法 `allowFloat(boolean)`），`allowFloat` 默认 `false` = 仅 FIX，与历史行为完全一致。开启后**仅在 FIX 基线不足 2 条时**由 FLOAT 补位（FIX 足量时 FLOAT 一律丢弃），FLOAT 协方差按 `floatCovInflate`（默认 1000，按方差计）膨胀降权，融合位置基本由 FIX 决定；基站一致性检核、网平差观测累积、基站诊断仍只消费 FIX，避免 FLOAT 分米级偏差污染基站位移与 σ₀
 - **adjust FLOAT 准入前门限**：`floatAgreementThreshold`（默认 0.20 m）从"事后判级"前移为**准入前置条件**。仅 1 条 FIX 时，FLOAT 与 FIX 的位置较差超过阈值则**不进入 WLS**，而非进入后再降级判定。由此"准入"与"等级"成为同一单调映射：较差 ≤ 阈值 → 准入 → `SINGLE_VERIFIED`；较差 > 阈值 → 拒绝 → `UNVERIFIED`（零自由度、`crossValidationDist` 为 NaN），消除"FLOAT 既拉坐标、等级又说不可信"的中间态。被拒 FLOAT 经 `AdjustResult.rejectedFloats`（`RejectedFloat(baseId, distanceToFix, threshold)`）显式透传，不再静默丢弃。距离口径由 `GnssBaselineAdjust.floatDistancesToFix` 单点提供，准入判定与判级共用；`fixCount != 1` 时返回空 Map 表示"无参照物"，调用方须读作"无法判定"而非"较差为 0"
+- **core 新增单历元归约位置协方差 `qPos`（`PrcOpt.DIAG_QPOS`）**：`QposSolver` 由当前历元的 `H`/`R` 归约法方程求逆，给出**只含本历元信息**的 3×3 位置协方差，经 `Sol.qPos` → `SolData.qPos` → `SolData.covEcef` 透传给 adjust。与原有 Kalman 后验协方差 `Pa`（`Sol.qr` 解包）并存，优先级 `qPos` → `qr`，未开开关时回退 `qr`、逐位一致。FIX 分支剔除模糊度列、FLOAT 分支保留全部活跃列——电离层/对流层/GLO 偏差等状态的不确定性通过求逆自然边缘化到位置块，避免 `(H_posᵀR⁻¹H_pos)⁻¹` 的系统性偏乐观；活跃列由扫 `H` 得到（而非索引函数），与真实观测集对齐；用完整 `R⁻¹` 而非 `diag(R)⁻¹`。实测 215 个 FIX 历元：与 `Pa` 的三轴 σ 和比值中位 1.0000 且从不偏大（略保守），开关只改协方差、不改解算坐标与历元数；FLOAT 历元 `Q_pos` 中位偏大 8.2 倍，如实反映单历元信息量远小于滤波累积信息
 
 ### Changed（破坏性 API）
 

@@ -19,7 +19,7 @@
 | rtklib-adjust | 多基线间接平差 | 核心流程+基站诊断+P0~P3优化；可按需扩展多时段累积平差 |
 | rtklib-vrs | 单基站虚拟参考站 | **临时激活**（GNSS 领域按需启用，不纳入梯队规划）：真实双站 RTCM3 239 历元验证，VRS+测站 FIX 76.6% vs 原始基站 77.0% |
 | rtklib-joint | 多基线联合 RTK | **临时激活**（GNSS 领域按需启用，不纳入梯队规划）：k 条基线共享同一 Kalman 滤波器的 Rover 坐标；真实 2 基站+1 测站验证，双基线 FIX 91.5% 与单基线 91.2% 持平 |
-| rtklib-otl | 海潮负荷BLQ | Fortran对比验证通过；属成熟稳定辅助模块 |
+| rtklib-otl | 海潮负荷BLQ | 移植自武汉大学 PRIDE-PPPAR OTL 模块；提取独立程序对比验证通过；属成熟稳定辅助模块 |
 | rtklib-research | 前沿研究（FGO/IACE/预积分） | FGO框架+IMU预积分+场景自适应已齐；缺：完好性保护级、PPP-FGO |
 | rtklib-test | 测试/演示 | SPP/RTK城市峡谷优化对比测试(DynamicRtkOptTest 12变体+UrbanCanyonSppOptTest)+NtripClient实时演示 |
 
@@ -112,7 +112,7 @@
 | NTRIP Caster 服务端（rtklib-stream） | Sourcetable + 挂载点订阅 + Basic 鉴权 + GGA 上行；异步队列按会话隔离 |
 | GGA 解析（rtklib-stream） | 任意 talker ID、校验和、正高→椭球高换算 |
 | 轨道模块（TLE/SGP4/SDP4） | Vallado 14 用例验证 |
-| 海潮负荷 OTL（rtklib-otl） | Fortran 对比验证 |
+| 海潮负荷 OTL（rtklib-otl） | 武汉大学 PRIDE-PPPAR OTL 模块对比验证 |
 | Trace 日志 + SolData 扩展 | 分散在各模块 |
 
 ---

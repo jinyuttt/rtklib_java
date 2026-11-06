@@ -148,6 +148,10 @@ org.rtklib.java.stream
 
 支持基站异常诊断：当σ₀持续超限时，自动定位异常基站并通过静态解算给出建议坐标。
 
+可选 **FLOAT 补位**（`allowFloat`，默认关闭）：FIX 基线不足 2 条时由 FLOAT 补位，出解覆盖率 90.8% → 100.0%（实测 2 基站 251 历元），补位历元如实标注为 `UNVERIFIED`，不影响原有 FIX 判级。
+
+协方差来源支持两种：Kalman 后验 `Pa`（`Sol.qr`，默认）与 core 新增的**单历元归约位置协方差** `Q_pos`（`PrcOpt.DIAG_QPOS`，切断跨历元相关性）。两者经 `SolData.covEcef` 统一透传，切换不改解算坐标。
+
 已通过2基站1测站连续9小时RTCM实测数据验证。基线质量加权、逐卫星残差与 H 矩阵位置分量等诊断输出，见 [使用说明](docs/ADJUST_USAGE.md)；实测结果见 [技术参考第10~11章](docs/ADJUST_TECHNICAL_REFERENCE.md#10-实测数据验证)。
 
 ```
@@ -174,7 +178,7 @@ org.rtklib.java.adjust
 - **球谐综合**：最大100阶，FES2004球谐系数 + Farrell Love数
 - **命令行工具**：`java -jar rtklib-otl.jar -lat 29.65 -lon 91.13 -sta LHASA -o lhasa.blq`
 
-验证：4站Java vs Fortran振幅/相位差异均为0.0000；25站边界测试（极区89°、赤道、海岸线、极端经度）100%通过。详见 [海潮负荷模块技术参考](docs/OTL_MODULE_REFERENCE.md)。
+算法源自武汉大学 PRIDE-PPPAR 的 OTL 模块（`src/otl`）。验证：4站 Java vs 由该模块提取改造的独立 Fortran 程序 `test_blq`（源程序随 3.3.0 Fortran 清理移除，二进制存于 `validate/`）振幅/相位差异均为0.0000；25站边界测试（极区89°、赤道、海岸线、极端经度）100%通过。详见 [海潮负荷模块技术参考](docs/OTL_MODULE_REFERENCE.md)。
 
 ```
 org.rtklib.java.otl
@@ -484,7 +488,7 @@ org.rtklib.java.otl
 | 联合 RTK（joint） | 🟡 已实现 | 单/双基线真实数据 FIX 91.5%（与 SBS 91.2% 持平） |
 | IGS SSR 4076 解码 | 🟡 IM201 闭环 | 公共头部 + 子类型识别 + IM201 球谐 + VTEC/STEC 合成；4076 卫星级数值未解析，VTEC 未接入定位链路 |
 | 因子图优化 FGO + IMU 预积分 | ✅ | FE-GUT 仿真数据集 |
-| 轨道模块 + 海潮负荷 | ✅ | Vallado/Fortran 参考对比 |
+| 轨道模块 + 海潮负荷 | ✅ | Vallado（轨道）/ 武汉大学 PRIDE-PPPAR OTL 模块（海潮）对比 |
 | 自适应引擎框架 | 🟡 | 14类实现，编译通过；待集成测试验证 |
 
 剩余：PPP-RTK 区域大气约束、完好性保护级（HPL/VPL）、ARAIM、固定解完好性增强——均属研究深化方向，**无上游场景驱动，定版不再投入（WONTFIX）**。

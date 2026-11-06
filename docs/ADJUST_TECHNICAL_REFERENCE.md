@@ -12,7 +12,7 @@
 
 | 价值 | 优先级 | 本模块支持 |
 |------|--------|-----------|
-| FIX可用性提升 | ⭐⭐⭐⭐⭐ | ✅ 至少一条FIX就输出结果 |
+| FIX可用性提升 | ⭐⭐⭐⭐⭐ | ✅ 至少一条FIX就输出结果；可选 `allowFloat` 让 FLOAT 补位（实测出解覆盖率 90.8% → 100.0%） |
 | 假固定检测 | ⭐⭐⭐⭐ | ✅ σ₀检验 + Baarda T |
 | 粗差基线剔除 | ⭐⭐⭐⭐ | ✅ Baarda数据探测 |
 | 服务范围扩展 | ⭐⭐⭐ | ✅ 多基站覆盖 |
@@ -42,11 +42,25 @@ rtklib-adjust（网平差：结果空间）
 
 **定论**：`adjust = SBS（来自 core）+ 平差（本模块）`；`joint = 独立的 MBS 引擎`。
 
+### 1.3 FLOAT 补位（`allowFloat`，可选）
+
+历史行为是"只吃 FIX"：某历元若两条基线都未固定，该历元直接断档、无输出。开启 `allowFloat` 后，FLOAT 基线可作为补位观测进入平差，把**出解覆盖率**从 ~91% 提到 100%（实测 228/251 = 90.8% → 251/251 = 100.0%，另一场景 228/248 = 91.9% → 248/248 = 100.0%）。
+
+规则（详见 §2.5）：
+
+- **FIX 优先**：FIX 达到 2 条及以上时 FLOAT 一律丢弃——双 FIX 交叉验证是最可靠判据，掺入分米级 FLOAT 只会把基线间较差推过 `SUSPECT` 阈值、错误剔除真 FIX
+- **FIX 不足 2 条时才补位**：0 条 FIX 时无参照物，FLOAT 直接补位；1 条 FIX 时 FLOAT 需通过"与 FIX 的位置较差 ≤ `floatAgreementThreshold`"的准入门限
+- **FLOAT 协方差膨胀降权**：`floatCovInflate`（默认 1000，按方差计），融合坐标基本由 FIX 决定
+- **只污染坐标，不污染基站**：基站一致性检核、网平差观测累积、基站诊断仍只消费 FIX，避免 FLOAT 分米级偏差污染基站位移与 σ₀
+- **等级如实标注**：补位历元产出的是 `UNVERIFIED` 等级（零自由度），不会伪装成已验证结果
+
+> 注意：这里的"提升固定"指**提升出解可用性**（历元不再断档），不是把 FLOAT 变成 FIX。FLOAT 补位历元的等级与保护级仍按 `UNVERIFIED` 口径给出。
+
 ## 2. 数学模型
 
 ### 2.1 观测方程
 
-对同一历元 k 条独立FIX基线，各基线RTK解给出的Rover ECEF位置作为虚拟观测值：
+对同一历元 k 条**准入**基线（默认全是 FIX，开启 `allowFloat` 后可能含补位 FLOAT），各基线RTK解给出的Rover ECEF位置作为虚拟观测值：
 
 ```
 l = H·x + v
@@ -55,7 +69,7 @@ l = H·x + v
 | 符号 | 维度 | 含义 |
 |------|------|------|
 | l | 3k×1 | 观测向量，各基线给出的Rover位置 |
-| H | 3k×3 | 设计矩阵，每3行为一个I₃ |
+| H | 3k×3 | 设计矩阵，每3行为一个I₃（P3 开启后取 `hPos`） |
 | x | 3×1 | 参数向量（Rover ECEF坐标） |
 | v | 3k×1 | 残差向量 |
 
@@ -67,6 +81,8 @@ u = HᵀR⁻¹l          法方程常数项
 dx = N⁻¹u            参数解
 v = H·dx - l         残差
 ```
+
+其中 H 的各块默认取 I₃（P3 开启后取 `hPos`）；R 的对角块对 FIX 基线取 `covEcef`，对**准入的 FLOAT 基线**取 `covEcef × floatCovInflate`（默认 1000，按方差计），因此 FLOAT 在法方程中的信息权重仅为 FIX 的 1/1000 量级（见 §2.5）。
 
 ### 2.3 精度评定
 
@@ -86,6 +102,44 @@ T_i = |v_i| / (σ₀·√Qv_ii)             Baarda数据探测统计量
 | 1 | 0 | 无法精度评定，σ₀=NaN，不计算Baarda |
 | ≥2 | 3(k-1) | 完整精度评定 |
 
+`k` 在此指**准入后**实际参与平差的基线数，`allowFloat=false` 时只计 FIX；`allowFloat=true` 时 FIX 与准入通过的 FLOAT 共同计入（见 §2.5）。
+
+### 2.5 FLOAT 补位准入策略
+
+准入由 `MultiBaselineConfig.SolutionAdmissionConfig` 控制，三个参数：
+
+| 参数 | 默认 | 含义 |
+|------|------|------|
+| `allowFloat` | `false` | 是否允许 FLOAT 基线进入平差。`false` = 仅 FIX，与历史行为逐位一致 |
+| `floatCovInflate` | `1000.0` | FLOAT 协方差膨胀倍数（**按方差计**，即 σ 放大 √1000 ≈ 31.6 倍），用于降权 |
+| `floatAgreementThreshold` | `0.20` | 仅 1 条 FIX 时，FLOAT 与 FIX 的位置较差上限 (m) |
+
+准入判定（`selectAdmitted`）：
+
+```
+FIX 条数 ≥ 2            → 只留 FIX，FLOAT 全丢
+FIX 条数 = 1，有 FLOAT   → 逐个比对 |FLOAT - FIX| ≤ floatAgreementThreshold：
+                            通过 → 准入（后续判级为 SINGLE_VERIFIED）
+                            拒绝 → 不进入 WLS，经 AdjustResult.rejectedFloats 显式上报
+FIX 条数 = 0，有 FLOAT   → FLOAT 全部补位（无参照物，门限不适用）
+```
+
+**门限前移的设计意图**：`floatAgreementThreshold` 从"事后判级"前移为**准入前置条件**，使"准入"与"等级"成为同一单调映射——较差 ≤ 阈值 → 准入 → `SINGLE_VERIFIED`；较差 > 阈值 → 拒绝 → `UNVERIFIED`。这样消除了"FLOAT 既拉坐标、等级又说不可信"的矛盾中间态。
+
+**拒绝必须上报**：被拒 FLOAT 已不在 `admitted` 内，平差看不到；若不上报就变成静默丢弃。`AdjustResult.rejectedFloats`（`RejectedFloat(baseId, distanceToFix, threshold)`）承担这条可见性。距离口径由 `GnssBaselineAdjust.floatDistancesToFix` 单点提供，准入判定与判级共用；`fixCount != 1` 时返回空 Map，表示"无参照物"，调用方须读作"无法判定"而非"较差为 0"。
+
+**`rejectedFloats` 的口径**：只承载"因超门限而被拒"的 FLOAT。FIX ≥ 2 时被丢弃的 FLOAT **不**进入该列表——它们不是"不可信"，而是"已被双 FIX 取代"，语义不同，不应混在一起报警。
+
+**实测（BDS 双频，2 基站，251 配对历元）**：
+
+| 指标 | 仅 FIX | FIX+FLOAT |
+|---|---|---|
+| 出解覆盖率 | 228/251 = 90.8% | 251/251 = 100.0%（+9.2 个百分点） |
+| 平差历元数 | 228 | 251 |
+| 等级分布 | UNVERIFIED=22, SUSPECT=206 | UNVERIFIED=45, SUSPECT=206 |
+
+覆盖率提升全部来自"0 条 FIX"的纯 FLOAT 历元（22 个）与少量"1 FIX + FLOAT"历元（2 个），原有 206 个 SUSPECT 历元等级不受影响。代价是这 23 个历元的等级如实降为 `UNVERIFIED`。
+
 ## 3. 全局协方差矩阵 R 的构造
 
 ### 3.1 结构
@@ -103,7 +157,7 @@ k=3:  R = blkdiag(C₁₁, C₂₂, C₃₃)                   (9×9)
 
 `rho>0` 时非对角块按 `R_ij = rho·sqrt(C_ii ⊙ C_jj)` 构造（近似估计）。
 
-- **对角块 C_ii**：第i条基线的自身协方差（3×3），来自 core 输出 `Sol.qr` 解包的原始完整协方差（`SolData.covEcef`，含非对角符号），非近似值
+- **对角块 C_ii**：第i条基线的自身协方差（3×3），取自 core 输出的 `SolData.covEcef`（完整 3×3，含非对角符号），非近似值。`covEcef` 的数据源按优先级取 `Sol.qPos` → `Sol.qr`，见 §3.4
 - **非对角块**：默认 `rho=0`（各基线独立，R 为块对角阵）；`rho>0` 时按 `R_ij = rho·sqrt(C_ii ⊙ C_jj)` 构造（近似估计）
 
 ### 3.2 Pr_fused 的计算
@@ -122,15 +176,71 @@ Pr_fused 是"如果各基线Rover位置估计相互独立，加权融合后的�
 
 **注意：这不是两条基线Rover位置估计之间的真实互协方差。** 真实互协方差应为Rover端公共误差的协方差，两者是不同的数学对象。详见第5节。
 
+### 3.4 协方差数据源：`Q_pos` 与 `Pa`（core 新增形式）
+
+core 为后处理（网平差、聚合器）新增了**第二种位置方差**，与原有 Kalman 后验协方差并存：
+
+| 数据源 | 字段 | 数学含义 | 是否含跨历元相关性 |
+|---|---|---|---|
+| 单历元归约法方程 | `Sol.qPos` → `SolData.qPos` | 只由**当前历元**的双差观测归约得到的 3×3 位置协方差 | 否 |
+| Kalman 后验 | `Sol.qr` → 对称展开 | 滤波状态协方差的位置块 `Pa` | 是（跨历元传播） |
+
+**协方差的三种表现形式**（同一物理量、不同封装口径，平差只认第一种）：
+
+| 形式 | 字段 | 元素数 | 非对角符号 | 用途 |
+|---|---|---|---|---|
+| 完整 3×3 行优先（**带符号**） | `SolData.covEcef` | 9：`c_xx,c_xy,c_xz,c_yx,c_yy,c_yz,c_zx,c_zy,c_zz` | **保留** | 平差/网平差/聚合器的真值来源 |
+| 上三角压缩（.pos 风格） | `Sol.qr` | 6：`c_xx,c_yy,c_zz,c_xy,c_yz,c_zx` | 保留（对称展开后即 3×3） | 滤波内部状态、`Accuracy` 的源 |
+| 精度摘要（**无符号**） | `SolData.accuracies`（`s1,s2,s3,c12,c23,c31`） | 6 | **丢失**（构造时取 `sqrt(|c_ij|)`） | 界面显示、.pos 输出 |
+
+- `covEcef` 是唯一保留完整符号信息的对外形式：`CovAssembler.extractCovariance3x3` 直接按行优先装成 3×3，不做 `abs()` 也不开方
+- `Accuracy` 的 `c12/c23/c31` 是 `sqrt(|c_ij|)`，符号在构造时已丢失；只有当历元无 `covEcef`（`qr[0]==0` 哨兵）时 `CovAssembler` 才回退用它重构，此时非对角只能填正值，与真实符号可能相反——这是刻意的降级路径，避免整条基线因缺协方差被丢弃
+- 速度协方差 `Sol.qv`（6 值，`m²/s²`）同样是带符号的上三角形式，但平差只消费位置，不读速度
+
+**求解方式**（`QposSolver`）：
+
+```
+A    = 扫 H 得到的活跃列集 ∪ {0,1,2}          （升序绝对列索引）
+N_A  = H_Aᵀ R⁻¹ H_A
+FLOAT → Q_A = N_A⁻¹，位置块取 Q_A[0:3,0:3]
+FIX   → 模糊度视为已知常数，A_fix = A ∩ [0,NR)，Q_pos = (H_AfixᵀR⁻¹H_Afix)⁻¹[0:3,0:3]
+        （NR = NP+NI+NT+NL，即状态向量中"模糊度之前"的维数）
+```
+
+三个关键点：
+
+1. **FIX 不能用 `(H_posᵀR⁻¹H_pos)⁻¹`**：那是 `A_fix = {0,1,2}` 的特例。`ionoopt=EST` / `tropopt≥EST` / GLONASS autocal 启用时，电离层、对流层等状态的不确定性必须通过求逆边缘化传播到位置块；只取前 3 列会得到系统性偏小的 `Q_pos`（静默偏乐观）
+2. **扫 H 而不是查索引函数**：索引函数感知不到 `ddres` 填 H 之前的跳过条件（参考星、`sysMap` 分组、`validobs` 失败、频率无效），会纳入全零列导致法方程奇异
+3. **用完整 `R⁻¹` 而非 `diag(R)⁻¹`**：`ddcov` 产生的 R 不是对角阵（同一组双差共享参考星），对角近似会低估观测信息量、使 `Q_pos` 系统性偏大
+
+**开关与回退**：`PrcOpt.diagMask & PrcOpt.DIAG_QPOS`（位值 32）打开才计算 `qPos`，默认关闭、零开销。计算点在 `ddres` 之后、`applyIggiii` 之前——此时 `H` 与 `R` 是同一次 `ddcov` 的产物、严格对齐；IGGIII 改写后的 `R` 块结构已被破坏，不能用于法方程。每次迭代覆写，最终取**最后一次迭代**的结果，且仅在 `stat != SOLQ_NONE` 时写入 `Sol.qPos`（`SOLQ_FIX` 走 FIX 分支，其余含 `SOLQ_FLOAT`/`SOLQ_SINGLE`/`SOLQ_DGPS` 走 FLOAT 分支）。`SolData.buildCovEcef` 的优先级是 `qPos`（长度恰为 9）→ `qr`；`qr[0]==0` 哨兵时 `covEcef` 为 `null`。
+
+**对 adjust 的影响**：
+
+- `CovAssembler.extractCovariance3x3` 读 `SolData.covEcef`，因此自动跟随该数据源切换，无需改 adjust 代码
+- `Accuracy` 中的 `c12/c23/c31` **始终**读 `Sol.qr`，不随开关变化——这是刻意设计：显示口径与后处理口径分离
+- 实测（BDS 双频，2 基站，215 个 FIX 历元）：
+
+| 指标 | Pa（`qr`） | Q_pos |
+|---|---|---|
+| ENU σ 中位 | (12.57, 11.38, 34.60) mm | (12.00, 11.12, 31.31) mm |
+| 三轴和比值中位 | — | 1.0000（偏小 88 / 相当 127 / 偏大 0） |
+| FLOAT 历元三轴和比值中位 | — | 8.23（区间 1.08 ~ 80.04，样本 22） |
+
+**结论**：FIX 历元下两者几乎等价（中位比值 1.0000，且从不偏大），`Q_pos` 略保守；FLOAT 历元下 `Q_pos` 显著偏大（中位 8.2 倍），因为单历元信息量远小于滤波累积信息——这正是"切断跨历元相关性污染"的预期表现，对 FLOAT 补位场景反而更诚实。开关**只改协方差，不改解算坐标与历元数**（回归测试逐历元比对确认位置完全一致）。
+
 ## 4. 信息流
 
 ```
 基站A ──→ rtkpos() ──→ (x̂_A, C_A, P_rover_A) ─┐
-基站B ──→ rtkpos() ──→ (x̂_B, C_B, P_rover_B) ─┤──→ 间接平差(l, H, R) ──→ x̂_fused
-基站C ──→ rtkpos() ──→ (x̂_C, C_C, P_rover_C) ─┘
+基站B ──→ rtkpos() ──→ (x̂_B, C_B, P_rover_B) ─┤──→ 准入筛选 ──→ 间接平差(l, H, R) ──→ x̂_fused
+基站C ──→ rtkpos() ──→ (x̂_C, C_C, P_rover_C) ─┘        │
+                                                       └──→ 被拒 FLOAT → rejectedFloats（上报，不入 WLS）
 ```
 
 每条基线在rtklib-core中独立完成完整的RTK解算（观测方程→Kalman滤波→模糊度固定），三条链路互不知情，只在最后一步汇合进入间接平差。
+
+**准入筛选**（`selectAdmitted`）在平差之前决定哪些解进入 WLS：默认只放行 FIX；开启 `allowFloat` 后按 §2.5 的规则补位。FIX 与 FLOAT 的区分只发生在这一层，平差本身对两者一视同仁（FLOAT 已通过 R 膨胀降权）。
 
 ## 5. 理论局限性
 
@@ -431,6 +541,9 @@ rtklib-adjust 已通过2基站1测站连续9小时RTCM实测数据完整验证�
 | 交叉验证 | `testCrossValidationStation0002` | 第二测站基线A/B坐标一致性验证 |
 | 修正后平差 | `testAdjustWithCorrectedBaseB` | 修正基站坐标后平差，验证σ₀恢复正常 |
 | 基站诊断器 | `BaseStationDiagnoserTest` | 2基站诊断流程：异常定位、建议坐标、缓存机制 |
+| FLOAT 补位 A/B | `MultiBaselineAdjustRealDataTest#testFloatAdmissionCompare` | 同一批数据分别跑"仅 FIX"与"FIX+FLOAT"，对比出解覆盖率、等级分布、融合坐标偏移 |
+| Q_pos 协方差源 A/B | `MultiBaselineAdjustRealDataTest#testQposCovSourceCompare` | 同一批数据分别用 `Pa`（`qr`）与 `Q_pos`（`qPos`），验证开关只改协方差、量级差异、传导到 Dx 与 PL |
+| 准入门限扫描 | `FloatAgreementThresholdSweepTest` | 受控扫描 `floatAgreementThreshold`，验证准入/拒绝边界与 `rejectedFloats` 上报 |
 
 ### 10.3 验证结论
 
@@ -439,6 +552,8 @@ rtklib-adjust 已通过2基站1测站连续9小时RTCM实测数据完整验证�
 3. **静态解算修正有效**：修正基站坐标后，σ₀从超限值收敛至~1.0附近，两条基线Rover坐标差异从米级降至厘米级
 4. **诊断器流程完整**：滑动窗口触发→SPP/残差定位异常基站→静态解算给建议坐标→回调推送，全链路验证通过
 5. **缓存机制正确**：诊断结果只推送一次，清除缓存后可重新验证
+6. **FLOAT 补位有效**：2 基站 251 配对历元下，出解覆盖率 90.8% → 100.0%（+9.2 个百分点），原有 SUSPECT 历元等级不受影响，新增历元如实标注为 `UNVERIFIED`
+7. **`Q_pos` 切换安全**：开关只改协方差、不改解算坐标与历元数（逐历元比对位置完全一致）；FIX 历元与 `Pa` 等价（三轴 σ 和比值中位 1.0000，从不偏大），FLOAT 历元更保守（中位 8.2 倍）
 
 ### 10.4 数据配置
 
@@ -455,7 +570,7 @@ date=YYYY-MM-DD
 
 无数据配置时测试自动跳过，不影响CI构建。
 
-## 11. 结构化信息提取与平差优化（P0~P3）
+## 11. 结构化信息提取与平差优化（P0~P4）
 
 ### 11.1 问题背景
 
@@ -469,6 +584,7 @@ RTK解算内部拥有丰富的结构化信息（逐卫星残差、模糊度、H�
 | P1 | 逐卫星残差提取 | core(小)+adjust | σ₀精度评定偏差±20%→±10% | ✅ 已实现 |
 | P2 | 基于残差的互协方差建模 | 仅adjust | 短基线互协方差更诚实 | 暂不实现（收益有限，P0+P1+P3已覆盖主要场景） |
 | P3 | H矩阵位置分量提取 | core(中)+adjust | 非对称卫星几何场景改善 | ✅ 已实现 |
+| P4 | 单历元归约协方差 `Q_pos` | core(中)+adjust(零改动) | 切断跨历元相关性，FLOAT 协方差更诚实 | ✅ 已实现（`DIAG_QPOS`，详见 §3.4） |
 
 ### 11.3 P0：基线质量加权
 
@@ -543,11 +659,20 @@ opt.diagMask = PrcOpt.DIAG_SAT_RESIDUAL   // 1: 逐卫星残差
              | PrcOpt.DIAG_SAT_AMBIGUITY  // 2: 模糊度
              | PrcOpt.DIAG_SAT_CYCLESLIP  // 4: 周跳/GF/MW
              | PrcOpt.DIAG_HPOS           // 8: H矩阵位置分量
-             | PrcOpt.DIAG_INNOVATION;    // 16: 新息摘要
-// opt.diagMask = 31;  // 等价写法
+             | PrcOpt.DIAG_INNOVATION     // 16: 新息摘要
+             | PrcOpt.DIAG_QPOS;          // 32: 单历元归约位置协方差（见 §3.4）
+// opt.diagMask = 63;  // 等价写法
 
 // 启用基线质量加权（P0）
 AdjustResult result = GnssBaselineAdjust.adjust(epoch, true);
+
+// 启用 FLOAT 补位（见 §2.5）
+MultiBaselineConfig cfg = MultiBaselineConfig.builder()
+        .baseStationIds("BASE_A", "BASE_B")
+        .allowFloat(true)                 // 允许 FLOAT 在 FIX 不足 2 条时补位
+        .floatCovInflate(1000.0)          // FLOAT 方差膨胀倍数（降权）
+        .floatAgreementThreshold(0.20)    // 1 条 FIX 时的位置较差准入上限 (m)
+        .build();
 
 // 检查诊断数据是否可用
 SolData sol = ...;
@@ -563,18 +688,20 @@ for (SatObsData sat : sol.satObsList) {
 
 ### 11.8 内存影响
 
-| 场景 | 当前 | diagMask=7(P1) | diagMask=31(P3全量) |
-|------|------|----------------|-------------------|
-| SolData/历元/基线 | 1.5 KB | 2.1 KB | 2.2 KB |
-| 9h×3基线存储 | 146 MB | 205 MB | 214 MB |
-| Rtk运行时 | 2.5 MB | 2.5 MB | 2.5 MB |
+| 场景 | 当前 | diagMask=7(P1) | diagMask=31(P3全量) | diagMask=63(+P4) |
+|------|------|----------------|-------------------|-----------------|
+| SolData/历元/基线 | 1.5 KB | 2.1 KB | 2.2 KB | 2.2 KB |
+| 9h×3基线存储 | 146 MB | 205 MB | 214 MB | 214 MB |
+| Rtk运行时 | 2.5 MB | 2.5 MB | 2.5 MB | 2.5 MB |
 
-P3全量比当前多68MB（+46%），其中P1占59MB，P3仅占9MB。
+P3全量比当前多68MB（+46%），其中P1占59MB，P3仅占9MB。`qPos` 为 3×3（72B 数据 + 数组头），对内存影响可忽略；但它是**每历元 O(nx³) 求逆**，CPU 开销大于内存开销，故默认关闭。
 
 ### 11.9 向后兼容保证
 
 | 配置 | 行为 |
 |------|------|
 | `diagMask=0`（默认） | SolData与修改前完全一致，诊断字段为null/NaN/0 |
+| `diagMask` 未含 `DIAG_QPOS` | `qPos=null`，`covEcef` 回退到 `Sol.qr`，与修改前逐位一致 |
+| `allowFloat=false`（adjust默认） | 只吃 FIX，与修改前逐位一致 |
 | `qualityWeight=false`（adjust默认） | R矩阵不缩放，与修改前一致 |
 | `hPos=null` | 设计矩阵退化为I₃，与修改前一致 |
