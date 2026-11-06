@@ -42,7 +42,7 @@ class BaselineWindowSolverTest {
                         0.0, nif + noise, 0.2 * Math.cos(e * 0.5 + i),
                         0.0, nwlTrue[i] + 0.01 * Math.sin(e + i),
                         0.0,
-                        0.1 * (i + 1), 0.2, 0.3, 0.0,
+                        0.1 * (i + 1), 0.2, 0.3, 0.0, 0.0,
                         45.0, 60.0));
             }
             epochs.add(new DdEpoch(new GTime(2270000000L + e, 0.0), observations));
@@ -82,7 +82,7 @@ class BaselineWindowSolverTest {
                         101 + i, refSat, Constants.SYS_CMP, F1, F2, WL,
                         0.0, nif, 0.0, 0.0, nwl,
                         0.0,
-                        0.1 * (i + 1), 0.2, 0.3, 0.0,
+                        0.1 * (i + 1), 0.2, 0.3, 0.0, 0.0,
                         45.0, 60.0));
             }
             epochs.add(new DdEpoch(new GTime(2270000000L + e, 0.0), observations));

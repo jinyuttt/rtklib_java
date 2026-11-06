@@ -9,6 +9,7 @@ import org.rtklib.java.networkvrs.correction.ModelCorrectionProvider;
 import org.rtklib.java.networkvrs.error.NetworkErrorDecomposer;
 import org.rtklib.java.networkvrs.sync.MultiStationSynchronizer;
 import org.rtklib.java.networkvrs.sync.RinexNavLoader;
+import org.rtklib.java.networkvrs.sync.SsrCorrectionProvider;
 import org.rtklib.java.networkvrs.sync.StationObservation;
 import org.rtklib.java.networkvrs.sync.SynchronizedEpoch;
 
@@ -55,6 +56,18 @@ public final class NetworkSolutionEngine {
      */
     public Result solve(List<StationObservation> stations, Nav nav, String masterId,
                         NetworkConfig config) {
+        return solve(stations, nav, masterId, config, null);
+    }
+
+    /**
+     * @param stations 各站观测（星历可从 {@code nav} 注入）
+     * @param nav      广播星历；SSR 改正写入该对象的 {@code ssr[]}
+     * @param masterId 主站
+     * @param config   配置
+     * @param ssr      逐历元 SSR 改正提供者；为 {@code null} 时不叠加 SSR
+     */
+    public Result solve(List<StationObservation> stations, Nav nav, String masterId,
+                        NetworkConfig config, SsrCorrectionProvider ssr) {
         if (stations == null || stations.size() < config.minStations) {
             throw new IllegalArgumentException("站数不足: 需要 " + config.minStations);
         }
@@ -67,6 +80,9 @@ public final class NetworkSolutionEngine {
         }
         if (!masterFound) {
             throw new IllegalArgumentException("master station not found: " + masterId);
+        }
+        if (ssr != null && nav == null) {
+            throw new IllegalArgumentException("SSR 改正需要共享 Nav（nav 不能为 null）");
         }
 
         List<StationObservation> prepared = prepare(stations, nav);
@@ -94,6 +110,9 @@ public final class NetworkSolutionEngine {
         }
         List<Map<String, List<DdObservation>>> epochDd = new ArrayList<>(epochs.size());
         for (SynchronizedEpoch epoch : epochs) {
+            if (ssr != null) {
+                ssr.applyAt(nav, epoch.time(), epoch.satellites());
+            }
             Map<String, List<DdObservation>> byBaseline = new LinkedHashMap<>();
             for (BaselineNetwork.Baseline baseline : network.baselines()) {
                 StationObservation a = byId.get(baseline.stationA());
@@ -104,7 +123,7 @@ public final class NetworkSolutionEngine {
                     continue;
                 }
                 List<DdObservation> dd = builder.build(a.ecef(), b.ecef(), obsA, obsB,
-                        navOf(a, nav), config.minElevationDeg);
+                        navOf(a, nav), config.minElevationDeg, config.ephemerisOption);
                 if (!dd.isEmpty()) {
                     byBaseline.put(key(baseline), dd);
                     ddByBaseline.get(key(baseline)).add(new DdEpoch(epoch.time(), dd));
