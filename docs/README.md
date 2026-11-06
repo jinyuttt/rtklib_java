@@ -2,7 +2,7 @@
 
 本文件是 `docs/` 的唯一入口，用于回答三个问题：**某件事该看哪份文档**、**这份文档现在还算不算数**、**哪些地方文档已经和代码不一致**。
 
-- 盘点基准：2026-10-28（依据各文件实际内容与最后修改时间，非猜测）
+- 盘点基准：2026-11-05（依据各文件实际内容与最后修改时间，非猜测）
 - 本文只做导航与状态标注，**不改写任何文档正文**
 
 ## 状态图例
@@ -29,8 +29,8 @@
 
 | 文档 | 定位 | 状态 | 最后更新 |
 |------|------|------|----------|
-| [CHANGELOG.md](CHANGELOG.md) | 面向用户的版本级变更摘要（当前至 3.3.0） | ✅ 活跃 | 2026-10-28 |
-| [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) | **定版核心档案**：每次改变数值行为的修改（C 依据/根因/验证），现存 FIX-ALG-001~029 | ✅ 活跃 | 2026-10-23 |
+| [CHANGELOG.md](CHANGELOG.md) | 面向用户的版本级变更摘要（当前至 3.3.0；3.3.1 变更在 [Unreleased] 在册） | ✅ 活跃 | 2026-11-05 |
+| [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) | **定版核心档案**：每次改变数值行为的修改（C 依据/根因/验证），现存 FIX-ALG-001~048 | ✅ 活跃 | 2026-11-05 |
 | [RTKLIB_Differences.md](RTKLIB_Differences.md) | 与 RTKLIB 2.5.0 C 版的长期差异声明（设计选择，非 Bug） | ✅ 活跃 | 2026-10-21 |
 
 ## 二、使用与测试
@@ -38,8 +38,8 @@
 | 文档 | 定位 | 状态 | 最后更新 |
 |------|------|------|----------|
 | [USAGE_GUIDE.md](USAGE_GUIDE.md) | RTCM 解码、RINEX 转换、RTK/SPP/PPP 调用示例与输出字段语义 | ✅ 活跃 | 2026-10-08 |
-| [SSR_ACCESS_PLAYBOOK.md](SSR_ACCESS_PLAYBOOK.md) | **SSR 接入手册**：CAS/北航/Galileo/QZSS 四条线、凭据管理、两行改动、验收清单与已知坑 | ✅ 活跃 | 2026-10-23 |
-| [DATA_GUIDE.md](DATA_GUIDE.md) | 测试类总览、公共测试数据清单、测试用例详情、大文件仓库 | ✅ 活跃 | 2026-10-23 |
+| [SSR_ACCESS_PLAYBOOK.md](SSR_ACCESS_PLAYBOOK.md) | **SSR 接入手册**：CAS/北航/Galileo/QZSS 四条线、凭据管理、两行改动、验收清单与已知坑；含统一摄入入口 `SsrCorrectionProvider`（实时流/文件回放同解码路径） | ✅ 活跃 | 2026-11-05 |
+| [DATA_GUIDE.md](DATA_GUIDE.md) | 测试类总览、公共测试数据清单、测试用例详情、大文件仓库；§0.7 含时间系统（内容 UTC / 目录北京时间）与私有 4 站数据集 | ✅ 活跃 | 2026-11-05 |
 | [TEST_DEVELOPMENT_GUIDE.md](TEST_DEVELOPMENT_GUIDE.md) | 测试开发标准流程与常见模式 | ✅ 活跃 | 2026-10-12 |
 
 ## 三、架构与技术参考
@@ -50,9 +50,10 @@
 | [MATRIX_DIMENSION_REFERENCE.md](MATRIX_DIMENSION_REFERENCE.md) | H 矩阵构建、filter 压缩、ddcov、varerr 的维度与存储约定 | ✅ 活跃 | 2026-07-13 |
 | [ADJUST_TECHNICAL_REFERENCE.md](ADJUST_TECHNICAL_REFERENCE.md) | rtklib-adjust 多基线间接平差：数学模型、协方差构造、理论局限、模块边界（SBS+平差） | ✅ 活跃 | 2026-10-27 |
 | [ADJUST_USAGE.md](ADJUST_USAGE.md) | rtklib-adjust 使用说明、加权与诊断配置 | ✅ 活跃 | 2026-10-27 |
-| [JOINT_RTK_DESIGN.md](JOINT_RTK_DESIGN.md) | rtklib-joint 多基线联合 RTK（MBS）：与 core 同层的独立引擎、状态向量、大气共享 | ✅ 活跃（核心已实现并实测：单/双基线 FIX 91.5%；AR 通道缺陷已由 FIX-ALG-042 修复；§2.1.1 大气维度修正与 §13 基站位移监测仍为未实施设计项，见文档 §0） | 2026-10-29 |
+| [JOINT_RTK_DESIGN.md](JOINT_RTK_DESIGN.md) | rtklib-joint 多基线联合 RTK（MBS）：与 core 同层的独立引擎、状态向量、大气共享 | ✅ 活跃（核心已实现并实测：单/双基线 FIX 91.5%；AR 通道缺陷已由 FIX-ALG-042 修复；§13 闸1/闸2/闸3 已落地（闸3 见 FIX-ALG-048），Phase B/D 与 §2.1.1 大气维度修正未实施，见文档 §0） | 2026-11-05 |
 | [JOINT_VS_ADJUST_ANALYSIS.md](JOINT_VS_ADJUST_ANALYSIS.md) | joint（观测层联合）vs adjust（结果层平差）对比：融合层级、故障隔离、FIX 后精度等价性、选型结论 | ✅ 活跃（v1.2 定稿） | 2026-10-27 |
 | [VRS_MODULE_DESIGN.md](VRS_MODULE_DESIGN.md) | rtklib-vrs 虚拟参考站生成：实现状态、单基站改正算法、RTCM3 编码器（含 MSM 信号裁剪与锁相指示）、四层验证策略、实测结果、已踩过的坑与已知限制 | ✅ 活跃 | 2026-10-27 |
+| [NETWORK_VRS_DESIGN.md](NETWORK_VRS_DESIGN.md) | rtklib-networkvrs 多基站网络 VRS：档 1 IDW 插值、档 2 网解 + 误差分解 + FKP；窄巷固定闭环、星历来源与逐历元 SSR 改正注入（`SsrCorrectionProvider`）、时间系统约定、实测结果 | ✅ 活跃（窄巷固定 18/18 窗口，BRDC 与精密星历同量级；录制 SSR 流端到端复现待做，见 ROADMAP §1.2） | 2026-11-05 |
 | [ORBIT_MODULE_REFERENCE.md](ORBIT_MODULE_REFERENCE.md) | TLE 解析、SGP4/SDP4、六根数转换 | ✅ 活跃 | 2026-10-08 |
 | [OTL_MODULE_REFERENCE.md](OTL_MODULE_REFERENCE.md) | 海潮负荷：分潮、BLQ 提取、位移序列、命令行 | ✅ 活跃 | 2026-09-24 |
 | [PRODUCT_MODULE_REFERENCE.md](PRODUCT_MODULE_REFERENCE.md) | 精密产品下载：产品类型、镜像优先级、缓存、协议 | ✅ 活跃 | 2026-09-24 |
@@ -94,7 +95,7 @@
 
 | 文档 | 定位 | 状态 | 最后更新 |
 |------|------|------|----------|
-| [ROADMAP.md](ROADMAP.md) | 模块状态总览 + 未完成事项（按需激活/冻结/WONTFIX）+ 暂缓与恢复条件；历史梯队记录见 [archive/ROADMAP_v3.3.0.md](archive/ROADMAP_v3.3.0.md) | ✅ 活跃 | 2026-10-28 |
+| [ROADMAP.md](ROADMAP.md) | 模块状态总览 + 未完成事项（按需激活/冻结/WONTFIX）+ 暂缓与恢复条件；历史梯队记录见 [archive/ROADMAP_v3.3.0.md](archive/ROADMAP_v3.3.0.md) | ✅ 活跃 | 2026-11-05 |
 | [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) | **终期技术摘要**：一句话定位 + 精度实测 + 001~029 闭环索引 + HAS/IMU/CLAS 扩展路线 | ✅ 活跃 | 2026-10-23 |
 | [TraceLog_V2_Design.md](TraceLog_V2_Design.md) | 追踪日志 V2 设计与实现（取代 archive 中的 V1 设计） | ✅ 活跃 | 2026-10-08 |
 | [RTKCONFIG_REFACTOR_DESIGN.md](RTKCONFIG_REFACTOR_DESIGN.md) | RtkConfig 组合模式重构：487 行扁平类按模式拆分子配置（Common/Rtk/Spp/Ppp）、向后兼容迁移路径 | 🟡 设计稿（v1.0 定稿，未执行；`RtkConfig` 仍为扁平类） | 2026-10-26 |

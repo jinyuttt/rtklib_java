@@ -14,11 +14,11 @@
 | rtklib-core | 核心定位算法（SPP/RTK/PPP/PPP-RTK）+ 自适应引擎 | 四大定位模式全实现；CascadeAR / PartialAR / GPT3+VMF3 / IERS2010 / RAIM FDE 已接齐；自适应引擎 14 类已实现。缺口：完好性监测/保护级/ARAIM、PPP-RTK 区域大气约束（WONTFIX，见 §1.3） |
 | rtklib-product | 精密产品下载 | IGS/MGEX 11 类产品全支持，多镜像源回退；可按需扩展其他分析中心 |
 | rtklib-stream | NTRIP/串口 | NTRIP 客户端 + SSL/TLS + NTRIP Caster + GGA 解析 + 串口 + 统一监听器；TCP 客户端不在项目设计范围内（见 §1.3） |
-| rtklib-adjust | 多基线间接平差 | 核心流程 + 基站诊断 + P0~P3 优化；可按需扩展多时段累积平差 |
+| rtklib-adjust | 多基线间接平差 | 核心流程 + 基站诊断 + P0~P4 优化 + FLOAT 补位（出解覆盖率 90.8%→100.0%）；可按需扩展多时段累积平差 |
 | rtklib-vrs | 单基站虚拟参考站 | **临时激活**（GNSS 领域按需启用，不纳入梯队规划）：真实双站 239 历元，VRS FIX 76.6% vs 原始基站 77.0% |
 | rtklib-joint | 多基线联合 RTK | **临时激活**（同上）：k 条基线共享同一 Kalman 滤波器的 Rover 坐标；真实 2 基站 + 1 测站，双基线 FIX 91.5% vs 单基线 91.2% |
-| rtklib-networkvrs | 多基站网络 VRS | 档 1（IDW 插值 + 相对主站改正）已完成并经真实三站数据验证；档 2（网解 + 误差分解 + FKP）已实现，BRDC 下降级为「宽巷固定 + IF 浮点」，窄巷固定待 SSR/精密星历 |
-| rtklib-otl | 海潮负荷 BLQ | Fortran 对比验证通过；成熟稳定辅助模块 |
+| rtklib-networkvrs | 多基站网络 VRS | 档 1（IDW 插值 + 相对主站改正）已完成并经真实三站数据验证；档 2（网解 + 误差分解 + FKP）窄巷固定已闭环：真实三站 18/18 窗口固定、ratio 10.7~23.8，BRDC 与精密星历结果同量级；SSR 改正链路贯通（`SsrCorrectionProvider` 统一 `byte[]` 摄入，文件回放与实时流同解码路径）。缺口：录制 SSR 流与三站观测时段不重叠，录制流端到端复现待做（见 §1.2） |
+| rtklib-otl | 海潮负荷 BLQ | 移植自武汉大学 PRIDE-PPPAR OTL 模块；提取独立程序对比验证通过；成熟稳定辅助模块 |
 | rtklib-research | 前沿研究（FGO/IACE/预积分） | FGO 框架 + IMU 预积分 + 场景自适应已齐；独立沙盒，不参与核心依赖链 |
 | rtklib-test | 测试/演示 | SPP/RTK 城市峡谷优化对比测试 + NTRIP 客户端实时演示 |
 
@@ -44,6 +44,7 @@
 | 事项 | 已具备 | 冻结原因 | 恢复条件 |
 |------|--------|----------|----------|
 | 梯队 2.5 城市峡谷 UC-2~UC-9 | UC-1 新息卡方检验已落地（`enableSppInnovChisq`，默认开启） | v3.1.0 封存时冻结，其余项未实施；UC-4/UC-5 零速门限未采纳（默认仍为 0.5 m/s / 1 历元） | 见 §2 |
+| networkvrs 录制 SSR 流端到端复现 | `SsrCorrectionProvider` 统一摄入接口 + 本地 SSR 录制流（`SSRA01CAS0`，2026-10-31/11-02 共 80 文件 176.6 MB） | 录制流时段与三站 DOY 300 观测时段不重叠，历史实时流已删；反算模式（SP3/CLK 反推 SSR）已验证 18/18 窗口固定 | 出现时段匹配的 SSR 录制流，或提供三站新观测时段（含观测 + 广播星历 + SSR 流） |
 
 ### 1.3 明确不做（WONTFIX）
 

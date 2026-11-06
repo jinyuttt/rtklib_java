@@ -1,8 +1,10 @@
-# BLQ Comparison: Java vs Fortran (Radial Component)
+# BLQ Comparison: Java vs Wuhan University PRIDE-PPPAR OTL Module (Radial Component)
 
-## Station 1: LHASA (29.65°N, 91.13°E)
+> Reference = standalone Fortran program (`test_blq`, source removed with the 3.3.0 Fortran cleanup, binary kept in this directory) extracted and adapted from the OTL module (`src/otl`) of PRIDE-PPPAR (GNSS Research Center, Wuhan University).
 
-| Constituent | Java Amp | Fortran Amp | Diff (mm) | Java Phase | Fortran Phase | Diff (deg) |
+## Station 1: LHASA (坐标已脱敏)
+
+| Constituent | Java Amp | Ref Amp | Diff (mm) | Java Phase | Ref Phase | Diff (deg) |
 |-------------|----------|-------------|-----------|------------|---------------|------------|
 | M2  | 0.8669 | 0.8669 | 0.0000 | 244.9739 | 244.9739 | 0.0000 |
 | S2  | 0.2569 | 0.2569 | 0.0000 | 356.4145 | 356.4145 | 0.0000 |
@@ -16,11 +18,11 @@
 | Mm  | 0.1225 | 0.1225 | 0.0000 | 192.8278 | 192.8278 | 0.0000 |
 | Ssa | 0.1319 | 0.1319 | 0.0000 | 183.1793 | 183.1793 | 0.0000 |
 
-*Note: Fortran has O1/P1 doodson numbers swapped (163.555 labeled as O1, 145.555 as P1), but the values match Java's correct ordering.
+*Note: the extracted reference program has O1/P1 doodson numbers swapped (163.555 labeled as O1, 145.555 as P1); PRIDE-PPPAR itself assigns them correctly. After swapping back, the values match Java.
 
-## Station 2: LINZHI (29.65°N, 94.33°E)
+## Station 2: LINZHI (坐标已脱敏)
 
-| Constituent | Java Amp | Fortran Amp | Diff (mm) | Java Phase | Fortran Phase | Diff (deg) |
+| Constituent | Java Amp | Ref Amp | Diff (mm) | Java Phase | Ref Phase | Diff (deg) |
 |-------------|----------|-------------|-----------|------------|---------------|------------|
 | M2  | 0.8454 | 0.8454 | 0.0000 | 201.3462 | 201.3462 | 0.0000 |
 | S2  | 0.1112 | 0.1112 | 0.0000 | 48.2889 | 48.2889 | 0.0000 |
@@ -34,9 +36,9 @@
 | Mm  | 0.1224 | 0.1224 | 0.0000 | 192.6978 | 192.6978 | 0.0000 |
 | Ssa | 0.1314 | 0.1314 | 0.0000 | 182.7612 | 182.7612 | 0.0000 |
 
-## Station 3: CHENGDU (30.57°N, 104.07°E)
+## Station 3: CHENGDU (坐标已脱敏)
 
-| Constituent | Java Amp | Fortran Amp | Diff (mm) | Java Phase | Fortran Phase | Diff (deg) |
+| Constituent | Java Amp | Ref Amp | Diff (mm) | Java Phase | Ref Phase | Diff (deg) |
 |-------------|----------|-------------|-----------|------------|---------------|------------|
 | M2  | 1.7259 | 1.7259 | 0.0000 | 154.2586 | 154.2586 | 0.0000 |
 | S2  | 0.5062 | 0.5062 | 0.0000 | 135.8446 | 135.8446 | 0.0000 |
@@ -50,9 +52,9 @@
 | Mm  | 0.0936 | 0.0936 | 0.0000 | 194.0026 | 194.0026 | 0.0000 |
 | Ssa | 0.1197 | 0.1197 | 0.0000 | 183.2689 | 183.2689 | 0.0000 |
 
-## Station 4: MENGDIGOU (29.50°N, 101.50°E)
+## Station 4: MENGDIGOU (坐标已脱敏)
 
-| Constituent | Java Amp | Fortran Amp | Diff (mm) | Java Phase | Fortran Phase | Diff (deg) |
+| Constituent | Java Amp | Ref Amp | Diff (mm) | Java Phase | Ref Phase | Diff (deg) |
 |-------------|----------|-------------|-----------|------------|---------------|------------|
 | M2  | 1.4191 | 1.4191 | 0.0000 | 155.8356 | 155.8356 | 0.0000 |
 | S2  | 0.3573 | 0.3573 | 0.0000 | 127.1920 | 127.1920 | 0.0000 |
@@ -68,11 +70,11 @@
 
 ## Summary
 
-All 4 stations show **perfect agreement** between Java and Fortran implementations:
+All 4 stations show **perfect agreement** between the Java implementation and the reference program extracted from the PRIDE-PPPAR OTL module (Wuhan University):
 - Amplitude differences: 0.0000 mm (all constituents)
 - Phase differences: 0.0000 degrees (all constituents)
 
-**Note on O1/P1 ordering**: The Fortran test program has the doodson numbers for O1 and P1 swapped (163.555 is computed at the O1 position, 145.555 at the P1 position), but the labels are correct. This means when comparing, we need to swap the O1/P1 values from Fortran to match Java's correct ordering. After accounting for this swap, all values match exactly.
+**Note on O1/P1 ordering**: The extracted reference program carries the doodson numbers for O1 and P1 swapped (163.555 is computed at the O1 position, 145.555 at the P1 position) — this is a transcription artifact of the extracted program's constituent table, not of PRIDE-PPPAR itself (whose `CalcTidefu.f90` assigns 145.555 → O1 and 163.555 → P1 correctly). When comparing, the O1/P1 values from the reference program are swapped back to match Java's ordering; after accounting for this swap, all values match exactly.
 
 The Java implementation correctly uses:
 - O1 = 145.555
