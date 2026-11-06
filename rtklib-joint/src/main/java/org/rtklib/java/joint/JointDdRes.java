@@ -89,7 +89,7 @@ public final class JointDdRes {
                     int frq = f % nf;
                     boolean code = f >= nf;
 
-                    int refIdx = selectRefSat(rtk, bo, m, f, nf, sysMap, group);
+                    int refIdx = selectRefSat(rtk, bo, m, f, nf, sysMap, group, b);
                     if (refIdx < 0) {
                         if (b == 0 && f == 0) {
                             log.debug("baseline[{}] sys={} f={} no ref sat, bo.ns={}", b, m, f, bo.ns);
@@ -242,7 +242,7 @@ public final class JointDdRes {
     }
 
     private static int selectRefSat(JointRtk rtk, BaselineObs bo, int m, int f, int nf,
-                                    int[] sysMap, BaselineGroup group) {
+                                    int[] sysMap, BaselineGroup group, int b) {
         int frq = f % nf;
         int refIdx = -1;
         double bestScore = Double.NEGATIVE_INFINITY;
@@ -261,7 +261,7 @@ public final class JointDdRes {
                 return j;
             }
 
-            if (refIdx >= 0 && (rtk.ssat[bo.sat[j] - 1].slip[frq] & Constants.LLI_SLIP) != 0) continue;
+            if (refIdx >= 0 && (rtk.ssatOf(b)[bo.sat[j] - 1].slip[frq] & Constants.LLI_SLIP) != 0) continue;
 
             double el_j = bo.azel[1 + bo.iu[j] * 2];
             if (refIdx < 0 || el_j >= bo.azel[1 + bo.iu[refIdx] * 2]) {
@@ -295,8 +295,10 @@ public final class JointDdRes {
                                             int j, int refIdx, double[] pos,
                                             double[] x, double[] v, double[] H,
                                             int nv, int nx, int frq, Nav nav) {
-        int ii_m = rtk.II(baseline, bo.sat[j]);
-        int ii_r = rtk.II(baseline, bo.sat[refIdx]);
+        // [§2.1.1] 电离层属于 rover+卫星：共享模式下所有基线取同一组状态（块号 0），
+        // 仅在长基线（sharedIonoMaxDist 超限）时才退回每基线独立块。
+        int ii_m = rtk.II(rtk.ionoBlockOf(baseline), bo.sat[j]);
+        int ii_r = rtk.II(rtk.ionoBlockOf(baseline), bo.sat[refIdx]);
         if (ii_m < 0 || ii_r < 0 || ii_m >= nx || ii_r >= nx) return;
 
         double az_m = bo.azel[bo.iu[j] * 2];
@@ -347,9 +349,10 @@ public final class JointDdRes {
                                             double[] x, double[] H, int nv, int nx) {
         double[] dtdx_m = new double[nx];
         double[] dtdx_r = new double[nx];
-        jointPrecTrop(rtk, rr_f, baseline, 0,
+        // [§2.1.1] rover 侧天顶湿延迟只有一个（共享模式取块号 0），基站侧按基站各一份。
+        jointPrecTrop(rtk, rr_f, rtk.ITrover(rtk.tropRoverBlockOf(baseline), 0),
                 new double[]{bo.azel[bo.iu[j] * 2], bo.azel[bo.iu[j] * 2 + 1]}, dtdx_m, nx);
-        jointPrecTrop(rtk, rr_r, baseline, 1,
+        jointPrecTrop(rtk, rr_r, rtk.ITbase(baseline, 0),
                 new double[]{bo.azel[bo.iu[refIdx] * 2], bo.azel[bo.iu[refIdx] * 2 + 1]}, dtdx_r, nx);
         if (H != null) {
             for (int k = 0; k < nx; k++) {
@@ -358,7 +361,7 @@ public final class JointDdRes {
         }
     }
 
-    private static void jointPrecTrop(JointRtk rtk, double[] rr, int baseline, int r,
+    private static void jointPrecTrop(JointRtk rtk, double[] rr, int it,
                                       double[] azel, double[] dtdx, int nx) {
         double[] pos = new double[3];
         CoordTransform.ecef2pos(rr, pos);
@@ -368,7 +371,6 @@ public final class JointDdRes {
 
         for (int k = 0; k < nx; k++) dtdx[k] = 0.0;
 
-        int it = rtk.IT(baseline, r);
         if (it >= 0 && it < nx) {
             dtdx[it] = mapWet[0];
             if (rtk.opt.tropopt >= Constants.TROPOPT_ESTG && azel[1] > 0.0) {

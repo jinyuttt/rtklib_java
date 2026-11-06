@@ -49,8 +49,9 @@ public class CovAssembler {
     /**
      * 从SolData提取3x3 ECEF协方差矩阵。
      *
-     * <p>优先使用 {@link SolData#covEcef}（{@code Sol.qr} 解包的完整协方差，
-     * 含非对角符号）。仅当该历元无协方差时才回退到 {@link Accuracy} 重构，
+     * <p>优先使用 {@link SolData#covEcef}（完整 3×3 ECEF 协方差，行优先，含非对角符号；
+     * 来源为 {@code Sol.qPos}（DIAG_QPOS）或 {@code Sol.qr} 展开，两者均由 core 决定）。
+     * 仅当该历元无协方差时才回退到 {@link Accuracy} 重构，
      * 此时非对角只能取绝对值——{@link Accuracy} 的 c12/c23/c31 已是
      * {@code sqrt(|c_ij|)}，符号信息在构造时已丢失。</p>
      *

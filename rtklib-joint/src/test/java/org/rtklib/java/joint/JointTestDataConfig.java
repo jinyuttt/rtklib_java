@@ -53,7 +53,22 @@ public final class JointTestDataConfig {
     public static boolean isAvailable() {
         load();
         String root = getDataRoot();
-        return !root.isEmpty() && Files.isDirectory(Paths.get(root));
+        if (root.isEmpty() || !Files.isDirectory(Paths.get(root))) return false;
+        String[] bases = getBaseGroup();
+        if (bases.length < 2) return false;
+        String rover = getRoverId();
+        if (rover.isEmpty()) return false;
+        // 根目录在，但基站/日期/小时文件是否实际存在
+        boolean anyExists = false;
+        for (int h = getStartHour(); h <= getEndHour(); h++) {
+            if (Files.exists(Paths.get(getRtcmPath(bases[0], h)))
+                    && Files.exists(Paths.get(getRtcmPath(bases[1], h)))
+                    && Files.exists(Paths.get(getRtcmPath(rover, h)))) {
+                anyExists = true;
+                break;
+            }
+        }
+        return anyExists;
     }
 
     public static String getDataRoot() {
