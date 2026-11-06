@@ -98,7 +98,8 @@ public final class PppRtkCore {
         double ssrMaxAge = cfg != null ? cfg.ppp.ssrMaxAge : 60.0;
         boolean hasSsr = SsrCorrector.hasSsrData(nav.ssr);
 
-        rtk.epoch++;
+        // rtk.epoch 已在 RtkProcessor.processEpoch 中按观测历元自增，此处不再重复自增
+        // （重复自增会使 epoch<=30 的初始化窗口只剩 15 个真实历元，导致预热收敛期被截断）
 
         if (rtk.epoch <= 3) {
             int[] owk = new int[1];
@@ -222,6 +223,15 @@ public final class PppRtkCore {
             System.arraycopy(Pp, 0, rtk.P, 0, nx * nx);
 
             int postStat = ppprtkRes(iter + 1, obs, n, rs, dts, var, svh, exc, nav, xp, rtk, null, null, null, azel, nx);
+            if (DBG_REJ && rtk.epoch <= DBG_REJ_MAXEPOCH) {
+                double[] posDbg = new double[3];
+                CoordTransform.ecef2pos(xp, posDbg);
+                LOG.warn("ppprtkos post: epoch={} iter={} nv={} postStat={} cdtr={} lat={} lon={} hgt={}",
+                        rtk.epoch, iter, nv, postStat, String.format("%.2f", xp[IC(0, opt)]),
+                        String.format("%.7f", posDbg[0] * Constants.R2D),
+                        String.format("%.7f", posDbg[1] * Constants.R2D),
+                        String.format("%.3f", posDbg[2]));
+            }
             if (postStat != 0) {
                 stat = Constants.SOLQ_PPP;
                 break;
@@ -641,6 +651,7 @@ public final class PppRtkCore {
         int[] obsi = new int[n * 2 * NF(opt)];
         int[] frqi = new int[n * 2 * NF(opt)];
         double[] ve = new double[n * 2 * NF(opt)];
+        double[] vth = new double[n * 2 * NF(opt)];
         int ne = 0;
 
         for (int i = 0; i < Constants.MAXSAT; i++) {
@@ -859,7 +870,7 @@ public final class PppRtkCore {
                 if (sys == Constants.SYS_GLO && code == 1) varr[nv] += VAR_GLO_IFB;
 
                 if (post == 0 && opt.maxinno[code] > 0.0) {
-                    double maxinno_val = (rtk.epoch <= 30 && code == 0) ? 30.0 : opt.maxinno[code];
+                    double maxinno_val = (rtk.epoch <= 60 && code == 0) ? 30.0 : opt.maxinno[code];
                     if (Math.abs(res) > maxinno_val) {
                         if (dbg) {
                             rejCnt[7]++;
@@ -898,6 +909,7 @@ public final class PppRtkCore {
                     obsi[ne] = i;
                     frqi[ne] = frq;
                     ve[ne] = res;
+                    vth[ne] = Math.sqrt(varr[nv]) * THRES_REJECT;
                     ne++;
                 }
 
@@ -923,6 +935,10 @@ public final class PppRtkCore {
                 rej = j;
             }
             int sat = obs[maxobs].sat;
+            if (DBG_REJ && rtk.epoch <= DBG_REJ_MAXEPOCH) {
+                LOG.warn("ppprtkRes POSTREJ epoch={} sat={} frq={} res={} thr={} nv={}", rtk.epoch, sat, maxfrq,
+                        String.format("%.2f", vmax), String.format("%.2f", vth[rej]), nv);
+            }
             exc[maxobs] = 1;
             rtk.ssat[sat - 1].rejc[maxfrq]++;
             stat = 0;
