@@ -68,6 +68,46 @@ class BaselineWindowSolverTest {
     }
 
     @Test
+    @DisplayName("采样间隔取中位数：缺测占比过半时仍按标称间隔判间隙")
+    void testSamplingIntervalUsesMedianNotMean() {
+        // 11 个历元、10 个间隔，交替 30 s / 120 s（缺测占比 50%）。
+        // 均值 = 75 s → 间隙阈值 3×75 = 225 s，所有 120 s 间隔都漏判；
+        // 下中位数 = 30 s → 阈值 90 s，每个 120 s 间隔都被判为切弧。
+        // 该用例能区分两种估计量，是「数据越稀越放宽」这一正反馈的回归护栏。
+        int refSat = 100;
+        int nAmb = 5;
+        double[] dts = {30, 120, 30, 120, 30, 120, 30, 120, 30, 120};
+        List<DdEpoch> epochs = new ArrayList<>();
+        double time = 2270000000L;
+        for (int e = 0; e <= dts.length; e++) {
+            if (e > 0) {
+                time += dts[e - 1];
+            }
+            List<DdObservation> observations = new ArrayList<>();
+            for (int i = 0; i < nAmb; i++) {
+                double nif = 1.0 + i;
+                observations.add(new DdObservation(
+                        101 + i, refSat, Constants.SYS_CMP, F1, F2, WL,
+                        0.0, nif, 0.0, 0.0, 7.0 + (i % 2),
+                        0.0,
+                        0.1 * (i + 1), 0.2, 0.3, 0.0, 0.0,
+                        45.0, 60.0));
+            }
+            epochs.add(new DdEpoch(new GTime((long) time, 0.0), observations));
+        }
+
+        BaselineWindowSolver solver = new BaselineWindowSolver(new NetworkConfig());
+        BaselineWindowSolution solution = solver.solve("A", "B",
+                new double[3], new double[3], epochs);
+
+        assertNotNull(solution);
+        BaselineWindowSolution.ArDiagnostics d = solution.diagnostics();
+        assertNotNull(d, "应输出归因诊断量");
+        assertEquals(5 * nAmb, d.gapCuts(),
+                "10 个间隔中 5 个为 120 s，应按 30 s 标称间隔逐个切弧");
+    }
+
+    @Test
     @DisplayName("宽巷不连续（周跳）时不固定")
     void testWideLaneScatterRejectsFix() {
         int refSat = 100;

@@ -748,7 +748,7 @@ public class VrsCorrection {
     <parent>
         <groupId>org.rtklib</groupId>
         <artifactId>rtklib-java</artifactId>
-        <version>3.3.0</version>
+        <version>3.4.0</version>
     </parent>
 
     <artifactId>rtklib-vrs</artifactId>

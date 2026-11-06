@@ -6,10 +6,15 @@
 
 ---
 
-## [Unreleased]
+## [3.4.0] - 2026-11-06
+
+> 版本号由 3.3.0 升至 3.4.0：网解窄巷 AR 闭环、`ArDiagnostics` 归因诊断量、周跳切弧判据尺度更正均属新增能力（非纯 bugfix）。
 
 ### Added
 
+- **`BaselineWindowSolution.ArDiagnostics` 归因诊断量**：逐窗口输出 `epochs` / `satellites` / `arcs` / `gapCuts` / `jumpCuts` / `dominantArcEpochs` / `wlFixed` / `floatPdop` / `fixedPdop` / `ambiguityCondition` / `conditionConverged` / `firstAmbiguities` / `firstRatio` / `attempts`，并附 `cuts()`、`wlRate()` 派生方法，用于把「固定失败」拆成可量测的维度（几何强弱 / 弧段完整性 / 协方差条件数 / 首次 AR 质量）
+- **几何 PDOP `fixedPdop`**：把模糊度视为已知、仅用位置 + 对流层参数构成法方程求 PDOP，为无量纲量且不含模糊度不确定性，可跨窗口比较几何强弱；与含模糊度的浮点 `floatPdop` 并列输出，后者仅作参考（后者随弧段数增加而虚高）
+- **`NetworkConfig.maxArcGapFactor`**（默认 3.0）：弧段内允许的最大历元间隔（按标称采样间隔的倍数），语义为「允许连续缺 factor−1 个历元」；30 s 采样下即 90 s
 - **rtklib-networkvrs 逐历元 SSR 改正注入 `SsrCorrectionProvider`**（`sync/SsrCorrectionProvider.java`）：统一 `byte[]` 摄入接口——`live(GTime, double)` 建实时通道、`ingest(byte[], int, int)` 增量解码（未凑齐的尾部电文缓存在 `pending` 续接，帧边界不必与块切分对齐）、`applyAt(Nav, GTime, Iterable<Integer>)` 逐历元写入 `nav.ssr[]`。`fromRtcm(Path, GTime, double)` 内部委托 `live` + `ingest`，**文件回放与 NTRIP 实时流走同一条解码路径**，不存在两套解码实现的分歧风险。一条 SSR 电文可携带多颗卫星，故不能只看 `Rtcm.ephsat`——按 `nav.ssr[].update` 位逐星快照并建立「卫星 → 时间线」（同一卫星同历元的轨道/钟差/偏差合并为一条记录），取最近记录后按 `ddeph` 线性项与钟差多项式外推到当前历元、并把 `t0` 归算到该历元
 - **`SsrCorrectionProvider.fromPreciseProducts()` 反算模式**：每次 `applyAt` 由已装载的 SP3/CLK 与广播星历实时求「精密 − 广播」差值（`deph` 取 RAC 分量、`dclk` 为钟差差），在无当日 SSR 录制流时事后回放整条 SSR 链路；与字节流模式完全隔离（该模式下 `decoder` 为 `null`，调用 `ingest` 抛 `IllegalArgumentException`）
 - **`PreciseEphemerisLoader`**（`sync/`）：把 SP3 精密轨道与 CLK 精密钟差装入 `Nav`（`nav.peph` / `nav.pclk`），只做文件 → `Nav` 的搬运，不参与解算决策
@@ -20,25 +25,31 @@
 ### Changed
 
 - **`EphModel` 星历最大时效按系统分档**：移除 `rtklib.eph.wideage` 开关与 7 天统一上限，改为复用 `Constants.MAXDTOE_*`（GPS/GAL/QZS/SBS/GLO = 2 h、BDS = 6 h、IRN = 8 h），与 RTKLIB `seleph()` / `selgeph()` 对齐（GAL 与 GLO 不加 1.0 s 余量，GPS/QZS/BDS/IRN 加 1.0 s）；SBAS 选择改为「`t0` 最近且 ≤ `MAXDTOE_SBS`」，不再「首个命中即返回」。广播星历装订的旧数据不再被当作有效星历，`RinexSppTest` 相应改为按可用星数最多的历元做 SPP 验证
+- **`BaselineWindowSolver.samplingIntervalSeconds` 改取全窗下中位数**：原实现取「窗口前 20 个相邻间隔的均值」，而缺测正是该判据要抓的对象——均值被缺测拉长、阈值随之放宽，形成「数据越稀 → 判据越松 → 漏判越多」的正反馈，使 `maxArcGapFactor × sampling` 的倍数失去可解释性。改为「全窗相邻间隔剔除非正后排序取下中位数 `intervals[(count-1)/2]`」：抗离群、恒返回真实观测到的间隔值（不产生插值伪值）、扫描全窗（窗口起点若紧接缺测段或采样率中途切换，开头一小段代表不了整窗）。判据语义不变（30 s 标称下阈值仍为 90 s），**零 API 变更**
 
 ### Fixed
 
 - **joint 闸3 骨架网固定数恒为 0**：`BaseSkeletonNetwork` 参考长度标定分支的状态判断写反——用 `stat < Constants.SOLQ_FLOAT` 判「非 FIX」，而 `SOLQ_FIX=1` 数值小于 `SOLQ_FLOAT=2`，所有 FIX 解被当成失败丢弃，235 历元无一次进入样本（`getFixSamples()=0`，测试 `fixes > 0` 断言失败）。修正为「**参考长度只接受 `SOLQ_FIX` 标定**」，FIX/FLOAT 均可进入长度变化监测。修复后 `fix=215/235`（91.5%）、基线长度 587.302 m 与两站坐标几何长度一致到 1 mm、σ 由 0.22 m 收敛到 0.0075 m
+- **固定解回代的 ZTD 先验与主解不一致**：`fixedSolution` 曾把 ZTD 先验写死为 0.3 m，而主解用按基线长缩放的 `max(2 cm, 2e-6 × 基线长)`。短基线时两套口径差异显著，回代位置被拉偏；改为由调用方传入同一缩放后的先验，主解与固定解共用一套口径
+- **未固定窗口的 `fixedPdop` 恒为 NaN**：原逻辑仅在固定成功时填充该字段，未固定窗口的几何维度在归因统计中缺样本；改为未固定时退化为几何 PDOP（模糊度不参与），使几何判据维度全窗口可比较
+- **条件数收敛判据不可比**：原 Jacobi 旋转固定 60 次扫描、以绝对阈值 `off < 1E-24` 提前退出，而 `off` 随矩阵量级缩放，不同窗口条件数无法横向比较。改为相对判据——非对角元平方和与对角元平方和之比小于 `1e-24`，并输出 `conditionConverged` 标志；全部 60 个 20 历元窗口均收敛
 
 ### Tests
 
+- `BaselineWindowSolverTest#testSamplingIntervalUsesMedianNotMean`：11 历元、10 个间隔交替 30 s / 120 s（缺测占比 50%）。均值 75 s → 阈值 225 s → `gapCuts=0`（超限间隔全部漏判）；下中位数 30 s → 阈值 90 s → `gapCuts=25`（5 卫星 × 5 间隔全部切弧）。该用例在旧实现下为红，能区分两种估计量，是「数据越稀越放宽」的回归护栏
 - `SsrCorrectionProviderTest#testIncrementalIngestMatchesWholeFile`：137 字节非对齐块逐块喂入，与整文件解码结果逐字段一致
 - `JointRtkRealDataTest#testBaseSkeletonNetwork`：真实 2 基站 + 1 测站，闸3 开启后主解不受影响、静态骨架解可固定、健康小时 `maxChange < 5 cm` 且无误报
 
 ### Docs
 
+- `docs/NETWORK_VRS_DESIGN.md`：**由草稿转定稿**（v0.1 草稿 → v1.0），头部流水状态压缩为「版本/日期/状态/前置文档 + 档位状态摘要表」，并声明 §6 为实现状态权威表（§6 标题同步改为「实施阶段与实现状态」）
 - `docs/NETWORK_VRS_DESIGN.md`：新增 §3.1.1（RTCM 内容 UTC 与目录/文件名北京时间 UTC+8 的 −8 h 换算）、§4.3（星历来源开关 + `SsrCorrectionProvider` 统一接口 + 实测）；档 2 状态由「降级为宽巷固定」改为「窄巷固定已闭环」
-- `docs/ALGORITHM_FIX_LOG.md`：新增 FIX-ALG-046（网解双差几何）、FIX-ALG-047（星历时效分档）、FIX-ALG-048（骨架网状态判断）
+- `docs/ALGORITHM_FIX_LOG.md`：新增 FIX-ALG-046（网解双差几何）、FIX-ALG-047（星历时效分档）、FIX-ALG-048（骨架网状态判断）、FIX-ALG-049（周跳切弧对正常缺测过敏 + 判据尺度更正 + `maxArcGapSeconds` 评估后不做）
 - `docs/JOINT_RTK_DESIGN.md` §13.9：补 Phase C（闸3 骨架网）实测与修复记录
 - `docs/DATA_GUIDE.md` §0.7：补时间系统（内容 UTC vs 目录北京时间）与私有 4 站数据集说明
 - `docs/ROADMAP.md`：rtklib-networkvrs 状态改为「窄巷固定已闭环 + SSR 链路贯通」；§1.2 新增「录制 SSR 流端到端复现」冻结项（缺时段匹配的数据）
 - `docs/SSR_ACCESS_PLAYBOOK.md`：补 2026-11-05 实时流复测数据、`SsrCorrectionProvider` 统一摄入入口用法；§七 新增已知坑 9（`CAS1` 挂载点为 4076 专有电文，core `Rtcm` 不识别）
-- `docs/README.md`：文档索引更新（`ALGORITHM_FIX_LOG` 覆盖至 048、补 `NETWORK_VRS_DESIGN` 条目、各文档最后更新日期）
+- `docs/README.md`：文档索引更新（`ALGORITHM_FIX_LOG` 覆盖至 049、补 `NETWORK_VRS_DESIGN` 条目并标注 v1.0 定稿、各文档最后更新日期）
 
 ---
 

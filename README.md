@@ -4,7 +4,7 @@ RTKLIB 的 Java 移植版本，基于 [RTKLIB 2.5.0](https://github.com/tomojita
 
 项目定位为**算法引擎库（Library）**而非独立软件，可嵌入 Java 应用中实现 GNSS 数据处理与定位解算。
 
-> **当前版本 v3.3.0（2026-10-28）**：新增 rtklib-stream NTRIP Caster（服务端）与 GGA 解析；VRS 输出接口改为纯字节回调 `RtcmSink`。29 项算法修复的闭环索引与精度实测见 [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md)，版本级变更见 [CHANGELOG](docs/CHANGELOG.md)。
+> **当前版本 v3.4.0（2026-11-06）**：rtklib-networkvrs 窄巷固定闭环（BRDC 与精密星历 ratio 均 > 3），新增 `ArDiagnostics` 归因诊断量与逐历元 SSR 改正注入 `SsrCorrectionProvider`；`EphModel` 星历时效改为按系统分档对齐 RTKLIB；周跳切弧判据的采样间隔尺度更正为全窗下中位数。算法修复的闭环索引与精度实测见 [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md)，版本级变更见 [CHANGELOG](docs/CHANGELOG.md)。
 
 > **功能边界**：Java版专注核心定位算法（SPP/RTK/PPP/PPP-AR/PPP-RTK），数据流通讯由 `rtklib-stream` 模块提供（NTRIP客户端 + NTRIP Caster 服务端 + 串口 + GGA 解析），不包含C版的TCP/UDP服务端、接收机原始协议（u-blox/NovAtel等）、NMEA输出等功能。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
@@ -226,7 +226,7 @@ org.rtklib.java.otl
 - **数据加载**：`RinexStationLoader` / `RtcmStationLoader` / `RinexNavLoader` 统一三站以上输入
 - **MAC 改正合成**：`MacCorrectionBuilder`（档 3 已冻结，只做改正合成，无编码与输出编排）
 
-状态：**档 1 完成、档 2 已实现、档 3 冻结**。档 1 = 多站同步 + IDW 插值 + 相对主站改正 + VRS 输出桥；档 2 = 网解引擎 + 误差分解 + FKP，真实三站验证，BRDC 下仅宽巷固定，窄巷待 SSR/精密星历；档 3 MAC 仅改正合成。详见 [网络 VRS 设计文档](docs/NETWORK_VRS_DESIGN.md)。
+状态：**档 1 完成、档 2 已实现、档 3 冻结**。档 1 = 多站同步 + IDW 插值 + 相对主站改正 + VRS 输出桥；档 2 = 网解引擎 + 误差分解 + FKP，真实三站验证，窄巷固定已闭环（BRDC 与精密星历 ratio 均 > 3）；档 3 MAC 仅改正合成。设计文档已定稿（v1.0），详见 [网络 VRS 设计文档](docs/NETWORK_VRS_DESIGN.md)。
 
 ### rtklib-ext-igs — IGS 专有 RTCM3 扩展
 
@@ -277,7 +277,7 @@ org.rtklib.java.otl
 | 文档 | 说明 |
 |------|------|
 | [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md) | 一句话定位 + 精度实测汇总 + FIX-ALG 001~029 闭环索引 + HAS/IMU/CLAS 扩展路线 |
-| [变更日志](docs/CHANGELOG.md) | 版本级变更摘要（当前至 3.3.0） |
+| [变更日志](docs/CHANGELOG.md) | 版本级变更摘要（当前至 3.4.0） |
 | [发布说明](RELEASE.md) | v3.1.0 封存版发布稿：本版重点、配置项、兼容性、已知问题、验收口径 |
 | [SSR 接入手册](docs/SSR_ACCESS_PLAYBOOK.md) | 接入操作与验收（已闭环）：两行改动、五步接入、开关表、验收清单与已知坑 |
 
