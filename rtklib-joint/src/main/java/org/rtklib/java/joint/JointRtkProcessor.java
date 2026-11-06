@@ -90,6 +90,14 @@ public class JointRtkProcessor {
         this(opt, null, null, null, null);
     }
 
+    /**
+     * 基站稳定性监测器（Phase A 只读诊断，见设计文档 §0.7）。
+     * 未启用（{@code JointConfig.baseStabilityMonitor=false}）或尚无成功历元时返回 null。
+     */
+    public BaseStabilityMonitor getMonitor() {
+        return jrtk.monitor;
+    }
+
     public void setRoverPosition(double[] pos) {
         if (pos != null && pos.length >= 3) {
             System.arraycopy(pos, 0, jrtk.sol.rr, 0, 3);

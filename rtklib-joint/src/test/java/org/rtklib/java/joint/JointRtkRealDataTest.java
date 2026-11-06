@@ -1,5 +1,6 @@
 package org.rtklib.java.joint;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -74,32 +75,69 @@ public class JointRtkRealDataTest {
     @Test
     @DisplayName("2基站1测站联合RTK：逐小时RTCM数据")
     void testJointRtk2Base1Rover() throws IOException {
-        if (!DATA_AVAILABLE) {
-            System.out.println("跳过：数据不可用");
-            return;
-        }
-
-        String baseA = BASES[0];
-        String baseB = BASES[1];
+        Assumptions.assumeTrue(DATA_AVAILABLE, JointTestDataConfig.getMissingMessage());
 
         System.out.println("========================================");
         System.out.println("  Joint RTK 实测数据测试");
-        System.out.printf("  基站A: %s%n", baseA);
-        System.out.printf("  基站B: %s%n", baseB);
+        System.out.printf("  基站A: %s%n", BASES[0]);
+        System.out.printf("  基站B: %s%n", BASES[1]);
         System.out.printf("  测站:  %s%n", ROVER);
         System.out.printf("  日期:  %s  时段: %02d~%02d时%n", DATE, START_HOUR, END_HOUR);
         System.out.println("========================================");
 
-        PrcOpt opt = createJointOpt();
-        JointConfig jcfg = new JointConfig();
-        jcfg.maxBaseline = 1;
+        System.out.println("\n--- 配置1: 单基站（基线A，RTCM 1005 原始坐标） ---");
+        RunStats single = runAllHours(false, false);
+        printSummary(single);
 
-        int totalEpochs = 0;
-        int successCount = 0;
-        int failCount = 0;
-        int fixCount = 0;
-        int floatCount = 0;
-        int singleCount = 0;
+        System.out.println("\n--- 配置2: 双基站（基线A坐标外部修正，FIX-ALG-042） ---");
+        RunStats dual = runAllHours(true, true);
+        printSummary(dual);
+
+        assertTrue(single.totalEpochs > 0, "应有历元数据");
+        assertTrue(single.solCount() > 0, "单基站应有解算输出");
+        assertTrue(single.success > 0, "单基站应有成功历元，实际 " + single.success);
+        assertTrue(single.fixRatio() >= 80.0,
+                "单基站联合 RTK 的 FIX 率应 ≥80%，实际 " + String.format("%.1f%%", single.fixRatio()));
+
+        // 双基站整时段稳定性为已知缺口（见 docs/JOINT_RTK_DESIGN.md「双基站稳定性」）：
+        // 部分小时因两条基线残差互不自洽（iter=0 ddres nv=0）导致全 FLOAT。
+        // 此处只守住「双基站能产出解、且能出 FIX」这条底线，逐小时 FIX 率仅作打印诊断。
+        // 双基站的 FIX 率硬门槛由 testJointRtkSingleHour（稳定小时）负责。
+        assertTrue(dual.solCount() > 0, "双基站应有解算输出");
+        assertTrue(dual.success > 0, "双基站应有成功历元，实际 " + dual.success);
+        assertTrue(dual.fix > 0, "双基站应存在 FIX 解，实际 " + dual.fix);
+    }
+
+    private static final double[] BASE_A_TRUE_XYZ = {-1083471.0560, 5483520.0386, 3066261.4618};
+
+    private static final class RunStats {
+        int totalEpochs;
+        int success;
+        int fail;
+        int fix;
+        int flt;
+        int sng;
+
+        int solCount() {
+            return fix + flt + sng;
+        }
+
+        double fixRatio() {
+            return solCount() == 0 ? 0.0 : 100.0 * fix / solCount();
+        }
+    }
+
+    private void printSummary(RunStats st) {
+        System.out.println("----------------------------------------");
+        System.out.printf("  合计: 总历元=%d 成功=%d 失败=%d%n", st.totalEpochs, st.success, st.fail);
+        System.out.printf("  FIX=%d(%.1f%%) FLOAT=%d SINGLE=%d%n", st.fix, st.fixRatio(), st.flt, st.sng);
+        System.out.println("========================================");
+    }
+
+    private RunStats runAllHours(boolean dualBase, boolean fixBaseACoord) throws IOException {
+        String baseA = BASES[0];
+        String baseB = BASES[1];
+        RunStats st = new RunStats();
 
         for (int hour = START_HOUR; hour <= END_HOUR; hour++) {
             String baseAFile = JointTestDataConfig.getRtcmPath(baseA, hour);
@@ -111,51 +149,48 @@ public class JointRtkRealDataTest {
                 continue;
             }
 
-            byte[] roverData = Files.readAllBytes(Paths.get(roverFile));
-            byte[] baseAData = Files.readAllBytes(Paths.get(baseAFile));
-            byte[] baseBData = Files.readAllBytes(Paths.get(baseBFile));
+            PrcOpt opt = createJointOpt();
+            JointConfig jcfg = new JointConfig();
+            jcfg.maxBaseline = dualBase ? 2 : 1;
+            if (fixBaseACoord) {
+                opt.refpos = Constants.POSOPT_POS_XYZ;
+                jcfg.baseCoordOverride = new LinkedHashMap<>();
+                jcfg.baseCoordOverride.put(baseA, BASE_A_TRUE_XYZ.clone());
+            }
 
             Map<String, byte[]> baseDataMap = new LinkedHashMap<>();
-            baseDataMap.put(baseA, baseAData);
+            baseDataMap.put(baseA, Files.readAllBytes(Paths.get(baseAFile)));
+            if (dualBase) {
+                baseDataMap.put(baseB, Files.readAllBytes(Paths.get(baseBFile)));
+            }
 
             JointRtkProcessor proc = new JointRtkProcessor(opt, jcfg);
-            JointRtkProcessor.JointRtkResult result = proc.process(roverData, baseDataMap);
+            JointRtkProcessor.JointRtkResult result =
+                    proc.process(Files.readAllBytes(Paths.get(roverFile)), baseDataMap);
 
             int hourFix = (int) result.solutions.stream().filter(s -> s.status == SolutionStatus.FIX).count();
             int hourFloat = (int) result.solutions.stream().filter(s -> s.status == SolutionStatus.FLOAT).count();
             int hourSingle = result.solutions.size() - hourFix - hourFloat;
-            double hourFixRatio = result.solutions.isEmpty() ? 0 : 100.0 * hourFix / result.solutions.size();
 
-            totalEpochs += result.totalEpochs;
-            successCount += result.successCount;
-            failCount += result.failCount;
-            fixCount += hourFix;
-            floatCount += hourFloat;
-            singleCount += hourSingle;
+            st.totalEpochs += result.totalEpochs;
+            st.success += result.successCount;
+            st.fail += result.failCount;
+            st.fix += hourFix;
+            st.flt += hourFloat;
+            st.sng += hourSingle;
 
             System.out.printf("  %02d时: 总=%d FIX=%d(%.1f%%) FLOAT=%d SINGLE=%d%n",
-                    hour, result.solutions.size(), hourFix, hourFixRatio, hourFloat, hourSingle);
+                    hour, result.solutions.size(), hourFix,
+                    result.solutions.isEmpty() ? 0.0 : 100.0 * hourFix / result.solutions.size(),
+                    hourFloat, hourSingle);
         }
-
-        double overallFixRatio = (fixCount + floatCount + singleCount) > 0
-                ? 100.0 * fixCount / (fixCount + floatCount + singleCount) : 0;
-
-        System.out.println("----------------------------------------");
-        System.out.printf("  合计: 总历元=%d 成功=%d 失败=%d%n", totalEpochs, successCount, failCount);
-        System.out.printf("  FIX=%d(%.1f%%) FLOAT=%d SINGLE=%d%n",
-                fixCount, overallFixRatio, floatCount, singleCount);
-        System.out.println("========================================");
-
-        assertTrue(totalEpochs > 0, "应有历元数据");
+        return st;
     }
 
     @Test
     @DisplayName("2基站1测站联合RTK：单小时快速验证")
     void testJointRtkSingleHour() throws IOException {
-        if (!DATA_AVAILABLE) {
-            System.out.println("跳过：数据不可用");
-            return;
-        }
+        Assumptions.assumeTrue(DATA_AVAILABLE, JointTestDataConfig.getMissingMessage());
 
         String baseA = BASES[0];
         String baseB = BASES[1];
@@ -236,15 +271,149 @@ public class JointRtkRealDataTest {
         }
 
         assertTrue(result.totalEpochs > 0, "应有历元数据");
+        assertFalse(result1.solutions.isEmpty(), "单基线应有解算输出");
+        assertFalse(result.solutions.isEmpty(), "双基线应有解算输出");
+        assertTrue(fix1 > 0, "单基线应存在 FIX 解");
+        assertTrue(fix > 0, "双基线应存在 FIX 解");
+        double fixRatioSingle = 100.0 * fix1 / Math.max(1, result1.solutions.size());
+        double fixRatioDual = 100.0 * fix / Math.max(1, result.solutions.size());
+        assertTrue(fixRatioSingle >= 80.0,
+                "单基线 FIX 率应 ≥80%，实际 " + String.format("%.1f%%", fixRatioSingle));
+        assertTrue(fixRatioDual >= 80.0,
+                "双基线 FIX 率应 ≥80%，实际 " + String.format("%.1f%%", fixRatioDual));
+
+        // [FIX-ALG-042 §13.4 Phase A] 基站稳定性监测回归保护：
+        // 该小时是已验证的健康小时（FIX 率 ≥80%），两条基线的残差应基本健康，
+        // 即闸1 不应长时间把基线判成 DRIFTING。若此断言失败，说明残差健康度退化。
+        BaseStabilityMonitor mon1 = proc1.getMonitor();
+        assertNotNull(mon1, "单基线应产出基站稳定性监测器");
+        assertTrue(mon1.getEpochCount(0) >= 10,
+                "单基线监测器应有足够历元样本，实际 " + mon1.getEpochCount(0));
+        double driftRatio1 = 100.0 * mon1.getDriftingEpochs(0) / Math.max(1, mon1.getEpochCount(0));
+        printMonitorStats("单基线", mon1, 1);
+        assertTrue(driftRatio1 <= 30.0,
+                "单基线 DRIFTING 历元占比应 ≤30%，实际 " + String.format("%.1f%%", driftRatio1)
+                        + "，末历元 chi2/dof=" + String.format("%.2f", mon1.getChi2Ratio(0)));
+
+        BaseStabilityMonitor mon2 = procFixed.getMonitor();
+        assertNotNull(mon2, "双基线应产出基站稳定性监测器");
+        printMonitorStats("双基线-原始坐标", proc.getMonitor(), 2);
+        printMonitorStats("双基线-坐标修正", mon2, 2);
+        for (int b = 0; b < 2; b++) {
+            double driftRatio2 = 100.0 * mon2.getDriftingEpochs(b) / Math.max(1, mon2.getEpochCount(b));
+            assertTrue(driftRatio2 <= 30.0,
+                    "双基线 baseline[" + b + "] DRIFTING 历元占比应 ≤30%，实际 "
+                            + String.format("%.1f%%", driftRatio2)
+                            + "，末历元 chi2/dof=" + String.format("%.2f", mon2.getChi2Ratio(b)));
+            // [FIX-ALG-042 §13.4 Phase A] 闸2 可用性回归保护：健康小时里闸2 应能产出大部分历元的
+            // 位移估计。放弃率高说明残差集合频繁变化（周跳/参考星切换/AR 切换），
+            // Phase B 降权会失去观测支撑。实测该健康小时放弃率为 0%，阈值留 20 个百分点余量。
+            assertTrue(mon2.getGate2RejectRatio(b) <= 20.0 / 100.0,
+                    "双基线 baseline[" + b + "] 闸2 历元放弃率应 ≤20%，实际 "
+                            + String.format("%.1f%%", 100.0 * mon2.getGate2RejectRatio(b))
+                            + "（attempts=" + mon2.getGate2Attempts(b)
+                            + ", samples=" + mon2.getStepSamples(b) + "）");
+            // 无条件分位数才是 Phase B 门限标定依据（日志分位数条件于超 0.05m 门限，会高估约 40 倍）。
+            // 实测健康小时 p90=0.008m、max=0.019m，故要求 p90 ≤5cm（约 6 倍余量），
+            // 保证 Phase B 降权不会被日常反演噪声触发。
+            assertTrue(mon2.getStepPercentile(b, 0.9) <= 0.05,
+                    "双基线 baseline[" + b + "] 闸2 无条件 p90 应 ≤5cm，实际 "
+                            + String.format("%.4f", mon2.getStepPercentile(b, 0.9)) + " m");
+        }
+    }
+
+    private void printMonitorStats(String tag, BaseStabilityMonitor mon, int nb) {
+        if (mon == null) {
+            System.out.printf("  [%s] 监测器未启用%n", tag);
+            return;
+        }
+        for (int b = 0; b < nb; b++) {
+            System.out.printf("  [%s] baseline[%d] 历元=%d DRIFTING=%d(%.1f%%) chi2/dof=%.2f(ref=%.2f)"
+                            + " 闸2: attempts=%d samples=%d reject=%.1f%%"
+                            + " |dDb| 无条件 p50=%.3f p90=%.3f max=%.3f m"
+                            + " 公共模式历元=%d 不可分离历元=%d%n",
+                    tag, b, mon.getEpochCount(b), mon.getDriftingEpochs(b),
+                    100.0 * mon.getDriftingEpochs(b) / Math.max(1, mon.getEpochCount(b)),
+                    mon.getChi2Ratio(b), mon.getChi2Ref(b),
+                    mon.getGate2Attempts(b), mon.getStepSamples(b),
+                    100.0 * mon.getGate2RejectRatio(b),
+                    mon.getStepPercentile(b, 0.5), mon.getStepPercentile(b, 0.9),
+                    mon.getStepMax(b), mon.getCommonModeEpochs(), mon.getUnidentifiableEpochs(b));
+        }
+    }
+
+    @Test
+    @DisplayName("闸3 骨架网：基站间基线静态解稳定、健康小时无误报")
+    void testBaseSkeletonNetwork() throws IOException {
+        Assumptions.assumeTrue(DATA_AVAILABLE, JointTestDataConfig.getMissingMessage());
+
+        String baseA = BASES[0];
+        String baseB = BASES[1];
+        int testHour = 8;
+
+        String baseAFile = JointTestDataConfig.getRtcmPath(baseA, testHour);
+        String baseBFile = JointTestDataConfig.getRtcmPath(baseB, testHour);
+        String roverFile = JointTestDataConfig.getRtcmPath(ROVER, testHour);
+        if (!Files.exists(Paths.get(baseAFile)) || !Files.exists(Paths.get(baseBFile))
+                || !Files.exists(Paths.get(roverFile))) {
+            System.out.printf("跳过：第%d小时数据缺失%n", testHour);
+            return;
+        }
+
+        System.out.printf("%n=== 闸3 骨架网验证: %02d时 ===%n", testHour);
+
+        PrcOpt opt = createJointOpt();
+        opt.refpos = Constants.POSOPT_POS_XYZ;
+        JointConfig jcfg = new JointConfig();
+        jcfg.maxBaseline = 2;
+        jcfg.baseSkeletonNetwork = true;
+        jcfg.baseCoordOverride = new LinkedHashMap<>();
+        jcfg.baseCoordOverride.put(baseA, BASE_A_TRUE_XYZ.clone());
+
+        Map<String, byte[]> baseDataMap = new LinkedHashMap<>();
+        baseDataMap.put(baseA, Files.readAllBytes(Paths.get(baseAFile)));
+        baseDataMap.put(baseB, Files.readAllBytes(Paths.get(baseBFile)));
+        JointRtkProcessor proc = new JointRtkProcessor(opt, jcfg);
+        JointRtkProcessor.JointRtkResult result =
+                proc.process(Files.readAllBytes(Paths.get(roverFile)), baseDataMap);
+
+        BaseSkeletonNetwork sk = proc.getJointRtk().skeleton;
+        assertNotNull(sk, "闸3 开启后应产出骨架网解算器");
+        assertTrue(result.solutions.size() > 0, "联合解算应有输出（闸3 不得影响主解）");
+
+        BaseStation[] bases = proc.getJointRtk().bases;
+        double coordLen = 0.0;
+        if (bases != null && bases.length >= 2 && bases[0] != null && bases[1] != null) {
+            double dx = bases[0].rb[0] - bases[1].rb[0];
+            double dy = bases[0].rb[1] - bases[1].rb[1];
+            double dz = bases[0].rb[2] - bases[1].rb[2];
+            coordLen = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+        System.out.printf("  coordLen(按基站坐标)=%.3f m%n", coordLen);
+
+        int attempts = sk.getAttempts(0, 1);
+        int fixes = sk.getFixSamples(0, 1);
+        double refLen = sk.getRefLength(0, 1);
+        double len = sk.getLength(0, 1);
+        double maxChange = sk.getMaxLengthChange(0, 1);
+        System.out.printf("  pair(0,1): attempts=%d fix=%d refLen=%.3f m len=%.3f m maxD=%.3f m suspect=%s/%s%n",
+                attempts, fixes, refLen, len, maxChange, sk.isSuspect(0), sk.isSuspect(1));
+
+        assertTrue(attempts > 0, "骨架网应执行解算");
+        assertTrue(fixes > 0, "静态骨架解应能固定，实际 fix=" + fixes);
+        assertTrue(refLen > 0.0, "参考长度应已标定，实际 " + refLen);
+
+        // 健康小时：基站未移动，骨架长度相对标定值的波动应在厘米级
+        assertTrue(maxChange < 0.05,
+                "健康小时骨架基线长度变化应 <5cm，实际 " + String.format("%.3f", maxChange) + " m");
+        assertFalse(sk.isSuspect(0), "健康小时不应误报基站[0]");
+        assertFalse(sk.isSuspect(1), "健康小时不应误报基站[1]");
     }
 
     @Test
     @DisplayName("对比：独立基线RTK vs 联合RTK")
     void testJointVsIndependent() throws IOException {
-        if (!DATA_AVAILABLE) {
-            System.out.println("跳过：数据不可用");
-            return;
-        }
+        Assumptions.assumeTrue(DATA_AVAILABLE, JointTestDataConfig.getMissingMessage());
 
         String baseA = BASES[0];
         String baseB = BASES[1];
@@ -298,15 +467,29 @@ public class JointRtkRealDataTest {
         System.out.printf("  %-20s  %4d  %4d  %5.1f%%%n", "独立基线A", resA.solutions.size(), fixA, fixRatioA);
         System.out.printf("  %-20s  %4d  %4d  %5.1f%%%n", "独立基线B", resB.solutions.size(), fixB, fixRatioB);
         System.out.printf("  %-20s  %4d  %4d  %5.1f%%%n", "联合RTK", resJ.solutions.size(), fixJ, fixRatioJ);
+
+        assertFalse(resA.solutions.isEmpty(), "独立基线A 应有解算输出");
+        assertFalse(resB.solutions.isEmpty(), "独立基线B 应有解算输出");
+        assertFalse(resJ.solutions.isEmpty(), "联合RTK 应有解算输出");
+        assertTrue(fixA > 0, "独立基线A 应存在 FIX 解");
+        assertTrue(fixJ > 0, "联合RTK 应存在 FIX 解");
+
+        assertTrue(fixRatioA >= 80.0,
+                "独立基线A FIX 率应 ≥80%，实际 " + String.format("%.1f%%", fixRatioA));
+        assertTrue(fixRatioJ >= 80.0,
+                "联合RTK FIX 率应 ≥80%，实际 " + String.format("%.1f%%", fixRatioJ));
+        assertTrue(fixRatioJ >= fixRatioA - 5.0,
+                "联合RTK 不应显著劣于最优独立基线：联合 " + String.format("%.1f%%", fixRatioJ)
+                        + " vs 基线A " + String.format("%.1f%%", fixRatioA));
+        assertTrue(fixRatioJ >= fixRatioB + 20.0,
+                "联合RTK 应显著优于最差独立基线：联合 " + String.format("%.1f%%", fixRatioJ)
+                        + " vs 基线B " + String.format("%.1f%%", fixRatioB));
     }
 
     @Test
     @DisplayName("标准RTK Kinematic模式模糊度诊断")
     void testStandardRtkKinemaDiag() throws IOException {
-        if (!DATA_AVAILABLE) {
-            System.out.println("跳过：数据不可用");
-            return;
-        }
+        Assumptions.assumeTrue(DATA_AVAILABLE, JointTestDataConfig.getMissingMessage());
 
         String baseA = BASES[0];
         int testHour = 8;
