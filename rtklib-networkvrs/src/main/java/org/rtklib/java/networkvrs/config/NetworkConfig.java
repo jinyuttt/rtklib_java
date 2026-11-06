@@ -67,6 +67,26 @@ public class NetworkConfig {
     /** 宽巷窗口内散度阈值（周），超过视为存在周跳/多路径，不固定。 */
     public double wlScatterThresholdCycles = 0.15;
 
+    /**
+     * 窗口内周跳检测阈值（米），按卫星比较相邻历元「相位 − 几何 − 模型」的阶跃。
+     *
+     * <p>单频 1 周失锁对应 IF 模糊度跳变 λ_if = c/(f1+f2) ≈ 0.107 m（GPS），
+     * 相邻历元噪声约 2 cm（相位 σ 的 √2 倍），故 5 cm 可稳定区分 1 周失锁与噪声。
+     * 超过阈值即在窗口内切分弧段，各弧段独立估计模糊度。</p>
+     */
+    public double cycleSlipThresholdMeters = 0.05;
+
+    /**
+     * 同一弧段内允许的最大历元间隔（按采样间隔的倍数）。
+     *
+     * <p>窗口内缺 1 个历元时相邻历元间隔变为 2 倍采样，若按 1.5 倍判定失锁，
+     * 会把连续的观测人为切成两段，短弧段的模糊度标准差迅速膨胀（实测可达 2~6 周），
+     * 直接让 LAMBDA 的 ratio 塌到噪声底。缺测历元本身不代表相位失锁，
+     * 因此把间隔放宽到 {@code 3.0} 倍采样（30 s 采样可容忍缺 2 个历元），
+     * 真正的周跳仍由 {@link #cycleSlipThresholdMeters} 的阶跃判据负责。</p>
+     */
+    public double maxArcGapFactor = 3.0;
+
     /** LAMBDA ratio 固定阈值（s[1]/s[0]）。 */
     public double arRatioThreshold = 3.0;
 
@@ -84,6 +104,14 @@ public class NetworkConfig {
 
     /** 双差非色散残差观测标准差（米）。 */
     public double ddNonDispSigmaM = 0.05;
+
+    /**
+     * 网解卫星位置/钟差使用的星历来源（与 core 的 ephopt 一致）：
+     * {@link Constants#EPHOPT_BRDC}（默认，广播星历）、
+     * {@link Constants#EPHOPT_PREC}（SP3/CLK 精密星历，需预先装载到 {@code Nav}）、
+     * {@link Constants#EPHOPT_SSRAPC}/{@link Constants#EPHOPT_SSRCOM}（SSR 改正）。
+     */
+    public int ephemerisOption = Constants.EPHOPT_BRDC;
 
     // ---------------- 档 3：MAC 星座策略 ----------------
 

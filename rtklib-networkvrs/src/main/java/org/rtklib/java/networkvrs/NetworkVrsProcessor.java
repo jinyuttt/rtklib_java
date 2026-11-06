@@ -10,6 +10,7 @@ import org.rtklib.java.networkvrs.interp.IdwInterpolator;
 import org.rtklib.java.networkvrs.interp.StationCorrection;
 import org.rtklib.java.networkvrs.netsol.NetworkSolutionEngine;
 import org.rtklib.java.networkvrs.sync.MultiStationSynchronizer;
+import org.rtklib.java.networkvrs.sync.SsrCorrectionProvider;
 import org.rtklib.java.networkvrs.sync.StationObservation;
 import org.rtklib.java.networkvrs.sync.SynchronizedEpoch;
 
@@ -130,8 +131,22 @@ public class NetworkVrsProcessor {
      */
     public List<EpochCorrection> processNetwork(List<StationObservation> stations, Nav nav,
                                                 double[] targetPos, String masterId) {
+        return processNetwork(stations, nav, targetPos, masterId, null);
+    }
+
+    /**
+     * 档 2 + SSR：在网解前逐历元把 SSR 改正注入 {@code nav.ssr[]}。
+     *
+     * <p>与 {@code config.ephemerisOption = EPHOPT_SSRAPC/SSRCOM} 配合使用；
+     * {@code ssr} 为 {@code null} 时与四参数版本完全等价。</p>
+     *
+     * @param ssr 逐历元 SSR 改正提供者（RTCM 回放或精密产品反算）
+     */
+    public List<EpochCorrection> processNetwork(List<StationObservation> stations, Nav nav,
+                                                double[] targetPos, String masterId,
+                                                SsrCorrectionProvider ssr) {
         NetworkSolutionEngine.Result solved =
-                new NetworkSolutionEngine().solve(stations, nav, masterId, config);
+                new NetworkSolutionEngine().solve(stations, nav, masterId, config, ssr);
         Map<String, double[]> ecefById = new LinkedHashMap<>();
         for (StationObservation station : stations) {
             ecefById.put(station.id(), station.ecef());

@@ -465,6 +465,10 @@
 | FIX-ALG-039 | 2026-10-27 | data/SolData.java、adjust/CovAssembler.java、adjust/GnssBaselineAdjust.java、adjust/MultiBaselineAdjust.java、adjust/DisplacementSeries.java | adjust 平差链路闭环：完整 ECEF 协方差暴露（保留符号）+ R 改块对角独立性模型（删除 ρ=1/k 的融合结果误用）+ dXyz 数据源修正 + 配置项接线 + 时间序列/网平差/白度检验（JAVA-ONLY） |
 | FIX-ALG-040 | 2026-10-27 | adjust/NetworkAdjustment.java、adjust/MultiBaselineAdjust.java、adjust/model/MultiBaselineConfig.java、rtklib-adjust/pom.xml、rtklib-core/pom.xml | 自由网平差 O(m²) 内存爆炸 + 残差计算错误双修复；网平差观测时间窗（默认 1h）；manual 测试命令行覆盖修复（JAVA-ONLY） |
 | FIX-ALG-041 | 2026-10-27 | adjust/GnssBaselineAdjust.java、adjust/MultiBaselineAdjust.java、adjust/ResidualWhiteness.java | 白度检验失效修复：adjustSingle 残差向量未随结果返回（恒 null）+ SUSPECT 剔除后 entries 与 v 长度错配 + df=0 历元改喂交叉检核残差（JAVA-ONLY） |
+| FIX-ALG-046 | 2026-11-05 | networkvrs/netsol/DdObservationBuilder.java、netsol/DdObservation.java、netsol/BaselineWindowSolver.java、ephemeris/EphModel.java | 网解窄巷固定闭环：双差两端共用同一卫星位置（按站 A 发射时刻）→ 逐星常量偏差被 IF 模糊度吸收、浮点 N1 偏 0.3 周而协方差仍按 0.05 周标称 → ratio≈1；改为两站各按本站坐标迭代发射时刻求 satpos，并新增两站残余 ZTD 及变化率状态（σ=0.3 m / 0.1 m·h⁻¹ 弱先验）（JAVA-ONLY） |
+| FIX-ALG-047 | 2026-11-05 | ephemeris/EphModel.java、rtklib-core/src/test/java/org/rtklib/java/RinexSppTest.java | 星历最大时效按系统分档（GPS/GAL/QZS/SBS/GLO 2 h、BDS 6 h、IRN 8 h，对齐 seleph/selgeph），移除 7 天统一上限与 `rtklib.eph.wideage` 开关；SBAS 改「t0 最近且 ≤ MAXDTOE_SBS」；RinexSppTest 改为按可用星数最多历元验证（JAVA-ONLY） |
+| FIX-ALG-048 | 2026-11-05 | joint/BaseSkeletonNetwork.java | 闸3 骨架网 FIX 恒为 0：参考长度标定用 `stat < SOLQ_FLOAT` 判「非 FIX」（SOLQ_FIX=1 < SOLQ_FLOAT=2）导致 FIX 全被丢弃、且曾用 FLOAT 解采样污染参考长度；改为参考长度只接受 SOLQ_FIX，FIX/FLOAT 均可进监测；修复后 fix=215/235、587.302 m 与坐标几何值毫米级一致（JAVA-ONLY） |
+| FIX-ALG-049 | 2026-11-06 | networkvrs/netsol/BaselineWindowSolver.java、networkvrs/config/NetworkConfig.java | 窄巷固定率偏低根因是周跳切弧对「正常缺测」过敏：1.5×采样间隔阈值把 30 s 采样下缺 1 历元的正常间隔（2×30 s）判为失锁，63 次误切弧把长弧切成短弧，模糊度 σ 膨胀到 2~6 周、LAMBDA ratio 塌到噪声底；改为间隙阈值可配置 `maxArcGapFactor=3.0`，周跳仍由 0.05 m 阶跃判据负责；固定率 69.4%→80.6%、基线重复性 0.180→0.160 m、平均 ratio 5.38→6.04（40 历元窗口；默认 20 历元窗口 34.7%→37.5%，瓶颈不在切弧）（JAVA-ONLY，core 零改动） |
 
 ## FIX-ALG-020 EST 模式死锁：DCB 产品加载 + enableIonoEstRobust 开关
 
@@ -2254,3 +2258,302 @@ VRS+测站 RTK FIX=0%，ratio 恒 ~1.0。
 - `rtklib-vrs/.../rtcm/Rtcm3Encoder.java`：lockCnt/lockEpoch/msmEpochSeq 状态、
   encodeMsmBatch 公开入口
 - `rtklib-vrs/.../VrsGenerator.java`：msmEpochSeq 每历元递增、encodeSystemBatched 分批驱动
+
+---
+
+## FIX-ALG-046 / 网解窄巷固定闭环：双差两端共用卫星位置 + 缺残余 ZTD 状态（2026-11-05）
+
+**日期**: 2026-11-05
+**类别**: rtklib-networkvrs / 网解双差观测构建（JAVA-ONLY）
+**触发**: `NetworkSolutionRealDataTest`（EUREF CIMO/PRAT/VIRG，2026 DOY 300，30 s，1 h 窗口）：
+宽巷 MW 100% 固定，窄巷 LAMBDA ratio 恒 1.0~1.7，3/3 窗口窄巷固定数为 0。
+
+### 根因
+
+`DdObservationBuilder` 对一对卫星只调一次 `satpos`（按站 A 的近似坐标迭代发射时刻），
+站 B 的几何距离沿用了站 A 的卫星位置。基线 46~100 km 时两站信号发射时刻差 0.15~0.3 ms，
+卫星位移 2~4 m，逐星在双差中留下一个与基线投影相关的**常量偏差**，被 IF 模糊度吸收，
+使浮点 N1 小数整体偏移（±0.3 周），而协方差仍按 0.05 周量级标称 → 整数候选距浮点解约 6σ
+→ ratio≈1 → LAMBDA 必然拒绝。此前把该现象归因于"广播星历米级轨道误差"（NETWORK_VRS_DESIGN §4.1），
+实测精密星历同样失败，该归因被推翻。
+
+次要因素：Saastamoinen 模型与真实天顶延迟有 0.1~0.3 m 系统差，双差后残留为常数量，
+一并被模糊度吸收，进一步压低 ratio。
+
+### 修复
+
+1. 站 A / 站 B **各自**按本站坐标迭代发射时刻调 `satpos`（`stateA`/`stateB`），
+   几何距离、方位高度角、对流层映射函数分别计算；截止角按两站高度角较小值判定。
+2. `BaselineWindowSolver` 未知数扩为 `[dx,dy,dz,ztdA,ztdB,ztdRateA,ztdRateB,N1..Nn]`，
+   两站残余 ZTD 及线性变化率各带弱先验（σ=0.3 m / 0.1 m·h⁻¹），吸收模型系统差；
+   残差、闭区间检验与 AR 后验全部按新未知数重排。
+3. `EphModel.satposPrec` 改 public，供只做单星位置计算的构建器直接调用；
+   `EPHOPT_SSRAPC/SSRCOM` 分支在广播位置叠加 `nav.ssr` 轨道改正前补算卫星速度
+   （RAC 基需要沿迹/法向，差商步长与 `satposPrec` 一致）。
+
+### 验证（120 历元 / 18 窗口 / 17 颗共视星）
+
+| 星历 | 基线 | ratio | 相位 RMS | 窄巷固定 |
+|---|---|---|---|---|
+| BRDC | CIMO-PRAT | 11.7 | 1.63 cm | ✅ |
+| BRDC | PRAT-VIRG | 13.5 | 1.71 cm | ✅ |
+| BRDC | CIMO-VIRG | 23.5 | 2.83 cm | ✅ |
+| WUM SP3/CLK | CIMO-PRAT | 10.69 | 1.63 cm | ✅ |
+| WUM SP3/CLK | PRAT-VIRG | 12.55 | 1.79 cm | ✅ |
+| WUM SP3/CLK | CIMO-VIRG | 23.82 | 2.94 cm | ✅ |
+
+- N1 小数 std：BRDC 0.135 周 / 精密 0.044 周（修复前 0.262 周）
+- BRDC 与精密星历 ratio/RMS 几乎同量级 → 双差中轨道/钟差误差高度共模，
+  **窄巷固定不依赖精密产品接入**（推翻 §4.1 的旧结论）
+- 残余 N1 小数 std≈0.17 周（≈1.8 cm）推断为卫星天线 PCO/PCV 未建模（未接 ATX），
+  ratio 已远超 3.0 门限，暂不引入该依赖
+
+### 修改文件
+
+- `rtklib-networkvrs/.../netsol/DdObservationBuilder.java`：两站各自求卫星位置/几何/映射函数；
+  补算广播速度供 SSR 改正使用
+- `rtklib-networkvrs/.../netsol/DdObservation.java`：携带 `tropoMapDiffA/B`（映射函数差）
+- `rtklib-networkvrs/.../netsol/BaselineWindowSolver.java`：ZTD/ZTD 率状态 + 弱先验
+- `rtklib-core/.../ephemeris/EphModel.java`：`satposPrec` 改 public
+
+---
+
+## FIX-ALG-047 / 星历最大时效按系统分档：删除 7 天统一上限 + SBAS 选择对齐（2026-11-05）
+
+**日期**: 2026-11-05
+**类别**: rtklib-core / 星历选择（JAVA-ONLY）
+
+### 问题
+
+`EphModel` 曾用 `rtklib.eph.wideage` 开关把星历时效放宽到 7 天，用于"星历稀疏时也能出解"。
+副作用：跨日/跨周的旧星历被当作有效星历参与解算，位置误差可达米~十米级，
+且与 RTKLIB `seleph()` 语义不一致（C 版按系统分档 2~8 h）；SBAS 分支「首个命中即返回」
+也不比较 `t0` 远近。
+
+### 修复
+
+1. 移除 `wideage` 开关与 7 天统一上限，按系统分档取 `Constants.MAXDTOE_*`：
+   GPS/GAL/QZS/SBS/GLO = 2 h、BDS = 6 h、IRN = 8 h。
+2. 与 `seleph()` / `selgeph()` 对齐：GAL 与 GLO 不加 1.0 s 余量，GPS/QZS/BDS/IRN 加 1.0 s（容纳 `toc` 与 `toe` 差）；SBS 由 `MAXDTOE_SBS` 单独处理。
+3. SBAS 改为「`t0` 最近且 ≤ `MAXDTOE_SBS`」，不再首个命中即返回。
+
+### 影响与适配
+
+- 装订过期的 BRDC 文件不再产生"能出解但米级误差"的假解；
+  `RinexSppTest` 的稀疏星历场景改为按**可用星数最多**的历元做 SPP 验证
+  （原固定历元在时效收紧后星数不足，会误判为无解）。
+
+### 修改文件
+
+- `rtklib-core/.../ephemeris/EphModel.java`
+- `rtklib-core/src/test/java/org/rtklib/java/RinexSppTest.java`
+
+---
+
+## FIX-ALG-048 / joint 闸3 骨架网 FIX 恒为 0：状态判断反向 + 参考长度被 FLOAT 污染（2026-11-05）
+
+**日期**: 2026-11-05
+**类别**: rtklib-joint / 闸3 基站骨架网（JAVA-ONLY）
+**触发**: `JointRtkRealDataTest#testBaseSkeletonNetwork` 断言 `fixes > 0` 失败
+（真实 2 基站 + 1 测站，235 历元，`baseSkeletonNetwork=true`）。
+
+### 根因
+
+`BaseSkeletonNetwork.solve()` 的参考长度标定分支用 `stat < Constants.SOLQ_FLOAT` 判「非 FIX」，
+但 `SOLQ_FIX = 1`、`SOLQ_FLOAT = 2`，FIX 解恰好满足该条件被 `return` 丢弃 —— 235 历元
+无一次进入样本，`getFixSamples() = 0`，`refLen` 永远标定不出来，骨架网等于没工作。
+
+次生缺陷：同一分支曾把**未收敛的 FLOAT 解**也当样本采信，参考长度中位值因此带 1.7 cm 偏差，
+使后续 `|Δlen|` 判据长期偏置。
+
+### 修复
+
+- 参考长度**只接受 `SOLQ_FIX`**：`if (stat != Constants.SOLQ_FIX) return;` 后再入样本，
+  `refLen = median(前 10 个 FIX 解)`。
+- 门限放行 `FIX/FLOAT` 进入长度变化监测（FLOAT 未收敛时 σ 大，由 `max(5 cm, 3σ)` 兜住，
+  不产生误报）。
+
+### 验证（235 历元）
+
+| 项 | 修复前 | 修复后 |
+|---|---|---|
+| `fixSamples` | 0 | **215/235（91.5%）** |
+| `refLen` | 未标定（0） | **587.302 m**，与两站坐标几何长度一致到 1 mm |
+| 位置 σ | 0.22 m | 0.0075 m |
+| `maxChange` | — | < 5 cm，`isSuspect(0/1)=false`（健康小时无误报） |
+
+- 反向佐证坐标来源：骨架长度与坐标几何值毫米级一致，说明基站 B 的 1005/1006 站坐标可信；
+  而基站 A 的 1005 坐标偏 4.7 m（另一处理中已确认），因此"1.7 cm 基线长度偏差"
+  不是坐标问题，是解算收敛性问题（即本条目）。
+- 设计意图回顾：骨架解只把基站间静态基线当作独立位移观测量，用 FIX 解标定参考长度，
+  以排除 rover 侧异常干扰——因此参考长度必须来自 FIX 解，这是本 bug 的判据来源。
+
+### 修改文件
+
+- `rtklib-joint/.../BaseSkeletonNetwork.java`
+
+---
+
+## FIX-ALG-049 / 窄巷固定率 69.4%→80.6%：周跳切弧对正常缺测过敏（2026-11-06）
+
+**日期**: 2026-11-06
+**类别**: rtklib-networkvrs / 网解窗口窄巷 AR（JAVA-ONLY，rtklib-core 零改动）
+**触发**: 2026-11-02 私有四站（站号以 `<DEVICE_A>`/`<DEVICE_B>`/`<DEVICE_C>`/`<DEVICE_D>` 代）端到端验证，
+`NetworkSsrEndToEndTest` 输出 `nlFixed=25/36 (69.4%)`，多个基线窄巷 ratio 只有 1.0~2.3，
+而浮点解 RMS 仅 7.5 mm——残差质量与固定率严重不匹配，说明问题不在观测精度。
+
+### 根因
+
+`BaselineWindowSolver` 的周跳检测把**弧段内相邻历元的时间间隔**也当作失锁判据：
+
+```java
+slip = dt > 1.5 * sampling || jump > config.cycleSlipThresholdMeters;
+```
+
+30 s 采样下，只要窗口内缺 1 个历元，相邻历元间隔就变成 2×30 s > 1.5×30 s，被误判为周跳。
+实测四站 1 h 窗口共触发 63 次切弧，逐条打印后确认**全部是正常缺测间隔，无一次真实相位阶跃**。
+后果是每个窗口的长弧被切成若干 3~8 历元的短弧：
+
+- 短弧的 IF 模糊度只有一个参数但观测太少，σ 从 0.1 周量级膨胀到 **2~6 周**；
+- LAMBDA 输入协方差被撑大，ratio 直接塌到噪声底（1.0~2.3），窄巷必然固定失败；
+- 因为切弧只发生在少数历元，浮点 RMS 几乎不受影响，指标上表现为「残差很好但固定率低」。
+
+### 修复
+
+把间隙判据从硬编码 1.5× 改为可配置的 `NetworkConfig.maxArcGapFactor`（默认 3.0）：
+
+```java
+boolean gapSlip = dt > config.maxArcGapFactor * sampling;
+boolean jumpSlip = jump > config.cycleSlipThresholdMeters;
+```
+
+- 3.0× 采样间隔意味着 30 s 采样可容忍**连续缺 2 个历元**仍算同一弧段；
+- 缺测历元本身不代表相位失锁（相位在失锁时会重新计数并由 LLI 标记），放宽间隙不会放过真周跳；
+- 真正的周跳仍由 `cycleSlipThresholdMeters = 0.05 m` 的几何阶跃判据负责，且该判据在间隙放宽后
+  **仍然生效**（原实现中 `dt` 超限会短路，jump 判据实际被旁路）。
+
+### 验证（2026-11-02 四站，SSR 改正）
+
+**40 历元窗口**（`-Dnetwork.window.epochs=40`，36 窗口 = 6 基线 × 6 窗口）：
+
+| 项 | 修复前（1.5×） | 修复后（3.0×） |
+|---|---|---|
+| 窄巷固定窗口 | 25/36（69.4%） | **29/36（80.6%）** |
+| 平均 ratio | 5.38 | **6.04** |
+| 最小 ratio | — | 1.08 |
+| 相位 RMS | 0.0075 m | 0.0075 m（不变） |
+| 基线重复性 | 0.180 m | **0.160 m** |
+| 误切弧次数 | 63（全为缺测间隙） | **1**（1 次 0.051 m 真实阶跃，刚过 0.05 m 门限） |
+
+**20 历元窗口**（默认 `network.window.epochs=20`，72 窗口 = 6 基线 × 12 窗口）：
+
+| 项 | 修复前（1.5×） | 修复后（3.0×） |
+|---|---|---|
+| 窄巷固定窗口 | 25/72（34.7%） | **27/72（37.5%）** |
+| 平均 ratio | 4.04 | 4.08 |
+| 基线重复性 | 0.552 m | 0.579 m |
+
+- 40 历元窗口收益显著且无任何指标劣化；20 历元窗口仅小幅提升，说明**短窗口的瓶颈不在切弧**，
+  属另一类问题，方向性判断见下节（已量测，非推测）。
+- 仍固定失败的窗口集中在 `<DEVICE_C>-<DEVICE_D>` 基线（重复性 0.55 m），对应 C 站
+  已知的 4.7 m 坐标偏差（1005 站坐标错误，属数据侧问题，不属本条目）；
+  `lenEst - lenApri` 在含 A/B/C 的基线上达 3~6 m，同样由站坐标偏差解释，
+  而窗口间重复性（0.02~0.08 m）说明解算本身稳定。
+- `rtklib-core` 全程未改动，符合「core 已封版」约束。
+
+### 20 历元窗口为何只有 37.5%：窗口太短，不是卫星数不足
+
+**结论**：20 历元（10 min）窗口的瓶颈是**「位置—模糊度」不可分离**（需要更长的几何变化或外部约束），
+**不是**该窗口下可用卫星数不足。依据是同一数据、同一 SSR 源、只改 `network.window.epochs` 的对照：
+
+| 按卫星数分组 | 20 历元 | 40 历元 |
+|---|---|---|
+| nSat=6 | 6/19 固定（32%），meanMaxRatio 6.89 | 6/7（86%），5.47 |
+| nSat=7 | 15/32（47%），3.54 | 19/23（**83%**），**6.97** |
+| nSat=8 | 3/4（75%），3.10 | 4/5（80%），4.53 |
+| 卫星数分布 | 4~8，均值 6.4 | 4~8，均值 7.0 |
+
+- **卫星数几乎没变**（两档都落在 4~8，均值只差 0.6 颗），同是 7 颗星的窗口固定率却从 47% 跳到 83%、
+  meanMaxRatio 从 3.54 到 6.97 → 增益来自窗口长度，不是多星。
+- **冗余本来就充足**：nSat=7 时 7 个双差/历元 × 20 历元 = 140 个观测，未知数 3 位置 + 4 ZTD
+  + 7 模糊度 = 14，冗余 126。「观测数不够」不成立。
+- **精度指标随窗口长度缩放，而非随卫星数缩放**：
+
+  | 指标 | 20 历元 | 40 历元 |
+  |---|---|---|
+  | σ(N1) 中位（周） | 1.7 | 0.9 |
+  | 位置 σ（ECEF 三分量） | 0.56 / 0.70 / 0.38 m | 0.24 / 0.27 / 0.16 m |
+  | 窗口间重复性 | 0.579 m | 0.160 m |
+
+  模糊度 σ 与位置 σ 都近似按「窗口长度加倍 → 减半」缩放。原因是解耦量正比于弧长内的卫星几何变化：
+  10 min 内 BDS/GPS 高度角只变约 2.5°，位置与 IF 模糊度相关系数接近 1，浮点模糊度必然停在 1~2 周，
+  ratio 到不了 3.0。40 历元把几何变化翻倍，σ 掉一半，ratio 才回到 6 以上。
+
+**可操作方向（按优先级）**
+
+1. **加长窗口**：40 历元（20 min）已验证 80.6%，代价是固定延迟由 10 min 涨到 20 min；
+2. **级联/滚动窗口**（保 10 min 延迟的替代路线）：用前一窗口的位置解作弱先验（σ≈0.1~0.3 m），
+   人为补上 10 min 内缺失的几何解耦。属"外部约束"路线，**尚未实现、未测**；
+3. **少星窗口不做 AR**：20 历元下 12 个 nSat=5 窗口只固定 2 个；且低维 ratio 会虚高
+   （nSat=4 的窗口 meanMaxRatio 7.28 却只固定 1/3），少星窗口的 ratio 不能当可信指标。
+
+**未验证**：方向 2 的级联窗口未实现；方向 3 跳过 AR 的收益未量化。
+
+### 已试并否决的方案（避免后续重复试错）
+
+**按仰角加权**：把法方程里的等权改成 `σ(el) = σ0 / sin(el)`，相位行与码行**同时**加权；
+仰角取 `min(卫星仰角, 参考星仰角)`，下限 10°（低于 10° 按 10° 计，避免 sin 趋零发散）。
+改动点仅 `BaselineWindowSolver` 的两处 `accumulate(..., 1/σ²)` 权重，未动其他逻辑。
+
+**实验条件**（数据不全结论就无意义，故逐项记明）：
+
+| 项 | 取值 |
+|---|---|
+| 数据集 | 2026-11-02 私有四站（`<DEVICE_A>`~`<DEVICE_D>`） |
+| 改正源 | 录制 SSR（`EPHOPT_SSRAPC`），与上文主实验同一数据 |
+| 窗口长度 | 默认 20 历元（`network.window.epochs=20`，即 10 min） |
+| 窗口总数 | 72（6 基线 × 12 窗口） |
+| 对照 | 同一数据、同一窗口配置下的等权版本 |
+
+| 指标 | 等权（保留） | 仰角加权（否决） |
+|---|---|---|
+| 窄巷固定窗口 | 27/72（37.5%） | **21/72（29.2%）** |
+| 平均 ratio | 4.08 | **2.49** |
+| 最小 ratio | 0.00 | 0.00 |
+| 相位 RMS | 0.0071 m | 0.0074 m（基本不变） |
+| 基线重复性 | 0.579 m | **1.018 m** |
+
+- 逐基线看劣化最重的是 `B-D`：fix 3→1、ratio 2.49→1.78、重复性 0.0297 m→NaN
+  （仅 1 个固定窗口，无法算重复性）；`A-D` fix 5→2、ratio 2.77→1.78。
+- 判读：相位 RMS 几乎不变（0.0071→0.0074 m）但 ratio 掉 40%，说明**不是观测拟合变差，
+  而是模糊度协方差的相对结构被破坏**——低仰角卫星的 σ 被放大后成了 LAMBDA 协方差的主导
+  方向，几何约束被稀释，这是与「残差好但固定率低」同一类症状的另一种成因。
+- **未验证的条件（后人若要重试请先补这两项）**：① 40 历元窗口下加权是否同样劣化未测；
+  ② 只对相位行加权、码行保持等权未测。故本结论的适用范围严格限于上表条件。
+- 当前代码保持等权，未保留任何加权分支。
+
+**加码伪距权重**：把 `codeSigmaM` 由 1.5 收紧到 0.3（单频码 σ，IF 后由 4.5 m → 0.9 m），
+其余不变，20 历元窗口：
+
+| 指标 | `codeSigmaM=1.5`（保留） | `codeSigmaM=0.3`（否决） |
+|---|---|---|
+| 窄巷固定窗口 | 27/72（37.5%） | **10/72（13.9%）** |
+| 平均 ratio | 4.08 | **2.10** |
+| 相位 RMS | 0.0071 m | **0.0106 m** |
+| 基线重复性 | 0.579 m | **1.632 m** |
+
+- 判读：固定率、ratio、重复性三项同时劣化，相位 RMS 还涨了 49%，说明码的多路径底噪在**米级**，
+  把它当 0.9 m 精度用会把位置拉离相位一致的解。**伪距权重已到上限，无法用来锚定短窗口的位置**，
+  这反过来印证上节结论：10 min 窗口只能靠几何随时间变化去解耦位置与模糊度。
+- 当前 `codeSigmaM` 保持 1.5，未改动。
+
+### 修改文件
+
+- `rtklib-networkvrs/.../netsol/BaselineWindowSolver.java`
+- `rtklib-networkvrs/.../config/NetworkConfig.java`
+
+### 归档（非本次修复）
+
+`rtklib-test` 的 `RtkValidationTest#testShortBaselineFixRateAndRms` 短基线固定率 8.06%
+失败已用 `git stash` 在 HEAD 上复现，属既有问题，与 core 封版内容无关，单独列入待办，
+不在本轮端到端验证闭环范围内。

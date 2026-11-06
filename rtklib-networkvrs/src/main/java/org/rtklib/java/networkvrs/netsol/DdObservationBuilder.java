@@ -8,6 +8,7 @@ import org.rtklib.java.data.GTime;
 import org.rtklib.java.data.Nav;
 import org.rtklib.java.data.Obsd;
 import org.rtklib.java.ephemeris.EphModel;
+import org.rtklib.java.ppprtk.SsrCorrector;
 import org.rtklib.java.troposphere.TroposphereModel;
 
 import java.util.ArrayList;
@@ -22,6 +23,8 @@ import java.util.Map;
  * <p>信号对按系统固定优先级选取（BDS 优先 B1I/B3I，GPS 优先 L1C/L2W，GAL 优先 L1C/L5Q），
  * 避免各站自动选频导致频间偏差不一致。参考星取两站最低高度角最大者；
  * 卫星位置按信号发射时刻迭代（2 次），并含 Sagnac 改正。</p>
+ *
+ * <p>星历来源由 {@code ephopt} 决定：广播星历（默认）、SP3/CLK 精密星历、SSR 改正。</p>
  *
  * <p>GLONASS 需要频率号，本阶段不参与网解。</p>
  */
@@ -39,7 +42,12 @@ public final class DdObservationBuilder {
                     new String[]{"1C", "5Q"}, new String[]{"1C", "7Q"},
                     new String[]{"1X", "5X"}, new String[]{"1C", "8Q"}));
 
+    /** 广播星历速度的差商步长（s）。 */
+    private static final double VELOCITY_STEP_SEC = 1e-3;
+
     /**
+     * 广播星历版本（等价于 {@code ephopt = EPHOPT_BRDC}）。
+     *
      * @param ecefA        站 A 坐标（米）
      * @param ecefB        站 B 坐标（米）
      * @param obsA         站 A 本历元观测
@@ -51,6 +59,25 @@ public final class DdObservationBuilder {
     public List<DdObservation> build(double[] ecefA, double[] ecefB,
                                      List<Obsd> obsA, List<Obsd> obsB,
                                      Nav nav, double minElevation) {
+        return build(ecefA, ecefB, obsA, obsB, nav, minElevation, Constants.EPHOPT_BRDC);
+    }
+
+    /**
+     * @param ecefA        站 A 坐标（米）
+     * @param ecefB        站 B 坐标（米）
+     * @param obsA         站 A 本历元观测
+     * @param obsB         站 B 本历元观测
+     * @param nav          星历（{@code EPHOPT_PREC} 时需已装载 SP3/CLK，
+     *                     {@code EPHOPT_SSRAPC/SSRCOM} 时需已装载 {@code nav.ssr}）
+     * @param minElevation 最低高度角（度）
+     * @param ephopt       星历选项：{@link Constants#EPHOPT_BRDC}（默认）、
+     *                     {@link Constants#EPHOPT_PREC}、{@link Constants#EPHOPT_SSRAPC}、
+     *                     {@link Constants#EPHOPT_SSRCOM}
+     * @return 双差观测（不含参考星本身）；有效卫星不足时返回空列表
+     */
+    public List<DdObservation> build(double[] ecefA, double[] ecefB,
+                                     List<Obsd> obsA, List<Obsd> obsB,
+                                     Nav nav, double minElevation, int ephopt) {
         Map<Integer, Obsd> mapA = bySat(obsA);
         Map<Integer, Obsd> mapB = bySat(obsB);
         Map<Integer, Satellite> sats = new LinkedHashMap<>();
@@ -79,13 +106,17 @@ public final class DdObservationBuilder {
                     || pair.code1 != pairB.code1 || pair.code2 != pairB.code2) {
                 continue;
             }
-            SatState state = satPos(entry.getValue().time, nav, sat, ecefA);
-            if (state == null) {
+            SatState stateA = satPos(entry.getValue().time, nav, sat, ecefA, ephopt, entry.getValue());
+            SatState stateB = satPos(b.time, nav, sat, ecefB, ephopt, b);
+            if (stateA == null || stateB == null) {
                 continue;
             }
-            double[] rs = state.rs;
-            double[] azelA = azel(entry.getValue().time, ecefA, rs);
-            double[] azelB = azel(b.time, ecefB, rs);
+            // 两站信号发射时刻不同（基线量级可达 0.1~1 ms），必须各用各的卫星位置，
+            // 否则卫星位移会以逐星常量偏差形式进入双差，破坏窄巷固定
+            double[] rsA = stateA.rs;
+            double[] rsB = stateB.rs;
+            double[] azelA = azel(entry.getValue().time, ecefA, rsA);
+            double[] azelB = azel(b.time, ecefB, rsB);
             if (azelA == null || azelB == null) {
                 continue;
             }
@@ -93,7 +124,7 @@ public final class DdObservationBuilder {
             if (satEl < minElevation) {
                 continue;
             }
-            sats.put(sat, new Satellite(sys, pair, rs, azelA, azelB, satEl));
+            sats.put(sat, new Satellite(sys, pair, rsA, rsB, azelA, azelB, satEl));
             obsMapA.put(sat, sanitize(entry.getValue(), pair));
             obsMapB.put(sat, sanitize(b, pair));
             pairs.put(sat, pair);
@@ -133,8 +164,8 @@ public final class DdObservationBuilder {
             SignalPair refPair = pairs.get(refSat);
             Obsd refA = obsMapA.get(refSat);
             Obsd refB = obsMapB.get(refSat);
-            double[] refRangeA = range(ref.rs, ecefA);
-            double[] refRangeB = range(ref.rs, ecefB);
+            double[] refRangeA = range(ref.rsA, ecefA);
+            double[] refRangeB = range(ref.rsB, ecefB);
             double refTropoA = slantTropo(posA, ref.azelA[1]);
             double refTropoB = slantTropo(posB, ref.azelB[1]);
             double refPhaseIfA = ifPhase(refA, refPair);
@@ -145,6 +176,7 @@ public final class DdObservationBuilder {
             double refGfB = gfPhase(refB, refPair);
             double refMwA = mw(refA, refPair);
             double refMwB = mw(refB, refPair);
+            double refMapA = map(ref.azelA[1]);
             double refMapB = map(ref.azelB[1]);
 
             for (int sat : group) {
@@ -155,8 +187,8 @@ public final class DdObservationBuilder {
                 Obsd satObsA = obsMapA.get(sat);
                 Obsd satObsB = obsMapB.get(sat);
                 SignalPair pair = pairs.get(sat);
-                double[] rangeA = range(s.rs, ecefA);
-                double[] rangeB = range(s.rs, ecefB);
+                double[] rangeA = range(s.rsA, ecefA);
+                double[] rangeB = range(s.rsB, ecefB);
                 double ddRange = (rangeA[0] - refRangeA[0]) - (rangeB[0] - refRangeB[0]);
                 double ddPhaseIf = (ifPhase(satObsA, pair) - refPhaseIfA) - (ifPhase(satObsB, pair) - refPhaseIfB);
                 double ddCodeIf = (ifCode(satObsA, pair) - refCodeIfA) - (ifCode(satObsB, pair) - refCodeIfB);
@@ -167,12 +199,13 @@ public final class DdObservationBuilder {
                 double losX = rangeB[1] - refRangeB[1];
                 double losY = rangeB[2] - refRangeB[2];
                 double losZ = rangeB[3] - refRangeB[3];
-                double mapDiff = map(s.azelB[1]) - refMapB;
+                double mapDiffA = map(s.azelA[1]) - refMapA;
+                double mapDiffB = map(s.azelB[1]) - refMapB;
                 result.add(new DdObservation(sat, refSat, s.sys, pair.f1, pair.f2,
                         Constants.CLIGHT / (pair.f1 - pair.f2),
                         ddRange, ddPhaseIf, ddCodeIf, ddGf, ddMw,
                         ddModelTropo,
-                        losX, losY, losZ, mapDiff,
+                        losX, losY, losZ, mapDiffA, mapDiffB,
                         Math.toDegrees(s.azelB[1]), refEl));
             }
         }
@@ -201,20 +234,69 @@ public final class DdObservationBuilder {
         return azel;
     }
 
-    private static SatState satPos(GTime time, Nav nav, int sat, double[] approxRr) {
+    /**
+     * 卫星位置：按信号发射时刻迭代 2 次。
+     *
+     * <p>{@code EPHOPT_BRDC} 走广播星历；{@code EPHOPT_PREC} 走 SP3/CLK 精密星历
+     * （失败即剔除该星，不回退广播）；{@code EPHOPT_SSRAPC/SSRCOM} 在广播星历位置
+     * 上叠加 {@code nav.ssr} 轨道改正，无改正数据的卫星保持广播值（短基线双差
+     * 下米级轨道差可忽略，剔除反而削弱 LAMBDA 的模糊度支撑）。</p>
+     */
+    private static SatState satPos(GTime time, Nav nav, int sat, double[] approxRr,
+                                   int ephopt, Obsd obs) {
         double[] rs = new double[6];
         double[] dts = new double[2];
         double[] vare = new double[1];
         double rho = 2.0e7;
+        boolean precise = ephopt == Constants.EPHOPT_PREC;
+        boolean ssr = ephopt == Constants.EPHOPT_SSRAPC || ephopt == Constants.EPHOPT_SSRCOM;
         for (int k = 0; k < 2; k++) {
-            EphModel.satpos(plus(time, -rho / Constants.CLIGHT), nav, sat, rs, dts, vare);
-            if (rs[0] == 0.0 && rs[1] == 0.0 && rs[2] == 0.0) {
-                return null;
+            GTime transmit = plus(time, -rho / Constants.CLIGHT);
+            if (precise) {
+                if (!EphModel.satposPrec(transmit, sat, nav, rs, dts, vare)) {
+                    return null;
+                }
+            } else {
+                EphModel.satpos(transmit, nav, sat, rs, dts, vare);
+                if (rs[0] == 0.0 && rs[1] == 0.0 && rs[2] == 0.0) {
+                    return null;
+                }
+                if (ssr) {
+                    // SSR 轨道改正以卫星 RAC 坐标系给出，需要速度构造沿迹/法向基；
+                    // 广播星历 satpos 只填位置，此处补算速度（与 EPHOPT_PREC 的算法一致）
+                    broadcastVelocity(nav, sat, transmit, rs);
+                    applySsr(nav, rs, dts, obs);
+                }
             }
             double[] e = new double[3];
             rho = RtklibCommon.geodist(rs, approxRr, e);
         }
         return new SatState(rs);
+    }
+
+    /**
+     * 广播星历速度：前向差商（与 {@link EphModel#satposPrec} 的速度算法一致）。
+     */
+    private static void broadcastVelocity(Nav nav, int sat, GTime time, double[] rs) {
+        double[] rs2 = new double[6];
+        double[] dts2 = new double[2];
+        double[] vare2 = new double[1];
+        EphModel.satpos(plus(time, VELOCITY_STEP_SEC), nav, sat, rs2, dts2, vare2);
+        for (int j = 0; j < 3; j++) {
+            rs[3 + j] = (rs2[j] - rs[j]) / VELOCITY_STEP_SEC;
+        }
+    }
+
+    /**
+     * SSR 轨道/钟差改正：无改正数据时保持广播值不变。
+     */
+    private static void applySsr(Nav nav, double[] rs, double[] dts, Obsd obs) {
+        if (nav.ssr == null || obs == null || !SsrCorrector.hasSsrData(nav.ssr, obs.sat)) {
+            return;
+        }
+        Obsd[] obsArr = {obs};
+        SsrCorrector.applyOrbitCorrection(nav.ssr, rs, obsArr, 1);
+        SsrCorrector.applyClockCorrection(nav.ssr, dts, obsArr, 1);
     }
 
     private static GTime plus(GTime t, double dt) {
@@ -357,16 +439,18 @@ public final class DdObservationBuilder {
     private static final class Satellite {
         private final int sys;
         private final SignalPair pair;
-        private final double[] rs;
+        private final double[] rsA;
+        private final double[] rsB;
         private final double[] azelA;
         private final double[] azelB;
         private final double satElevationDeg;
 
-        private Satellite(int sys, SignalPair pair, double[] rs,
+        private Satellite(int sys, SignalPair pair, double[] rsA, double[] rsB,
                           double[] azelA, double[] azelB, double satElevationDeg) {
             this.sys = sys;
             this.pair = pair;
-            this.rs = rs;
+            this.rsA = rsA;
+            this.rsB = rsB;
             this.azelA = azelA;
             this.azelB = azelB;
             this.satElevationDeg = satElevationDeg;
