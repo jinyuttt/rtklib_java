@@ -129,6 +129,8 @@ public final class BaselineWindowSolver {
         int[][] arcIdOfSat = new int[nSats][nEpochs];
         int[][] ambIndexOfSat = new int[nSats][];
         int nAmb = 0;
+        int gapCuts = 0;
+        int jumpCuts = 0;
         double sampling = samplingIntervalSeconds(usable);
         for (int k = 0; k < nSats; k++) {
             Arrays.fill(arcIdOfSat[k], -1);
@@ -150,6 +152,11 @@ public final class BaselineWindowSolver {
                     boolean jumpSlip = jump > config.cycleSlipThresholdMeters;
                     if (gapSlip || jumpSlip) {
                         slip = true;
+                        if (gapSlip) {
+                            gapCuts++;
+                        } else {
+                            jumpCuts++;
+                        }
                         if (debugAr) {
                             System.out.printf("[slip] %s-%s sat=%d t=%s dt=%.1fs jump=%.3f m %s%n",
                                     stationA, stationB, satList.get(k), usable.get(e).time(),
@@ -171,6 +178,7 @@ public final class BaselineWindowSolver {
         }
         // 每颗卫星取历元数最多的弧段代表该卫星（用于浮点解输出与 LAMBDA 固定）
         int[] domArcOfSat = new int[nSats];
+        int domArcEpochsSum = 0;
         for (int k = 0; k < nSats; k++) {
             int[] counts = new int[ambIndexOfSat[k].length];
             for (int e = 0; e < nEpochs; e++) {
@@ -186,6 +194,7 @@ public final class BaselineWindowSolver {
                 }
             }
             domArcOfSat[k] = bestArc;
+            domArcEpochsSum += counts[bestArc];
         }
 
         int nx = ZTD_AMB_OFFSET + nAmb;
@@ -325,7 +334,12 @@ public final class BaselineWindowSolver {
         // 部分固定（partial AR）：ratio 不达标时逐步剔除模糊度标准差最大的卫星再重试，
         // 与 RTKLIB 的处理一致；低高度角/多路径卫星的模糊度方差大，往往是拉低 ratio 的源头
         List<Integer> active = new ArrayList<>(wlFixed.keySet());
-        boolean firstAttempt = true;
+        int attempts = 0;
+        int firstAmbiguities = 0;
+        double firstRatio = 0.0;
+        double ambiguityCondition = Double.NaN;
+        double fixedPdop = Double.NaN;
+        boolean conditionConverged = true;
         while (active.size() >= config.minFixedAmbiguities) {
             int nFix = active.size();
             // 消元：每颗可固定卫星的整周 N1 = x_if/λ_if − f2·N_WL/(f1−f2)
@@ -344,7 +358,7 @@ public final class BaselineWindowSolver {
                     qa[i * nFix + j] = q[p][r] * scale[i] * scale[j];
                 }
             }
-            if (firstAttempt && debugAr) {
+            if (attempts == 0 && debugAr) {
                 System.out.printf("[ar] %s-%s dx=(%.3f %.3f %.3f) m ztd=(%.3f %.3f) m "
                                 + "ztdRate=(%.3f %.3f) m/h sigma=(%.3f %.3f %.3f)%n",
                         stationA, stationB, x[0], x[1], x[2],
@@ -413,14 +427,21 @@ public final class BaselineWindowSolver {
                                 d.elevationSatDeg(), res * 100.0);
                     }
                 }
-                firstAttempt = false;
             }
             double[] f = new double[nFix * 2];
             double[] s = new double[2];
+            attempts++;
             if (Lambda.lambda(nFix, 2, a, qa, f, s) != 0 || !(s[0] > 0.0)) {
                 break;
             }
             ratio = s[1] / s[0];
+            if (attempts == 1) {
+                firstAmbiguities = nFix;
+                firstRatio = ratio;
+                ConditionEstimate cond = conditionEstimate(qa, nFix);
+                ambiguityCondition = cond.value();
+                conditionConverged = cond.converged();
+            }
             if (debugAr) {
                 System.out.printf("[lam] %s-%s nFix=%d s0=%.3f s1=%.3f ratio=%.2f%n",
                         stationA, stationB, nFix, s[0], s[1], ratio);
@@ -451,22 +472,42 @@ public final class BaselineWindowSolver {
         if (fixed) {
             // 固定解回代：把已固定的 IF 模糊度当作已知量，只重估位置与对流层参数。
             // 若不回代，输出的 δx 仍是浮点解，固定窗口之间的基线长度会漂移 0.1~1 m。
-            double[] xFixed = fixedSolution(usable, fixedNifByParam, satIndex,
-                    arcIdOfSat, ambIndexOfSat, ambOffset, sigmaPhaseIf, sigmaCodeIf, tMid);
-            if (xFixed != null) {
-                System.arraycopy(xFixed, 0, x, 0, ambOffset);
+            // 对流层先验必须与主解一致：主解按基线长缩放（短基线 2 cm），回代若沿用
+            // 固定的 0.3 m，天顶延迟与高程分量的相关性会重新放开，位置被拉偏。
+            FixedEstimate estimate = fixedSolution(usable, fixedNifByParam, satIndex,
+                    arcIdOfSat, ambIndexOfSat, ambOffset, sigmaPhaseIf, sigmaCodeIf,
+                    sigmaZtdPrior, sigmaZtdRatePrior, tMid);
+            if (estimate != null) {
+                System.arraycopy(estimate.x(), 0, x, 0, ambOffset);
+                fixedPdop = estimate.pdop();
             }
+        }
+
+        if (Double.isNaN(fixedPdop)) {
+            // 未固定窗口没有「模糊度已知」的解，退化为几何 PDOP：不建模糊度参数、用全部观测。
+            fixedPdop = geometricPdop(usable, satIndex, arcIdOfSat, ambIndexOfSat, ambOffset,
+                    sigmaPhaseIf, sigmaCodeIf, sigmaZtdPrior, sigmaZtdRatePrior, tMid);
         }
 
         double rms = fixed
                 ? fixedPhaseRms(usable, x, fixedNifByParam, satIndex, arcIdOfSat, ambIndexOfSat,
                         ambOffset, tMid)
                 : phaseRms;
+        // PDOP 分两种口径：浮点解的 q 含模糊度参数，模糊度不确定性被摊到位置上，
+        // 随弧段数增加而虚高；固定解回代的 PDOP 是「模糊度已知」的位置精度。
+        // 两者并列输出，几何判读只看 fixedPdop，floatPdop 用于衡量模糊度摊薄程度。
+        double floatPdop = Math.sqrt(Math.max(0.0, q[0][0] + q[1][1] + q[2][2]));
+        BaselineWindowSolution.ArDiagnostics diagnostics =
+                new BaselineWindowSolution.ArDiagnostics(
+                        nEpochs, nSats, nAmb, gapCuts, jumpCuts,
+                        nSats == 0 ? 0.0 : (double) domArcEpochsSum / nSats,
+                        wlFixed.size(), floatPdop, fixedPdop, ambiguityCondition,
+                        conditionConverged, firstAmbiguities, firstRatio, attempts);
         return new BaselineWindowSolution(stationA, stationB,
                 usable.get(0).time(), usable.get(usable.size() - 1).time(),
                 refSatsOf(usable), fixed, ambiguityCount, ratio, rms,
                 new double[]{x[0], x[1], x[2]},
-                fixedN1, fixedN2, floatNif, floatN1);
+                fixedN1, fixedN2, floatNif, floatN1, diagnostics);
     }
 
     /** IF 模糊度（米）→ 整周 N1：{@code N1 = N_if·(f1+f2)/c − f2·N_WL/(f1−f2)}。 */
@@ -476,24 +517,160 @@ public final class BaselineWindowSolver {
     }
 
     /**
+     * 对称矩阵条件数（最大/最小特征值之比），用于衡量模糊度协方差的病态程度。
+     *
+     * <p>Jacobi 旋转求全部特征值；{@code nFix} 不超过十几维，开销可忽略。收敛判据用
+     * 相对阈值：非对角元的平方和与对角元平方和之比小于 {@code 1e-24}（等价于非对角
+     * 贡献相对量级 1e-12）。绝对阈值不随矩阵量级缩放——模糊度方差常在 1e-4 量级，
+     * 用绝对阈值会让迭代永远跑满而提前退出，不同窗口间的条件数就不可比。</p>
+     *
+     * <p>{@code converged=false} 表示扫描满上限仍未达标，此时条件数只是近似值，
+     * 调用方应在统计时标注，避免把「未收敛」误读成「条件数异常」。</p>
+     */
+    private static ConditionEstimate conditionEstimate(double[] a, int n) {
+        if (n <= 1) {
+            return new ConditionEstimate(1.0, true);
+        }
+        double[][] m = new double[n][n];
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                m[i][j] = a[i * n + j];
+            }
+        }
+        boolean converged = false;
+        for (int sweep = 0; sweep < 60; sweep++) {
+            double off = 0.0;
+            double diag = 0.0;
+            for (int p = 0; p < n; p++) {
+                diag += m[p][p] * m[p][p];
+                for (int q = p + 1; q < n; q++) {
+                    off += m[p][q] * m[p][q];
+                }
+            }
+            if (diag <= 0.0 || off <= 1E-24 * diag) {
+                converged = true;
+                break;
+            }
+            for (int p = 0; p < n; p++) {
+                for (int q = p + 1; q < n; q++) {
+                    if (Math.abs(m[p][q]) < 1E-18 * Math.max(1.0, Math.abs(m[p][p]))) {
+                        continue;
+                    }
+                    double theta = (m[q][q] - m[p][p]) / (2.0 * m[p][q]);
+                    double t = theta == 0.0
+                            ? 1.0
+                            : Math.signum(theta) / (Math.abs(theta) + Math.sqrt(theta * theta + 1.0));
+                    double c = 1.0 / Math.sqrt(t * t + 1.0);
+                    double s = t * c;
+                    for (int k = 0; k < n; k++) {
+                        double akp = m[k][p];
+                        double akq = m[k][q];
+                        m[k][p] = c * akp - s * akq;
+                        m[k][q] = s * akp + c * akq;
+                    }
+                    for (int k = 0; k < n; k++) {
+                        double apk = m[p][k];
+                        double aqk = m[q][k];
+                        m[p][k] = c * apk - s * aqk;
+                        m[q][k] = s * apk + c * aqk;
+                    }
+                }
+            }
+        }
+        double max = Double.NEGATIVE_INFINITY;
+        double min = Double.POSITIVE_INFINITY;
+        for (int i = 0; i < n; i++) {
+            max = Math.max(max, m[i][i]);
+            min = Math.min(min, m[i][i]);
+        }
+        if (min <= 0.0) {
+            return new ConditionEstimate(Double.NaN, converged);
+        }
+        return new ConditionEstimate(max / min, converged);
+    }
+
+    /**
      * 固定解回代：以已固定的 IF 模糊度作为已知量，重估位置增量与对流层参数。
      *
      * <p>只使用参与固定的弧段（参数索引命中 {@code fixedNifByParam}）；同一卫星被周跳
      * 切出的其他弧段整周值未固定，不能进入本解。</p>
      *
-     * @return 位置与对流层参数估计 {@code [dx, dy, dz, ztdA, ztdB, ztdRateA, ztdRateB]}；
+     * <p>对流层先验由调用方传入，与主解保持同一口径（按基线长缩放）。</p>
+     *
+     * @return 位置与对流层参数估计 {@code [dx, dy, dz, ztdA, ztdB, ztdRateA, ztdRateB]} 及 PDOP；
      *         无法求解返回 {@code null}
      */
-    private static double[] fixedSolution(List<DdEpoch> epochs,
-                                          Map<Integer, Double> fixedNifByParam,
-                                          Map<Integer, Integer> satIndex,
-                                          int[][] arcIdOfSat, int[][] ambIndexOfSat,
-                                          int ambOffset, double sigmaPhaseIf, double sigmaCodeIf,
-                                          double tMid) {
+    private static FixedEstimate fixedSolution(List<DdEpoch> epochs,
+                                               Map<Integer, Double> fixedNifByParam,
+                                               Map<Integer, Integer> satIndex,
+                                               int[][] arcIdOfSat, int[][] ambIndexOfSat,
+                                               int ambOffset, double sigmaPhaseIf,
+                                               double sigmaCodeIf, double sigmaZtdPrior,
+                                               double sigmaZtdRatePrior, double tMid) {
+        PositionNormal sys = positionNormal(epochs, satIndex, arcIdOfSat, ambIndexOfSat,
+                ambOffset, sigmaPhaseIf, sigmaCodeIf, sigmaZtdPrior, sigmaZtdRatePrior,
+                tMid, fixedNifByParam);
+        if (sys.count() == 0) {
+            return null;
+        }
+        try {
+            SimpleMatrix nMat = toMatrix(sys.normal());
+            SimpleMatrix rhsMat = new SimpleMatrix(ambOffset, 1);
+            for (int i = 0; i < ambOffset; i++) {
+                rhsMat.set(i, 0, sys.rhs()[i]);
+            }
+            SimpleMatrix xMat = nMat.solve(rhsMat);
+            double[] out = new double[ambOffset];
+            for (int i = 0; i < ambOffset; i++) {
+                out[i] = xMat.get(i, 0);
+            }
+            return new FixedEstimate(out, positionPdop(nMat.invert(), sigmaPhaseIf));
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 几何 PDOP：把模糊度视为已知（不建模糊度参数），只用位置与对流层参数构成法方程，
+     * 由全部可用观测求位置三轴标准差并按相位中误差归一化。
+     *
+     * <p>与浮点解的 PDOP 不同，本量不含模糊度参数，因此不会随弧段数/模糊度数增加而
+     * 虚高，可以跨窗口比较，是判断「观测几何强弱」的判据。固定窗口缺失时该量仍然有效。</p>
+     *
+     * @return 几何 PDOP；法方程不可逆返回 {@code NaN}
+     */
+    private static double geometricPdop(List<DdEpoch> epochs,
+                                        Map<Integer, Integer> satIndex,
+                                        int[][] arcIdOfSat, int[][] ambIndexOfSat,
+                                        int ambOffset, double sigmaPhaseIf, double sigmaCodeIf,
+                                        double sigmaZtdPrior, double sigmaZtdRatePrior,
+                                        double tMid) {
+        PositionNormal sys = positionNormal(epochs, satIndex, arcIdOfSat, ambIndexOfSat,
+                ambOffset, sigmaPhaseIf, sigmaCodeIf, sigmaZtdPrior, sigmaZtdRatePrior,
+                tMid, null);
+        if (sys.count() == 0) {
+            return Double.NaN;
+        }
+        try {
+            return positionPdop(toMatrix(sys.normal()).invert(), sigmaPhaseIf);
+        } catch (RuntimeException e) {
+            return Double.NaN;
+        }
+    }
+
+    /**
+     * 位置+对流层法方程累加。{@code fixedNifByParam} 为 {@code null} 时使用全部观测，
+     * 非空时只使用已固定弧段的观测（并把整周值作为已知量扣除）。
+     */
+    private static PositionNormal positionNormal(List<DdEpoch> epochs,
+                                                 Map<Integer, Integer> satIndex,
+                                                 int[][] arcIdOfSat, int[][] ambIndexOfSat,
+                                                 int ambOffset, double sigmaPhaseIf,
+                                                 double sigmaCodeIf, double sigmaZtdPrior,
+                                                 double sigmaZtdRatePrior, double tMid,
+                                                 Map<Integer, Double> fixedNifByParam) {
         double[][] normal = new double[ambOffset][ambOffset];
         double[] rhs = new double[ambOffset];
-        double sigmaZtdPrior = 0.3;
-        double sigmaZtdRatePrior = 0.1;
         normal[ZTD_A_OFFSET][ZTD_A_OFFSET] += 1.0 / (sigmaZtdPrior * sigmaZtdPrior);
         normal[ZTD_B_OFFSET][ZTD_B_OFFSET] += 1.0 / (sigmaZtdPrior * sigmaZtdPrior);
         normal[ZTD_RATE_A_OFFSET][ZTD_RATE_A_OFFSET] += 1.0 / (sigmaZtdRatePrior * sigmaZtdRatePrior);
@@ -507,9 +684,14 @@ public final class BaselineWindowSolver {
                 if (k == null) {
                     continue;
                 }
-                Double nif = fixedNifByParam.get(ambOffset + ambIndexOfSat[k][arcIdOfSat[k][e]]);
-                if (nif == null) {
-                    continue;
+                double nif = 0.0;
+                if (fixedNifByParam != null) {
+                    Double fixed = fixedNifByParam.get(
+                            ambOffset + ambIndexOfSat[k][arcIdOfSat[k][e]]);
+                    if (fixed == null) {
+                        continue;
+                    }
+                    nif = fixed;
                 }
                 double[] h = new double[ambOffset];
                 h[0] = d.losX();
@@ -526,29 +708,36 @@ public final class BaselineWindowSolver {
                 count++;
             }
         }
-        if (count == 0) {
-            return null;
+        return new PositionNormal(normal, rhs, count);
+    }
+
+    private static SimpleMatrix toMatrix(double[][] a) {
+        int n = a.length;
+        SimpleMatrix m = new SimpleMatrix(n, n);
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                m.set(i, j, a[i][j]);
+            }
         }
-        try {
-            SimpleMatrix nMat = new SimpleMatrix(ambOffset, ambOffset);
-            for (int i = 0; i < ambOffset; i++) {
-                for (int j = 0; j < ambOffset; j++) {
-                    nMat.set(i, j, normal[i][j]);
-                }
-            }
-            SimpleMatrix rhsMat = new SimpleMatrix(ambOffset, 1);
-            for (int i = 0; i < ambOffset; i++) {
-                rhsMat.set(i, 0, rhs[i]);
-            }
-            SimpleMatrix xMat = nMat.solve(rhsMat);
-            double[] out = new double[ambOffset];
-            for (int i = 0; i < ambOffset; i++) {
-                out[i] = xMat.get(i, 0);
-            }
-            return out;
-        } catch (RuntimeException e) {
-            return null;
-        }
+        return m;
+    }
+
+    /** 位置三轴标准差按相位中误差归一化，得到无量纲 PDOP。 */
+    private static double positionPdop(SimpleMatrix q, double sigmaPhase) {
+        double variance = Math.max(0.0, q.get(0, 0) + q.get(1, 1) + q.get(2, 2));
+        return Math.sqrt(variance) / sigmaPhase;
+    }
+
+    /** 位置+对流层法方程（无模糊度参数）及其使用的观测数。 */
+    private record PositionNormal(double[][] normal, double[] rhs, int count) {
+    }
+
+    /** 固定解回代结果：位置/对流层增量与「模糊度已知」的 PDOP。 */
+    private record FixedEstimate(double[] x, double pdop) {
+    }
+
+    /** 条件数估计：{@code value} 为最大/最小特征值之比，{@code converged} 表示 Jacobi 扫描已收敛。 */
+    private record ConditionEstimate(double value, boolean converged) {
     }
 
     private static Set<Integer> refSatsOf(List<DdEpoch> epochs) {
@@ -576,18 +765,35 @@ public final class BaselineWindowSolver {
         return epoch.time().time + epoch.time().sec;
     }
 
-    /** 窗口平均采样间隔（秒），缺省按 30 s 处理。 */
+    /**
+     * 窗口标称采样间隔（秒），取全窗相邻历元间隔的**下中位数**；无有效间隔时按 30 s 处理。
+     *
+     * <p>该量唯一用途是给周跳检测的间隙判据提供尺度（{@code maxArcGapFactor × sampling}），
+     * 因此要的是抗离群而不是统计效率：缺测会把个别间隔拉长，而缺测正是该判据要抓的对象，
+     * 估计量与被判对象共享同一个失效来源。用均值时一个 600 s 的空档就能把 20 个间隔的均值
+     * 从 30 s 抬到 58.5 s，阈值随之从 90 s 放宽到 175 s，该窗口内本应切分的间隔全部漏判——
+     * 数据越稀越看不见稀疏（自掩蔽，且偏差单边向上）。中位数在离群占比不足一半时恒返回
+     * 真实观测值，不会出现这种正反馈。</p>
+     *
+     * <p>取**下中位数**而非插值中位数：间隔量化到采样间隔的整数倍，偶数样本插值会给出
+     * 45 s 这类不存在的值，下中位数恒等于某个真实观测间隔。扫描全窗而非只看前 20 个间隔，
+     * 因为中位数的鲁棒性不依赖样本量，而窗口起点若紧接缺测段、或采样率中途切换，
+     * 开头那一小段代表不了整窗。</p>
+     */
     private static double samplingIntervalSeconds(List<DdEpoch> epochs) {
-        double sum = 0.0;
+        double[] intervals = new double[Math.max(0, epochs.size() - 1)];
         int count = 0;
-        for (int i = 1; i < epochs.size() && count < 20; i++) {
+        for (int i = 1; i < epochs.size(); i++) {
             double dt = epochSeconds(epochs.get(i)) - epochSeconds(epochs.get(i - 1));
             if (dt > 0.0) {
-                sum += dt;
-                count++;
+                intervals[count++] = dt;
             }
         }
-        return count == 0 ? 30.0 : sum / count;
+        if (count == 0) {
+            return 30.0;
+        }
+        Arrays.sort(intervals, 0, count);
+        return intervals[(count - 1) / 2];
     }
 
     private static void accumulate(double[][] normal, double[] rhs,

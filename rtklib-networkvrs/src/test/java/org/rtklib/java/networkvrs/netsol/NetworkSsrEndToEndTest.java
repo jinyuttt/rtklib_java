@@ -136,6 +136,111 @@ class NetworkSsrEndToEndTest {
                         brdcStats.meanRatio(), ssrStats.meanRatio()));
     }
 
+    @Test
+    @DisplayName("窗口归因三选一：误切率 / 几何条件 / 宽巷固定率")
+    void testWindowAttributionDiagnostics() {
+        Fixture f = fixture();
+        SsrCorrectionProvider ssr = f.ssr();
+        Assumptions.assumeTrue(ssr != null, "缺少录制 SSR 流，跳过");
+
+        NetworkSolutionEngine.Result result = new NetworkSolutionEngine()
+                .solve(f.stations(), f.freshNav(), MASTER, f.config(Constants.EPHOPT_SSRAPC), ssr);
+        List<BaselineWindowSolution> list = result.windows();
+        assertFalse(list.isEmpty(), "应有基线窗口解");
+
+        // 归因三选一：把「窄巷固定失败」拆成弧段误切、几何不足、宽巷未稳三类，
+        // 每类各有一组可直接判读的量。这里分别按固定窗口/失败窗口统计均值，
+        // 两类之间的差距就是根因所在维度。几何判据只看 fixedPdop（模糊度已知），
+        // floatPdop 含模糊度不确定性、随弧段数虚高，单独列出仅供参考。
+        double[] fixedAgg = new double[9];
+        int[] fixedN = new int[9];
+        double[] failAgg = new double[9];
+        int[] failN = new int[9];
+        int fixedCount = 0;
+        int failCount = 0;
+        int nonConverged = 0;
+        for (BaselineWindowSolution window : list) {
+            BaselineWindowSolution.ArDiagnostics d = window.diagnostics();
+            if (d == null) {
+                continue;
+            }
+            double[] v = {d.satellites(), d.cuts(), d.dominantArcEpochs(), d.fixedPdop(),
+                    d.ambiguityCondition(), d.wlRate(), d.firstRatio(), d.attempts(),
+                    d.floatPdop()};
+            double[] target = window.fixed() ? fixedAgg : failAgg;
+            int[] counter = window.fixed() ? fixedN : failN;
+            for (int i = 0; i < v.length; i++) {
+                if (Double.isFinite(v[i])) {
+                    target[i] += v[i];
+                    counter[i]++;
+                }
+            }
+            if (!d.conditionConverged()) {
+                nonConverged++;
+            }
+            if (window.fixed()) {
+                fixedCount++;
+            } else {
+                failCount++;
+            }
+            if (VERBOSE) {
+                System.out.printf("[attr] %-24s tow=%9.0f fix=%d sats=%2d arcs=%2d cuts=%d(g%d/j%d) "
+                                + "domArc=%4.1f wl=%2d/%2d pdop=%6.3f/%6.3f cond=%8.1f%s ratio=%5.2f "
+                                + "nAmb=%2d tries=%d%n",
+                        window.stationA() + "-" + window.stationB(),
+                        window.start().time + window.start().sec, window.fixed() ? 1 : 0,
+                        d.satellites(), d.arcs(), d.cuts(), d.gapCuts(), d.jumpCuts(),
+                        d.dominantArcEpochs(), d.wlFixed(), d.satellites(),
+                        d.fixedPdop(), d.floatPdop(),
+                        d.ambiguityCondition(), d.conditionConverged() ? "" : "!",
+                        d.firstRatio(), d.firstAmbiguities(), d.attempts());
+            }
+        }
+
+        System.out.printf("[attr] 固定窗口 %d 个 / 失败窗口 %d 个；条件数未收敛 %d 个%n",
+                fixedCount, failCount, nonConverged);
+        printAttribution("[attr-fix ]", fixedAgg, fixedN, fixedCount);
+        printAttribution("[attr-fail]", failAgg, failN, failCount);
+
+        double fixedCuts = avg(fixedAgg[1], fixedN[1]);
+        double failCuts = avg(failAgg[1], failN[1]);
+        double fixedArc = avg(fixedAgg[2], fixedN[2]);
+        double failArc = avg(failAgg[2], failN[2]);
+        double fixedSats = avg(fixedAgg[0], fixedN[0]);
+        double failSats = avg(failAgg[0], failN[0]);
+        double fixedPdop = avg(fixedAgg[3], fixedN[3]);
+        double failPdop = avg(failAgg[3], failN[3]);
+        double fixedCond = avg(fixedAgg[4], fixedN[4]);
+        double failCond = avg(failAgg[4], failN[4]);
+        double fixedWl = avg(fixedAgg[5], fixedN[5]);
+        double failWl = avg(failAgg[5], failN[5]);
+
+        boolean cutsDominant = failCuts >= fixedCuts * 1.5 + 0.5 || failArc < 0.75 * fixedArc;
+        boolean geometryDominant = failSats < fixedSats - 1.0 || failPdop > 1.3 * fixedPdop
+                || failCond > 2.0 * fixedCond;
+        boolean wlDominant = failWl < 0.9 || fixedWl < 0.9;
+        System.out.printf("[attr-verdict] 误切=%s（失败窗切弧 %.2f 次 vs 固定窗 %.2f 次，"
+                        + "主导弧 %.1f vs %.1f 历元）；几何=%s（星数 %.1f vs %.1f，"
+                        + "固定PDOP %.3f vs %.3f，条件数 %.1f vs %.1f）；宽巷=%s（WL %.1f%% vs %.1f%%）%n",
+                cutsDominant ? "是" : "否", failCuts, fixedCuts, failArc, fixedArc,
+                geometryDominant ? "是" : "否", failSats, fixedSats, failPdop, fixedPdop,
+                failCond, fixedCond, wlDominant ? "是" : "否",
+                100.0 * failWl, 100.0 * fixedWl);
+    }
+
+    private static void printAttribution(String tag, double[] agg, int[] n, int windows) {
+        System.out.printf("%s windows=%d 星数=%.2f 切弧=%.2f 主导弧=%.1f 历元 固定PDOP=%.3f "
+                        + "浮点PDOP=%.3f 条件数=%.1f WL固定率=%.1f%% 首ratio=%.2f 尝试=%.2f%n",
+                tag, windows,
+                avg(agg[0], n[0]), avg(agg[1], n[1]), avg(agg[2], n[2]),
+                avg(agg[3], n[3]), avg(agg[8], n[8]), avg(agg[4], n[4]),
+                100.0 * avg(agg[5], n[5]), avg(agg[6], n[6]), avg(agg[7], n[7]));
+    }
+
+    private static double avg(double sum, int count) {
+        return count == 0 ? Double.NaN : sum / count;
+    }
+
     private static Fixture fixture() {
         if (fixture == null) {
             fixture = load();

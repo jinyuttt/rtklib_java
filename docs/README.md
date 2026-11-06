@@ -29,8 +29,8 @@
 
 | 文档 | 定位 | 状态 | 最后更新 |
 |------|------|------|----------|
-| [CHANGELOG.md](CHANGELOG.md) | 面向用户的版本级变更摘要（当前至 3.3.0；3.3.1 变更在 [Unreleased] 在册） | ✅ 活跃 | 2026-11-05 |
-| [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) | **定版核心档案**：每次改变数值行为的修改（C 依据/根因/验证），现存 FIX-ALG-001~048 | ✅ 活跃 | 2026-11-05 |
+| [CHANGELOG.md](CHANGELOG.md) | 面向用户的版本级变更摘要（当前至 3.4.0） | ✅ 活跃 | 2026-11-06 |
+| [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) | **定版核心档案**：每次改变数值行为的修改（C 依据/根因/验证），现存 FIX-ALG-001~049 | ✅ 活跃 | 2026-11-06 |
 | [RTKLIB_Differences.md](RTKLIB_Differences.md) | 与 RTKLIB 2.5.0 C 版的长期差异声明（设计选择，非 Bug） | ✅ 活跃 | 2026-10-21 |
 
 ## 二、使用与测试
@@ -53,7 +53,7 @@
 | [JOINT_RTK_DESIGN.md](JOINT_RTK_DESIGN.md) | rtklib-joint 多基线联合 RTK（MBS）：与 core 同层的独立引擎、状态向量、大气共享 | ✅ 活跃（核心已实现并实测：单/双基线 FIX 91.5%；AR 通道缺陷已由 FIX-ALG-042 修复；§13 闸1/闸2/闸3 已落地（闸3 见 FIX-ALG-048），Phase B/D 与 §2.1.1 大气维度修正未实施，见文档 §0） | 2026-11-05 |
 | [JOINT_VS_ADJUST_ANALYSIS.md](JOINT_VS_ADJUST_ANALYSIS.md) | joint（观测层联合）vs adjust（结果层平差）对比：融合层级、故障隔离、FIX 后精度等价性、选型结论 | ✅ 活跃（v1.2 定稿） | 2026-10-27 |
 | [VRS_MODULE_DESIGN.md](VRS_MODULE_DESIGN.md) | rtklib-vrs 虚拟参考站生成：实现状态、单基站改正算法、RTCM3 编码器（含 MSM 信号裁剪与锁相指示）、四层验证策略、实测结果、已踩过的坑与已知限制 | ✅ 活跃 | 2026-10-27 |
-| [NETWORK_VRS_DESIGN.md](NETWORK_VRS_DESIGN.md) | rtklib-networkvrs 多基站网络 VRS：档 1 IDW 插值、档 2 网解 + 误差分解 + FKP；窄巷固定闭环、星历来源与逐历元 SSR 改正注入（`SsrCorrectionProvider`）、时间系统约定、实测结果 | ✅ 活跃（窄巷固定 18/18 窗口，BRDC 与精密星历同量级；录制 SSR 流端到端复现待做，见 ROADMAP §1.2） | 2026-11-05 |
+| [NETWORK_VRS_DESIGN.md](NETWORK_VRS_DESIGN.md) | rtklib-networkvrs 多基站网络 VRS：档 1 IDW 插值、档 2 网解 + 误差分解 + FKP；窄巷固定闭环、星历来源与逐历元 SSR 改正注入（`SsrCorrectionProvider`）、时间系统约定、实测结果 | ✅ 活跃（v1.0 定稿；窄巷固定 18/18 窗口，BRDC 与精密星历同量级；录制 SSR 流端到端复现待做，见 ROADMAP §1.2） | 2026-11-06 |
 | [ORBIT_MODULE_REFERENCE.md](ORBIT_MODULE_REFERENCE.md) | TLE 解析、SGP4/SDP4、六根数转换 | ✅ 活跃 | 2026-10-08 |
 | [OTL_MODULE_REFERENCE.md](OTL_MODULE_REFERENCE.md) | 海潮负荷：分潮、BLQ 提取、位移序列、命令行 | ✅ 活跃 | 2026-09-24 |
 | [PRODUCT_MODULE_REFERENCE.md](PRODUCT_MODULE_REFERENCE.md) | 精密产品下载：产品类型、镜像优先级、缓存、协议 | ✅ 活跃 | 2026-09-24 |

@@ -104,11 +104,16 @@ class NetworkSolutionRealDataTest {
                 deltaCount == 0 ? Double.NaN : deltaSum / deltaCount,
                 fracCount == 0 ? Double.NaN : fracSum / fracCount);
         for (BaselineWindowSolution window : result.windows()) {
-            System.out.printf("  %s-%s refs=%s n=%d fixed=%s ratio=%.1f rms=%.4f delta=%.3f%n",
+            BaselineWindowSolution.ArDiagnostics d = window.diagnostics();
+            double[] delta = window.estimatedDelta();
+            double deltaNorm = Math.hypot(delta[0], Math.hypot(delta[1], delta[2]));
+            System.out.printf("  %s-%s refs=%s n=%d fixed=%s ratio=%.1f rms=%.4f delta=%.3f"
+                            + " cuts=%d(g%d/j%d) domArc=%.1f%n",
                     window.stationA(), window.stationB(), window.refSats(),
                     window.floatNifMeters().size(), window.fixed(), window.ratio(),
-                    window.phaseRms(), Math.hypot(window.estimatedDelta()[0],
-                            Math.hypot(window.estimatedDelta()[1], window.estimatedDelta()[2])));
+                    window.phaseRms(), deltaNorm,
+                    d == null ? 0 : d.cuts(), d == null ? 0 : d.gapCuts(),
+                    d == null ? 0 : d.jumpCuts(), d == null ? 0.0 : d.dominantArcEpochs());
         }
 
         // V2 统计：宽巷固定率与基线重复性（δx 跨窗口的标准差）
