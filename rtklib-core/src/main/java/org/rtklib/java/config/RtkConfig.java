@@ -3,7 +3,7 @@ package org.rtklib.java.config;
 import java.io.Serializable;
 
 public class RtkConfig implements Serializable {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 3L;
 
     /** 所有模式共用参数（CommonOpts）。 */
     public final CommonOpts common = new CommonOpts();
@@ -26,6 +26,9 @@ public class RtkConfig implements Serializable {
     /** 自适应场景参数（AdaptiveOpts）。 */
     public final AdaptiveOpts adaptive = new AdaptiveOpts();
 
+    /** AI 增强参数（AiOpts），阈值随配置自动深拷贝传播。 */
+    public final AiOpts ai = new AiOpts();
+
     public RtkConfig() {
     }
 
@@ -38,5 +41,6 @@ public class RtkConfig implements Serializable {
         this.pppRtk.copyFrom(other.pppRtk);
         this.pppAr.copyFrom(other.pppAr);
         this.adaptive.copyFrom(other.adaptive);
+        this.ai.copyFrom(other.ai);
     }
 }

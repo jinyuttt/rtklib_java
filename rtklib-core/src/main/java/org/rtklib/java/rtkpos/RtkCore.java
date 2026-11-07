@@ -1,6 +1,9 @@
 package org.rtklib.java.rtkpos;
 
 import org.rtklib.java.ambiguity.Lambda;
+import org.rtklib.java.ai.spi.AiHooks;
+import org.rtklib.java.ai.spi.FixQualityContext;
+import org.rtklib.java.ai.spi.FixValidator;
 import org.rtklib.java.common.ObsCode;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.common.RtklibCommon;
@@ -475,21 +478,28 @@ public final class RtkCore {
                     boolean valOk = nv > 0 && valpos(rtk, v, R, vflg, nv, 4.0);
 
                     if (valOk) {
-                        if (++rtk.nfix >= opt.minfix) {
-                            if (opt.modear == Constants.ARMODE_FIXHOLD) {
-                                holdamb(rtk, xa_arr);
+                        /* [AI-1] 接口一接线：位置必须精确到 nfix 自增之前（§3.3）。
+                         * 之后的 ++nfix / holdamb / PMODE_STATIC_START 切换均不可回滚，
+                         * 故拒绝只能表现为「不进固定分支」，stat 保持 SOLQ_FLOAT，
+                         * rtk.x / rtk.P 已是浮点解（上方已拷入），回退天然正确。 */
+                        if (aiAcceptFix(rtk, obs, sat, iu, ns, nf, nb, xa_arr,
+                                v, vflg, nv, azel, opt, v2cfg, v2cb)) {
+                            if (++rtk.nfix >= opt.minfix) {
+                                if (opt.modear == Constants.ARMODE_FIXHOLD) {
+                                    holdamb(rtk, xa_arr);
+                                }
+                                if (opt.mode == Constants.PMODE_STATIC_START) {
+                                    opt.mode = Constants.PMODE_KINEMA;
+                                }
                             }
-                            if (opt.mode == Constants.PMODE_STATIC_START) {
-                                opt.mode = Constants.PMODE_KINEMA;
-                            }
+                            stat = Constants.SOLQ_FIX;
+                            System.arraycopy(xa_arr, 0, xa, 0, nx);
+                            Trace.emit("AR", "FIX", v2cfg, v2cb, rtk.epoch, obs[0].time,
+                                    "nb", nb, "ratio", (double) rtk.sol.ratio,
+                                    "x", xa_arr[0] + rtk.rb[0],
+                                    "y", xa_arr[1] + rtk.rb[1],
+                                    "z", xa_arr[2] + rtk.rb[2]);
                         }
-                        stat = Constants.SOLQ_FIX;
-                        System.arraycopy(xa_arr, 0, xa, 0, nx);
-                        Trace.emit("AR", "FIX", v2cfg, v2cb, rtk.epoch, obs[0].time,
-                                "nb", nb, "ratio", (double) rtk.sol.ratio,
-                                "x", xa_arr[0] + rtk.rb[0],
-                                "y", xa_arr[1] + rtk.rb[1],
-                                "z", xa_arr[2] + rtk.rb[2]);
                     } else {
                         Trace.emit("AR", "FAIL", v2cfg, v2cb, rtk.epoch, obs[0].time,
                                 "nb", nb, "ratio", (double) rtk.sol.ratio,
@@ -709,6 +719,128 @@ public final class RtkCore {
         int nl = (opt.glomodear != Constants.GLO_ARMODE_AUTOCAL) ? 0 : Constants.NFREQGLO;
         int nr = np + ni + nt + nl;
         return nr + Constants.MAXSAT * f + (sat - 1);
+    }
+
+    /**
+     * 接口一（AI 固定质量校验）接线（§3.3）。
+     * <p>
+     * 未注入时直接返回 {@code true}：不构造上下文、不分配数组、不改变任何状态，
+     * 原生行为逐位不变（I-1）。
+     * </p>
+     * <p>
+     * 注入后：{@code confidence >= AiOpts.fixValidatorMinConfidence} 即接受；
+     * 异常、非有限置信度一律按 {@code 1.0}（不干预）处理，禁止 fail-closed（§3.4）。
+     * </p>
+     * <p>
+     * 已知不可回滚副作用：{@code manage_amb_LAMBDA} 内对 {@code prev_ratio1/2}、
+     * {@code excsat}、{@code lock[]} 的修改在本次校验之前已经发生，拒绝固定不会撤销它们，
+     * 这是期望行为（ratio 确实很高，AR 历史应如实记录），不是 bug（§3.3）。
+     * </p>
+     *
+     * @return {@code true} 接受固定（进入原生固定分支）；{@code false} 拒绝（stat 保持浮点）
+     */
+    private static boolean aiAcceptFix(Rtk rtk, Obsd[] obs, int[] sat, int[] iu, int ns, int nf,
+                                       int nb, double[] xa, double[] v, int[] vflg, int nv,
+                                       double[] azel, PrcOpt opt,
+                                       TraceConfig cfg, TraceCallback cb) {
+        FixValidator validator = AiHooks.resolveFixValidator(rtk);
+        if (validator == null) return true;
+
+        double confidence;
+        try {
+            confidence = validator.validate(buildFixQualityContext(rtk, sat, iu, ns, nf, nb,
+                    xa, v, vflg, nv, azel, opt));
+        } catch (Throwable t) {
+            if (rtk.rtkConfig.ai.traceDegrades && !rtk.aiDegradeLogged) {
+                rtk.aiDegradeLogged = true;
+                Trace.emit("AR", "AI_DEGRADE", cfg, cb, rtk.epoch, obs[0].time,
+                        "interface", "fix_validator", "error", String.valueOf(t));
+            }
+            LOG.warn("AI fix_validator 抛出异常，按不干预(1.0)处理: epoch={}, {}",
+                    rtk.epoch, t.toString());
+            return true;
+        }
+        if (!Double.isFinite(confidence)) {
+            LOG.warn("AI fix_validator 返回非有限置信度 {}，按不干预(1.0)处理: epoch={}",
+                    confidence, rtk.epoch);
+            return true;
+        }
+        double clamped = Math.max(0.0, Math.min(1.0, confidence));
+        double threshold = rtk.rtkConfig.ai.fixValidatorMinConfidence;
+        boolean accept = clamped >= threshold;
+        if (!accept && rtk.rtkConfig.ai.traceRejects) {
+            Trace.emit("AR", "AI_REJECT", cfg, cb, rtk.epoch, obs[0].time,
+                    "nb", nb, "ratio", (double) rtk.sol.ratio,
+                    "confidence", clamped, "threshold", threshold);
+        }
+        return accept;
+    }
+
+    /**
+     * 构造接口一输入（§4.4.5 / §5.1 六维来源）。
+     * <p>
+     * {@code pdop} 必须局部重算：{@code rtk.sol.pdop} 的输入是 {@code ssat[].azel}，
+     * 而该字段在全仓库范围内从未被赋值，故恒为 0；仰角只能取自 {@code relpos} 的工作
+     * 缓冲 {@code azel}，按 {@code iu[]} 索引。此处**不回写** {@code rtk.sol.pdop}，
+     * 否则会改变 sol 输出与 RESULT trace 的 pdop 字段，破坏 I-1 的日志基线。
+     * </p>
+     * <p>
+     * {@code prr}/{@code pcr} 取自固定解回代那次 {@code ddres} 的 {@code v[]}，
+     * 不用 {@code ssat.resp/resc}：后者按频点存、参考星恒 0、且入口被清零，
+     * 用它会系统性低估 RMS（§5.1）。
+     * </p>
+     */
+    private static FixQualityContext buildFixQualityContext(Rtk rtk, int[] sat, int[] iu,
+                                                            int ns, int nf, int nb, double[] xa,
+                                                            double[] v, int[] vflg, int nv,
+                                                            double[] azel, PrcOpt opt) {
+        double adrSum = 0.0;
+        int adrCount = 0;
+        for (int i = 0; i < ns; i++) {
+            for (int f = 0; f < nf; f++) {
+                int ib = IB(sat[i], f, opt);
+                if (ib < 0 || ib >= rtk.nx) continue;
+                double xi = rtk.x[ib];
+                double xai = xa[ib];
+                if (xi == 0.0 || xai == 0.0) continue;
+                double d = xi - xai;
+                adrSum += d * d;
+                adrCount++;
+            }
+        }
+        double adrRms = adrCount > 0 ? Math.sqrt(adrSum / adrCount) : 0.0;
+
+        double prrSum = 0.0;
+        double pcrSum = 0.0;
+        int nPhase = 0;
+        int nCode = 0;
+        for (int k = 0; k < nv; k++) {
+            boolean isCode = ((vflg[k] >> 4) & 0x01) == 1;
+            if (isCode) {
+                pcrSum += v[k] * v[k];
+                nCode++;
+            } else {
+                prrSum += v[k] * v[k];
+                nPhase++;
+            }
+        }
+        double prrRms = nPhase > 0 ? Math.sqrt(prrSum / nPhase) : 0.0;
+        double pcrRms = nCode > 0 ? Math.sqrt(pcrSum / nCode) : 0.0;
+
+        double[] dopAzel = new double[Constants.MAXSAT * 2];
+        int dopNs = 0;
+        for (int i = 0; i < ns; i++) {
+            dopAzel[dopNs * 2] = azel[iu[i] * 2];
+            dopAzel[dopNs * 2 + 1] = azel[iu[i] * 2 + 1];
+            dopNs++;
+        }
+        double[] dop = new double[4];
+        RtklibCommon.dops(dopNs, dopAzel, opt.elmin, dop);
+
+        double nsFixed = rtk.sol.ns > 0 ? (double) nb / rtk.sol.ns : 0.0;
+
+        return new FixQualityContext(rtk.epoch, rtk.sol.ns, nf, nb, rtk.sol.ratio, dop[1],
+                adrRms, prrRms, pcrRms, nCode, nPhase);
     }
 
 
