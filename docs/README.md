@@ -100,6 +100,7 @@
 | [TraceLog_V2_Design.md](TraceLog_V2_Design.md) | 追踪日志 V2 设计与实现（取代 archive 中的 V1 设计） | ✅ 活跃 | 2026-10-08 |
 | [RTKCONFIG_REFACTOR_DESIGN.md](RTKCONFIG_REFACTOR_DESIGN.md) | RtkConfig 组合模式重构：487 行扁平类按模式拆分子配置（Common/Rtk/Spp/Ppp）、向后兼容迁移路径 | 🟡 设计稿（v1.0 定稿，未执行；`RtkConfig` 仍为扁平类） | 2026-10-26 |
 | [SOL_AGGREGATOR_DESIGN.md](SOL_AGGREGATOR_DESIGN.md) | SolAggregator 历元聚合工具：鲁棒加权 / 卡尔曼 RTS 两模式、与 solstatic 及 PosFileRtsSmoother 的分工、协方差与降级策略 | 🟡 设计稿（v1.2 待评审；`aggregate` 包已实现，未接入主流程、无测试） | 2026-10-27 |
+| [AI_ENHANCEMENT_DESIGN.md](AI_ENHANCEMENT_DESIGN.md) | **GNSS AI 增强开发文档**：两接口契约（假固定判别 / 观测改正，接口二冻结）、`AiRegistry` 注入 + core 零依赖 SPI + 独立 `rtklib-ai` 模块、特征定义、训练与评估协议、零回归不变量 | ✅ 定稿（v1.2；阶段 0–2 已完成：SPI + `rtklib-ai` 推理层 + 接口一接线；训练与评估未开始，接口二冻结） | 2026-11-07 |
 
 ---
 

@@ -1,5 +1,7 @@
 package org.rtklib.java.data;
 
+import org.rtklib.java.ai.spi.FixValidator;
+import org.rtklib.java.ai.spi.ObsCorrector;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.trace.TraceControl;
@@ -127,6 +129,12 @@ public class Rtk implements Serializable {
     public transient Object workBufRtk;
     public transient Object workBufPpp;
 
+    // AI 实例级覆盖：优先级高于 AiHooks 注入点，null 表示不覆盖
+    public transient FixValidator aiFixValidator;
+    public transient ObsCorrector aiObsCorrector;
+    // AI 降级告警去重（每会话一次，避免逐历元刷屏，§4.1）
+    public transient boolean aiDegradeLogged;
+
     public Rtk() {
         this.sol = new Sol();
         this.rb = new double[6];
@@ -160,6 +168,8 @@ public class Rtk implements Serializable {
         this.traceConfig = null;
         this.traceCallback = null;
         this.rtkConfig = new RtkConfig();
+        this.aiFixValidator = null;
+        this.aiObsCorrector = null;
         this.qScale = 1.0;
         this.snrMedian = new double[Constants.NFREQ];
         this.snrMedianHistory = new double[Constants.NFREQ][20];
