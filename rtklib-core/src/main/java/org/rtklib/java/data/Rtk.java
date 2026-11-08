@@ -134,6 +134,9 @@ public class Rtk implements Serializable {
     public transient ObsCorrector aiObsCorrector;
     // AI 降级告警去重（每会话一次，避免逐历元刷屏，§4.1）
     public transient boolean aiDegradeLogged;
+    // 接口三钳位告警去重（偏差置 0 / 方差上限各一次，§4.3.4）
+    public transient boolean aiBiasClampLogged;
+    public transient boolean aiScaleClampLogged;
 
     public Rtk() {
         this.sol = new Sol();

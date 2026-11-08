@@ -2,9 +2,14 @@ package org.rtklib.java.rtkpos;
 
 import org.rtklib.java.ambiguity.Lambda;
 import org.rtklib.java.ai.spi.AiHooks;
+import org.rtklib.java.ai.spi.CodeCorrection;
 import org.rtklib.java.ai.spi.FixQualityContext;
 import org.rtklib.java.ai.spi.FixValidator;
+import org.rtklib.java.ai.spi.ObsCorrectionContext;
+import org.rtklib.java.ai.spi.ObsCorrector;
+import org.rtklib.java.ai.spi.SatFeature;
 import org.rtklib.java.common.ObsCode;
+import org.rtklib.java.config.AiOpts;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.common.RtklibCommon;
 import org.rtklib.java.common.SatUtils;
@@ -236,6 +241,14 @@ public final class RtkCore {
             return 0;
         }
 
+        /* [AI-3] 接口三门禁（§4.3.7）：IFLC 时 nf 已被归一为 1，y 中是消电离层组合量，
+         * 逐频点偏差的物理含义不成立，故 core 侧直接不调用，等价于未注入。 */
+        ObsCorrector aiCorrector = (opt.ionoopt != Constants.IONOOPT_IFLC)
+                ? AiHooks.resolveObsCorrector(rtk) : null;
+        double[] aiBias = (aiCorrector != null) ? new double[ns * nf] : null;
+        double[] aiScale = (aiCorrector != null) ? new double[ns * nf] : null;
+        boolean aiCorrectionDone = false;
+
         RtkTrace.traceStage0(v1ctrl, v1cb, rtk.epoch, obs, nu, nr, nav, rtk.ssat);
         Trace.emit("SATELLITE", "START", v2cfg, v2cb, rtk.epoch, obs[0].time,
                 "rover_ns", nu, "base_ns", nr, "common_ns", ns);
@@ -323,8 +336,16 @@ public final class RtkCore {
                 stat = Constants.SOLQ_NONE;
                 break;
             }
+            /* [AI-3] 每历元一次批量推理（§3.3）：必须在迭代首轮 zdres(rover) 之后、
+             * 首次 ddres 之前——azel 由 zdres 写入，放在循环前只能拿到上一历元值。
+             * 推理结果写入局部数组，ddres 内只读查表，故 ddres 跑 2~3 次也不会重复施加。 */
+            if (i == 0 && aiCorrector != null && !aiCorrectionDone) {
+                aiCorrectionDone = true;
+                aiComputeCorrection(rtk, obs, sat, iu, ns, nf, dt, azel,
+                        aiBias, aiScale, aiCorrector, v2cfg, v2cb);
+            }
             if ((nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
-                    iu, ir, ns, nf, nav, v, H, R, vflg)) < 4) {
+                    iu, ir, ns, nf, nav, v, H, R, vflg, aiBias, aiScale)) < 4) {
                 stat = Constants.SOLQ_NONE;
                 break;
             }
@@ -432,7 +453,7 @@ public final class RtkCore {
             if (zdres(rtk.toState(), 0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
                     y, e, azel, freq, rtk.epoch)) {
                 nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
-                        iu, ir, ns, nf, nav, v, null, R, vflg);
+                        iu, ir, ns, nf, nav, v, null, R, vflg, aiBias, aiScale);
 
                 // [OPT-RES-EDIT] 残差时序周跳检测与伪距-载波一致性校验
                 RtkOptimizationsResEdit.checkCycleSlip(rtk, v, R, vflg, nv);
@@ -474,7 +495,7 @@ public final class RtkCore {
 
                 if (zdOk) {
                     nv = ddres(rtk, obs, dt, xa_arr, rtk.P, sat, y, e, azel, freq,
-                            iu, ir, ns, nf, nav, v, null, R, vflg);
+                            iu, ir, ns, nf, nav, v, null, R, vflg, aiBias, aiScale);
                     boolean valOk = nv > 0 && valpos(rtk, v, R, vflg, nv, 4.0);
 
                     if (valOk) {
@@ -745,6 +766,8 @@ public final class RtkCore {
                                        TraceConfig cfg, TraceCallback cb) {
         FixValidator validator = AiHooks.resolveFixValidator(rtk);
         if (validator == null) return true;
+        /* [AI-1] IFLC 统一门禁（§4.3.7）：与接口三一致，组合观测下训练分布失效，直接不调用。 */
+        if (opt.ionoopt == Constants.IONOOPT_IFLC) return true;
 
         double confidence;
         try {
@@ -1675,10 +1698,109 @@ public final class RtkCore {
         }
     }
 
+    /**
+     * 接口三批量推理（§3.3）：每历元仅调用一次，结果写入 {@code bias}/{@code scale} 供 ddres 只读。
+     * <p>
+     * 所有降级路径（异常、null、长度不符、非有限值）都回落到「不干预」（bias=0、scale=1），
+     * 绝不 fail-closed；偏差超 {@code ai.obsCorrectorMaxBias} 时置 0（不钳到边界），
+     * 方差超 {@code ai.varianceScaleMax} 时钳到上限并告警（§4.3.4）。
+     * </p>
+     */
+    private static void aiComputeCorrection(Rtk rtk, Obsd[] obs, int[] sat, int[] iu,
+                                            int ns, int nf, double dt, double[] azel,
+                                            double[] aiBias, double[] aiScale,
+                                            ObsCorrector corrector,
+                                            TraceConfig cfg, TraceCallback cb) {
+        Arrays.fill(aiBias, 0.0);
+        Arrays.fill(aiScale, 1.0);
+
+        SatFeature[] feats = new SatFeature[ns];
+        for (int i = 0; i < ns; i++) {
+            Ssat ss = rtk.ssat[sat[i] - 1];
+            feats[i] = new SatFeature(
+                    sat[i],
+                    SatUtils.satsys(sat[i], null),
+                    azel[iu[i] * 2],
+                    azel[iu[i] * 2 + 1],
+                    aiDoubles(ss.snrRover),
+                    aiDoubles(ss.snrBase),
+                    ss.resp,
+                    ss.resc,
+                    ss.lock,
+                    ss.slip,
+                    ss.half,
+                    ss.gf,
+                    ss.vsat,
+                    ss.fix);
+        }
+
+        CodeCorrection cc;
+        try {
+            cc = corrector.correct(new ObsCorrectionContext(rtk.epoch, ns, nf, dt, feats));
+        } catch (Throwable t) {
+            LOG.warn("接口三实现抛异常，本历元按不干预处理（epoch={}）: {}", rtk.epoch, t.toString());
+            return;
+        }
+        if (cc == null || cc.biasMeters() == null || cc.varianceScale() == null
+                || cc.biasMeters().length != ns * nf || cc.varianceScale().length != ns * nf) {
+            LOG.warn("接口三输出非法（null 或长度不符，期望 {}），本历元按不干预处理（epoch={}）",
+                    ns * nf, rtk.epoch);
+            if (aiTraceDegrades(rtk)) {
+                Trace.emit("AI3", "AI_DEGRADE", cfg, cb, rtk.epoch, obs[0].time,
+                        "interface", "obs_corrector", "reason", "invalid_output");
+            }
+            return;
+        }
+
+        AiOpts ai = rtk.rtkConfig == null ? null : rtk.rtkConfig.ai;
+        double maxBias = ai == null ? AiOpts.DEFAULT_OBS_CORRECTOR_MAX_BIAS : ai.obsCorrectorMaxBias;
+        double maxScale = ai == null ? AiOpts.DEFAULT_VARIANCE_SCALE_MAX : ai.varianceScaleMax;
+
+        for (int idx = 0; idx < ns * nf; idx++) {
+            double b = cc.biasMeters()[idx];
+            double s = cc.varianceScale()[idx];
+            if (!Double.isFinite(b) || Math.abs(b) > maxBias) {
+                if (!rtk.aiBiasClampLogged) {
+                    rtk.aiBiasClampLogged = true;
+                    LOG.warn("接口三偏差越界/非有限({} > {} m)，该行置 0（不钳边界，§4.3.4）: epoch={}",
+                            b, maxBias, rtk.epoch);
+                }
+            } else {
+                aiBias[idx] = b;
+            }
+            if (!Double.isFinite(s) || s < 1.0) {
+                aiScale[idx] = 1.0;
+            } else if (s > maxScale) {
+                aiScale[idx] = maxScale;
+                if (!rtk.aiScaleClampLogged) {
+                    rtk.aiScaleClampLogged = true;
+                    LOG.warn("接口三方差膨胀因子越界({} > {})，钳到上限（§4.3.4）: epoch={}",
+                            s, maxScale, rtk.epoch);
+                }
+            } else {
+                aiScale[idx] = s;
+            }
+        }
+
+        Trace.emit("AI3", "CORRECT", cfg, cb, rtk.epoch, obs[0].time,
+                "ns", ns, "nf", nf, "dt", dt);
+    }
+
+    private static boolean aiTraceDegrades(Rtk rtk) {
+        return rtk.rtkConfig != null && rtk.rtkConfig.ai != null && rtk.rtkConfig.ai.traceDegrades;
+    }
+
+    private static double[] aiDoubles(float[] src) {
+        double[] d = new double[src.length];
+        for (int k = 0; k < src.length; k++) d[k] = src[k];
+        return d;
+    }
+
     private static int ddres(Rtk rtk, Obsd[] obs, double dt, double[] x, double[] P,
                              int[] sat, double[] y, double[] e, double[] azel,
                              double[] freq, int[] iu, int[] ir, int ns, int nf,
-                             Nav nav, double[] v, double[] H, double[] R, int[] vflg) {
+                             Nav nav, double[] v, double[] H, double[] R, int[] vflg,
+                             double[] aiBias, double[] aiScale) {
         PrcOpt opt = rtk.opt;
         int nx = rtk.nx;int i, j, k, m, f, nv = 0;
         int[] nb = new int[Constants.NFREQ * 7 * 2 + 2];
@@ -1846,6 +1968,13 @@ public final class RtkCore {
                         }
                     }
 
+                    /* [AI-3] 偏差施加（§4.3.3/§4.3.6）：只读查表，仅伪距行。
+                     * 符号照抄设计：v -= (参考星偏差 − 本星偏差)，索引用 sat[] 下标而非卫星号。
+                     * v[nv] 每次由 y 现场重算，故 ddres 多次调用不会重复扣除（幂等）。 */
+                    if (code && aiBias != null) {
+                        v[nv] -= aiBias[refIdx * nf + frq] - aiBias[j * nf + frq];
+                    }
+
                     if (code) {
                         rtk.ssat[sat[j] - 1].resp[frq] = v[nv];
                     } else {
@@ -1882,6 +2011,13 @@ public final class RtkCore {
                         if (!code) {
                             if ((obs[iu[refIdx]].LLI[frq] & Constants.LLI_HALFC) != 0) Ri[nv] += 0.01;
                             if ((obs[iu[j]].LLI[frq] & Constants.LLI_HALFC) != 0) Rj[nv] += 0.01;
+                        }
+                        /* [AI-3] 方差膨胀（§4.3.4）：必须在半周 0.01 补偿之后施加，
+                         * 否则 0.01 会被膨胀因子放大。Ri ↔ 参考星，Rj ↔ 非参考星，方向不得对调。
+                         * code 行与 carrier 行共用同一 (i, frq) 的系数（同一观测质量判断）。 */
+                        if (aiScale != null) {
+                            Ri[nv] *= aiScale[refIdx * nf + frq];
+                            Rj[nv] *= aiScale[j * nf + frq];
                         }
                     }
 

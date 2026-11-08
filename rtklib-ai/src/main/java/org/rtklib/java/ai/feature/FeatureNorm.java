@@ -31,26 +31,43 @@ public final class FeatureNorm {
 
     private final double[] mean;
     private final double[] std;
+    private final int dim;
 
-    private FeatureNorm(double[] mean, double[] std) {
+    private FeatureNorm(double[] mean, double[] std, int dim) {
         this.mean = mean;
         this.std = std;
+        this.dim = dim;
     }
 
     /** 恒等归一化：不改变特征，供无 {@code norm.json} 的 dummy 模型使用。 */
     public static FeatureNorm identity() {
-        return new FeatureNorm(null, null);
+        return identity(FixQualityFeatures.DIM);
+    }
+
+    /** 指定维度的恒等归一化。 */
+    public static FeatureNorm identity(int dim) {
+        return new FeatureNorm(null, null, dim);
     }
 
     /**
-     * 从 {@code norm.json} 加载；文件不存在返回恒等归一化。
+     * 从 {@code norm.json} 加载（接口一维度）；文件不存在返回恒等归一化。
      *
      * @param path {@code norm.json} 路径，可为 {@code null}
      * @throws IllegalArgumentException 文件存在但内容/维度非法（配置错误应尽早暴露）
      */
     public static FeatureNorm load(Path path) {
+        return load(path, FixQualityFeatures.DIM);
+    }
+
+    /**
+     * 从 {@code norm.json} 加载并校验特征维度；文件不存在返回该维度的恒等归一化。
+     *
+     * @param path {@code norm.json} 路径，可为 {@code null}
+     * @param dim  期望的特征维数（接口一 6、接口三 17）
+     */
+    public static FeatureNorm load(Path path, int dim) {
         if (path == null || !Files.isRegularFile(path)) {
-            return identity();
+            return identity(dim);
         }
         String text;
         try {
@@ -60,15 +77,15 @@ public final class FeatureNorm {
         }
         double[] mean = parseArray(text, "mean", path);
         double[] std = parseArray(text, "std", path);
-        if (mean != null && mean.length != FixQualityFeatures.DIM) {
+        if (mean != null && mean.length != dim) {
             throw new IllegalArgumentException("norm.json 的 mean 长度 " + mean.length
-                    + " 与特征维 " + FixQualityFeatures.DIM + " 不一致: " + path);
+                    + " 与特征维 " + dim + " 不一致: " + path);
         }
-        if (std != null && std.length != FixQualityFeatures.DIM) {
+        if (std != null && std.length != dim) {
             throw new IllegalArgumentException("norm.json 的 std 长度 " + std.length
-                    + " 与特征维 " + FixQualityFeatures.DIM + " 不一致: " + path);
+                    + " 与特征维 " + dim + " 不一致: " + path);
         }
-        return new FeatureNorm(mean, std);
+        return new FeatureNorm(mean, std, dim);
     }
 
     /** 是否为恒等归一化（无参数）。 */
@@ -76,15 +93,31 @@ public final class FeatureNorm {
         return mean == null && std == null;
     }
 
+    /** 归一化参数覆盖的特征维数。 */
+    public int dim() {
+        return dim;
+    }
+
     /**
-     * 对原始特征做归一化。
+     * 对原始特征做归一化（接口一维度）。
      *
      * @param raw 长度必须等于 {@link FixQualityFeatures#DIM}
      * @return 可直接送入 ONNX 的 {@code float} 数组（与 {@code raw} 等长、新分配）
      */
     public float[] normalize(double[] raw) {
-        if (raw == null || raw.length != FixQualityFeatures.DIM) {
-            throw new IllegalArgumentException("原始特征长度必须为 " + FixQualityFeatures.DIM
+        return normalize(raw, dim);
+    }
+
+    /**
+     * 对原始特征做归一化。
+     *
+     * @param raw       原始特征
+     * @param expected  期望长度
+     * @return 可直接送入 ONNX 的 {@code float} 数组（与 {@code raw} 等长、新分配）
+     */
+    public float[] normalize(double[] raw, int expected) {
+        if (raw == null || raw.length != expected) {
+            throw new IllegalArgumentException("原始特征长度必须为 " + expected
                     + "，实际 " + (raw == null ? "null" : raw.length));
         }
         float[] out = new float[raw.length];

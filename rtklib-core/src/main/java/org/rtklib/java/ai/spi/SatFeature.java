@@ -7,7 +7,7 @@ package org.rtklib.java.ai.spi;
  * </p>
  *
  * @param sat       卫星号，仅用于 trace/调试，不参与索引
- * @param sys       卫星系统码（{@code SatUtils.satsys(sat, null)}），非位掩码
+ * @param sys       卫星系统码（{@code SatUtils.satsys(sat, null)} 的返回值，是 {@code SYS_??} 位掩码）
  * @param az        方位角（弧度），取自 {@code relpos} 工作缓冲区 {@code azel}
  * @param el        高度角（弧度），同上
  * @param snrRover  流动站 SNR（dBHz）

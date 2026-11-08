@@ -31,7 +31,7 @@ import ai.onnxruntime.TensorInfo;
  * 可被多个历元/线程并发调用。
  * </p>
  */
-public final class OnnxInference implements AutoCloseable {
+public final class OnnxInference implements BatchInference, AutoCloseable {
 
     private final OrtEnvironment env;
     private final OrtSession session;
@@ -115,11 +115,13 @@ public final class OnnxInference implements AutoCloseable {
     }
 
     /** 模型声明的特征维（接口一为 6）。 */
+    @Override
     public int inputDim() {
         return inDim;
     }
 
     /** 模型声明的输出维（接口一为 1）。 */
+    @Override
     public int outputDim() {
         return outDim;
     }
@@ -139,6 +141,7 @@ public final class OnnxInference implements AutoCloseable {
      * @param rows  样本行数（{@code >= 1}）
      * @return 行优先压平的输出，长度等于 {@code rows * outputDim()}
      */
+    @Override
     public float[] infer(float[] batch, int rows) throws OrtException {
         if (rows < 1) {
             throw new IllegalArgumentException("rows 必须 >= 1，实际 " + rows);

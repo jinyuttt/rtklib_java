@@ -56,6 +56,14 @@ target/
 *.py
 *.js
 
+# 例外：AI 训练管道与测试模型生成器是交付物，必须纳入版本控制
+!/rtklib-ai/training/**/*.py
+!/rtklib-ai/src/test/python/*.py
+
+# AI 训练管道产物（可由 train.py 重新生成，不入库）
+/rtklib-ai/training/out/
+/rtklib-ai/training/**/__pycache__/
+
 # Test output directories
 test_results/
 test_output*

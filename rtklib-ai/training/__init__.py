@@ -1,0 +1,1 @@
+"""rtklib-ai 训练管道（Python，与 Java 侧独立，§6.1）。"""
