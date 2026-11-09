@@ -1975,6 +1975,27 @@ public final class RtkCore {
                         v[nv] -= aiBias[refIdx * nf + frq] - aiBias[j * nf + frq];
                     }
 
+                    int sysi = SatUtils.satsys(sat[refIdx], null);
+                    if (sysi == Constants.SYS_GLO && sysj == Constants.SYS_GLO) {
+                        if (opt.glomodear == Constants.GLO_ARMODE_AUTOCAL && frq < Constants.NFREQGLO) {
+                            double df = (freqi - freqj) / (f == 0 ? Constants.DFRQ1_GLO : Constants.DFRQ2_GLO);
+                            v[nv] -= df * x[IL(frq, opt)];
+                            if (H != null) {
+                                H[nv * nx + IL(frq, opt)] = df;
+                            }
+                        } else if (opt.glomodear == Constants.GLO_ARMODE_FIXHOLD && frq < Constants.NFREQGLO) {
+                            v[nv] -= rtk.ssat[sat[refIdx] - 1].icbias[frq] * Constants.CLIGHT / freqi
+                                    - rtk.ssat[sat[j] - 1].icbias[frq] * Constants.CLIGHT / freqj;
+                        }
+                    }
+
+                    if (sysj == Constants.SYS_SBS && sysi == Constants.SYS_GPS) {
+                        if (opt.glomodear == Constants.GLO_ARMODE_FIXHOLD && frq < Constants.NFREQ) {
+                            v[nv] -= rtk.ssat[sat[refIdx] - 1].icbias[frq] * Constants.CLIGHT / freqi
+                                    - rtk.ssat[sat[j] - 1].icbias[frq] * Constants.CLIGHT / freqj;
+                        }
+                    }
+
                     if (code) {
                         rtk.ssat[sat[j] - 1].resp[frq] = v[nv];
                     } else {
@@ -2561,6 +2582,23 @@ public final class RtkCore {
                     if (refI < 0) {
                         refI = j;
                     } else {
+                        double dd = rtk.x[IB(j + 1, f, opt)] - rtk.x[IB(refI + 1, f, opt)];
+                        dd = opt.gainholdamb * (dd - Math.round(dd));
+                        rtk.x[IB(j + 1, f, opt)] -= dd;
+                        rtk.ssat[j].icbias[f] += dd;
+                    }
+                }
+            }
+        }
+
+        for (int f = 0; f < nf; f++) {
+            int refI = -1;
+            for (int j = 0; j < Constants.MAXSAT; j++) {
+                if (testSys(rtk.ssat[j].sys, 0) && rtk.ssat[j].vsat[f] != 0 && rtk.ssat[j].lock[f] >= 0) {
+                    if (refI < 0) {
+                        refI = j;
+                    } else {
+                        if (rtk.ssat[j].sys != Constants.SYS_SBS) continue;
                         double dd = rtk.x[IB(j + 1, f, opt)] - rtk.x[IB(refI + 1, f, opt)];
                         dd = opt.gainholdamb * (dd - Math.round(dd));
                         rtk.x[IB(j + 1, f, opt)] -= dd;
