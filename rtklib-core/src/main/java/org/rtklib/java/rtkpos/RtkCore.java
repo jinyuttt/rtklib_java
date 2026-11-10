@@ -422,16 +422,27 @@ public final class RtkCore {
                 }
             }
 
+            if (rtk.epoch <= 4 && i == 0 && ns > 0) {
+                double posVarB = (Pp[0] + Pp[1*nx+1] + Pp[2*nx+2]) / 3.0;
+                int ib0 = IB(sat[0], 0, opt);
+                LOG.info("[STD-KF] epoch={} BEFORE Kalman: xp=({},{},{}) posVar={} ambVar={}",
+                        rtk.epoch, String.format("%.6f", xp[0]), String.format("%.6f", xp[1]),
+                        String.format("%.6f", xp[2]), String.format("%.6f", posVarB),
+                        (ib0 >= 0 && ib0 < nx) ? String.format("%.4f", Pp[ib0*nx+ib0]) : "-");
+            }
+
             int info = filter(rtk, xp, Pp, H, v, R, nx, nv);
 
-            if ((rtk.epoch <= 1 || rtk.epoch == 79) && i == 0 && info == 0 && ns > 0) {
+            if ((rtk.epoch <= 4 || rtk.epoch == 79) && i == 0 && info == 0 && ns > 0) {
                 double posVarA = (Pp[0] + Pp[1*nx+1] + Pp[2*nx+2]) / 3.0;
                 int ib0 = IB(sat[0], 0, opt);
                 double ambVarA = (ib0 >= 0 && ib0 < nx) ? Pp[ib0*nx+ib0] : 0;
                 double crossPN = 0;
                 if (ib0 >= 0 && ib0 < nx) crossPN = Math.abs(Pp[0*nx+ib0]) + Math.abs(Pp[1*nx+ib0]) + Math.abs(Pp[2*nx+ib0]);
-                LOG.info("[STD-KF] epoch={} AFTER Kalman: posVar={} ambVar={} crossPN={} nx={} nv={} ib0={}",
-                        rtk.epoch, String.format("%.6f", posVarA), String.format("%.4f", ambVarA),
+                LOG.info("[STD-KF] epoch={} AFTER Kalman: xp=({},{},{}) posVar={} ambVar={} crossPN={} nx={} nv={} ib0={}",
+                        rtk.epoch, String.format("%.6f", xp[0]), String.format("%.6f", xp[1]),
+                        String.format("%.6f", xp[2]),
+                        String.format("%.6f", posVarA), String.format("%.4f", ambVarA),
                         String.format("%.6f", crossPN), nx, nv, ib0);
             }
 
@@ -539,6 +550,15 @@ public final class RtkCore {
         }
 
 
+
+        if (rtk.epoch <= 4) {
+            LOG.info("[STD-KF] epoch={} POST-AR: stat={} nfix={} ratio={} rtkx=({},{},{}) posVar={} xa=({},{},{})",
+                    rtk.epoch, stat, rtk.nfix, String.format("%.3f", rtk.sol.ratio),
+                    String.format("%.6f", rtk.x[0]), String.format("%.6f", rtk.x[1]),
+                    String.format("%.6f", rtk.x[2]), String.format("%.6f", rtk.P[0]),
+                    String.format("%.6f", xa[0]), String.format("%.6f", xa[1]),
+                    String.format("%.6f", xa[2]));
+        }
 
         if (stat == Constants.SOLQ_FIX) {
             for (i = 0; i < 3; i++) {
@@ -1674,28 +1694,28 @@ public final class RtkCore {
         }
     }
 
-    public static void prectrop(RtkState rtk, double[] rr, int r,
-                                double[] azel, double[] dtdx, int nx) {
+    public static double prectrop(RtkState rtk, double[] pos, int r,
+                                  double[] azel, double[] dtdx, int off) {
         PrcOpt opt = rtk.opt();
-        double[] pos = new double[3];
-        CoordTransform.ecef2pos(rr, pos);
+        double[] x = rtk.x();
+        int it = IT(r, opt);
 
         double[] mapWet = new double[1];
         TroposphereModel.tropmapf(rtk.sol().time, pos, azel, mapWet);
+        double m_w = mapWet[0];
 
-        for (int k = 0; k < nx; k++) dtdx[k] = 0.0;
-
-        int it = IT(r, opt);
-        if (it >= 0 && it < nx) {
-            dtdx[it] = mapWet[0];
-            if (opt.tropopt >= Constants.TROPOPT_ESTG && azel[1] > 0.0) {
-                double cotz = 1.0 / Math.tan(azel[1]);
-                double grad_n = mapWet[0] * cotz * Math.cos(azel[0]);
-                double grad_e = mapWet[0] * cotz * Math.sin(azel[0]);
-                if (it + 1 < nx) dtdx[it + 1] = grad_n * rtk.x()[it];
-                if (it + 2 < nx) dtdx[it + 2] = grad_e * rtk.x()[it];
-            }
+        if (opt.tropopt >= Constants.TROPOPT_ESTG && azel[1] > 0.0) {
+            double cotz = 1.0 / Math.tan(azel[1]);
+            double grad_n = m_w * cotz * Math.cos(azel[0]);
+            double grad_e = m_w * cotz * Math.sin(azel[0]);
+            m_w += grad_n * x[it + 1] + grad_e * x[it + 2];
+            dtdx[off + 1] = grad_n * x[it];
+            dtdx[off + 2] = grad_e * x[it];
+        } else {
+            dtdx[off + 1] = dtdx[off + 2] = 0.0;
         }
+        dtdx[off] = m_w;
+        return m_w * x[it];
     }
 
     /**
@@ -1812,6 +1832,22 @@ public final class RtkCore {
         double[] rr_r = rtk.rb;
         double[] pos_r = new double[3];
         CoordTransform.ecef2pos(rr_r, pos_r);
+        double[] posu = new double[3];
+        CoordTransform.ecef2pos(x, posu);
+
+        double[] tropu = null, tropr = null, dtdxu = null, dtdxr = null;
+        if (opt.tropopt >= Constants.TROPOPT_EST) {
+            tropu = new double[ns];
+            tropr = new double[ns];
+            dtdxu = new double[ns * 3];
+            dtdxr = new double[ns * 3];
+            for (i = 0; i < ns; i++) {
+                tropu[i] = prectrop(rtk.toState(), posu, 0,
+                        new double[]{azel[iu[i] * 2], azel[iu[i] * 2 + 1]}, dtdxu, i * 3);
+                tropr[i] = prectrop(rtk.toState(), pos_r, 1,
+                        new double[]{azel[ir[i] * 2], azel[ir[i] * 2 + 1]}, dtdxr, i * 3);
+            }
+        }
 
         double bl = RtklibCommon.norm(x, 3);
 
@@ -1958,13 +1994,14 @@ public final class RtkCore {
                         }
                     }
 
-                    if (opt.tropopt == Constants.TROPOPT_EST || opt.tropopt == Constants.TROPOPT_ESTG) {
-                        double[] dtdx_m = new double[nx];
-                        double[] dtdx_r = new double[nx];
-                        prectrop(rtk.toState(), rr_f, 0, new double[]{azel[iu[j] * 2], azel[iu[j] * 2 + 1]}, dtdx_m, nx);
-                        prectrop(rtk.toState(), rr_r, 1, new double[]{azel[iu[refIdx] * 2], azel[iu[refIdx] * 2 + 1]}, dtdx_r, nx);
-                        for (k = 0; k < nx; k++) {
-                            if (H != null) H[nv * nx + k] += dtdx_m[k] - dtdx_r[k];
+                    if (tropu != null) {
+                        v[nv] -= (tropu[refIdx] - tropu[j]) - (tropr[refIdx] - tropr[j]);
+                        if (H != null) {
+                            int nt = (opt.tropopt < Constants.TROPOPT_ESTG) ? 1 : 3;
+                            for (k = 0; k < nt; k++) {
+                                H[nv * nx + IT(0, opt) + k] = dtdxu[k + refIdx * 3] - dtdxu[k + j * 3];
+                                H[nv * nx + IT(1, opt) + k] = -(dtdxr[k + refIdx * 3] - dtdxr[k + j * 3]);
+                            }
                         }
                     }
 
@@ -2074,7 +2111,7 @@ public final class RtkCore {
     private static int filter(Rtk rtk, double[] xp, double[] Pp,
                               double[] H, double[] v, double[] R,
                               int nx, int nv) {
-        int ret = KalmanFilter.update(xp, Pp, H, v, R, nx, nv);
+        int ret = KalmanFilter.update(xp, Pp, H, v, R, nx, nv, false);
         return ret;
     }
 
@@ -2559,7 +2596,7 @@ public final class RtkCore {
         for (int i = 0; i < nv; i++) Rh[i * nv + i] = opt.varholdamb;
 
         if (nv > 0) {
-            int ret = KalmanFilter.update(rtk.x, rtk.P, H, v, Rh, nx, nv);
+            KalmanFilter.update(rtk.x, rtk.P, H, v, Rh, nx, nv, false);
         }
 
         if (enableAnchor && rtk.sol.stat != Constants.SOLQ_FIX) {

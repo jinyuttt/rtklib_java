@@ -331,6 +331,9 @@ C版 `filter_()` 中协方差更新使用**标准形式** `P = (I-KH)*P`。
 ### Java版行为
 使用行优先矩阵 + EJML 库实现，公式与 C 版一致。
 通过 `KalmanFilter.update()` 封装，内部包含状态压缩（ix 数组）和 **Joseph 形式**协方差更新。
+状态压缩判据本身与 C `filter()` 一致（`x[i]!=0 && P[i+i*n]>0`）；额外的「跳过 H 全零列」
+是可选参数 `skipZeroHCols`，**仅 joint 双基线启用**，单基线 RTK（`relpos`/`holdamb`）传
+`false` 以保持与 C 逐位一致（见 FIX-ALG-051）。
 
 ### 关键差异：Joseph 形式协方差更新
 

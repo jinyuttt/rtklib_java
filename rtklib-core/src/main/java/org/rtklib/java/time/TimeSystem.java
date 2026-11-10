@@ -28,11 +28,14 @@ public final class TimeSystem {
     /** Day-of-year for non-leap year (cumulative, start=1) */
     private static final int[] DOY = {1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335};
     
-    /** Days in month for 4-year cycle */
+    /**
+     * Days in month for 4-year cycle (1970-1973)，与 rtkcmn.c 的 mday 表逐项一致：
+     * 闰年在 4 年周期中的第 3 年（1972/1976/...）。
+     */
     private static final int[] MDAY = {
         31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
-        31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
         31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+        31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
         31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
     };
 

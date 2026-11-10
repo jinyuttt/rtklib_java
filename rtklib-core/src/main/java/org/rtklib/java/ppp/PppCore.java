@@ -206,10 +206,13 @@ public class PppCore {
 
         int stat = Constants.SOLQ_SINGLE;
 
-        for (int iter = 0; iter < MAX_ITER; iter++) {
-            System.arraycopy(rtk.x, 0, xp, 0, nx);
-            System.arraycopy(rtk.P, 0, Pp, 0, nx * nx);
+        /* C ppp.c pppos: matcpy(xp,rtk->x,...) once before the iteration loop,
+         * so each iteration refines the previous filter result instead of
+         * restarting from the un-committed rtk state. */
+        System.arraycopy(rtk.x, 0, xp, 0, nx);
+        System.arraycopy(rtk.P, 0, Pp, 0, nx * nx);
 
+        for (int iter = 0; iter < MAX_ITER; iter++) {
             int nv = pppRes(0, obs, n, rs, dts, var, svh, exc, nav, xp, rtk, v, H, R, azel, nx);
 
             if (iter == 0) {

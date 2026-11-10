@@ -6,6 +6,38 @@
 
 ---
 
+## [3.4.1] - 2026-11-10
+
+> 补丁版本：全部为 C 原版对齐与缺陷修复，无新增对外 API（`KalmanFilter.update` 仅新增重载，旧签名行为不变）。
+
+### Fixed
+
+- **短基线 RTK 固定率 0.07% → 73.82%（C 原版 73.78%）**：`KalmanFilter.update` 的状态压缩比 C `filter()` 多一条「H 列非零」判据（原为 joint 双基线防跨基线污染而加），导致 `holdamb` 的固定模糊度伪观测只更新模糊度对角块，位置/对流层等与模糊度有交叉协方差的状态被排除在压缩子空间外——模糊度被「钉住」而位置不同步修正，载波残差每历元单向累积，`maxV` 由 ep20 的 0.53 周涨到 ep28 的 2.1154 周（跨整周），触发周跳判定后 LAMBDA 连续失败、`nb` 30→28 进入卫星排除死亡螺旋。改为 `skipZeroHCols` 可选参数：**默认 `true`（joint 双基线行为逐位不变）**，单基线 RTK 的 `relpos` 与 `holdamb` 两处显式 `false`，与 C 逐位一致（FIX-ALG-051）。验证：HKWS-HKSS 2024-060（6.8 km，2880 历元）固定率 2126/2880，与 C 的 2125/2880 仅差 1 个历元，两端同为 FIX 的 2122 个历元平均差 dE/dN/dU = −0.0169/0.0115/−0.0299 m，水平差 >0.1 m 的历元数 0；`holdamb` 触发次数由前 200 历元 21 次恢复为 181 次
+- **RTK 双差残差的对流层项与 C `rtkpos.c ddres()` 结构不一致**：原实现把 `prectrop` 放进卫星循环按双差对重复调用（`ns×(ns−1)×2` 次，C 为 `2×ns`），且**未在 v 中扣除对流层双差**（延迟全部由模糊度状态吸收），偏导还用长度 `nx` 的临时数组整向量累加，使两站对流层参数写进同一索引。改为循环前逐星缓存 `tropu/tropr/dtdxu/dtdxr`，循环内按 C 补 `v[nv]-=(tropu[ref]-tropu[j])-(tropr[ref]-tropr[j])` 并按 `IT(0)/IT(1)` 分列赋值 H（FIX-ALG-050）
+- **`TimeSystem.MDAY` 四年周期表闰年错位**：29 天的二月放在第 2 个 12 项块（对应 1971）而非第 3 块（对应 1972），使闰年（2020、2024 等）3 月 1 日以后 `time2epoch()` 反算的日历日期整体早一天（`epoch2time()` 的闰年判据本来就正确，故正反变换不自洽）。改为与 C `mday` 表逐项一致（FIX-ALG-052）
+- **`pppos` 迭代退化为「同一初值重复求解」**：`xp/Pp ← rtk.x/P` 的拷贝原在迭代循环体内，每次迭代都从未提交的 `rtk` 状态重新起步，第 2 次迭代的线性化中心用不到第 1 次的更新结果。按 C `ppp.c L1219-1238` 移到循环之前（FIX-ALG-053）
+
+### Added
+
+- **`PostPosProcessor` trace 接线**：新增 `setTraceConfig` / `setTraceCallback`，透传到内部 `Rtk` 的 `traceConfig`/`traceCallback`；未设置时保持默认（行为与原实现逐位一致）。`RinexRtkProcessor` 同步把自身的 trace 配置转发给 `PostPosProcessor`，使后处理链路的 trace 与直接调用 `RtkCore` 时一致，便于诊断测试挂载
+
+### Changed
+
+- `KalmanFilter.update` 新增 `skipZeroHCols` 重载，原 7 参签名委托到 `true`，joint 双基线路径逐位不变；`RtkCore.filter()` / `RtkCore.holdamb()` 显式传 `false`
+
+### Tests
+
+- `CJavaEpochDiffTest`：逐历元对照改为按**历元序号**匹配（原按 GPST 整数秒作 key，闰秒/取整差异会造成错位），时间戳仅作显示列；基线对照关闭 `enableSnrMedian`，并可 `-Dcjdiff.trace=true` 挂 AR trace
+- `FixValidatorCollectTest`：新增 `fixvalidator.nav` / `run-suffix` / `glo-mode` / `igg` / `niter` 参数，支持同一 (站, 日) 跑多套配置；真值口径改为「RINEX 头 APPROX POSITION XYZ + 天线偏移」的天线相位中心，与 `PostPosProcessor#posFromSta` 同口径
+- 新增 `ShortBaselineOptSweepTest`：短基线 HKWS-HKSS 2024-060 逐开关扫描（数据缺失时自动跳过），用于分离「基线移植错误」与「优化逻辑错误」
+
+### Docs
+
+- `docs/ALGORITHM_FIX_LOG.md`：新增 FIX-ALG-050（ddres 对流层项）、FIX-ALG-051（Kalman 状态压缩 → 短基线固定率）、FIX-ALG-052（MDAY 闰年错位）、FIX-ALG-053（pppos 迭代起点），并补「FIX-ALG-042 P4 的作用域更正」（H 列过滤自本版起仅对 joint 生效）
+- `docs/README.md`：`ALGORITHM_FIX_LOG` 覆盖范围更新为 001~053、`CHANGELOG` 当前版本更新为 3.4.1
+
+---
+
 ## [3.4.0] - 2026-11-06
 
 > 版本号由 3.3.0 升至 3.4.0：网解窄巷 AR 闭环、`ArDiagnostics` 归因诊断量、周跳切弧判据尺度更正均属新增能力（非纯 bugfix）。

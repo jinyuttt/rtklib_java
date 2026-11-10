@@ -469,6 +469,10 @@
 | FIX-ALG-047 | 2026-11-05 | ephemeris/EphModel.java、rtklib-core/src/test/java/org/rtklib/java/RinexSppTest.java | 星历最大时效按系统分档（GPS/GAL/QZS/SBS/GLO 2 h、BDS 6 h、IRN 8 h，对齐 seleph/selgeph），移除 7 天统一上限与 `rtklib.eph.wideage` 开关；SBAS 改「t0 最近且 ≤ MAXDTOE_SBS」；RinexSppTest 改为按可用星数最多历元验证（JAVA-ONLY） |
 | FIX-ALG-048 | 2026-11-05 | joint/BaseSkeletonNetwork.java | 闸3 骨架网 FIX 恒为 0：参考长度标定用 `stat < SOLQ_FLOAT` 判「非 FIX」（SOLQ_FIX=1 < SOLQ_FLOAT=2）导致 FIX 全被丢弃、且曾用 FLOAT 解采样污染参考长度；改为参考长度只接受 SOLQ_FIX，FIX/FLOAT 均可进监测；修复后 fix=215/235、587.302 m 与坐标几何值毫米级一致（JAVA-ONLY） |
 | FIX-ALG-049 | 2026-11-06 | networkvrs/netsol/BaselineWindowSolver.java、networkvrs/config/NetworkConfig.java | 窄巷固定率偏低根因是周跳切弧对「正常缺测」过敏：1.5×采样间隔阈值把 30 s 采样下缺 1 历元的正常间隔（2×30 s）判为失锁，63 次误切弧把长弧切成短弧，模糊度 σ 膨胀到 2~6 周、LAMBDA ratio 塌到噪声底；改为间隙阈值可配置 `maxArcGapFactor=3.0`，周跳仍由 0.05 m 阶跃判据负责；固定率 69.4%→80.6%、基线重复性 0.180→0.160 m、平均 ratio 5.38→6.04（40 历元窗口；默认 20 历元窗口 34.7%→37.5%，瓶颈不在切弧）。2026-11-06 复核更正：1.5× 失效的根因是「倍数 × 有偏尺度（前 20 间隔均值，被缺测抬高）」，非倍数本身，3.0 的语义是「允许连续缺 2 个历元」而非调出来的最优倍数；尺度已改为全窗下中位数（判据语义不变、零 API 变更，条目内「尺度更正」）；`maxArcGapSeconds` 绝对秒数方案评估后不做、正式关闭（条目内「评估后不做」）（JAVA-ONLY，core 零改动） |
+| FIX-ALG-050 | 2026-11-10 | rtkpos/RtkCore.java | ddres 对流层项按 C `rtkpos.c` 结构重写：卫星循环前逐星各调一次 `prectrop` 缓存 `tropu/tropr/dtdxu/dtdxr`，循环内补上 `v[nv]-=(tropu[ref]-tropu[j])-(tropr[ref]-tropr[j])` 并按 `IT(0)/IT(1)` 分列赋值 H（原实现缺 v 修正、两站偏导写进同一索引、每对星重复调 2 次） |
+| FIX-ALG-051 | 2026-11-10 | kalman/KalmanFilter.java、rtkpos/RtkCore.java | **短基线固定率 0.07%→73.82%（C 73.78%）**：`KalmanFilter.update` 的状态压缩比 C `filter()` 多一条「H 列非零」过滤（FIX-ALG-042 P4 为 joint 双基线引入），使 `holdamb` 伪观测只更新模糊度对角块、位置/对流层交叉协方差被丢弃 → maxV 单调发散、ep28 跨整周 2.1154 周 → LAMBDA 失败、nb 30→28 卫星排除死亡螺旋。改为可选参数 `skipZeroHCols`（默认 true 保持 joint 行为逐位不变），`relpos`/`holdamb` 两处显式 false 对齐 C；holdamb 触发 21→181 次/前 200 历元，同为 FIX 2122 个、平均差 −0.0169/0.0115/−0.0299 m、水平差 >0.1 m 历元数 0 |
+| FIX-ALG-052 | 2026-11-10 | time/TimeSystem.java | `MDAY` 四年周期（1461 天）表闰年位置错位：29 天放在第 2 个 12 项块（1971）而非第 3 块（1972），使闰年（2020/2024 等）3 月 1 日以后 `time2epoch()` 反算日期整体早一天；改为与 C `mday` 表逐项一致（`epoch2time()` 闰年判据本就正确） |
+| FIX-ALG-053 | 2026-11-10 | ppp/PppCore.java | `pppos` 迭代起点对齐 C：`matcpy(xp/Pp ← rtk->x/P)` 原在迭代循环体内，每次迭代都从未提交的 `rtk` 状态重新起步，使「迭代精化」退化为「同一初值重复求解」；移到 `for (iter...)` 之前（C `ppp.c L1219-1238`） |
 
 ## FIX-ALG-020 EST 模式死锁：DCB 产品加载 + enableIonoEstRobust 开关
 
@@ -2634,3 +2638,268 @@ CIMO/PRAT/VIRG 三基线）：
 `rtklib-test` 的 `RtkValidationTest#testShortBaselineFixRateAndRms` 短基线固定率 8.06%
 失败已用 `git stash` 在 HEAD 上复现，属既有问题，与 core 封版内容无关，单独列入待办，
 不在本轮端到端验证闭环范围内。
+
+---
+
+## FIX-ALG-050 / ddres 对流层项按 C 结构重写：逐星预计算 + 两站偏导分列（2026-11-10）
+
+**日期**: 2026-11-10
+**类别**: rtklib-core / RTK 双差残差（C 对齐）
+**触发**: 短基线 HKWS-HKSS 2024-060（约 6.8 km，2880 历元）固定率 0.07%（C 原版 73.78%）
+逐历元对照排查，ddres 的对流层项与 C `rtkpos.c ddres()` 结构不一致。
+
+### C 原版逻辑（rtkpos.c ddres）
+
+```c
+/* 卫星循环之前：逐星预计算两站对流层延迟及其对状态向量的偏导（每星 3 个分量） */
+for (i=0;i<ns;i++) {
+    if (opt->tropopt>=TROPOPT_EST) {
+        tropu[i]=prectrop(rtk->sol,posu,0,azel+iu[i]*2,dtdxu+i*3,opt);
+        tropr[i]=prectrop(rtk->sol,posr,1,azel+ir[i]*2,dtdxr+i*3,opt);
+    }
+}
+/* 卫星循环内（非参考星、通过 validobs、频率有效） */
+v[nv]-=(tropu[ref]-tropu[j])-(tropr[ref]-tropr[j]);
+for (k=0;k<NT(opt);k++) {
+    H[nv+nx*IT(0,opt)+k]= dtdxu[k+3*ref]-dtdxu[k+3*j];
+    H[nv+nx*IT(1,opt)+k]=-(dtdxr[k+3*ref]-dtdxr[k+3*j]);
+}
+```
+
+### Java 侧原实现的三处偏差
+
+原实现把 `prectrop` 放进卫星循环、按双差对逐次调用，且**只取偏导、不修正残差**：
+
+```java
+double[] dtdx_m = new double[nx];
+double[] dtdx_r = new double[nx];
+prectrop(..., rr_f, 0, ..., dtdx_m, nx);   // 车侧
+prectrop(..., rr_r, 1, ..., dtdx_r, nx);   // 基站侧
+for (k = 0; k < nx; k++) H[nv * nx + k] += dtdx_m[k] - dtdx_r[k];
+```
+
+1. **v 未扣除对流层双差**：`v[nv]-=...` 整项缺失，天顶对流层延迟只能由模糊度状态吸收，
+   在短基线上表现为浮点模糊度被系统性污染；
+2. **偏导按整个状态向量累加**：用长度 nx 的临时数组逐元素 `+=`，而不是按 `IT(0)/IT(1)`
+   定位的 `NT(opt)` 个分量**赋值**，两站对流层参数被写进同一段索引；
+3. **每对卫星重复调用 2 次 `prectrop`**（`ns×(ns−1)×2` 次），C 为 `2×ns` 次。
+
+### 修复
+
+按 C 结构重排：卫星循环前对 `ns` 颗星各调一次 `prectrop`（车/基各一次），
+缓存 `tropu[]/tropr[]`（延迟）与 `dtdxu[]/dtdxr[]`（每星 3 分量偏导），
+循环内按 C 的两行公式修正 v 并写 H（`nt = tropopt < TROPOPT_ESTG ? 1 : 3`）：
+
+```java
+v[nv] -= (tropu[refIdx] - tropu[j]) - (tropr[refIdx] - tropr[j]);
+int nt = (opt.tropopt < Constants.TROPOPT_ESTG) ? 1 : 3;
+for (k = 0; k < nt; k++) {
+    H[nv * nx + IT(0, opt) + k] =   dtdxu[k + refIdx * 3] - dtdxu[k + j * 3];
+    H[nv * nx + IT(1, opt) + k] = -(dtdxr[k + refIdx * 3] - dtdxr[k + j * 3]);
+}
+```
+
+### 验证
+
+与 FIX-ALG-051 在同一工作区、同一次对照中一并生效（2880 历元逐历元比对），
+**未做单独 A/B**，故本条目不带独立增益数字。结构性证据：本条只影响 v/H 的对流层项
+（量级 cm，且 `TROPOPT_EST` 下由 IT(0)/IT(1) 两个状态承担），而基线固定率从 0.07% 到
+73.82% 的跳变形态由 FIX-ALG-051 的 holdamb 链路解释（ep28 跨周跳变消失）。
+
+### 修改文件
+
+- `rtklib-core/.../rtkpos/RtkCore.java`（`ddres`）
+
+---
+
+## FIX-ALG-051 / RTK 短基线固定率 0.07%→73.8%：Kalman 状态压缩多加了 H 全零列过滤（holdamb 死亡螺旋）（2026-11-10）
+
+**日期**: 2026-11-10
+**类别**: rtklib-core / Kalman 滤波状态压缩（C 对齐 + 作用域收敛）
+**触发**: 短基线 HKWS-HKSS 2024-060（约 6.8 km，2880 历元、30 s 采样）Java 固定率 0.07%，
+C 原版（rtklibexplorer demo5，RTKLIB-2.5.0，`VER_RTKLIB "EX"`）73.78%。
+
+### 排查路径（先切分问题域，再定位）
+
+1. **AR 入口**：首历元 Java `nb=26`、`ratio=13.216`，与 C 的 `nb=26`、`ratio=12.81`、
+   `s[0]/s[1]=17.83/228.48`、`nu=22 nr=24 ns=16` 一致 → AR 之前无病。
+2. **AR 之后**：`holdamb` 在整段数据只被调用 21 次（正常应接近逐历元），
+   逐历元 trace 显示 `ep28` 的 `maxV` 跳到 **2.1154 周**（跨整周），此后 LAMBDA 失败、
+   `nb` 由 30 降到 28，进入「卫星被逐个排除」的死亡螺旋。
+3. **唯一可追溯差异**：`KalmanFilter.update` 的状态压缩条件比 C 多一条 H 列非零检查。
+
+### 根因
+
+C `rtkcmn.c filter()` 的状态压缩只有两条判据：
+
+```c
+for (i=k=0;i<n;i++) {
+    if (x[i]!=0.0&&P[i+i*n]>0.0) ix[k++]=i;
+}
+```
+
+Java `KalmanFilter.update` 额外加了「H 中该列必须非零」，否则跳过该状态
+（这是 FIX-ALG-042 P4 为 joint 双基线防跨基线污染引入的优化）。
+
+对 `holdamb` 的伪观测而言，这个过滤是致命的：
+
+- H 只在已固定卫星的模糊度列上有 ±1，**位置、速度、对流层等状态列全为零**；
+- 这些状态虽然不被本条观测直接约束，但与模糊度有**非零交叉协方差** `Pc`；
+  C 版把它们一起纳入压缩子空间，更新后 `Pc` 参与增益计算，位置/对流层随模糊度
+  被一并修正，模糊度与位置保持自洽；
+- Java 把它们排除后，只更新模糊度对角块 → 模糊度被「钉住」但位置没有跟着修正，
+  载波残差每历元把位置误差渗回模糊度状态，`maxV` 从 ep20 的 0.53 单调涨到 ep27 的 0.79，
+  ep28 越过整周触发周跳判定 → 固定失败 → 卫星排除 → 无法恢复。
+
+注意：模糊度**稳态残留**（`varholdamb=0.1` 下约 0.13 周）本身不是根因，C 同样存在；
+根因是位置没被同步修正，使残差单向累积而不是稳态收敛。
+
+### 修复
+
+1. `KalmanFilter.update` 新增带 `skipZeroHCols` 的重载，**默认 `true`（保持既有行为）**，
+   旧 7 参签名委托到 `true`，joint 双基线路径完全不受影响：
+
+```java
+public static int update(double[] x, double[] P, double[] H, double[] v,
+                         double[] R, int nx, int nv) {
+    return update(x, P, H, v, R, nx, nv, true);
+}
+public static int update(double[] x, double[] P, double[] H, double[] v,
+                         double[] R, int nx, int nv, boolean skipZeroHCols) { ... }
+```
+
+2. RTK 主流程的两处调用显式传 `false`，严格对齐 C `filter()` 的压缩规则：
+   - `RtkCore.filter()`（`relpos` 的量测更新）
+   - `RtkCore.holdamb()`（固定模糊度的伪观测更新）
+
+### 验证（HKWS-HKSS 2024-060，2880 历元，基线配置、新增优化全关）
+
+| 指标 | 修复前 | 修复后 | C 原版 |
+|---|---|---|---|
+| 固定率 | 0.07%（2/2880） | **73.82%（2126/2880）** | 73.78%（2125/2880） |
+| Q 分布 fix/float | 2/2878 | **2126/754** | 2125/755 |
+| 两端同为 FIX | — | **2122** | — |
+| Java FIX / C 非 FIX | — | 4 | — |
+| C FIX / Java 非 FIX | — | 3 | — |
+| `holdamb` 调用次数（前 200 历元） | 21（ep28 后基本不再触发） | **181** | — |
+| `holdamb` maxV 最大值 | 2.1154 周（ep28 跨周） | **0.5339 周（ep20，无跨周）** | ~0.5 周 |
+| ep29 状态 | FLOAT，nb 30→28 | **FIX，nb=30** | FIX |
+| ep44 nb | 28（卫星已排除） | **30 并持续增长（→32/34/36）** | — |
+| 同为 FIX 平均差 dE/dN/dU | — | **−0.0169/0.0115/−0.0299 m** | — |
+| 水平差 >0.1 m 的历元 | — | **0** | — |
+| 最大单历元 \|dE\| | — | 0.023 m @ ep248 | — |
+
+逐历元 ratio 同步对齐（ep1 13.216 vs C 12.8、ep11 3.591 vs 3.4、ep28 之后不再塌陷），
+`maxV` 曲线由「单调发散」恢复为「逐历元衰减的稳态残留」
+（ep20 0.5339 → ep28 0.1025 → ep44 0.0653 → ep59 0.0889 → ep200 0.1260，全程无跨周）。
+
+已知残留（与解算无关）：`.pos` 时间标签在闰秒边界仍有 `23:59:60.000000`/`02:03:60.000000`
+的显示差异——C 的 `time2epoch_n()` 会在 `1.0-t.sec<0.5/10^n` 时进位到下一秒，
+Java 侧暂无对应的 `time2epoch_n` 实现。该差异只影响文本输出，不进入解算，
+对照工具已改为按历元序号（index）匹配，故不干扰本表的结论。
+
+### 作用域说明（与 FIX-ALG-042 P4 的关系）
+
+FIX-ALG-042 P4 的 H 列过滤是 **joint 双基线**的必要保护：单基线 update 中另一基线的
+模糊度列在 H 中全零，若不跳过，新息会通过 P 的交叉协方差泄漏到共享位置状态
+（实测 epoch=0 位置跳 71 m）。本条目不是回退该保护，而是把它**限定在 joint 路径**：
+- 默认重载保持 `skipZeroHCols=true` → joint 行为逐位不变；
+- 单基线 RTK 两处调用显式 `false` → 与 C 逐位一致。
+
+### 修改文件
+
+- `rtklib-core/.../kalman/KalmanFilter.java`（新增重载，默认行为不变）
+- `rtklib-core/.../rtkpos/RtkCore.java`（`filter()`、`holdamb()` 传 `false`）
+
+---
+
+## FIX-ALG-052 / TimeSystem.MDAY 四年周期闰年位置错位（2026-11-10）
+
+**日期**: 2026-11-10
+**类别**: rtklib-core / 时间系统（C 对齐）
+**触发**: 时间系统逐项核对 `rtkcmn.c` 时发现 `MDAY` 表与 C 的 4 年周期排列不一致。
+
+### 根因
+
+C `time2epoch()` 用一张 48 项的 `mday` 表覆盖 1461 天的 4 年周期（1970-1973）：
+
+```c
+31,28,...,31,  31,28,...,31,  31,29,...,31,  31,28,...,31
+   ↑ 1970          ↑ 1971        ↑ 1972(闰)      ↑ 1973
+```
+
+Java `MDAY` 把 29 天（闰年二月）放在了**第二个 12 项块**（对应周期内第 1 年），
+即 1971 年按闰年算、1972 年按平年算。由于 `mon` 在 0..47 上累减，
+块序错位使**周期内第 2 年的 3 月以后全部日期偏移一天**——1970 起每 4 年一个闰年
+（1970 % 4 = 2，故闰年恒落在块 2），2020、2024 等年份的 3 月 1 日之后日期都会被算早一天。
+
+### 修复
+
+把第三个块改为 29 天，与 C 的 `mday` 表逐项一致：
+
+```java
+private static final int[] MDAY = {
+    31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,   // 1970
+    31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,   // 1971
+    31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,   // 1972（闰）
+    31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31    // 1973
+};
+```
+
+`epoch2time()` 侧的闰年判据 `(year % 4 == 0 && mon >= 3)` 本来就与 C 一致，
+只有 `time2epoch()` 反算受影响，故修复后正反变换在闰年 3 月以后自洽。
+
+### 验证
+
+静态逐项对照 C `mday` 表；不影响 `GTime` 内部秒计数与解算数值，只影响日历字段输出
+（`.pos` 时间标签、RINEX 写出）。未做数值回归（该项不改变滤波行为）。
+
+### 修改文件
+
+- `rtklib-core/.../time/TimeSystem.java`
+
+---
+
+## FIX-ALG-053 / pppos 迭代起点对齐 C：xp/Pp 只在循环前拷贝一次（2026-11-10）
+
+**日期**: 2026-11-10
+**类别**: rtklib-core / PPP 迭代（C 对齐）
+**触发**: 逐行核对 `ppp.c pppos()` 与 Java `PppCore.pppos` 的迭代结构。
+
+### 根因
+
+C 在进入迭代循环**之前**拷贝一次状态，之后每次迭代都在上一次滤波结果上继续精化：
+
+```c
+matcpy(xp,rtk->x,rtk->nx,1);
+matcpy(Pp,rtk->P,rtk->nx,rtk->nx);
+for (i=0;i<MAX_ITER;i++) { ... ppp_res -> filter -> ppp_res(postfit) ... }
+```
+
+Java 把这两行拷贝放在了**循环体内部**，每次迭代都从未提交的 `rtk.x/rtk.P` 重新起步，
+迭代之间相互独立，等于把「迭代精化」退化成「同一初值重复求解」：
+
+- 第 2 次迭代的线性化中心没有用到第 1 次更新的结果，收敛速度与收敛判据都失去意义；
+- 每次迭代的 `filter` 都基于同一份先验，若第 1 次被 postfit 拒绝，后续迭代只是重复同样的失败。
+
+### 修复
+
+把两次 `System.arraycopy` 移到 `for (iter...)` 之前，与 C 的语句位置一致；
+循环内仍保留 `xp/Pp` 的原地更新与 postfit 通过后的提交逻辑（不变）。
+
+### 验证
+
+静态对照 C `ppp.c L1219-1238`；本次未单独跑 PPP 数据集 A/B（该改动属结构对齐，
+后续 PPP 回归任务中一并验证）。
+
+### 修改文件
+
+- `rtklib-core/.../ppp/PppCore.java`
+
+---
+
+## 附：FIX-ALG-042 P4 的作用域更正（2026-11-10）
+
+FIX-ALG-042 的 P4 修复（`KalmanFilter.update` 增加 H 列非零检查）自 FIX-ALG-051 起
+**仅对 joint 双基线生效**：该检查已改为可选参数 `skipZeroHCols`，默认值 `true`
+保持 joint 行为逐位不变，单基线 RTK（`relpos`/`holdamb`）显式传 `false` 对齐 C。

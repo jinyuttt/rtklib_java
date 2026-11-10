@@ -21,6 +21,8 @@ import org.rtklib.java.rtkpos.RtkCore;
 import org.rtklib.java.rtkpos.RtkProcessor;
 import org.rtklib.java.rtkpos.SegmentSigmaFilter;
 import org.rtklib.java.time.TimeSystem;
+import org.rtklib.java.trace.TraceCallback;
+import org.rtklib.java.trace.TraceConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +53,10 @@ public class PostPosProcessor {
     private String osbPath;
     private String updPath;
     private String dcbPath;
+
+    /* 可选 trace 接线：未设置（null）时内部 Rtk 的 trace 字段保持默认，行为与原来逐位一致。 */
+    private TraceConfig traceConfig;
+    private TraceCallback traceCallback;
 
     public PostPosProcessor(PrcOpt opt, SolOpt sopt, RtkConfig rtkConfig, PosHandler handler, OutputStream outputStream) {
         this.opt = new PrcOpt(opt);
@@ -95,6 +101,8 @@ public class PostPosProcessor {
     public void setOsbPath(String osbPath) { this.osbPath = osbPath; }
     public void setUpdPath(String updPath) { this.updPath = updPath; }
     public void setDcbPath(String dcbPath) { this.dcbPath = dcbPath; }
+    public void setTraceConfig(TraceConfig traceConfig) { this.traceConfig = traceConfig; }
+    public void setTraceCallback(TraceCallback traceCallback) { this.traceCallback = traceCallback; }
 
     public PostPosResult process(String roverObsPath, String baseObsPath,
                                  String navPath, String sp3Path, String clkPath,
@@ -506,6 +514,8 @@ public class PostPosProcessor {
         Rtk rtk = new Rtk();
         rtk.opt = new PrcOpt(opt);
         rtk.rtkConfig = new RtkConfig(rtkConfig);
+        rtk.traceConfig = traceConfig;
+        rtk.traceCallback = traceCallback;
 
         if (approxPos != null) {
             System.arraycopy(approxPos, 0, rtk.sol.rr, 0, 3);

@@ -155,6 +155,8 @@ public class RinexRtkProcessor {
             }
         }
         PostPosProcessor proc = new PostPosProcessor(procOpt, effectiveSolOpt, rtkConfig);
+        proc.setTraceConfig(rtk.traceConfig);
+        proc.setTraceCallback(rtk.traceCallback);
         PostPosProcessor.PostPosResult result = proc.process(roverObsPath, baseObsPath, navPath, null, null, atxPath);
 
         totalEpochs = result.totalEpochs;

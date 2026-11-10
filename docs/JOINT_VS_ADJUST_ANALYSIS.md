@@ -198,7 +198,7 @@ joint 在观测层把 k 条基线并进同一个滤波器，输出时"多条独�
 
 | 编号 | 问题 | 根因 | 修复 |
 |------|------|------|------|
-| P4 | 跨基线污染位置 | KF 状态压缩不检查 H 列是否全零，无关状态通过交叉协方差泄漏 | [KalmanFilter.java#L47-L52](../rtklib-core/src/main/java/org/rtklib/java/kalman/KalmanFilter.java#L47-L52) 增加 H 列非零检查 |
+| P4 | 跨基线污染位置 | KF 状态压缩不检查 H 列是否全零，无关状态通过交叉协方差泄漏 | [KalmanFilter.java](../rtklib-core/src/main/java/org/rtklib/java/kalman/KalmanFilter.java) 增加 H 列非零检查（`skipZeroHCols`，**仅 joint 路径生效**：默认重载为 `true`，单基线 RTK 显式 `false` 以对齐 C，见 FIX-ALG-051） |
 | P5 | holdamb 触发过晚 | minfix 门槛导致首次 FIX 后模糊度方差未压缩 | 去掉 minfix 门槛，每次 FIX 即 holdamb |
 | P6 | FIX 后模糊度 P 未修正 | LAMBDA 后只改模糊度值，不改 P 中对应行/列 | FIX 后手动将模糊度 P 对角设 1E-6，交叉协方差清零 |
 
