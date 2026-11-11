@@ -27,7 +27,7 @@ public class UrbanCanyonDataCheckTest {
 
     private static final Logger log = LoggerFactory.getLogger(UrbanCanyonDataCheckTest.class);
 
-    private static final String BASE = "D:/code/rtklib_java/test-data";
+    private static final String BASE = TestDataConfig.getTestDataDir();
 
     static class RinexInfo {
         String name;

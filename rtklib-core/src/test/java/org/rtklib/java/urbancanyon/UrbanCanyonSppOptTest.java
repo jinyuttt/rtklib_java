@@ -1,6 +1,7 @@
 package org.rtklib.java.urbancanyon;
 
 import org.junit.jupiter.api.*;
+import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
@@ -22,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class UrbanCanyonSppOptTest {
 
     private static final Logger log = LoggerFactory.getLogger(UrbanCanyonSppOptTest.class);
-    private static final String BASE = "D:/code/rtklib_java/test-data";
+    private static final String BASE = TestDataConfig.getTestDataDir();
 
     static class DataSet {
         final String name;

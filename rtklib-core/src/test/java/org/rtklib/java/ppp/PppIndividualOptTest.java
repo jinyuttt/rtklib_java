@@ -26,9 +26,7 @@ public class PppIndividualOptTest {
     private static final String BASE;
     static {
         String dir = TestDataConfig.getTestDataDir();
-        BASE = Files.exists(Paths.get(dir, "rinex", "ppp_wtzr_20180606.18o"))
-                ? dir
-                : "D:/code/rtklib_java/test-data";
+        BASE = dir;
     }
 
     static class Station {

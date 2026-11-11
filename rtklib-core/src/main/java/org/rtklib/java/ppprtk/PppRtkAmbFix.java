@@ -86,8 +86,10 @@ public final class PppRtkAmbFix {
             if (rtk.ssat[sat - 1].vs == 0) continue;
             if (rtk.ssat[sat - 1].azel[1] < opt.elmin) continue;
 
+            // [FIX-ALG-060] 系统白名单原为写死的 GPS|GAL，navsys 只配 BDS/QZS 时 UC 路径
+            // 静默全跳过（与 FIX-ALG-058 同类缺陷）。改为动态继承 opt.navsys。
             int sys = SatUtils.satsys(sat, null);
-            if ((sys & (Constants.SYS_GPS | Constants.SYS_GAL)) == 0) continue;
+            if ((sys & opt.navsys) == 0) continue;
 
             for (int f = 0; f < nf; f++) {
                 if (rtk.ssat[sat - 1].vsat[f] == 0) continue;

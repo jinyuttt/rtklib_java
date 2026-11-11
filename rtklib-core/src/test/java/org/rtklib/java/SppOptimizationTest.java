@@ -29,7 +29,7 @@ public class SppOptimizationTest {
             TestDataConfig.hasTestDataFile("rinex/rinex304_gejc_elevated.25o") ||
             TestDataConfig.hasTestDataFile("rinex/opensky_rover_20250408.25o")
                 ? TestDataConfig.getTestDataDir()
-                : "D:\\rtklib\\rtklib_java\\reference-projects\\MobileGNSS-SPP\\data";
+                : TestDataConfig.get("spp.opt.data.dir", TestDataConfig.getTestDataDir());
 
     static class ObsEpoch {
         final GTime time;

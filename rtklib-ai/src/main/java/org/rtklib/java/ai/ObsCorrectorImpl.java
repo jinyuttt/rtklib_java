@@ -152,6 +152,19 @@ public final class ObsCorrectorImpl implements ObsCorrector {
         return windows.size();
     }
 
+    /**
+     * 当前 {@code (sat, frq)} 的短窗聚合（测试与诊断用）。
+     * <p>
+     * 必须在 {@link #correct(ObsCorrectionContext)} 之后调用才是「模型本历元真正看到的输入」：
+     * 当前历元样本在推理前已入窗，故此处返回的 {@code n} 已含本历元。
+     * 无样本（卫星首次出现或刚被周跳清空）返回 {@link ObsCorrectionFeatures.WindowAgg#EMPTY}。
+     * </p>
+     */
+    public ObsCorrectionFeatures.WindowAgg windowAggregate(int sat, int frq) {
+        Window w = windows.get(key(sat, frq));
+        return w == null ? ObsCorrectionFeatures.WindowAgg.EMPTY : w.aggregate();
+    }
+
     /** 清空全部窗口（测试与跨会话重置用）。 */
     public void reset() {
         windows.clear();

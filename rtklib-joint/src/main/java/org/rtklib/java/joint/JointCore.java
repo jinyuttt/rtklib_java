@@ -124,7 +124,7 @@ public final class JointCore {
             if (!RtkCore.zdres(state, 1, merged, nu, nr,
                     blObs[b].rs, blObs[b].dts, blObs[b].vare, blObs[b].svh,
                     nav, bs.rb, opt,
-                    blObs[b].y, blObs[b].e, blObs[b].azel, blObs[b].freq, jrtk.epoch)) {
+                    blObs[b].y, blObs[b].e, blObs[b].azel, blObs[b].freq)) {
                 log.warn("baseline[{}] zdres failed, rb=({},{},{})", b, bs.rb[0], bs.rb[1], bs.rb[2]);
                 continue;
             }
@@ -213,7 +213,7 @@ public final class JointCore {
             RtkCore.zdres(jrtk.toState(), 0, mergedInit, nu, nr,
                     bo.rs, bo.dts, bo.vare, bo.svh,
                     nav, rr_rover0, opt,
-                    bo.y, bo.e, bo.azel, bo.freq, jrtk.epoch);
+                    bo.y, bo.e, bo.azel, bo.freq);
         }
 
         detectCycleSlip(jrtk, roverObs, roverN, bases, nBaseline, nf, blObs, nav, opt);
@@ -256,11 +256,11 @@ public final class JointCore {
                 RtkCore.zdres(state, 0, merged, nu, nr,
                         bo.rs, bo.dts, bo.vare, bo.svh,
                         nav, rr_rover, opt,
-                        bo.y, bo.e, bo.azel, bo.freq, jrtk.epoch);
+                        bo.y, bo.e, bo.azel, bo.freq);
                 RtkCore.zdres(state, 1, merged, nu, nr,
                         bo.rs, bo.dts, bo.vare, bo.svh,
                         nav, bs.rb, opt,
-                        bo.y, bo.e, bo.azel, bo.freq, jrtk.epoch);
+                        bo.y, bo.e, bo.azel, bo.freq);
             }
 
             for (int i = 0; i < Constants.MAXSAT; i++) {

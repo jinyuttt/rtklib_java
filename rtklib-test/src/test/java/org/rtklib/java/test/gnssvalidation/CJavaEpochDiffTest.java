@@ -66,7 +66,7 @@ class CJavaEpochDiffTest {
         Assumptions.assumeTrue(new File(ROVER).exists() && new File(BASE).exists() && new File(NAV).exists(),
                 "短基线数据不可用");
 
-        Path cPos = Paths.get(System.getProperty(PROP_CPOS, "D:\\code\\rtklib_java\\.tmp\\cbin\\B.pos"));
+        Path cPos = Paths.get(System.getProperty(PROP_CPOS, ".tmp" + File.separator + "cbin" + File.separator + "B.pos"));
         Assumptions.assumeTrue(Files.exists(cPos), "C 侧 .pos 不存在: " + cPos);
 
         List<String[]> cList = readCPos(cPos);
@@ -84,7 +84,7 @@ class CJavaEpochDiffTest {
             tc.enabled = true;
             tc.topics.add("AR");
             tc.actions = new java.util.LinkedHashSet<>(List.of("FIX", "FAIL"));
-            Path tp = Paths.get("D:\\code\\rtklib_java\\.tmp\\cbin\\java_ar.trace");
+            Path tp = Paths.get(".tmp", "cbin", "java_ar.trace");
             Files.createDirectories(tp.getParent());
             BufferedWriter tw = Files.newBufferedWriter(tp, StandardCharsets.UTF_8);
             rtk.setTraceConfig(tc);
@@ -100,7 +100,7 @@ class CJavaEpochDiffTest {
         RtkProcessor.RtkResult result = rtk.process(ROVER, BASE, NAV);
         List<SolData> sols = result.solutions;
 
-        Path out = Paths.get("D:\\code\\rtklib_java\\.tmp\\cbin\\java_epochs.csv");
+        Path out = Paths.get(".tmp", "cbin", "java_epochs.csv");
         Files.createDirectories(out.getParent());
 
         int matched = 0, missC = 0;

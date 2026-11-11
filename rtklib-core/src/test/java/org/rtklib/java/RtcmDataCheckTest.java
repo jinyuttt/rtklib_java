@@ -19,21 +19,23 @@ public class RtcmDataCheckTest {
     @Test
     @DisplayName("Check rtcmdata directory for base+rover")
     void testCheckRtcmData() throws Exception {
-        String dir = "D:\\rtcmdata";
+        String dir = TestDataConfig.get("rtcm.data.dir", TestDataConfig.getRtcmBaseDir());
         java.io.File f = new java.io.File(dir);
         if (!f.exists()) {
-            log.warn("D:\\rtcmdata not found, skipping");
+            log.warn("{} not found, skipping", dir);
             return;
         }
 
-        String baseFile = dir + "\\DEVICE_ID_REDACTED\\DEVICE_ID_REDACTED\\2026-03-03\\17.rtcm3";
-        String roverFile = dir + "\\DEVICE_ID_REDACTED\\DEVICE_ID_REDACTED\\2026-03-03\\0.rtcm3";
+        String baseId = TestDataConfig.get("rtcm.check.base.id", "");
+        String roverId = TestDataConfig.get("rtcm.check.rover.id", "");
+        String baseFile = dir + "\\" + baseId + "\\" + baseId + "\\2026-03-03\\17.rtcm3";
+        String roverFile = dir + "\\" + roverId + "\\" + roverId + "\\2026-03-03\\0.rtcm3";
 
-        log.info("=== Checking DEVICE_ID_REDACTED (potential base) ===");
-        analyzeRtcmFile(baseFile, "DEVICE_ID_REDACTED");
+        log.info("=== Checking base (potential base) ===");
+        analyzeRtcmFile(baseFile, baseId);
 
-        log.info("=== Checking DEVICE_ID_REDACTED (potential rover) ===");
-        analyzeRtcmFile(roverFile, "DEVICE_ID_REDACTED");
+        log.info("=== Checking rover (potential rover) ===");
+        analyzeRtcmFile(roverFile, roverId);
 
         String rootRtcm1 = dir + "\\10.rtcm3";
         String rootRtcm2 = dir + "\\5567.rtcm3";

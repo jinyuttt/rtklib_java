@@ -69,11 +69,11 @@ public final class TestDataConfig {
     }
 
     public static String getGreatPvtPppDir() {
-        return get("greatpvt.ppp.dir", "D:\\code\\GREAT-PVT\\sample_data\\PPPFLT_2023305\\PPPFLT_2023305");
+        return get("greatpvt.ppp.dir", "");
     }
 
     public static String getGreatPvtRtkDir() {
-        return get("greatpvt.rtk.dir", "D:\\code\\GREAT-PVT\\sample_data\\RTKFLT_2020351\\RTKFLT_2020351");
+        return get("greatpvt.rtk.dir", "");
     }
 
     public static String getResultDir() {

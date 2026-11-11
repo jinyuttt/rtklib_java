@@ -10,6 +10,7 @@ import org.rtklib.java.data.Position;
 import org.rtklib.java.data.PrcOpt;
 import org.rtklib.java.data.SolData;
 import org.rtklib.java.data.SolutionStatus;
+import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.rinex.RinexRtkProcessor;
 import org.rtklib.java.rtkpos.RtkProcessor;
 import org.slf4j.Logger;
@@ -40,7 +41,9 @@ public class CascadeArBehaviorTest {
     private static final double GPS_EPOCH_UNIX = 315964800.0;
     private static final int SYS_MULTI = Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_GLO
             | Constants.SYS_CMP | Constants.SYS_QZS;
-    private static final String BASE = "D:/code/rtklib_java/test-data/ppc/PPC-Dataset";
+    private static final String BASE = TestDataConfig.getTestDataDir() + "/ppc/PPC-Dataset";
+    /** 诊断输出目录（相对 Maven 模块工作目录）。 */
+    private static final String OUT_DIR = ".";
 
     // 诊断开关（环境变量）：CASCADE_AB_DATASET="Tokyo run2" 单数据集；CASCADE_AB_BASELINE=false 跳过基线
     private static final String ONLY_DATASET = System.getenv().getOrDefault("CASCADE_AB_DATASET", "");
@@ -160,7 +163,7 @@ public class CascadeArBehaviorTest {
 
         // 逐历元误差 CSV（与级联日志按历元 join 用）
         try (java.io.PrintWriter pw = new java.io.PrintWriter(
-                new java.io.FileWriter("D:/code/rtklib_java/cascade_epochs_"
+                new java.io.FileWriter(OUT_DIR + "/cascade_epochs_"
                         + ds.name().replaceAll("\\s+", "") + (cascadeOn ? "_cas" : "_ref") + ".csv"), true)) {
             pw.println("unix_time,status,e,n,u");
             for (SolData sol : result.solutions) {
@@ -189,8 +192,8 @@ public class CascadeArBehaviorTest {
     void testCascadeEstAB() throws Exception {
         // 分片运行（CASCADE_AB_DATASET 设置时）写独立报告文件，支持 4 进程并行
         String reportPath = ONLY_DATASET.isEmpty()
-                ? "D:/code/rtklib_java/cascade_ab_report.txt"
-                : "D:/code/rtklib_java/cascade_ab_report_" + ONLY_DATASET.replaceAll("\\s+", "") + ".txt";
+                ? OUT_DIR + "/cascade_ab_report.txt"
+                : OUT_DIR + "/cascade_ab_report_" + ONLY_DATASET.replaceAll("\\s+", "") + ".txt";
         java.io.PrintStream out = new java.io.PrintStream(
                 new java.io.FileOutputStream(reportPath), true, "UTF-8");
         List<RunStat> all = new ArrayList<>();

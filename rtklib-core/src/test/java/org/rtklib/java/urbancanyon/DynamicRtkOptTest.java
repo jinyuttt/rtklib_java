@@ -1,6 +1,7 @@
 package org.rtklib.java.urbancanyon;
 
 import org.junit.jupiter.api.*;
+import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
@@ -101,7 +102,7 @@ public class DynamicRtkOptTest {
         }
     }
 
-    private static final String BASE = "D:/code/rtklib_java/test-data";
+    private static final String BASE = TestDataConfig.getTestDataDir();
 
     static final DataSet[] DATA_SETS = {
         new DataSet("Net_Diff Urban",

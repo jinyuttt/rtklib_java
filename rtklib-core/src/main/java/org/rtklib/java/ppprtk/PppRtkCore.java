@@ -37,6 +37,15 @@ public final class PppRtkCore {
     }
     private static final int MAX_ITER = 8;
     private static final int MIN_NSAT_SOL = 4;
+    /**
+     * FIX-ALG-059：相位 pre-fit 残差门限（m），对齐 C ppp.c 的 maxinno[0]=30.0。
+     * 原实现沿用 PrcOpt 默认 maxinno[0]=5.0（该值是为 RTK 码行设计的），仅对
+     * epoch<=60 放宽到 30m。接收机钟跳（约 30ns，对应 ~9m 公共项）一旦发生在
+     * epoch>60，全部卫星的相位行会在同一历元被一次性剔除，EKF 仅剩码行更新，
+     * 可见星数从 14 骤降到 4~6 且此后无法恢复（相位残差随之升至米级）。
+     * 这里统一按 C 语义：相位行 30m、码行 opt.maxinno[1]。
+     */
+    private static final double MAXINNO_PHASE = 30.0;
 
     private static final double VAR_POS = PppCore.VAR_POS;
     private static final double VAR_VEL = PppCore.VAR_VEL;
@@ -100,6 +109,11 @@ public final class PppRtkCore {
 
         // rtk.epoch 已在 RtkProcessor.processEpoch 中按观测历元自增，此处不再重复自增
         // （重复自增会使 epoch<=30 的初始化窗口只剩 15 个真实历元，导致预热收敛期被截断）
+
+        // [FIX-ALG-054] 逐历元重置解状态：ppprtkos 是独立的历元求解入口，上一历元 AR 写入的
+        // SOLQ_FIX 必须在本历元入口清除。否则 updateStat 的 SOLQ_FIX 守卫会永久锁存该标签，
+        // 使 MIN_NSAT_SOL 降级判断与后续 AR 失败全部失效（实测 UTC04 起 NL 固定归零仍全程输出 FIX）。
+        rtk.sol.stat = Constants.SOLQ_NONE;
 
         if (rtk.epoch <= 3) {
             int[] owk = new int[1];
@@ -870,7 +884,7 @@ public final class PppRtkCore {
                 if (sys == Constants.SYS_GLO && code == 1) varr[nv] += VAR_GLO_IFB;
 
                 if (post == 0 && opt.maxinno[code] > 0.0) {
-                    double maxinno_val = (rtk.epoch <= 60 && code == 0) ? 30.0 : opt.maxinno[code];
+                    double maxinno_val = code == 0 ? MAXINNO_PHASE : opt.maxinno[1];
                     if (Math.abs(res) > maxinno_val) {
                         if (dbg) {
                             rejCnt[7]++;
@@ -996,19 +1010,41 @@ public final class PppRtkCore {
             }
         }
 
-        // FIX-ALG-040: preserve SOLQ_FIX from AR resolution. PppRtkAmbFix may have
-        // upgraded rtk.sol.stat to SOLQ_FIX before updateStat runs — don't clobber it.
-        if (rtk.sol.stat != Constants.SOLQ_FIX) {
-            rtk.sol.stat = (byte)(rtk.sol.ns < MIN_NSAT_SOL ? Constants.SOLQ_NONE : stat);
+        // [FIX-ALG-054] 解状态判定：入口已把 sol.stat 重置为 SOLQ_NONE，此处只有本历元 AR 成功
+        // 写入的 SOLQ_FIX 才会被识别为固定解，不会再锁存上一历元的标签。
+        // MIN_NSAT_SOL 门限对固定解同样生效：卫星数不足的解无论是否 AR 固定都不具备可用精度。
+        boolean arFixed = rtk.sol.stat == Constants.SOLQ_FIX;
+        if (rtk.sol.ns < MIN_NSAT_SOL) {
+            if (arFixed) {
+                LOG.debug("updateStat: FIX downgraded to NONE, ns={} < {}", rtk.sol.ns, MIN_NSAT_SOL);
+            }
+            rtk.sol.stat = Constants.SOLQ_NONE;
+            arFixed = false;
+        } else {
+            rtk.sol.stat = (byte)(arFixed ? Constants.SOLQ_FIX : stat);
         }
 
-        for (int i = 0; i < 3; i++) {
-            rtk.sol.rr[i] = rtk.x[i];
-            rtk.sol.qr[i] = (float) rtk.P[i * nx + i];
+        // [FIX-ALG-054] 固定解位置/协方差从 xa/Pa 取（对齐 RtkCore.java 的 stat==SOLQ_FIX 分支），
+        // 避免固定解的 rr/qr 被纯浮点状态覆盖。IFLC 分支当前不做位置条件更新，
+        // xa[0..2] 恒等于 x[0..2]，此处保证的是「结构上不再回退」，位置重解需另立条目。
+        if (arFixed && rtk.xa != null && rtk.Pa != null
+                && rtk.xa.length >= nx && rtk.Pa.length >= nx * nx) {
+            for (int i = 0; i < 3; i++) {
+                rtk.sol.rr[i] = rtk.xa[i];
+                rtk.sol.qr[i] = (float) rtk.Pa[i * nx + i];
+            }
+            rtk.sol.qr[3] = (float) rtk.Pa[0 * nx + 1];
+            rtk.sol.qr[4] = (float) rtk.Pa[1 * nx + 2];
+            rtk.sol.qr[5] = (float) rtk.Pa[0 * nx + 2];
+        } else {
+            for (int i = 0; i < 3; i++) {
+                rtk.sol.rr[i] = rtk.x[i];
+                rtk.sol.qr[i] = (float) rtk.P[i * nx + i];
+            }
+            rtk.sol.qr[3] = (float) rtk.P[0 * nx + 1];
+            rtk.sol.qr[4] = (float) rtk.P[1 * nx + 2];
+            rtk.sol.qr[5] = (float) rtk.P[0 * nx + 2];
         }
-        rtk.sol.qr[3] = (float) rtk.P[0 * nx + 1];
-        rtk.sol.qr[4] = (float) rtk.P[1 * nx + 2];
-        rtk.sol.qr[5] = (float) rtk.P[0 * nx + 2];
 
         rtk.sol.dtr[0] = rtk.x[IC(0, opt)] / Constants.CLIGHT;
         rtk.sol.dtr[1] = (rtk.x[IC(1, opt)] - rtk.x[IC(0, opt)]) / Constants.CLIGHT;

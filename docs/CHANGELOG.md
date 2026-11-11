@@ -35,6 +35,9 @@
 
 - `docs/ALGORITHM_FIX_LOG.md`：新增 FIX-ALG-050（ddres 对流层项）、FIX-ALG-051（Kalman 状态压缩 → 短基线固定率）、FIX-ALG-052（MDAY 闰年错位）、FIX-ALG-053（pppos 迭代起点），并补「FIX-ALG-042 P4 的作用域更正」（H 列过滤自本版起仅对 joint 生效）
 - `docs/README.md`：`ALGORITHM_FIX_LOG` 覆盖范围更新为 001~053、`CHANGELOG` 当前版本更新为 3.4.1
+- `docs/AI_ENHANCEMENT_DESIGN.md`：升至 v1.4——阶段 3（接口一训练集导出）标记完成并新增 §8.1 数据体检（12 run / 6 站 / 2 天 / 16152 行 / 3001 错误固定，含真值口径与阈值口径两项待核查；另记按小时切片的第二条采集线已采集未组装）；接口三由「未开始」更正为「代码已落地、模型未训练」；§9 新增「真值口径错配」「自动真值自证」两条风险
+- `docs/PPP_AI_ASSESSMENT.md`：引用版本同步至 v1.4，§8.1 补充「接口一训练集已导出、但标签可信度待闭环」，结论不变
+- `rtklib-ai/training/README.md`：§6.1 补「第二条入口：按小时切片（`FixValidatorHourlyCollectTest`）」并说明其无 `truth.csv`、`--truth auto` 未实现故暂不可组装；§6.7 改为采集/组装已用真实 RINEX 验证并记录两项数据体检发现，「注意事项」同步
 
 ---
 

@@ -1,5 +1,6 @@
 package org.rtklib.java.test;
 
+import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
@@ -16,19 +17,24 @@ public class PppRtkDemo {
 
     private static final Logger log = LoggerFactory.getLogger(PppRtkDemo.class);
 
-    private static final String RTCM_DIR = "D:\\rtcm3";
-    private static final String PRODUCT_DIR = "D:\\rtcm3\\product";
+    private static final String RTCM_DIR = TestDataConfig.getRtcmBaseDir();
+    private static final String PRODUCT_DIR = TestDataConfig.getProductDir();
 
     public static void main(String[] args) {
         Locale.setDefault(Locale.US);
 
-        String station = "DEVICE_ID_REDACTED";
-        String date = "2026-06-29";
+        String station = TestDataConfig.getStation();
+        String date = TestDataConfig.getStationDate();
         int hour = 0;
 
         log.info("============================================================");
         log.info("  PPP-RTK Demo");
         log.info("============================================================");
+
+        if (station.isEmpty() || date.isEmpty()) {
+            log.error("未配置 station.id / station.date，请写入 test-data.properties 后重试");
+            return;
+        }
 
         String rtcmFile = RTCM_DIR + "\\" + station + "\\" + date + "\\" + hour + ".rtcm3";
         log.info("Station: {}  Date: {}  Hour: {}", station, date, hour);

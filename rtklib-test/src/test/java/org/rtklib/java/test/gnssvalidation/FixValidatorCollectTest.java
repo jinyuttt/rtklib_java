@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.ai.collect.CollectConfig;
 import org.rtklib.java.ai.collect.CollectSession;
+import org.rtklib.java.ai.collect.ObsCorrectorCollectSession;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.coord.CoordTransform;
@@ -72,6 +73,7 @@ class FixValidatorCollectTest {
     private static final Logger log = LoggerFactory.getLogger(FixValidatorCollectTest.class);
 
     private static final String PROP_ENABLE = "fixvalidator.collect";
+    private static final String PROP_ENABLE_OBS = "obs-corrector.collect";
     private static final String PROP_YEAR = "fixvalidator.year";
     private static final String PROP_DOYS = "fixvalidator.doys";
     private static final String PROP_STATIONS = "fixvalidator.stations";
@@ -193,6 +195,147 @@ class FixValidatorCollectTest {
                 planned.size(), ran, skippedExists, skippedNoData, skippedNoBase);
         for (String p : planned) {
             log.info("  计划: {}", p);
+        }
+    }
+
+    /**
+     * 接口三采集：与接口一<b>同一站/同一日/同一基站配对</b>，只换采集器与 trace 主题。
+     * <p>
+     * 复用同一套 {@code createOpt()} / 选基站 / 读星历逻辑是刻意的：接口三的特征必须与
+     * 接口一的基线逐位可比（A2 配对验收的前提就是两组解算除注入外完全一致），
+     * 任何配置漂移都会让配对归因失去意义。
+     * </p>
+     * <p>
+     * trace 主题为 {@code AI3}（{@code DDRES} / {@code DDRES_REJ} / {@code CORRECT}）加
+     * {@code AR}（{@code FIX} / {@code FAIL}，仅用于给数据集填 {@code solution_stat}）。
+     * {@code actions} 必须置 {@code null}：它是<b>跨主题的全局过滤器</b>，若沿用接口一的
+     * {@code {FIX, FAIL}}，{@code DDRES} 会被一并滤掉，trace 里一行标签都不会剩下。
+     * </p>
+     * <p>
+     * 启用方式：
+     * </p>
+     * <pre>
+     * mvn test -pl rtklib-test -Dtest=FixValidatorCollectTest -Dobs-corrector.collect=true
+     * </pre>
+     */
+    @Test
+    void collectObsCorrector() throws Exception {
+        Assumptions.assumeTrue(Boolean.getBoolean(PROP_ENABLE_OBS),
+                "接口三采集默认关闭，设置 -D" + PROP_ENABLE_OBS + "=true 启用");
+
+        int year = Integer.parseInt(System.getProperty(PROP_YEAR, "2024"));
+        List<String> doys = splitList(System.getProperty(PROP_DOYS, DEFAULT_DOYS));
+        List<String> stations = splitList(System.getProperty(PROP_STATIONS, DEFAULT_STATIONS));
+        double maxBaseKm = Double.parseDouble(System.getProperty(PROP_MAX_BASE_KM, "60"));
+        String runSuffix = System.getProperty(PROP_RUN_SUFFIX, "-ai3").trim();
+
+        Path repoRoot = Paths.get(TestDataConfig.getTestDataDir()).getParent();
+        Path outDir = repoRoot.resolve("data").resolve("fix-validator");
+        Path collectDir = outDir.resolve("collect-obs");
+        Path rinexRoot = outDir.resolve("rinex");
+        Files.createDirectories(collectDir);
+
+        String atxPath = findAtx();
+        GnssValidationDataHelper helper =
+                new GnssValidationDataHelper(TestDataConfig.getTestDataDir());
+
+        int skippedExists = 0, ran = 0, failed = 0;
+
+        for (String doy : doys) {
+            Path rinexDir = rinexRoot.resolve(year + "-" + doy);
+            String navFile = resolveNav(helper, year, Integer.parseInt(doy), rinexDir);
+            if (navFile == null) {
+                log.warn("{} 广播星历不可用，跳过该日全部站点", doy);
+                continue;
+            }
+
+            Map<String, String> obsByStation = new LinkedHashMap<>();
+            Map<String, double[]> posByStation = new LinkedHashMap<>();
+            for (String st : stations) {
+                String obs = findObs(rinexDir, st);
+                if (obs == null) {
+                    log.warn("{} {} 观测文件不可用，跳过", st, doy);
+                    continue;
+                }
+                double[] pos = readApproxPos(obs);
+                if (pos == null) {
+                    log.warn("{} {} 头文件无可信近似坐标，跳过", st, doy);
+                    continue;
+                }
+                obsByStation.put(st, obs);
+                posByStation.put(st, pos);
+            }
+            if (obsByStation.size() < 2) {
+                log.warn("{} 可用站仅 {} 个，无法构造基线", doy, obsByStation.size());
+                continue;
+            }
+
+            String day = year + "-" + doy;
+            for (Map.Entry<String, String> e : obsByStation.entrySet()) {
+                String rover = e.getKey();
+                double[] roverPos = posByStation.get(rover);
+                String base = nearestOther(rover, roverPos, posByStation);
+                if (base == null) {
+                    continue;
+                }
+                if (distanceKm(roverPos, posByStation.get(base)) > maxBaseKm) {
+                    continue;
+                }
+
+                String runId = rover + "-" + day + "-" + base + runSuffix;
+                CollectConfig cfg = new CollectConfig(collectDir, rover, day, runId, false,
+                        CollectConfig.DEFAULT_FLUSH_EVERY);
+
+                if (Files.exists(cfg.obsCsvPath()) && Files.exists(cfg.tracePath())) {
+                    log.info("已采集，跳过: {}", cfg.obsCsvPath().getFileName());
+                    skippedExists++;
+                    continue;
+                }
+
+                try {
+                    collectObsOne(cfg, e.getValue(), obsByStation.get(base), navFile, atxPath);
+                    ran++;
+                } catch (IOException ex) {
+                    failed++;
+                    log.error("接口三采集失败 {}: {}", cfg.runId(), ex.getMessage());
+                }
+            }
+        }
+
+        log.info("接口三采集完成: 实跑 {}，已存在跳过 {}，失败 {}", ran, skippedExists, failed);
+    }
+
+    private void collectObsOne(CollectConfig cfg, String roverObs, String baseObs,
+                               String navFile, String atxPath) throws IOException {
+        PrcOpt opt = createOpt();
+        RtkConfig rtkConfig = createRtkConfig();
+
+        SolOpt solOpt = new SolOpt();
+        solOpt.solstatic = 0;
+
+        TraceConfig traceCfg = new TraceConfig();
+        traceCfg.enabled = true;
+        traceCfg.topics.add("AI3");
+        traceCfg.topics.add("AR");
+        traceCfg.actions = null;
+
+        try (ObsCorrectorCollectSession session = ObsCorrectorCollectSession.open(cfg);
+             Writer traceOut = Files.newBufferedWriter(cfg.tracePath(), StandardCharsets.UTF_8,
+                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            TraceCallback cb = line -> {
+                try {
+                    traceOut.write(line);
+                    traceOut.write('\n');
+                } catch (IOException ignored) {
+                }
+            };
+            session.runWith(() -> {
+                RinexRtkProcessor proc = new RinexRtkProcessor(opt, solOpt, rtkConfig, null, null);
+                proc.setAtxPath(atxPath);
+                proc.setTraceConfig(traceCfg);
+                proc.setTraceCallback(cb);
+                proc.process(roverObs, baseObs, navFile);
+            });
         }
     }
 

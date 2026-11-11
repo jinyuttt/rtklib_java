@@ -25,8 +25,7 @@ public class SppCompareTest {
     private static final Logger log = LoggerFactory.getLogger(SppCompareTest.class);
 
     private static final String DATA_DIR =
-            TestDataConfig.get("sppcompare.data.dir",
-                    "D:\\rtklib\\rtklib_java\\RTKLIB_EX_2.5.0");
+            TestDataConfig.get("sppcompare.data.dir", TestDataConfig.getTestDataDir());
     private static final String OBS_FILE = DATA_DIR + "\\1.obs";
     private static final String NAV_FILE = DATA_DIR + "\\1.nav";
     private static final String C_REF_FILE = DATA_DIR + "\\spp_bds.pos";

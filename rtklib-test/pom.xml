@@ -13,6 +13,10 @@
     <artifactId>rtklib-test</artifactId>
     <packaging>jar</packaging>
 
+    <properties>
+        <exec.mainClass>org.rtklib.java.test.PppArDiag</exec.mainClass>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.rtklib</groupId>
@@ -34,7 +38,6 @@
             <groupId>org.rtklib</groupId>
             <artifactId>rtklib-ai</artifactId>
             <version>3.4.1</version>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>ch.qos.logback</groupId>
@@ -54,7 +57,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.2.0</version>
                 <configuration>
-                    <mainClass>org.rtklib.java.test.PppArDiag</mainClass>
+                    <mainClass>${exec.mainClass}</mainClass>
                 </configuration>
             </plugin>
             <plugin>

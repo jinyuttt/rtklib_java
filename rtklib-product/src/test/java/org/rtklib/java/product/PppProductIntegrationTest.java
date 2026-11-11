@@ -3,6 +3,7 @@ package org.rtklib.java.product;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
@@ -46,7 +47,7 @@ public class PppProductIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(PppProductIntegrationTest.class);
 
-    private static final String RTCM_BASE_DIR = "D:\\yaxia\\rtcm";
+    private static final String RTCM_BASE_DIR = TestDataConfig.getRtcmBaseDir();
 
     private static final LocalDate BJ_START_DATE = LocalDate.of(2026, 7, 1);
     private static final LocalDate BJ_END_DATE = LocalDate.of(2026, 7, 6);
@@ -56,14 +57,23 @@ public class PppProductIntegrationTest {
     private static final Map<String, String[]> BASE_ROVER_MAP = new LinkedHashMap<>();
 
     static {
-        BASE_ROVER_MAP.put("DEVICE_ID_REDACTED", new String[]{
-                "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED",
-                "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED"
-        });
-        BASE_ROVER_MAP.put("DEVICE_ID_REDACTED", new String[]{
-                "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED",
-                "DEVICE_ID_REDACTED", "DEVICE_ID_REDACTED"
-        });
+        String raw = TestDataConfig.get("ppp.base.rover.map", "");
+        for (String group : raw.split(";")) {
+            String trimmed = group.trim();
+            if (trimmed.isEmpty()) continue;
+            int colon = trimmed.indexOf(':');
+            if (colon < 0) {
+                log.warn("ppp.base.rover.map 格式错误（缺少 ':'）：{}", trimmed);
+                continue;
+            }
+            String base = trimmed.substring(0, colon).trim();
+            String rovers = trimmed.substring(colon + 1).trim();
+            if (base.isEmpty() || rovers.isEmpty()) continue;
+            BASE_ROVER_MAP.put(base, rovers.split(","));
+        }
+        if (BASE_ROVER_MAP.isEmpty()) {
+            log.info("未配置 ppp.base.rover.map，本测试将跳过（私有设备号不入库）");
+        }
     }
 
     private static boolean dataAvailable = false;
@@ -134,7 +144,7 @@ public class PppProductIntegrationTest {
                     .collect(Collectors.groupingBy(d -> d.bjDate, Collectors.counting()));
             byDate.forEach((d, c) -> log.info("  BJ {}: {} pairs", d, c));
         } else {
-            log.warn("No July 2026 RTCM data available");
+            log.warn("无可用 RTCM 数据：请配置 ppp.base.rover.map 与 rtcm.base.dir 后重试");
         }
     }
 

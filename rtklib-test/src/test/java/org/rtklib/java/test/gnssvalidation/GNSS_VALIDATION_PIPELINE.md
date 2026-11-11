@@ -292,7 +292,7 @@ test-data/
 ### 5.2 编译项目
 
 ```bash
-cd D:\code\rtklib_java
+cd <repo-root>
 mvn install -DskipTests -pl rtklib-core,rtklib-stream,rtklib-adjust,rtklib-product -am
 ```
 

@@ -20,17 +20,24 @@ OUT_DIM = 2
 
 
 def write_norm(path: Path, mean: np.ndarray, std: np.ndarray, note: str | None = None,
-               dim: int = DIM) -> None:
+               dim: int = DIM, constant_cols: "list[str] | None" = None) -> None:
     """写 ``norm.json``：Java 侧 ``FeatureNorm`` 只读 ``mean`` / ``std`` 两个数组。
 
     ``dim`` 必须与对应接口的特征维一致（接口三 17、接口一 6），否则 Java 侧
     ``FeatureNorm.load(path, dim)`` 会直接抛错。
+
+    ``constant_cols`` 标注训练集上方差恒为 0 的结构性死列（接口三的 f2/f3/f8）。
+    这些列**保留占位**（不删维，输入维恒为 ``dim``），但其 ``std`` 按 1.0 兜底，
+    归一化后恒等于 0——下游据此知道该维不携带信息，可跳过解读。
+    Java 侧 ``FeatureNorm`` 解析器允许额外字段，故该键对推理无影响。
     """
     mean = np.asarray(mean, dtype=np.float64).reshape(-1)
     std = np.asarray(std, dtype=np.float64).reshape(-1)
     if mean.size != dim or std.size != dim:
         raise ValueError(f"归一化参数长度必须为 {dim}，实际 mean={mean.size} std={std.size}")
     payload = {"mean": [float(v) for v in mean], "std": [float(v) for v in std]}
+    if constant_cols:
+        payload["constant_cols"] = [str(c) for c in constant_cols]
     if note:
         payload["note"] = note
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

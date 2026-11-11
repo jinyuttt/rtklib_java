@@ -32,6 +32,9 @@ public class Rtk implements Serializable {
 
     public double tt;
 
+    /** 上一次接口三推理的观测时刻（GPST 整秒+小数秒之和），用于求历元采样间隔（§5.3）。 */
+    public double aiPrevObsSec;
+
     public int nband;
 
     public int[] nepoch;

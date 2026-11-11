@@ -74,6 +74,18 @@ public record CollectConfig(
         return outputDir.resolve(station + "_" + day + "_" + runId + ".trace");
     }
 
+    /**
+     * 接口三采集的 17 维特征落盘路径。
+     * <p>
+     * 与接口一的 {@link #csvPath()} <b>必须分开</b>：接口一是「一历元一行」（6 维），
+     * 接口三是「一历元 × 一卫星 × 一频点一行」（17 维），行数与主键都不同，
+     * 混在一个文件里无法 join，也无法按行回溯。
+     * </p>
+     */
+    public Path obsCsvPath() {
+        return outputDir.resolve(station + "_" + day + "_" + runId + ".obs.csv");
+    }
+
     /** 跨运行累积的运行清单，记录每次运行的站/日/行数，供组装阶段过滤残缺运行。 */
     public Path manifestPath() {
         return outputDir.resolve("_runs.csv");
@@ -88,6 +100,9 @@ public record CollectConfig(
         Files.createDirectories(outputDir);
         if (!overwrite && Files.exists(csvPath())) {
             throw new IOException("采集文件已存在，拒绝覆盖（runId 必须唯一）: " + csvPath());
+        }
+        if (!overwrite && Files.exists(obsCsvPath())) {
+            throw new IOException("接口三采集文件已存在，拒绝覆盖（runId 必须唯一）: " + obsCsvPath());
         }
     }
 

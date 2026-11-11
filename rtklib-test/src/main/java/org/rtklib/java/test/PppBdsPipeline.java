@@ -1,5 +1,6 @@
 package org.rtklib.java.test;
 
+import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
@@ -19,11 +20,11 @@ public class PppBdsPipeline {
 
     private static final Logger log = LoggerFactory.getLogger(PppBdsPipeline.class);
 
-    private static final String YAXIA_DIR = "D:\\rtcm3";
-    private static final String STATION = "DEVICE_ID_REDACTED";
-    private static final String DATE_STR = "2026-06-29";
-    private static final String RTCM_FILE = YAXIA_DIR + "\\" + STATION + "\\" + DATE_STR + "\\0.rtcm3";
-    private static final String PRODUCT_DIR = "D:\\rtcm3\\product";
+    private static final String RTCM_DIR = TestDataConfig.getRtcmBaseDir();
+    private static final String STATION = TestDataConfig.getStation();
+    private static final String DATE_STR = TestDataConfig.getStationDate();
+    private static final String RTCM_FILE = RTCM_DIR + "\\" + STATION + "\\" + DATE_STR + "\\0.rtcm3";
+    private static final String PRODUCT_DIR = TestDataConfig.getProductDir();
 
     private static String obsFile;
     private static String navFile;
@@ -67,6 +68,11 @@ public class PppBdsPipeline {
         log.info("  PPP BDS Comprehensive Pipeline Test");
         log.info("  Station: {}  Date: {}", STATION, DATE_STR);
         log.info("============================================================");
+
+        if (STATION.isEmpty() || DATE_STR.isEmpty()) {
+            log.error("未配置 station.id / station.date，请写入 test-data.properties 后重试");
+            return;
+        }
 
         step1_checkRtcm();
         step2_convertRinex();

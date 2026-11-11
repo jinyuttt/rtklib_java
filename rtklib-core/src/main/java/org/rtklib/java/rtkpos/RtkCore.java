@@ -1,3 +1,5 @@
+
+
 package org.rtklib.java.rtkpos;
 
 import org.rtklib.java.ambiguity.Lambda;
@@ -43,6 +45,14 @@ public final class RtkCore {
     private static final double TTOL_MOVEB = 1.05;
     private static final int MIN_ND = 4;
     private static final double RNX2CLK = 299792458.0;
+    /**
+     * 接口一几何退化门禁（§7.4.3 / D14）：{@code pdop} 高于该值的历元一律接受、不参与剔除。
+     * <p>
+     * 必须与训练侧 {@code training/fix_validator/train.py} 的 {@code PDOP_ABSTAIN_MAX}
+     * 保持同值，改任一处即视为改判据，须走新决策记录。
+     * </p>
+     */
+    private static final double AI_PDOP_ABSTAIN_MAX = 8.0;
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(RtkCore.class);
 
     public static int rtkpos(Rtk rtk, Obsd[] obs, int n, Nav nav) {
@@ -221,7 +231,7 @@ public final class RtkCore {
         negotiateIflcPairs(rtk.toState(), obs, nu, nr);
 
         if (!zdres(rtk.toState(), 1, obs, nu, nr, rs, dts, vare, svh, nav, rtk.rb, opt,
-                y, e, azel, freq, rtk.epoch)) {
+                y, e, azel, freq)) {
             LOG.info("relpos: zdres(base) failed, epoch={}", rtk.epoch);
             return 0;
         }
@@ -331,7 +341,7 @@ public final class RtkCore {
         for (i = 0; i < opt.niter; i++) {
             for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xp[j];
             if (!zdres(rtk.toState(), 0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
-                    y, e, azel, freq, rtk.epoch)) {
+                    y, e, azel, freq)) {
                 LOG.info("relpos: zdres(rover) failed, epoch={}, iter={}", rtk.epoch, i);
                 stat = Constants.SOLQ_NONE;
                 break;
@@ -341,11 +351,11 @@ public final class RtkCore {
              * 推理结果写入局部数组，ddres 内只读查表，故 ddres 跑 2~3 次也不会重复施加。 */
             if (i == 0 && aiCorrector != null && !aiCorrectionDone) {
                 aiCorrectionDone = true;
-                aiComputeCorrection(rtk, obs, sat, iu, ns, nf, dt, azel,
+                aiComputeCorrection(rtk, obs, sat, iu, ir, ns, nf, azel,
                         aiBias, aiScale, aiCorrector, v2cfg, v2cb);
             }
             if ((nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
-                    iu, ir, ns, nf, nav, v, H, R, vflg, aiBias, aiScale)) < 4) {
+                    iu, ir, ns, nf, nav, v, H, R, vflg, aiBias, aiScale, false)) < 4) {
                 stat = Constants.SOLQ_NONE;
                 break;
             }
@@ -462,9 +472,13 @@ public final class RtkCore {
         if (stat != Constants.SOLQ_NONE) {
             for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xp[j];
             if (zdres(rtk.toState(), 0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
-                    y, e, azel, freq, rtk.epoch)) {
+                    y, e, azel, freq)) {
+                /* [AI-3] 本调用是每历元唯一一次「滤波更新后」的残差求值（valpos 的输入），
+                 * 也是模型真正要修的那组残差，故 AI3 逐行 trace 只在此处开启。
+                 * 循环内的 ddres（niter 次）与 AR 固定解后的 ddres（基于 xa）都不是标签口径，
+                 * 必须保持关闭，否则同一 (epoch, sat, frq) 会出现多行互相矛盾的标签。 */
                 nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
-                        iu, ir, ns, nf, nav, v, null, R, vflg, aiBias, aiScale);
+                            iu, ir, ns, nf, nav, v, H, R, vflg, aiBias, aiScale, true);
 
                 // [OPT-RES-EDIT] 残差时序周跳检测与伪距-载波一致性校验
                 RtkOptimizationsResEdit.checkCycleSlip(rtk, v, R, vflg, nv);
@@ -502,11 +516,11 @@ public final class RtkCore {
             if (nb > 1) {
                 for (j = 0; j < 3; j++) rr_rover[j] = rtk.rb[j] + xa_arr[j];
                 boolean zdOk = zdres(rtk.toState(), 0, obs, nu, nr, rs, dts, vare, svh, nav, rr_rover, opt,
-                        y, e, azel, freq, rtk.epoch);
+                        y, e, azel, freq);
 
                 if (zdOk) {
-                    nv = ddres(rtk, obs, dt, xa_arr, rtk.P, sat, y, e, azel, freq,
-                            iu, ir, ns, nf, nav, v, null, R, vflg, aiBias, aiScale);
+                    nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
+                        iu, ir, ns, nf, nav, v, null, R, vflg, aiBias, aiScale, false);
                     boolean valOk = nv > 0 && valpos(rtk, v, R, vflg, nv, 4.0);
 
                     if (valOk) {
@@ -769,7 +783,9 @@ public final class RtkCore {
      * 原生行为逐位不变（I-1）。
      * </p>
      * <p>
-     * 注入后：{@code confidence >= AiOpts.fixValidatorMinConfidence} 即接受；
+     * 注入后：{@code pdop > 8.0} 的几何退化历元在阈值比较之前直接接受（§7.4.3 / D14，
+     * 与训练侧 {@code PDOP_ABSTAIN_MAX} 同语义）；其余历元
+     * {@code confidence >= AiOpts.fixValidatorMinConfidence} 即接受；
      * 异常、非有限置信度一律按 {@code 1.0}（不干预）处理，禁止 fail-closed（§3.4）。
      * </p>
      * <p>
@@ -791,8 +807,13 @@ public final class RtkCore {
 
         double confidence;
         try {
-            confidence = validator.validate(buildFixQualityContext(rtk, sat, iu, ns, nf, nb,
-                    xa, v, vflg, nv, azel, opt));
+            FixQualityContext ctx = buildFixQualityContext(rtk, sat, iu, ns, nf, nb,
+                    xa, v, vflg, nv, azel, opt);
+            /* [AI-2] 几何退化前置门禁（§7.4.3 / D14）：pdop > 8.0 的历元不参与剔除，
+             * 在阈值比较之前直接接受。与训练侧 train.py 的 _accepted() 同语义：
+             * conf >= threshold || pdop > PDOP_ABSTAIN_MAX。 */
+            if (ctx.pdop() > AI_PDOP_ABSTAIN_MAX) return true;
+            confidence = validator.validate(ctx);
         } catch (Throwable t) {
             if (rtk.rtkConfig.ai.traceDegrades && !rtk.aiDegradeLogged) {
                 rtk.aiDegradeLogged = true;
@@ -1229,8 +1250,8 @@ public final class RtkCore {
 
             for (int f = 0; f < nf; f++) {
                 rtk.ssat[sat[i] - 1].half[f] =
-                    !((obs[iu[i]].LLI[f] & Constants.LLI_HALFC) != 0 ||
-                      (obs[ir[i]].LLI[f] & Constants.LLI_HALFC) != 0) ? 1 : 0;
+                    ((obs[iu[i]].LLI[f] & Constants.LLI_HALFC) != 0 ||
+                     (obs[ir[i]].LLI[f] & Constants.LLI_HALFC) != 0) ? 1 : 0;
             }
         }
 
@@ -1357,8 +1378,7 @@ public final class RtkCore {
     public static boolean zdres(RtkState rtk, int base, Obsd[] obs, int nu, int nr,
                                 double[] rs, double[] dts, double[] vare, int[] svh,
                                 Nav nav, double[] rr, PrcOpt opt,
-                                double[] y, double[] e, double[] azel, double[] freq,
-                                int epoch) {
+                                double[] y, double[] e, double[] azel, double[] freq) {
         int n = base != 0 ? nr : nu;
         int off = base != 0 ? nu : 0;
         int foff = base != 0 ? nu : 0;
@@ -1726,18 +1746,29 @@ public final class RtkCore {
      * 方差超 {@code ai.varianceScaleMax} 时钳到上限并告警（§4.3.4）。
      * </p>
      */
-    private static void aiComputeCorrection(Rtk rtk, Obsd[] obs, int[] sat, int[] iu,
-                                            int ns, int nf, double dt, double[] azel,
+    private static void aiComputeCorrection(Rtk rtk, Obsd[] obs, int[] sat, int[] iu, int[] ir,
+                                            int ns, int nf, double[] azel,
                                             double[] aiBias, double[] aiScale,
                                             ObsCorrector corrector,
                                             TraceConfig cfg, TraceCallback cb) {
         Arrays.fill(aiBias, 0.0);
         Arrays.fill(aiScale, 1.0);
 
+        /* selsat 按基准站高度角筛选（C 版行为），而本历元 rover 侧 azel 只有 zdres(rover)
+         * 之后才可用；因此 ns 中可能含「基准站有星历、流动站无几何」的卫星，其 rover
+         * 高度角是 satazel 在 rs=0 时的退化值 -90°，与 §5.3「f0 不缺失（zdres 已按 elmin
+         * 过滤）」冲突。此类卫星在 ddres 中因 validobs 失败不参与双差，故在此剔除其行：
+         * 模型不再看到脏行，且 aiBias/aiScale 仍按 ns*nf 原位回填，解算结果逐位不变。 */
+        int[] rowSat = new int[ns];
         SatFeature[] feats = new SatFeature[ns];
+        int nsel = 0;
         for (int i = 0; i < ns; i++) {
+            if (!(azel[iu[i] * 2 + 1] >= rtk.opt.elmin)) {
+                continue;
+            }
             Ssat ss = rtk.ssat[sat[i] - 1];
-            feats[i] = new SatFeature(
+            rowSat[nsel] = i;
+            feats[nsel++] = new SatFeature(
                     sat[i],
                     SatUtils.satsys(sat[i], null),
                     azel[iu[i] * 2],
@@ -1750,21 +1781,38 @@ public final class RtkCore {
                     ss.slip,
                     ss.half,
                     ss.gf,
-                    ss.vsat,
+                    aiVsat(obs, iu[i], ir[i], nf),
                     ss.fix);
         }
+        if (nsel == 0) {
+            return;
+        }
+        SatFeature[] sel = (nsel == ns) ? feats : Arrays.copyOf(feats, nsel);
+        int rows = nsel * nf;
 
         CodeCorrection cc;
+        /* 上下文 dt 必须是「历元采样间隔」：接口三短窗的缺口判据（§5.3，间隔 > 1.5*dt
+         * 清空全部窗口）依赖它，且契约规定 dt 唯一来源是 core、impl 不得自行推算。
+         * 不能用本历元的 ddres 参数 dt——那是「流动站与基准站观测时刻之差」
+         * （同步采集时恒 0）；也不能只信 rtk.tt——该字段由 rtk.sol.time 的引用别名推算，
+         * 观测对象被复用时前后两历元取到同一时刻，同样恒 0。两者一旦为 0，
+         * 缺口判据每历元都成立，窗口永远只有 1 个样本（f16 恒 0.2、f14 恒 0、
+         * f13 恒等于 f4），训练侧学到退化特征，推理侧再喂真实窗口值就会因
+         * 归一化尺度失配而饱和。故此处按「相邻两次推理的观测时刻之差」求间隔，
+         * 只保存 double 快照，不受对象复用影响。 */
+        double obsSec = (double) obs[0].time.time + obs[0].time.sec;
+        double epochDt = rtk.aiPrevObsSec > 0.0 ? obsSec - rtk.aiPrevObsSec : rtk.tt;
+        rtk.aiPrevObsSec = obsSec;
         try {
-            cc = corrector.correct(new ObsCorrectionContext(rtk.epoch, ns, nf, dt, feats));
+            cc = corrector.correct(new ObsCorrectionContext(rtk.epoch, nsel, nf, epochDt, sel));
         } catch (Throwable t) {
             LOG.warn("接口三实现抛异常，本历元按不干预处理（epoch={}）: {}", rtk.epoch, t.toString());
             return;
         }
         if (cc == null || cc.biasMeters() == null || cc.varianceScale() == null
-                || cc.biasMeters().length != ns * nf || cc.varianceScale().length != ns * nf) {
+                || cc.biasMeters().length != rows || cc.varianceScale().length != rows) {
             LOG.warn("接口三输出非法（null 或长度不符，期望 {}），本历元按不干预处理（epoch={}）",
-                    ns * nf, rtk.epoch);
+                    rows, rtk.epoch);
             if (aiTraceDegrades(rtk)) {
                 Trace.emit("AI3", "AI_DEGRADE", cfg, cb, rtk.epoch, obs[0].time,
                         "interface", "obs_corrector", "reason", "invalid_output");
@@ -1776,9 +1824,10 @@ public final class RtkCore {
         double maxBias = ai == null ? AiOpts.DEFAULT_OBS_CORRECTOR_MAX_BIAS : ai.obsCorrectorMaxBias;
         double maxScale = ai == null ? AiOpts.DEFAULT_VARIANCE_SCALE_MAX : ai.varianceScaleMax;
 
-        for (int idx = 0; idx < ns * nf; idx++) {
-            double b = cc.biasMeters()[idx];
-            double s = cc.varianceScale()[idx];
+        for (int r = 0; r < rows; r++) {
+            int idx = rowSat[r / nf] * nf + r % nf;
+            double b = cc.biasMeters()[r];
+            double s = cc.varianceScale()[r];
             if (!Double.isFinite(b) || Math.abs(b) > maxBias) {
                 if (!rtk.aiBiasClampLogged) {
                     rtk.aiBiasClampLogged = true;
@@ -1803,7 +1852,7 @@ public final class RtkCore {
         }
 
         Trace.emit("AI3", "CORRECT", cfg, cb, rtk.epoch, obs[0].time,
-                "ns", ns, "nf", nf, "dt", dt);
+                "ns", nsel, "nf", nf, "dt", epochDt);
     }
 
     private static boolean aiTraceDegrades(Rtk rtk) {
@@ -1816,12 +1865,36 @@ public final class RtkCore {
         return d;
     }
 
+    /**
+     * 接口三 f10 的当历元可用性。
+     * <p>
+     * 不能直接传 {@code ssat.vsat}：{@code relpos} 在每个历元开头就把 {@code vsat} 清零，
+     * 而接口三推理位于首次 {@code ddres} 之前（§3.3），此时 {@code vsat} 必然全 0，
+     * f10 会退化成恒 0 的常数维。此处按与 {@code ddres} 的 {@code validobs} 相同口径
+     * （流动站与基准站同频点同时有该观测类型）判当历元结构可用性，逐频点填 0/1，
+     * 既保留「该频点是否有效」的语义，又不会把 {@code ddres} 的后验结果（标签）漏进特征。
+     * </p>
+     */
+    private static int[] aiVsat(Obsd[] obs, int iu, int ir, int nf) {
+        int[] vsat = new int[Constants.NFREQ];
+        for (int f = 0; f < nf && f < Constants.NFREQ; f++) {
+            boolean code = obs[iu].P[f] != 0.0 && obs[ir].P[f] != 0.0;
+            boolean phase = obs[iu].L[f] != 0.0 && obs[ir].L[f] != 0.0;
+            vsat[f] = (code || phase) ? 1 : 0;
+        }
+        return vsat;
+    }
+
     private static int ddres(Rtk rtk, Obsd[] obs, double dt, double[] x, double[] P,
                              int[] sat, double[] y, double[] e, double[] azel,
                              double[] freq, int[] iu, int[] ir, int ns, int nf,
                              Nav nav, double[] v, double[] H, double[] R, int[] vflg,
-                             double[] aiBias, double[] aiScale) {
+                             double[] aiBias, double[] aiScale, boolean traceRow) {
         PrcOpt opt = rtk.opt;
+        /* A3 逐行 trace 的开关（§7.5.3）：只在评估期开启，关闭时仅多一次短路的
+         * 布尔判断，逐行不构造任何 kv 数组，故不进入生产热路径。 */
+        boolean traceDdres = traceRow && rtk.traceConfig != null && rtk.traceConfig.enabled
+                && rtk.traceCallback != null && rtk.traceConfig.topics.contains("AI3");
         int nx = rtk.nx;int i, j, k, m, f, nv = 0;
         int[] nb = new int[Constants.NFREQ * 7 * 2 + 2];
         int b = 0;
@@ -2008,6 +2081,9 @@ public final class RtkCore {
                     /* [AI-3] 偏差施加（§4.3.3/§4.3.6）：只读查表，仅伪距行。
                      * 符号照抄设计：v -= (参考星偏差 − 本星偏差)，索引用 sat[] 下标而非卫星号。
                      * v[nv] 每次由 y 现场重算，故 ddres 多次调用不会重复扣除（幂等）。 */
+                    /* A3 的 before 取「未扣偏差」的同一行残差（§7.5.3）：与 A 组同历元
+                     * 同星同频点的语义等价，且不受两次运行滤波状态漂移影响。 */
+                    double vBeforeAi = traceDdres && code ? v[nv] : 0.0;
                     if (code && aiBias != null) {
                         v[nv] -= aiBias[refIdx * nf + frq] - aiBias[j * nf + frq];
                     }
@@ -2056,6 +2132,14 @@ public final class RtkCore {
                         /* aligned with C rtkpos.c ddres(): vsat=0 and rejc++ for both code and phase */
                         rtk.ssat[sat[j] - 1].vsat[frq] = 0;
                         rtk.ssat[sat[j] - 1].rejc[frq]++;
+                        /* A2-4 归因用（§7.5.2）：被 maxinno 剔除的行在此记录 before/after，
+                         * 才能判定「ns 减少」是否由偏差或方差膨胀改变了剔除行为。 */
+                        if (traceDdres && code) {
+                            Trace.emit("AI3", "DDRES_REJ", rtk.traceConfig, rtk.traceCallback,
+                                    rtk.epoch, obs[0].time,
+                                    "sat", sat[j], "i", j, "frq", frq,
+                                    "before", vBeforeAi, "after", v[nv], "maxinno", maxinno_val);
+                        }
                         continue;
                     }
 
@@ -2073,9 +2157,19 @@ public final class RtkCore {
                         /* [AI-3] 方差膨胀（§4.3.4）：必须在半周 0.01 补偿之后施加，
                          * 否则 0.01 会被膨胀因子放大。Ri ↔ 参考星，Rj ↔ 非参考星，方向不得对调。
                          * code 行与 carrier 行共用同一 (i, frq) 的系数（同一观测质量判断）。 */
+                        double riPreAi = Ri[nv];
+                        double rjPreAi = Rj[nv];
                         if (aiScale != null) {
                             Ri[nv] *= aiScale[refIdx * nf + frq];
                             Rj[nv] *= aiScale[j * nf + frq];
+                        }
+                        /* A3 逐行 trace（§7.5.3）：σ_dd = sqrt(Ri+Rj) 必须用**膨胀前**的原生方差，
+                         * 否则模型把 varianceScale 调大就能自己放宽门限（自我放宽）。 */
+                        if (traceDdres && code) {
+                            Trace.emit("AI3", "DDRES", rtk.traceConfig, rtk.traceCallback,
+                                    rtk.epoch, obs[0].time,
+                                    "sat", sat[j], "i", j, "frq", frq,
+                                    "before", vBeforeAi, "after", v[nv], "Ri", riPreAi, "Rj", rjPreAi);
                         }
                     }
 
@@ -2802,7 +2896,7 @@ public final class RtkCore {
             if (rcv == 1) { rtk.ssat()[sat - 1].slip[f] = (rtk.ssat()[sat - 1].slip[f] & 0xFC) | (obs[i].LLI[f] & 0x03); }
             else { rtk.ssat()[sat - 1].slip[f] = (rtk.ssat()[sat - 1].slip[f] & 0xF3) | ((obs[i].LLI[f] & 0x03) << 2); }
             rtk.ssat()[sat - 1].slip[f] |= slip;
-            rtk.ssat()[sat - 1].half[f] = (obs[i].LLI[f] & Constants.LLI_HALFC) != 0 ? 0 : 1;
+            rtk.ssat()[sat - 1].half[f] = (obs[i].LLI[f] & Constants.LLI_HALFC) != 0 ? 1 : 0;
         }
     }
 

@@ -63,6 +63,10 @@ target/
 # AI 训练管道产物（可由 train.py 重新生成，不入库）
 /rtklib-ai/training/out/
 /rtklib-ai/training/**/__pycache__/
+# 训练中间产物与临时目录（含站点设备号、绝对路径，不入库）
+/rtklib-ai/out/
+/rtklib-ai/training/artifacts/
+/rtklib-ai/.tmp_smoke/
 
 # Test output directories
 test_results/
@@ -148,7 +152,8 @@ cascade_ab_report*.txt
 .tmp/
 .tmp-macgen/
 cas_sourcetable.txt
-rtklib-product/cp.txt
+# Maven classpath dumps (contain local repo absolute paths, never commit)
+**/cp.txt
 cascade_epochs_*.csv
 # Adaptive engine audit log (AdaptiveAuditLogger output + rotated *.csv.1, .2, ...)
 **/adaptive_audit.csv*

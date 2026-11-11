@@ -127,6 +127,11 @@ public class PppProcessor {
     /* 自适应引擎（JAVA-ONLY，默认关闭）：首个历元惰性启动，绑定 this.opt 与 rtk.rtkConfig 引用 */
     private AdaptiveController adaptiveCtl;
 
+    /* [FIX-ALG-055] SPP 重初始化专用 scratch 卫星状态，见 sppScratchSsat() */
+    private Ssat[] sppScratch;
+    /* [FIX-ALG-056] SPP 重初始化专用 scratch 解算结果，见 sppScratchSol() */
+    private Sol sppScratchSol;
+
     public PppProcessor(PrcOpt opt, SolOpt solOpt, PosHandler handler, OutputStream outputStream) {
         this.opt = new PrcOpt(opt);
         this.rtcm.relaxSyncFlag = this.opt.relaxSyncFlag;
@@ -456,6 +461,89 @@ public class PppProcessor {
 
     public void feed(byte[] data) {
         feed(data, 0, data.length);
+    }
+
+    public void setReferenceTime(GTime time) {
+        rtcm.setReferenceTime(time);
+    }
+
+    /**
+     * [FIX-ALG-055] SPP 重初始化专用的 scratch 卫星状态数组。
+     * <p>
+     * {@link PntPos#pntpos} 会先清写全部 {@code snrRover/snrBase}，结束时再清写全部
+     * {@code vs/azel/resp/resc}，只保留本次历元参与 SPP 的卫星。若把滤波器在用的
+     * {@code rtk.ssat} 直接传进去，已收敛的逐星状态（历史高度角、残差、有效标志）
+     * 会被 SPP 抹掉，导致 PPP 侧后续历元的选星/定权与失锁判断偏离。
+     * </p>
+     * <p>
+     * SPP 对 ssat 的唯一读取是 {@code snrRover[0]}，而该值由 pntpos 自己按 obs 写入，
+     * 因此一份独立的 scratch 数组即可满足 SPP 的全部需求，且不与滤波器共享任何可变状态。
+     * 数组惰性创建后复用：每次 pntpos 返回时已把 vs/azel/resp/resc 全部归零重填，
+     * 不存在跨历元残留。
+     * </p>
+     *
+     * @return 长度 {@link Constants#MAXSAT} 的 scratch 数组，元素非 null
+     */
+    private Ssat[] sppScratchSsat() {
+        if (sppScratch == null) {
+            sppScratch = new Ssat[Constants.MAXSAT];
+            for (int i = 0; i < Constants.MAXSAT; i++) {
+                sppScratch[i] = new Ssat();
+            }
+        }
+        return sppScratch;
+    }
+
+    /**
+     * [FIX-ALG-056] SPP 重初始化专用的 scratch 解算结果。
+     * <p>
+     * {@link PntPos#pntpos} 会往传入的 {@code Sol} 写 {@code stat/ns/rr/qr/ratio/age}。
+     * 若直接传 {@code rtk.sol}，滤波器一旦收敛，SPP 的米级单点解会覆盖掉
+     * {@code sol.rr}——而 {@code sol.rr} 正是 {@code udpos()} 的 re-init 参考、
+     * {@code udtrop/udiono} 的映射函数输入，覆盖后整条轨迹会被拽走（实测偏移约 5 m，
+     * 随后 AR 全线失败）。因此 SPP 结果先落到这份 scratch，再由 {@link #needSppInit}
+     * 决定是否采纳。
+     * </p>
+     *
+     * @return 复用的 scratch {@link Sol} 实例
+     */
+    private Sol sppScratchSol() {
+        if (sppScratchSol == null) {
+            sppScratchSol = new Sol();
+        }
+        return sppScratchSol;
+    }
+
+    /**
+     * [FIX-ALG-056] 判断滤波器是否真的还没有位置，从而需要采纳 SPP 单点解。
+     * <p>
+     * 仅两种情况为真：
+     * <ol>
+     *   <li>{@code rtk.nx == 0}：滤波器尚未初始化，SPP 解就是初值来源；</li>
+     *   <li>{@code rtk.x[0..2]} 全零：状态向量没有位置（{@code udpos()} 会走 re-init 分支
+     *       从 {@code sol.rr} 取值，此时同样需要 SPP 解）。</li>
+     * </ol>
+     * 其余情况（已收敛、或位置虽然失锁但仍保有上一历元参考位置）一律不采纳，
+     * 保持 {@code sol.rr} 为 AR/KF 的位置参考不被污染。
+     * </p>
+     *
+     * @param r 待检查的滤波器实例
+     * @return 需要采纳 SPP 解返回 {@code true}
+     */
+    private static boolean needSppInit(Rtk r) {
+        if (r.nx == 0 || r.x == null) return true;
+        double norm = 0.0;
+        for (int i = 0; i < 3 && i < r.x.length; i++) norm += r.x[i] * r.x[i];
+        return norm <= 0.0;
+    }
+
+    public void processEpochObs(Obsd[] obsData, int n) {
+        if (finished) {
+            throw new IllegalStateException("Processor already finished");
+        }
+        if (obsData == null || n <= 0) return;
+        for (int i = 0; i < n; i++) obsData[i].rcv = 1;
+        processEpoch(obsData, n, obsData[0].time, rtcm.nav);
     }
 
     public void reset() {
@@ -870,23 +958,43 @@ public class PppProcessor {
         if (rtk.sol.stat == Constants.SOLQ_NONE) {
             PrcOpt sppInitOpt = new PrcOpt(opt);
             sppInitOpt.mode = Constants.PMODE_SINGLE;
-            sppInitOpt.navsys = Constants.SYS_GPS;
+            /* [FIX-ALG-056] 继承 opt.navsys，不再写死 GPS：原写法在 BDS-only 数据上
+             * （如 navsys=0x20）必然凑不出 4 颗 GPS 卫星而失败，SPP 初始位置永远拿不到。 */
+            sppInitOpt.navsys = opt.navsys;
             sppInitOpt.ionoopt = Constants.IONOOPT_BRDC;
             sppInitOpt.tropopt = Constants.TROPOPT_SAAS;
+            Sol sppSol = sppScratchSol();
+            sppSol.stat = Constants.SOLQ_NONE;
+            sppSol.ns = 0;
             try {
-                PntPos.pntpos(obsData, n, nav, sppInitOpt, rtk.sol, null, rtk.ssat);
+                /* [FIX-ALG-055] 传 scratch ssat：PntPos 会清写 vs/azel/resp/resc/snrRover，
+                 * 直接传 rtk.ssat 会把已收敛滤波器的逐星状态覆盖掉。
+                 * [FIX-ALG-056] 同时传 scratch sol：SPP 结果只有滤波器尚无位置时才采纳，
+                 * 见下方 adoptSpp。 */
+                PntPos.pntpos(obsData, n, nav, sppInitOpt, sppSol, null, sppScratchSsat());
             } catch (Throwable t) {
                 log.error("SPP init failed: {}", t.toString(), t);
             }
-            if (log.isDebugEnabled() && rtk.sol.stat != Constants.SOLQ_NONE) {
+            boolean adoptSpp = sppSol.stat != Constants.SOLQ_NONE && needSppInit(rtk);
+            if (adoptSpp) {
+                rtk.sol.stat = sppSol.stat;
+                rtk.sol.ns = sppSol.ns;
+                rtk.sol.ratio = sppSol.ratio;
+                rtk.sol.age = sppSol.age;
+                System.arraycopy(sppSol.rr, 0, rtk.sol.rr, 0, 3);
+                System.arraycopy(sppSol.qr, 0, rtk.sol.qr, 0, 3);
+            }
+            rtk.sol.time = obsData[0].time;
+            rtk.sol.eventime = obsData[0].eventime;
+            if (log.isDebugEnabled() && sppSol.stat != Constants.SOLQ_NONE) {
                 double[] llh = new double[3];
-                CoordTransform.ecef2pos(rtk.sol.rr, llh);
-                log.debug("SPP initial pos: lat={} lon={} h={} ns={}",
+                CoordTransform.ecef2pos(sppSol.rr, llh);
+                log.debug("SPP initial pos: lat={} lon={} h={} ns={} adopted={}",
                         String.format("%.6f", llh[0] * Constants.R2D),
                         String.format("%.6f", llh[1] * Constants.R2D),
-                        String.format("%.1f", llh[2]), rtk.sol.ns);
+                        String.format("%.1f", llh[2]), sppSol.ns, adoptSpp);
             }
-            if (log.isDebugEnabled() && rtk.sol.stat == Constants.SOLQ_NONE) {
+            if (log.isDebugEnabled() && sppSol.stat == Constants.SOLQ_NONE) {
                 log.debug("SPP failed - no initial position for PPP");
             }
         } else {
@@ -1235,10 +1343,24 @@ public class PppProcessor {
             if (rtkB.sol.stat == Constants.SOLQ_NONE) {
                 PrcOpt sppInitOptB = new PrcOpt(opt);
                 sppInitOptB.mode = Constants.PMODE_SINGLE;
-                sppInitOptB.navsys = Constants.SYS_GPS;
+                /* [FIX-ALG-056] 同正向分支：继承 opt.navsys + scratch ssat/sol */
+                sppInitOptB.navsys = opt.navsys;
                 sppInitOptB.ionoopt = Constants.IONOOPT_BRDC;
                 sppInitOptB.tropopt = Constants.TROPOPT_SAAS;
-                PntPos.pntpos(obsData, n, nav, sppInitOptB, rtkB.sol, null, rtkB.ssat);
+                Sol sppSolB = sppScratchSol();
+                sppSolB.stat = Constants.SOLQ_NONE;
+                sppSolB.ns = 0;
+                PntPos.pntpos(obsData, n, nav, sppInitOptB, sppSolB, null, sppScratchSsat());
+                if (sppSolB.stat != Constants.SOLQ_NONE && needSppInit(rtkB)) {
+                    rtkB.sol.stat = sppSolB.stat;
+                    rtkB.sol.ns = sppSolB.ns;
+                    rtkB.sol.ratio = sppSolB.ratio;
+                    rtkB.sol.age = sppSolB.age;
+                    System.arraycopy(sppSolB.rr, 0, rtkB.sol.rr, 0, 3);
+                    System.arraycopy(sppSolB.qr, 0, rtkB.sol.qr, 0, 3);
+                }
+                rtkB.sol.time = obsData[0].time;
+                rtkB.sol.eventime = obsData[0].eventime;
             } else {
                 rtkB.sol.time = obsData[0].time;
             }

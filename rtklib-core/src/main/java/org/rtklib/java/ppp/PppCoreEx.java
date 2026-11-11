@@ -28,6 +28,12 @@ public class PppCoreEx {
 
     public static void ppos(Rtk rtk, Obsd[] obs, int n, Nav nav, RtkConfig cfg) {
         LOG.info("PppCoreEx.ppos called: pppAR={}, bds3AR={}", cfg.pppAr.enableAR, cfg.pppAr.enableBds3AR);
+
+        /* [FIX-ALG-057] 与 PppCore.pppos 一致：逐历元入口清除上一历元 AR 写入的
+         * SOLQ_FIX 锁存，避免扩展状态分支跳过 PppCore.pppos 时 stat 永久停留
+         * 在 FIX（浮点坐标被当成固定解输出、AR 不再执行）。 */
+        PppCore.clearFixLatch(rtk);
+
         boolean needExtendedState = cfg.ppp.enableIsbIfcbIfb || cfg.ppp.enableOsb || cfg.ppp.enableAt1S2 || cfg.ppp.useGpt3Grid;
         boolean needAr = cfg.pppAr.enableAR || cfg.pppAr.enableFixHold || cfg.pppAr.enablePartialAR
                 || cfg.pppAr.enableBds3AR || cfg.pppAr.enableMultiFreqAR;

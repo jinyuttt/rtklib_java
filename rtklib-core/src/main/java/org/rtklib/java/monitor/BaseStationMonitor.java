@@ -39,7 +39,7 @@ import java.util.List;
  * monitor.onRtcmData(rtcmBytes, 0, rtcmBytes.length);
  *
  * // 使用示例2：RTCM文件
- * monitor.onRtcmFile("D:\\data\\BASE_STATION\\2026-07-04\\17.rtcm3");
+ * monitor.onRtcmFile("/data/base_station/2026-07-04/17.rtcm3");
  *
  * // 使用示例3：RINEX文件
  * monitor.onRinexFile("base.obs", "base.nav");

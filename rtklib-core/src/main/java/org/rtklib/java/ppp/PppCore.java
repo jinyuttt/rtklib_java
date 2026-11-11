@@ -134,6 +134,9 @@ public class PppCore {
         TraceCallback v2cb = rtk.traceCallback;
         rtk.epoch++;
 
+        /* [FIX-ALG-057] 清除上一历元 AR 写入的 SOLQ_FIX 锁存。 */
+        clearFixLatch(rtk);
+
         if (rtk.nx == 0 || rtk.nx != nx) {
             rtk.nx = nx;
             rtk.x = new double[nx];
@@ -1219,6 +1222,20 @@ public class PppCore {
         return var;
     }
 
+    /* [FIX-ALG-057] 逐历元入口清除上一历元 AR 写入的 SOLQ_FIX 锁存。
+     *
+     * 若上一历元固定成功、本历元滤波器只回到 SOLQ_PPP，updateStat 的 FIX 守卫
+     * 会让 stat 永久停留在 FIX，从而把浮点坐标当固定解输出，并使 AR 因
+     * stat != PPP/FLOAT 而永不再执行（PPP-RTK 侧同源缺陷见 FIX-ALG-054）。
+     *
+     * 只清 FIX 而不无条件重置：C rtkpos() 在 outsingle=1 时会把 SPP 留下的
+     * SOLQ_SINGLE 保留到 PPP 失败历元，无条件重置会破坏该语义。 */
+    static void clearFixLatch(Rtk rtk) {
+        if (rtk.sol.stat == Constants.SOLQ_FIX) {
+            rtk.sol.stat = Constants.SOLQ_NONE;
+        }
+    }
+
     public static void updateStat(Rtk rtk, Obsd[] obs, int n, int stat, int nx) {
         PrcOpt opt = rtk.opt;
 
@@ -1232,10 +1249,18 @@ public class PppCore {
             }
         }
 
-        // FIX-ALG-040: preserve SOLQ_FIX from AR resolution. PppArEngine may have
-        // upgraded rtk.sol.stat to SOLQ_FIX before updateStat runs — don't clobber it.
-        if (rtk.sol.stat != Constants.SOLQ_FIX) {
-            rtk.sol.stat = (byte)(rtk.sol.ns < MIN_NSAT_SOL ? Constants.SOLQ_NONE : stat);
+        // FIX-ALG-040 / FIX-ALG-057: preserve SOLQ_FIX written by this epoch's AR,
+        // but a fixed solution is still bound by MIN_NSAT_SOL — with too few
+        // satellites the label must degrade to SOLQ_NONE instead of advertising
+        // a float coordinate as a fixed one (mirrors PPP-RTK FIX-054).
+        boolean arFixed = rtk.sol.stat == Constants.SOLQ_FIX;
+        if (rtk.sol.ns < MIN_NSAT_SOL) {
+            if (arFixed) {
+                LOG.debug("updateStat: FIX downgraded to NONE, ns={} < {}", rtk.sol.ns, MIN_NSAT_SOL);
+            }
+            rtk.sol.stat = Constants.SOLQ_NONE;
+        } else {
+            rtk.sol.stat = (byte)(arFixed ? Constants.SOLQ_FIX : stat);
         }
 
         for (int i = 0; i < 3; i++) {

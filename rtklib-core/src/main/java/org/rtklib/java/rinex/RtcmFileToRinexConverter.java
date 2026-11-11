@@ -15,11 +15,11 @@ import java.io.IOException;
  *
  * <pre>
  * // 示例：RTCM文件转RINEX
- * RtcmFileToRinexConverter converter = new RtcmFileToRinexConverter(3.05, "D:/output", "ROVER");
- * boolean ok = converter.convert("D:/data/1.rtcm3");
+ * RtcmFileToRinexConverter converter = new RtcmFileToRinexConverter(3.05, "/output", "ROVER");
+ * boolean ok = converter.convert("/data/1.rtcm3");
  *
  * // 或使用便捷方法
- * boolean ok = RtcmFileToRinexConverter.convertFile("D:/data/1.rtcm3", 3.05, "D:/output", "ROVER");
+ * boolean ok = RtcmFileToRinexConverter.convertFile("/data/1.rtcm3", 3.05, "/output", "ROVER");
  * </pre>
  */
 public class RtcmFileToRinexConverter {

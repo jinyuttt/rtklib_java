@@ -9,7 +9,7 @@ import java.nio.file.*;
 
 public class VrsOutputDiag {
     public static void main(String[] args) throws Exception {
-        String file = args.length > 0 ? args[0] : "D:\\code\\rtklib_java\\rtklib-vrs\\target\\vrs-reverse-validation.rtcm3";
+        String file = args.length > 0 ? args[0] : "target/vrs-reverse-validation.rtcm3";
         byte[] data = Files.readAllBytes(Paths.get(file));
         System.out.printf("VRS输出文件: %d bytes%n", data.length);
 

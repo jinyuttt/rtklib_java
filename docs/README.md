@@ -100,8 +100,8 @@
 | [TraceLog_V2_Design.md](TraceLog_V2_Design.md) | 追踪日志 V2 设计与实现（取代 archive 中的 V1 设计） | ✅ 活跃 | 2026-10-08 |
 | [RTKCONFIG_REFACTOR_DESIGN.md](RTKCONFIG_REFACTOR_DESIGN.md) | RtkConfig 组合模式重构：487 行扁平类按模式拆分子配置（Common/Rtk/Spp/Ppp）、向后兼容迁移路径 | 🟡 设计稿（v1.0 定稿，未执行；`RtkConfig` 仍为扁平类） | 2026-10-26 |
 | [SOL_AGGREGATOR_DESIGN.md](SOL_AGGREGATOR_DESIGN.md) | SolAggregator 历元聚合工具：鲁棒加权 / 卡尔曼 RTS 两模式、与 solstatic 及 PosFileRtsSmoother 的分工、协方差与降级策略 | 🟡 设计稿（v1.2 待评审；`aggregate` 包已实现，未接入主流程、无测试） | 2026-10-27 |
-| [AI_ENHANCEMENT_DESIGN.md](AI_ENHANCEMENT_DESIGN.md) | **GNSS AI 增强开发文档**：两接口契约（假固定判别 / 观测改正，接口二冻结）、`AiRegistry` 注入 + core 零依赖 SPI + 独立 `rtklib-ai` 模块、特征定义、训练与评估协议、零回归不变量 | ✅ 定稿（v1.3；阶段 0–2 已完成：SPI + `rtklib-ai` 推理层 + 接口一接线；§1.5 + D11/D12 判定 joint/adjust 不接入；接口一训练管线已建成，真实数据与模型训练未开始，接口二冻结） | 2026-11-08 |
-| [PPP_AI_ASSESSMENT.md](PPP_AI_ASSESSMENT.md) | **PPP 体系 AI 接入技术评估**：AI 在 PPP 浮点 / PPP-AR / PPP-RTK 中的定位（框架-接口-模型三层）、三重门槛（对象存在 / 收益可量测 / 确定性对照）、三条链路代码现状与候选接口逐条否决 | 🟡 技术评估（v1.0，**结论：PPP 体系本阶段不接入 AI**；含 §3.3 PPP-RTK AR 输出缺陷核对、§8 结论、§9 重开条件） | 2026-11-09 |
+| [AI_ENHANCEMENT_DESIGN.md](AI_ENHANCEMENT_DESIGN.md) | **GNSS AI 增强开发文档**：两接口契约（假固定判别 / 观测改正，接口二冻结）、`AiProvider` 注入 + core 零依赖 SPI + 独立 `rtklib-ai` 模块、特征定义、训练与评估协议、零回归不变量、输出钳位保守/激进两模式（§4.6）、方案 B 端到端对照结论（§8.4） | ✅ 定稿（v1.10；阶段 0–4 已完成；接口一训练形态选层次 A（模型共享 + 阈值分站），G-3 原判据满足；接口三模型已训练（方案 A），A1/A2/A3 第一阶段全部通过、允许显式注入但默认不注入；方案 B 端到端经两轮迭代未达预注册判据，**判定不交付、仅作实验 provider 保留**；激进模式 `enableAggressiveAi` 仅存设计、未落地（D19）；§1.5 + D11/D12 判定 joint/adjust 不接入；接口二冻结） | 2026-11-11 |
+| [PPP_AI_ASSESSMENT.md](PPP_AI_ASSESSMENT.md) | **PPP 体系 AI 接入技术评估**：AI 在 PPP 浮点 / PPP-AR / PPP-RTK 中的定位（框架-接口-模型三层）、三重门槛（对象存在 / 收益可量测 / 确定性对照）、三条链路代码现状与候选接口逐条否决 | 🟡 技术评估（v1.0，**结论：PPP 体系本阶段不接入 AI**；含 §3.3 PPP-RTK AR 输出缺陷核对、§8 结论、§9 重开条件；引用设计文档已同步至 v1.4） | 2026-11-10 |
 
 ---
 

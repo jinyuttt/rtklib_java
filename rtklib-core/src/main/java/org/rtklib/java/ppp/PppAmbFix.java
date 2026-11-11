@@ -43,7 +43,10 @@ public class PppAmbFix {
             if (rtk.ssat[sat - 1].azel[1] < opt.elmin) { nSkipVs++; continue; }
 
             int sys = SatUtils.satsys(sat, null);
-            if ((sys & (Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP)) == 0) { nSkipSys++; continue; }
+            /* [FIX-ALG-058] 白名单动态继承 opt.navsys：原写法硬编码 GPS|GAL|CMP，
+             * 忽略系统配置，navsys 若只含 GLO/QZS/IRN 时 AR 会静默全部跳过。
+             * 无 OSB/FCB 覆盖的系统仍会被下方 WL/NL 质量门自动剔除，不会误固定。 */
+            if ((sys & opt.navsys) == 0) { nSkipSys++; continue; }
 
             int f = 0;
             int idx = PppCore.IB(sat, f, opt);
@@ -618,7 +621,8 @@ public class PppAmbFix {
             if (rtk.ssat[sat - 1].azel[1] < opt.elmin) continue;
 
             int sys = SatUtils.satsys(sat, null);
-            if ((sys & (Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP)) == 0) continue;
+            /* [FIX-ALG-058] 同 pppAmbFixWlNl：按 opt.navsys 动态放行 */
+            if ((sys & opt.navsys) == 0) continue;
 
             int f = 0;
             int idx = PppCore.IB(sat, f, opt);
@@ -1330,7 +1334,8 @@ public class PppAmbFix {
             if (rtk.ssat[sat - 1].azel[1] < opt.elmin) { nSkipVs++; continue; }
 
             int sys = SatUtils.satsys(sat, null);
-            if ((sys & (Constants.SYS_GPS | Constants.SYS_GAL | Constants.SYS_CMP)) == 0) { nSkipSys++; continue; }
+            /* [FIX-ALG-058] 同 pppAmbFixWlNl：按 opt.navsys 动态放行 */
+            if ((sys & opt.navsys) == 0) { nSkipSys++; continue; }
 
             int idx = PppCore.IB(sat, 0, opt);
             if (idx >= nx) { nSkipIdx++; continue; }

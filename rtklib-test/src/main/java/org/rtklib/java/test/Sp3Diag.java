@@ -1,5 +1,6 @@
 package org.rtklib.java.test;
 
+import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.data.Nav;
 import org.rtklib.java.data.PepH;
 import org.rtklib.java.data.Pclk;
@@ -12,10 +13,11 @@ import org.rtklib.java.constants.Constants;
 public class Sp3Diag {
 
     public static void main(String[] args) {
-        String sp3File1 = "D:\\rtcm3\\product\\sp3\\WUM0MGXRAP_20261440000_01D_05M_ORB.SP3";
-        String sp3File2 = "D:\\rtcm3\\product\\sp3\\WUM0MGXRAP_20261450000_01D_05M_ORB.SP3";
-        String clkFile1 = "D:\\rtcm3\\product\\clk\\WUM0MGXRAP_20261440000_01D_30S_CLK.CLK";
-        String clkFile2 = "D:\\rtcm3\\product\\clk\\WUM0MGXRAP_20261450000_01D_30S_CLK.CLK";
+        String productDir = TestDataConfig.getProductDir();
+        String sp3File1 = productDir + "\\sp3\\WUM0MGXRAP_20261440000_01D_05M_ORB.SP3";
+        String sp3File2 = productDir + "\\sp3\\WUM0MGXRAP_20261450000_01D_05M_ORB.SP3";
+        String clkFile1 = productDir + "\\clk\\WUM0MGXRAP_20261440000_01D_30S_CLK.CLK";
+        String clkFile2 = productDir + "\\clk\\WUM0MGXRAP_20261450000_01D_30S_CLK.CLK";
 
         Nav nav = new Nav();
 

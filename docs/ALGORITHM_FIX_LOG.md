@@ -473,6 +473,10 @@
 | FIX-ALG-051 | 2026-11-10 | kalman/KalmanFilter.java、rtkpos/RtkCore.java | **短基线固定率 0.07%→73.82%（C 73.78%）**：`KalmanFilter.update` 的状态压缩比 C `filter()` 多一条「H 列非零」过滤（FIX-ALG-042 P4 为 joint 双基线引入），使 `holdamb` 伪观测只更新模糊度对角块、位置/对流层交叉协方差被丢弃 → maxV 单调发散、ep28 跨整周 2.1154 周 → LAMBDA 失败、nb 30→28 卫星排除死亡螺旋。改为可选参数 `skipZeroHCols`（默认 true 保持 joint 行为逐位不变），`relpos`/`holdamb` 两处显式 false 对齐 C；holdamb 触发 21→181 次/前 200 历元，同为 FIX 2122 个、平均差 −0.0169/0.0115/−0.0299 m、水平差 >0.1 m 历元数 0 |
 | FIX-ALG-052 | 2026-11-10 | time/TimeSystem.java | `MDAY` 四年周期（1461 天）表闰年位置错位：29 天放在第 2 个 12 项块（1971）而非第 3 块（1972），使闰年（2020/2024 等）3 月 1 日以后 `time2epoch()` 反算日期整体早一天；改为与 C `mday` 表逐项一致（`epoch2time()` 闰年判据本就正确） |
 | FIX-ALG-053 | 2026-11-10 | ppp/PppCore.java | `pppos` 迭代起点对齐 C：`matcpy(xp/Pp ← rtk->x/P)` 原在迭代循环体内，每次迭代都从未提交的 `rtk` 状态重新起步，使「迭代精化」退化为「同一初值重复求解」；移到 `for (iter...)` 之前（C `ppp.c L1219-1238`） |
+| FIX-ALG-057 | 2026-11-11 | ppp/PppCore.java、ppp/PppCoreEx.java、pppar/PppArEngine.java | PPP-AR 固定解永久锁存（FIX-054 同源）：`pppos`/`ppos` 逐历元入口新增 `clearFixLatch` 清除上一历元 AR 写入的 `SOLQ_FIX`（只清 FIX，保留 `outsingle=1` 时 SPP 的 SINGLE 语义），`updateStat` 的 FIX 标签同样受 `MIN_NSAT_SOL=4` 降级，`PppArEngine` 入口加 ns 门控 —— 修复后 FIX 必须逐历元由本历元 AR 重新获得 |
+| FIX-ALG-058 | 2026-11-11 | ppp/PppAmbFix.java | AR 系统白名单 `SYS_GPS\|SYS_GAL\|SYS_CMP` 写死改为动态继承 `opt.navsys`（三处：WlNl / PartialAR / EwlWlNl），navsys 只配 GLO/QZS/IRN 时不再静默全跳过；无 OSB/FCB 覆盖的系统由既有 WL/NL 质量门自然剔除 |
+| FIX-ALG-059 | 2026-11-11 | ppprtk/PppRtkCore.java | **PPP-RTK 好站全天 FIX 2270/3815（59.5%），修复前恒 <1000**：相位行 pre-fit 门限错用 `PrcOpt.maxinno[0]=5.0`（该值按 RTK `ddres` 索引约定为码行设计，PPP 侧 `code==0` 却是相位行）→ 一次 ~9m 接收机钟跳当历元把 13 颗星的相位行全部剔除（nv 28→15），此后长期只剩码行更新、可见星 4~6 无法恢复。相位行改按 C `ppp.c maxinno[0]=30.0` 固定 30m，码行仍取 `opt.maxinno[1]`，删除原 `epoch<=60` 临时放宽 |
+| FIX-ALG-060 | 2026-11-11 | ppprtk/PppRtkAmbFix.java | `ppprtkAmbFixUc` 系统白名单 `SYS_GPS\|SYS_GAL` 写死改为动态继承 `opt.navsys`（与 FIX-ALG-058 同类缺陷）；**同批实测确认 PPP-RTK 非 IFLC（UC/EST，nf=3）链路整体退化**：0015 hour00 `fix=0 / ns=1 / vsat0=0`，故接口三 AI 在 PPP-RTK 链上既无合法注入点、也无可用非 IFLC 载体，A/B 对比不可执行（详见该条目「接口三 A/B 可行性核查」） |
 
 ## FIX-ALG-020 EST 模式死锁：DCB 产品加载 + enableIonoEstRobust 开关
 
@@ -2898,8 +2902,751 @@ Java 把这两行拷贝放在了**循环体内部**，每次迭代都从未提�
 
 ---
 
+## FIX-ALG-054 / PPP-RTK 固定解永久锁存 + 固定解坐标不更新：sol.stat 逐历元重置 + updateStat 增加 FIX 分支（2026-11-11）
+
+**日期**: 2026-11-11
+**类别**: rtklib-core / PPP-RTK 解状态（`PppRtkCore.updateStat`）
+**触发**: UTC00–15 全窗口回放中，UTC05 起 `PPP-AR: fixed` 行已归零，但 `sol.stat` 全程输出
+`1`(FIX)，全窗口固定率 99.5%（3800/3820）与真实 NL 固定数 454 严重不符。
+
+### 根因（`updateStat` 的 SOLQ_FIX 守卫）
+
+`updateStat` 原逻辑（`git show HEAD` 原文）：
+
+```java
+// FIX-ALG-040: preserve SOLQ_FIX from AR resolution.
+if (rtk.sol.stat != Constants.SOLQ_FIX) {
+    rtk.sol.stat = (byte)(rtk.sol.ns < MIN_NSAT_SOL ? Constants.SOLQ_NONE : stat);
+}
+
+for (int i = 0; i < 3; i++) {          /* ← rr/qr 本来就在守卫之外，每历元都更新 */
+    rtk.sol.rr[i] = rtk.x[i];
+    rtk.sol.qr[i] = (float) rtk.P[i * nx + i];
+}
+```
+
+**FIX 标签永久锁存**：AR 首次成功把 `rtk.sol.stat` 写成 `SOLQ_FIX` 后，此后每个历元该守卫
+恒为假 → `sol.stat` 再也不更新，上一历元的 FIX 标签被永久沿用。后果：
+- `MIN_NSAT_SOL=4` 的降级判断对 FIX 完全失效（ns=2 的历元照样输出 FIX）；
+- 后续历元 AR 全部失败，也照样记为 FIX（UTC04 起 NL 固定 0，stat 仍全程 1）。
+
+**关于坐标覆盖（原判断已更正）**：经核对 `git show HEAD` 与全窗口日志（`run_full.txt` 中
+3795 个历元的 `sol.rr` 各不相同），旧代码的 `rr/qr` 从未被冻结，每历元都从 `x/P` 更新，
+所以「FIX 坐标回退成纯浮点」在本数据上并未实际发生。本次新增的 `arFixed` 分支属于
+**对齐 `RtkCore` 的结构性补强**（FIX 时从 `xa/Pa` 取），在 IFLC 下 `xa[0..2] ≡ x[0..2]`、
+`Pa ≡ P`，数值上恒等（`xaDelta` 全程 0.000000），不改变结果，仅为后续「位置条件更新」
+留出正确的取值入口。
+
+### 修复
+
+1. `ppprtkos` 入口（`rtk.epoch` 日志之前）无条件重置：
+
+```java
+rtk.sol.stat = Constants.SOLQ_NONE;
+```
+
+   把「本历元是否固定」交回本历元 AR 重新判定，保证历元之间状态独立。
+
+2. `updateStat` 重写解状态与坐标赋值：
+   - `arFixed = (rtk.sol.stat == SOLQ_FIX)`：只认**本历元** AR 写入的标签；
+   - `rtk.sol.ns < MIN_NSAT_SOL` 时强制 `SOLQ_NONE`（FIX 同样降级，打印
+     `updateStat: FIX downgraded to NONE`）；
+   - `arFixed` 时 `rr/qr` 从 `xa/Pa` 取（对齐 `RtkCore` 的 `stat==SOLQ_FIX` 分支），
+     否则从 `x/P` 取。IFLC 分支当前不做位置条件更新，`xa[0..2]` 恒等于 `x[0..2]`，
+     本次只保证「结构上不再回退成纯浮点」，位置重解需另立条目。
+
+### 验证（`PppRtkSsrReplay run -1 0 15`，全窗口 3820 历元）
+
+逐小时 FIX 历元（修复前 → 修复后）：
+
+| UTC | 修前 FIX | 修后 FIX | 修后 PPP | 修后 NONE | NL 固定(前→后) | 平均 ns |
+|-----|---------|---------|---------|----------|----------------|---------|
+| 00 | 220 | 77 | 158 | 5 | 80 → 77 | 9.8 |
+| 01 | 238 | 135 | 103 | 0 | 135 → 135 | 5.6 |
+| 02 | 240 | 105 | 135 | 0 | 159 → 105 | 6.1 |
+| 03 | 239 | 85 | 154 | 0 | 119 → 85 | 6.2 |
+| 04 | 236 | 52 | 184 | 0 | 0 → 52 | 6.3 |
+| 05 | 239 | 0 | 231 | 8 | 0 → 0 | 5.5 |
+| 06 | 238 | 0 | 34 | 204 | 0 → 0 | 2.2 |
+| 07–15 | 238~241/时 | 0 | 0 | 全 NONE | 0 → 0 | 2.0~3.0 |
+
+逐卫星数分桶固定率（修复后）：
+
+| ns 区间 | 历元数 | FIX 历元 | 固定率 |
+|---------|--------|----------|--------|
+| ns<=3 | 2362 | 0 | 0.0% |
+| ns4–5 | 474 | 98 | 20.7% |
+| ns6–7 | 842 | 280 | 33.3% |
+| ns8–9 | 42 | 0 | 0.0% |
+| ns>=13 | 100 | 76 | 76.0% |
+
+### 结论
+
+- 全窗口固定率 99.5%（3800/3820）→ **11.9%（454/3820）**，与真实 NL 固定数 454 逐一吻合，
+  锁存现象彻底消失；UTC05 起 NL 固定归零后 stat 正确降级为 `6`(PPP)/`0`(NONE)。
+- 逐历元固定率随卫星数单调上升（ns4–5 20.7% → ns6–7 33.3% → ns≥13 76.0%），不再是一条直线。
+- `xaDelta` 全程 0.000000，与 IFLC 分支不做位置条件更新的事实一致。
+
+### 遗留（未在本次改动，需另立条目）
+
+hour02/03 的 NL 固定数 159/119 → 105/85，hour04 由 0 → 52。已用**同编译产物的 A/B**
+（`git stash` 只回退本文件，重编译后重跑 0–4）复现：
+
+| UTC | 旧代码 NLfix | 新代码 NLfix | 旧 FIX | 新 FIX |
+|-----|-------------|-------------|--------|--------|
+| 00 | 80 | 77 | 220 | 77 |
+| 01 | 135 | 135 | 238 | 135 |
+| 02 | 159 | 105 | 240 | 105 |
+| 03 | 119 | 85 | 239 | 85 |
+| 04 | 0 | 52 | 236 | 52 |
+
+两条轨迹在第 215 历元（UTC00:54:15）之前 `sol.rr` **逐位相同**，之后才分岔（`ns` 6 vs 7，
+位置差 0.2 m 量级），说明滤波轨迹本身未被破坏，差异来自 `sol.stat` 唯一的下游消费者：
+
+- **`PppProcessor:883` 的 SPP 重初始化分支**（`if (rtk.sol.stat == SOLQ_NONE)`）。
+  修复前 stat 被锁存为 FIX，该分支 16 小时一次都没进过；修复后只要上一历元降级为 NONE，
+  下一历元就会进这个分支。实测 UTC00 共进入 5 次（对应 5 个 NONE 历元），且**全部失败**
+  （`sppInitOpt.navsys = SYS_GPS`，而本数据是 BDS-only，`SPP failed` 5 次）。
+  但 `PntPos` 在失败前就已清写 `ssat.snrRover/azel/vs/resp/resc`，且把**存活的 `rtk.ssat`**
+  当参数传入，而不是一份 scratch 数组，属于既有缺陷。
+- 已核实**不是**配置项导致的差异：回放配置只打开了 `pppRtk.enable` / `pppRtk.enableAR` /
+  `pppAr.enableAR`，`enableFixHold`（`PppRtkOpts`/`PppArOpts` 默认 false，日志
+  `arFixHold=false`）、`pppAr.enablePartialAR`、`spp.enableEkf` 均为关闭；
+  `PppRtkAmbFix` 的 IF 分支由 `opt.ionoopt == IONOOPT_IFLC` 选择，不是配置开关。
+  因此 FIX-ALG-054 早期记录里「fix-and-hold 方差收紧历史」的推测**不成立，已作废**。
+- 待办（FIX-ALG-055）：SPP 重初始化改用独立 scratch `Ssat[]`（或仅在 `rtk.nx == 0` 时执行），
+  再做 A/B 确认 hour02/03/04 的 NL 固定数回到 159/119/0 以上。→ **已由 FIX-ALG-055 完成，
+  实测 hour02/03/04 精确回到 159/119/0，且整条滤波轨迹与旧代码逐位一致。**
+
+### 修改文件
+
+- `rtklib-core/.../ppprtk/PppRtkCore.java`（`ppprtkos` 入口 + `updateStat`）
+
+---
+
+## FIX-ALG-055 / SPP 重初始化污染滤波器逐星状态：改用独立 scratch `Ssat[]`（2026-11-11）
+
+**日期**: 2026-11-11
+**类别**: rtklib-core / PPP 历元调度（`PppProcessor` 的 SPP 重初始化分支）
+**触发**: FIX-ALG-054 修好 FIX 锁存后，`PppProcessor:883` 的 SPP 重初始化分支首次被放出来，
+hour02/03/04 的 NL 固定数从 159/119/0 变成 105/85/52。A/B 显示两轨迹在第 215 历元前逐位相同、
+之后分岔，差异只能来自 `sol.stat` 的唯一下游消费者（该 SPP 分支）。
+
+### 根因
+
+`PntPos.pntpos` 对传入的 `ssat` 做两次全量清写：
+
+```java
+// 入口：清空全部卫星 SNR，只回填本历元观测到的
+for (int i = 0; i < Constants.MAXSAT; i++) { ssat[i].snrRover[0] = 0; ssat[i].snrBase[0] = 0; }
+...
+// 出口：清空全部卫星 vs/azel/resp/resc，只回填 SPP 判为有效的
+for (int i = 0; i < Constants.MAXSAT; i++) { ssat[i].vs = 0; ssat[i].azel[0..1] = 0; ssat[i].resp[0] = 0; ssat[i].resc[0] = 0; }
+```
+
+而 `PppProcessor` 把**滤波器正在使用的 `rtk.ssat`** 直接传了进去：
+
+```java
+PntPos.pntpos(obsData, n, nav, sppInitOpt, rtk.sol, null, rtk.ssat);   // ← 共享可变状态
+```
+
+后果：每次进这个分支，已收敛滤波器的逐星 `vs/azel/resp/resc` 被抹成 SPP 视角的值。
+`PppRtkCore.udstate` 虽然会重算 `vs`、`ppprtkRes` 会重算当前历元的 `azel`，但
+`ssat.azel` 对**本历元未观测到的卫星**保持被清空后的 0 值（旧代码里它保留上一次的高度角），
+下游的选星/定权/失锁判断因此偏离，形成后续历元的离散分岔（典型表现就是 `sol.ns` 差 1）。
+
+同时该分支在本数据上必然失败：`sppInitOpt.navsys = SYS_GPS` 写死 GPS，而数据是 BDS-only
+（`navsys=0x20`），实测 hour00 进入 5 次、`SPP failed` 5 次——**失败也一样污染**。
+
+### 修复
+
+`PppProcessor` 新增惰性创建的 scratch 数组，SPP 专用，不与滤波器共享：
+
+```java
+private Ssat[] sppScratch;
+
+private Ssat[] sppScratchSsat() {
+    if (sppScratch == null) {
+        sppScratch = new Ssat[Constants.MAXSAT];
+        for (int i = 0; i < Constants.MAXSAT; i++) sppScratch[i] = new Ssat();
+    }
+    return sppScratch;
+}
+```
+
+两处调用点（正/反向双天线）改为传 scratch：
+
+```java
+PntPos.pntpos(obsData, n, nav, sppInitOpt, rtk.sol, null, sppScratchSsat());
+PntPos.pntpos(obsData, n, nav, sppInitOptB, rtkB.sol, null, sppScratchSsat());
+```
+
+**为何可以无条件替换（不加 `rtk.nx == 0` 门禁）**：SPP 对 `ssat` 的唯一读取是
+`SppCore.varerr` 里的 `ssat.snrRover[0]`，而该值由 `pntpos` 自己按 obs 写入；
+`SppCore.estpos`/`SppOptimizations.estposFilter` 全程不读 `ssat`。
+PPP 侧（`PppRtkCore.udstate` / `PppCore.udstate`）都会自建 `vs`，位置也来自 `sol.rr`，
+因此首历元与收敛后都不依赖 SPP 写回的 `ssat`。数组复用亦安全：`pntpos` 返回时已把
+`vs/azel/resp/resc` 全部归零重填，无跨历元残留。
+
+### 验证
+
+**A/B 结构等价性（0–4h，1193 历元）**：把 `stat=` 字段剔除后逐历元比对
+`rr/llh/xaDelta/resRms`，**不一致历元数 = 0**。即修复后滤波轨迹与 FIX-ALG-054 之前的旧代码
+**逐位相同**，唯一差异是 `stat` 标签（旧代码锁存、新代码正确）。
+
+**逐小时（0–4）**：
+
+| UTC | 旧代码 NLfix | FIX-054 后 NLfix | FIX-055 后 NLfix | FIX-055 后 FIX | PPP | NONE |
+|-----|-------------|------------------|------------------|----------------|-----|------|
+| 00 | 80 | 77 | **80** | 80 | 155 | 5 |
+| 01 | 135 | 135 | **135** | 135 | 103 | 0 |
+| 02 | 159 | 105 | **159** | 159 | 81 | 0 |
+| 03 | 119 | 85 | **119** | 119 | 120 | 0 |
+| 04 | 0 | 52 | **0** | 0 | 235 | 1 |
+
+**全窗口（00–15，3820 历元）**：
+
+| UTC | NLfix | FIX | PPP | NONE |
+|-----|-------|-----|-----|------|
+| 00 | 80 | 80 | 155 | 5 |
+| 01 | 135 | 135 | 103 | 0 |
+| 02 | 159 | 159 | 81 | 0 |
+| 03 | 119 | 119 | 120 | 0 |
+| 04 | 0 | 0 | 235 | 1 |
+| 05 | 0 | 0 | 237 | 2 |
+| 06 | 0 | 0 | 34 | 204 |
+| 07–12 | 0 | 0 | 0 | 全 NONE |
+| 13 | 0 | 0 | 104 | 134 |
+| 14 | 0 | 0 | 240 | 0 |
+| 15 | 0 | 0 | 79 | 159 |
+
+- 全窗口 NLfix **454 → 493**，固定率 11.9% → **12.9%**（493/3820）；
+- `FIX` 历元数 **恒等于** NLfix（493 = 493），标签与真实固定一一对应，无锁存、无漏记。
+
+**逐卫星数分桶（FIX-055 后）**：
+
+| ns 区间 | 历元数 | FIX 历元 | 固定率 |
+|---------|--------|----------|--------|
+| ns<=3 | 1932 | 0 | 0.0% |
+| ns4–5 | 1031 | 113 | 11.0% |
+| ns6–7 | 727 | 304 | 41.8% |
+| ns8–9 | 30 | 0 | 0.0% |
+| ns>=13 | 100 | 76 | 76.0% |
+
+（ns<=3 恒为 0 由 `MIN_NSAT_SOL=4` 降级保证；ns8–9 的 0 与 ns>=13 的 76% 差异来自
+SSR/OSB 可用性而非卫星数——UTC07–12 全程无可用改正，任何卫星数都无法固定。）
+
+### 结论
+
+SPP 重初始化污染滤波器逐星状态是 FIX-ALG-054 暴露出的**独立既有缺陷**，与 fix-and-hold
+（本数据 `arFixHold=false`，从未开启）无关。改用 scratch `Ssat[]` 后：
+AR 固定数完全恢复（hour02/03/04 = 159/119/0），且滤波轨迹与修复前逐位一致，
+说明 FIX-ALG-054 的 `stat` 逐历元重置是**纯粹的标签修复，未改变任何数值解**。
+
+本条目遗留的 `sppInitOpt.navsys = SYS_GPS` 硬编码，以及「SPP 结果整体覆盖 `rtk.sol`」
+的副作用，另见 **FIX-ALG-056**。
+
+### 修改文件
+
+- `rtklib-core/.../ppp/PppProcessor.java`（新增 `sppScratch` 字段与 `sppScratchSsat()`，
+  两处 `PntPos.pntpos` 调用点改传 scratch）
+
+---
+
+## FIX-ALG-056 / SPP 重初始化 navsys 写死 GPS + SPP 结果污染 `sol.rr`（2026-11-11）
+
+**日期**: 2026-11-11
+**类别**: rtklib-core / PPP 历元调度（`PppProcessor` 的 SPP 重初始化分支）
+**触发**: FIX-ALG-055 记录里顺手标注的硬编码坑——`sppInitOpt.navsys = Constants.SYS_GPS`，
+本数据是 BDS-only（`navsys=0x20`），hour00 的 5 次 SPP 重初始化**全部失败**。
+
+### 根因
+
+**坑一：`navsys` 写死 GPS。** `SppCore.nx`/`sysIdx` 本身已按 `opt.navsys` 动态分配状态维度，
+支持任意系统组合，问题只在于重初始化分支硬塞了 `SYS_GPS`：
+
+```java
+PrcOpt sppInitOpt = new PrcOpt(opt);
+sppInitOpt.mode = Constants.PMODE_SINGLE;
+sppInitOpt.navsys = Constants.SYS_GPS;   // ← BDS-only 数据上永远凑不出 4 颗 GPS
+```
+
+于是 SPP 在 GPS 系统下找不到可用卫星，`stat` 停在 `SOLQ_NONE`，SPP 初始位置一次都拿不到。
+
+**坑二：SPP 结果整体覆盖 `rtk.sol`。** 只把 `navsys` 改对之后立刻暴露出第二个缺陷。
+`Sol` 是**值对象**，`pntpos` 成功时会把 `stat/ns/rr/qr/ratio/age` 全部写进传入的实例，
+而原写法直接传 `rtk.sol`：
+
+```java
+PntPos.pntpos(obsData, n, nav, sppInitOpt, rtk.sol, null, sppScratchSsat());
+```
+
+而 `sol.rr` 在 PPP 侧是**位置参考基准**，不只是输出：
+
+- `PppRtkCore.udpos()` 的 re-init 分支（`norm(x[0..2]) <= 0` 时）直接用 `sol.rr` 赋初值；
+- `udtrop()`/`udiono()` 用 `sol.rr` 算对流层/电离层映射函数。
+
+已收敛的滤波器一旦 `sol.stat` 落到 `SOLQ_NONE`（失锁历元），就会被 SPP 的**米级单点解**
+覆盖 `sol.rr`，整条轨迹被拽走。实测（只改 `navsys`、未加门禁的中间版本）：hour00 首个
+`SOLQ_NONE` 历元后 `xaDelta` 从 0 → **5.3 m**，且因为轨迹偏了导致后续 `SOLQ_NONE` 历元
+连锁放大（SPP 调用从 5 次涨到 **143** 次），NL 固定数 **80 → 76**。
+
+### 修复
+
+**(1) `navsys` 继承 `opt.navsys`**（正向 + 反向双天线两处调用点）：
+
+```java
+sppInitOpt.navsys = opt.navsys;    // 不再写死 SYS_GPS
+```
+
+**(2) SPP 结果先落 scratch `Sol`，再由门禁决定是否采纳**：
+
+```java
+private Sol sppScratchSol;         // 惰性创建、复用
+
+Sol sppSol = sppScratchSol();
+sppSol.stat = Constants.SOLQ_NONE;
+sppSol.ns = 0;
+PntPos.pntpos(obsData, n, nav, sppInitOpt, sppSol, null, sppScratchSsat());
+
+boolean adoptSpp = sppSol.stat != Constants.SOLQ_NONE && needSppInit(rtk);
+if (adoptSpp) {
+    rtk.sol.stat = sppSol.stat;
+    rtk.sol.ns   = sppSol.ns;
+    rtk.sol.ratio = sppSol.ratio;
+    rtk.sol.age  = sppSol.age;
+    System.arraycopy(sppSol.rr, 0, rtk.sol.rr, 0, 3);
+    System.arraycopy(sppSol.qr, 0, rtk.sol.qr, 0, 3);
+}
+rtk.sol.time = obsData[0].time;
+rtk.sol.eventime = obsData[0].eventime;
+```
+
+门禁语义——**只有滤波器确实没有位置时才采纳 SPP 解**：
+
+```java
+private static boolean needSppInit(Rtk r) {
+    if (r.nx == 0 || r.x == null) return true;      // 尚未初始化，SPP 就是初值来源
+    double norm = 0.0;
+    for (int i = 0; i < 3 && i < r.x.length; i++) norm += r.x[i] * r.x[i];
+    return norm <= 0.0;                             // 状态里没有位置，udpos 会走 re-init
+}
+```
+
+其余情况（已收敛、或失锁但仍保有上一历元参考位置）一律**不采纳**，`sol.rr` 保持为
+AR/KF 的位置参考不被污染。`stat/ns` 也保持原状（与 FIX-ALG-055 完全一致）。
+
+### 验证
+
+**hour00（240 历元）**：
+
+| 指标 | FIX-055 后 | 只改 navsys（无门禁） | **FIX-056 后** |
+|------|-----------|----------------------|---------------|
+| `SPP failed` 次数 | 5 | 0 | **0** |
+| `SPP initial pos` 次数 | 0 | 143 | **5** |
+| `adopted=true` 次数 | — | 143（无条件写） | **0** |
+| `xaDelta` 峰值 | 0 | 5.3 m | **0** |
+| NLfix | 80 | 76 | **80** |
+| FIX / PPP / NONE | 80 / 155 / 5 | 76 / ? / ? | **80 / 155 / 5** |
+
+**全窗口（00–15，3820 历元）**：
+
+| 指标 | FIX-055 基线 | FIX-056 |
+|------|-------------|---------|
+| `SPP initial pos` | 0 | **1938** |
+| `SPP failed` | 1938 次尝试全失败 | **0** |
+| `adopted=true` | — | **0** |
+| NLfix | 493 | **493** |
+| FIX | 493 | **493** |
+| 固定率 | 12.9% | **12.9%** |
+
+逐历元比对（剔除 `stat=` 字段后比对 `rr/llh/xaDelta/resRms`）：3820 历元
+**不一致数 = 0**，即本数据上修复**未改变任何数值解**。
+
+### 结论
+
+1. **SPP 失败清零**：BDS-only 数据上 SPP 重初始化从「必然失败」变为「全部成功」
+   （hour00 5/5 成功，全窗口 1938 次全部成功）。
+2. **FIX 数不涨（493 → 493）**，且**不应该涨**。本回放脚手架在首历元就预设了
+   `rtk.sol.stat = SOLQ_SINGLE` 与测站坐标（`PppRtkSsrReplay:236-240`），
+   滤波器位置自始有效，`needSppInit` 全窗口恒为 `false`——SPP 解在这条序列里
+   一次都不该被采纳（它是米级单点解，采纳只会把已收敛轨迹拽偏 5.3 m）。
+   FIX-ALG-056 的收益是**冷启动鲁棒性**：实时场景没有概略坐标、或 `nx` 归零后重收敛时，
+   SPP 现在能真正提供初值，而不会因 navsys 写死而永久拿不到。
+3. 两个坑必须**同时**修：只改 `navsys` 不加门禁是**回归**（hour00 NLfix 80 → 76）；
+   只加门禁不改 `navsys` 则 SPP 永远失败、门禁永不生效。
+
+### 修改文件
+
+- `rtklib-core/.../ppp/PppProcessor.java`
+  （两处 `sppInitOpt.navsys = opt.navsys`；新增 `sppScratchSol` 字段、`sppScratchSol()`
+  与 `needSppInit()`；两处 `PntPos.pntpos` 调用点改传 scratch `Sol` 并加采纳门禁）
+
+---
+
+## FIX-ALG-057 / PPP-AR 固定解永久锁存 + FIX 绕过 MIN_NSAT_SOL（2026-11-11）
+
+**日期**: 2026-11-11
+**类别**: rtklib-core / PPP-AR 解状态（`PppCore.pppos`、`PppCoreEx.ppos`、`PppCore.updateStat`、`PppArEngine`）
+**C 版依据**: `RTKLIB-2.5.0/src/rtkpos.c` L2306-2308 `if (!opt->outsingle) rtk->sol.stat=SOLQ_NONE;`
+（Java `RtkCore.relpos` L108 已对齐该句）；`ppp.c` `update_stat()` 无 FIX 特殊分支，
+`sol->stat` 每历元由 `stat` 参数重算，**不存在跨历元锁存**。
+**触发**: FIX-ALG-054 修好 PPP-RTK 锁存后，按「同源缺陷」对 PPP-AR 链路做三项排查（锁存/污染/navsys）。
+
+### 根因（与 FIX-ALG-054 完全同源，PPP-AR 侧原样保留）
+
+1. **逐历元入口不重置**：`PppCore.pppos`（L128）与 `PppCoreEx.ppos`（L29）入口只做
+   `rtk.epoch++` 与 `nx` 重建，从不重置 `rtk.sol.stat`。
+2. **FIX-ALG-040 守卫造成锁存**：`updateStat` 原为
+   ```java
+   if (rtk.sol.stat != Constants.SOLQ_FIX) {
+       rtk.sol.stat = (byte)(rtk.sol.ns < MIN_NSAT_SOL ? Constants.SOLQ_NONE : stat);
+   }
+   ```
+   第 N 历元 AR 成功写入 FIX 后，第 N+1 历元即使只回到 `SOLQ_PPP`，守卫恒为假 →
+   标签永久沿用 FIX（`rr/qr` 仍逐历元从 `x/P` 更新，即**浮点坐标被当成固定解输出**）。
+3. **AR 因此永久停摆**：`PppCoreEx` 简分支 `if (stat == PPP || FLOAT) applyAR` 不再成立，
+   AR 与 `nfix` 计数同时冻结；`nfix` 还因 `PppArEngine` 的 `stat==FIX → nfix++` 虚假累加，
+   连带污染 fix-and-hold 的最小历元守卫。
+4. **FIX 绕过 MIN_NSAT_SOL**：`MIN_NSAT_SOL=4` 的降级判断被上述守卫整个包住，`ns=1` 也输出 FIX；
+   且 `PppCoreEx` 扩展状态分支（L194）在 `updateStat` **之后**无条件调用 AR，
+   即使 `updateStat` 已把 stat 判为 NONE，AR 仍可再次写回 FIX。
+
+### 修复
+
+1. 新增包内工具 `PppCore.clearFixLatch(Rtk)`，由 `PppCore.pppos` 与 `PppCoreEx.ppos`
+   逐历元入口调用：
+   ```java
+   static void clearFixLatch(Rtk rtk) {
+       if (rtk.sol.stat == Constants.SOLQ_FIX) rtk.sol.stat = Constants.SOLQ_NONE;
+   }
+   ```
+   **只清 FIX 而不无条件重置**：C `rtkpos()` 在 `outsingle=1` 时会把 SPP 留下的
+   `SOLQ_SINGLE` 保留到 PPP 失败历元（`RtkCore.relpos` L108 同样只在 `outsingle==0` 时清零），
+   无条件重置会破坏该语义（FIX-054 在 `ppprtkos` 里用的是无条件重置，因其调用点已先清零）。
+2. `updateStat` 改为「只认本历元 AR 写入的 FIX + FIX 同样受 MIN_NSAT_SOL 约束」：
+   ```java
+   boolean arFixed = rtk.sol.stat == Constants.SOLQ_FIX;
+   if (rtk.sol.ns < MIN_NSAT_SOL) {
+       if (arFixed) LOG.debug("updateStat: FIX downgraded to NONE, ns={} < {}", ...);
+       rtk.sol.stat = Constants.SOLQ_NONE;
+   } else {
+       rtk.sol.stat = (byte)(arFixed ? Constants.SOLQ_FIX : stat);
+   }
+   ```
+3. `PppArEngine.applyAmbiguityResolution` 入口加 ns 门控（堵住扩展状态分支
+   `updateStat → AR` 的时序漏洞）：
+   ```java
+   if (rtk.sol.ns < PppCore.MIN_NSAT_SOL) {
+       if (rtk.sol.stat == Constants.SOLQ_FIX) rtk.sol.stat = Constants.SOLQ_NONE;
+       rtk.nfix = 0;
+       return;
+   }
+   ```
+
+### 验证
+
+```bash
+mvn -o -pl rtklib-core -am "-Dtest=PppArStatLatchTest" -DfailIfNoTests=false test
+# Tests run: 6, Failures: 0, Errors: 0, Skipped: 0  （新增 PppArStatLatchTest）
+
+mvn -o -pl rtklib-core -am "-Dtest=PppArFixVerificationTest,PppArStatLatchTest" test
+# Tests run: 10, Failures: 0, Errors: 0, Skipped: 2 （旧 AR 用例无回归）
+
+mvn -o -DskipTests compile
+# BUILD SUCCESS（13 个模块全量编译）
+```
+
+新增用例（`rtklib-core/src/test/java/org/rtklib/java/ppp/PppArStatLatchTest.java`）：
+
+| 用例 | 断言 |
+|------|------|
+| `testClearFixLatch` | `FIX → NONE` |
+| `testClearFixLatchKeepsNonFixStat` | `PPP`/`SINGLE` 不被入口清理破坏 |
+| `testUpdateStatDowngradesFixBelowMinNsat` | `ns=3 + FIX → NONE` |
+| `testUpdateStatKeepsFixAtSufficientNsat` | `ns=6 + FIX → FIX` |
+| `testUpdateStatFloatPathUnchanged` | 浮点路径 `NONE → PPP` 不变 |
+| `testArEngineRefusesFixBelowMinNsat` | `ns=3` 时 AR 拒绝抬标签且 `nfix→0` |
+
+### 对齐结论 / 影响面
+
+- 仅改**标签判定**：不改 `x/P` 数值、不改 AR 的 ratio/方差门限，滤波轨迹逐位不变。
+- 修复后 `stat==NONE` 的历元会重新进入 `PppProcessor` 的 SPP 重初始化分支；
+  FIX-055（scratch `Ssat`）与 FIX-056（scratch `Sol` + `needSppInit` 门禁）已就位，
+  已收敛轨迹不会被米级 SPP 解拉偏，冷启动/重收敛能力恢复。
+- 问题二（SPP 状态污染）与问题三的 navsys 部分在 PPP-AR 链路**未发现缺陷**
+  （PPP-AR 全程不调用 `PntPos`，FIX-055/056 的修复自动覆盖）。
+
+### 修改文件
+
+- `rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java`
+  （新增 `clearFixLatch`；`pppos` 入口调用；`updateStat` FIX/MIN_NSAT_SOL 分支重写）
+- `rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java`（`ppos` 入口调用 `PppCore.clearFixLatch`）
+- `rtklib-core/src/main/java/org/rtklib/java/pppar/PppArEngine.java`（AR 入口 `MIN_NSAT_SOL` 门控）
+- `rtklib-core/src/test/java/org/rtklib/java/ppp/PppArStatLatchTest.java`（新增，6 用例）
+
+---
+
+## FIX-ALG-058 / PPP-AR 系统白名单写死 GPS|GAL|CMP：改为动态继承 opt.navsys（2026-11-11）
+
+**日期**: 2026-11-11
+**类别**: rtklib-core / PPP-AR 系统门控（`PppAmbFix`）
+**C 版依据**: `RTKLIB-2.5.0/src/ppp.c` `ppp_ar()` 不对系统做硬编码白名单，
+卫星是否参与 AR 取决于 `nav->fcb`/`nav->osb` 是否有对应条目（缺失即失败退化为浮点）。
+Java 侧用白名单替代了这一隐式判据，等于把「产品覆盖」写死成「系统常量」。
+
+**触发**: FIX-ALG-057 同源排查第三问（门控/初始化是否写死 `SYS_GPS` 或忽略 `opt.navsys`）。
+
+### 根因
+
+`PppAmbFix` 三处卫星循环内使用常量白名单，全文**无任何 `opt.navsys` 引用**：
+
+| 原位置 | 原判据 |
+|--------|--------|
+| L46（`pppAmbFixWlNl`） | `(sys & (SYS_GPS\|SYS_GAL\|SYS_CMP)) == 0 → nSkipSys++, continue` |
+| L621（`pppPartialAR`） | 同上（无计数） |
+| L1333（`pppAmbFixEwlWlNl`） | 同上 |
+
+后果：`opt.navsys` 若只配 GLO/QZS/IRN（或未来新增系统），AR 静默全部跳过，
+仅体现在 `nSkipSys` 计数上，不报错、不告警，表现为「固定率恒为 0」而无法定位。
+
+### 修复
+
+三处判据统一改为动态继承配置：
+
+```java
+int sys = SatUtils.satsys(sat, null);
+if ((sys & opt.navsys) == 0) { nSkipSys++; continue; }   // 三处一致
+```
+
+### 安全性说明
+
+- 系统配置包含但**无 OSB/FCB 覆盖**的卫星，仍会在后续质量门被剔除
+  （`nSkipOsb`、WL 均值/σ 门限、NL 方差与 ratio 判据），不会误固定；
+- 默认 `navsys`（GPS|GAL|CMP）下 `sys & (GPS|GAL|CMP)` 与 `sys & navsys` 恒等，
+  与修改前**逐位等价**；
+- **未改动** `PppAmbFixBds3` L54 的 `sys != SYS_CMP`：该引擎是 BDS-3 专用实现
+  （仅 `cfg.pppAr.enableBds3AR` 开启时调用），属设计约束而非配置覆盖缺陷。
+
+### 验证
+
+`mvn -o -DskipTests compile` → BUILD SUCCESS（13 模块）；默认 navsys 行为与修改前等价
+（判据等价性见上）。
+
+### 修改文件
+
+- `rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFix.java`（三处判据，修改后为
+  L49 / L625 / L1338，修改前为 L46 / L621 / L1333）
+
+---
+
+## 附：PppRtkSsrReplay 测站参数化（2026-11-11，非算法改动）
+
+回放脚手架原先把测站名写死三处（`OBS_DIR` 目录名、`obsPath`、`navPath` 中的
+测站号），换站必须改源码。现改为：
+
+- 优先级：**命令行第 5 参数** > 环境变量 `RTK_STATION` > 系统属性 `-Drtk.station=`（无内置默认值）；
+- `RINEX_ROOT` 与 `station` 解耦，路径统一由 `%s\%s\%02d\%s.obs` 拼装；
+- usage 同步更新为 `diag | run [ratioLimit] [hourStart] [hourEnd] [station]`。
+
+用法示例：`java ... PppRtkSsrReplay run -1 0 15 0015` 或
+`$env:RTK_STATION="0017"; java ... PppRtkSsrReplay run -1 0 15`。
+
+---
+
 ## 附：FIX-ALG-042 P4 的作用域更正（2026-11-10）
 
 FIX-ALG-042 的 P4 修复（`KalmanFilter.update` 增加 H 列非零检查）自 FIX-ALG-051 起
 **仅对 joint 双基线生效**：该检查已改为可选参数 `skipZeroHCols`，默认值 `true`
 保持 joint 行为逐位不变，单基线 RTK（`relpos`/`holdamb`）显式传 `false` 对齐 C。
+
+## FIX-ALG-059 / PPP-RTK 相位 pre-fit 门限错用 RTK 码行值：钟跳当历元全星剔除 → 可见星 14→4 死亡螺旋（2026-11-11）
+
+**日期**: 2026-11-11
+**类别**: rtklib-core / PPP-RTK 观测质量控制（`PppRtkCore.ppprtkRes`）
+**C 版依据**: `RTKLIB-2.5.0/src/ppp.c` `ppp_res()` 的 pre-fit 剔除为
+`opt->maxinno[code]`，默认 `maxinno[0]=maxinno[1]=30.0`（相位/码行同为 30m）。
+
+**触发**: FIX-ALG-054~058 排雷完成后回归好站数据，0015/0017/0020 全天解算在
+第 1 小时左右出现可见星 12~14 → 3~6 骤降、相位残差 ~1.7cm → 2m，FIX 历元数
+始终达不到 >1000 的验收门限。
+
+### 根因
+
+`PrcOpt.maxinno` 默认 `{5.0, 30.0}`，该取值是按 **RTK `ddres`** 的索引约定设计的
+（`ddres` 中 `code=j%2`，`code==0` 是**码**行，故 `maxinno[0]=5.0` 收紧的是码行）。
+而 PPP 侧 `ppprtkRes`/`pppRes` 的索引约定相反：`code==0` 取 `Lc[0]`，即**相位**行。
+于是相位行拿到 5.0m 门限，比 C 的 30m 紧 6 倍；原代码只在 `epoch<=60` 期间临时
+放宽到 30m（`(rtk.epoch <= 60 && code == 0) ? 30.0 : opt.maxinno[code]`），
+第 61 历元起恢复 5m。
+
+**探针证据**（`PPP_DEBUG_REJ=1`，0015 hour00）：
+
+| 历元 | 现象 |
+|---|---|
+| 90~96 | `nv=27~28`，仅 sat116 因 -6/-7m 被剔除，系统稳定 |
+| **97** | **13 颗星同历元被 `maxinno` 剔除，残差 +8~+13m 同号同量级**，`nv` 28→15（仅剩码行） |
+| 98~ | `nv` 长期 ≈15、可见星 4~6，相位残差升至米级，全天不再恢复 |
+
++8~+13m 同号公共项跳变 = 接收机钟跳（约 30ns）。C 版 30m 门限下该历元全部
+通过、由 EKF 的接收机钟状态一次性吸收；5m 门限下则全部剔除，EKF 只剩码行更新，
+钟差状态无法在一历元内吸收跳变，后续历元继续全部超限 → 死亡螺旋。
+叠加 FIX-ALG-043 的初始化期永久冻结（`rejc>=10 → 1000`）后，卫星被逐个永久杀死。
+
+### 修复
+
+```java
+private static final double MAXINNO_PHASE = 30.0;   // 对齐 C ppp.c maxinno[0]
+...
+double maxinno_val = code == 0 ? MAXINNO_PHASE : opt.maxinno[1];
+```
+
+删除 `epoch<=60` 的临时放宽（该 hack 本身就是「作者已察觉 5m 过紧、只补了启动窗口」
+的痕迹）。`opt.maxinno[code] > 0.0` 的外层开关保留，用户显式置 0 仍可关闭该行剔除。
+
+### 验证（2026-10-31 SSR 数据，全天 00~15h）
+
+| 测站 | epochs | FIX | 固定率 | 可见星 mean/min/max | PERM-FREEZE 次数 |
+|---|---|---|---|---|---|
+| 0015 | 3815 | **2270** | **59.5%** | 10.0 / 1 / 15 | 1（sat109@ep6） |
+| 0017 | 3820 | **2974** | **77.9%** | 9.2 / 2 / 12 | 0 |
+| 0020 | 3827 | **1501** | **39.2%** | 9.8 / 2 / 14 | 1（sat107@ep5） |
+
+- 0015 hour00 修复前后：固定率 76.9%→**89.1%**，可见星 mean 9.1→**13.6**、min 1→**9**
+- 0015 hour00 逐历元复查：epoch 97 `nv=28`、`maxinno` 剔除 0 次（修复前 13 次）
+- `PERM-FREEZE` 由「每站多颗星批量冻结」降到 0~1 次 → **FIX-ALG-043 的
+  `INIT_PHASE_EPOCH=10` / `INIT_REJC_THRESHOLD=10` / `PERM_FROZEN_REJC=1000`
+  经实测已足够，本次不再放宽**
+- 残存问题（不在本次范围）：0015 hour07~08、hour10~11 固定数为 0，另有
+  `resRms` 全天 2.7~4.3m 偏高，需另案定位
+
+### 修改文件
+
+- `rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkCore.java`
+  （新增 `MAXINNO_PHASE` 常量；`ppprtkRes` pre-fit 门限一行）
+
+## FIX-ALG-060 / PPP-RTK UC 分支白名单写死 + 接口三 AI A/B 可行性核查（2026-11-11）
+
+**日期**: 2026-11-11
+**类别**: rtklib-core / PPP-RTK AR（`PppRtkAmbFix.ppprtkAmbFixUc`）+ AI 接口接入可行性
+**触发**: FIX-ALG-059 修复后三站 FIX 均 >1000，按计划给 PPP-RTK 挂接口三
+（ObsCorrector）做 A/B；接口三门禁要求 `ionoopt != IONOOPT_IFLC`，故先跑
+非 IFLC 原生基线。
+
+### 修复：UC 分支系统白名单
+
+```java
+// 原：if ((sys & (Constants.SYS_GPS | Constants.SYS_GAL)) == 0) continue;
+if ((sys & opt.navsys) == 0) continue;
+```
+
+与 FIX-ALG-058（PPP-AR `PppAmbFix`）同类缺陷：`navsys` 未含 GPS/GAL 时静默全跳过，
+无任何告警。本次测试配置 `navsys=0x20`（仅 GPS）时该改动为等价空操作，
+故 **UC 分支改动无法端到端验证**，仅作为对称性修复归档。
+
+### 核查结论：接口三 A/B 在 PPP-RTK 链上不可执行（双重阻断）
+
+**阻断一：PPP-RTK 链没有任何 AI 注入点。**
+`AiHooks.resolveObsCorrector` / `resolveFixValidator` 的全部调用点只有
+`rtkpos/RtkCore.java`（L257 接口三、L803 接口一），`ppprtk/PppRtkCore.java`
+与 `ppp/PppCore.java` 一次都没有调用。即 PPP-RTK 不走 `RtkCore`，接口 1/2/3
+在 PPP-RTK 上「未接线」，`rtk.aiObsCorrector` 挂上去也不会被读。
+
+**阻断二：解除 IFLC 门禁的唯一手段（非 IFLC 配置）本身不可用。**
+`RtkCore` L256-258 与 `aiAcceptFix` L805 的 IFLC 门禁是 `§4.3.7` 冻结设计
+（IFLC 下 nf 归一为 1，y 为组合量，逐频点偏差物理含义不成立）。绕开它只能
+改用 UC/EST 配置，实测（0015 hour00，`ionoopt=4(EST)`、`nf=3`、`navsys=0x20`）：
+
+| 配置 | epochs | FIX | 固定率 | 末历元状态 | 相位残差 p50 |
+|---|---|---|---|---|---|
+| IFLC（`ionoopt=3`，nf=2） | 238 | 212 | **89.1%** | `stat=FIX` | 2.92 m |
+| UC/EST（`ionoopt=4`，nf=3） | 238 | **0** | **0.0%** | `ns=1 vsat0=0 ambAlive=5` | 0.00 m（143/238 历元残差缺失） |
+
+UC 链路不是「固定率低」，而是**滤波器退化为单参数**（`ns=1`、`vsat0=0`），
+全天无一个可用固定解。故非 IFLC 载体不存在，接口三无法取得 A/B 样本。
+
+### 可量化上限：即使 AI 完美也无法提升（oracle 门禁分析）
+
+以「相邻 FIX 历元位置跳变 >0.2m」判定错误固定，统计三站全天：
+
+| 测站 | FIX 总数 | 正确 | 错误 | 错误固定率 | resRms 正确/错误 p50 | 可见星 正确/错误 p50 |
+|---|---|---|---|---|---|---|
+| 0015 | 2270 | 2251 | 18 | **0.79%** | 3.48 / 3.92 m | 10 / 11 |
+| 0017 | 2974 | 2960 | 13 | **0.44%** | 3.18 / 5.66 m | 9 / 11 |
+| 0020 | 1501 | 1484 | 16 | **1.07%** | 3.32 / 2.67 m | 10 / 13 |
+
+- **oracle 上限**：假设存在一个完美的固定有效性判别器，把 18/13/16 个错误固定
+  全部剔除且不误杀，固定率仅从 59.5%→59.0%、77.9%→77.5%、39.2%→38.8%
+  （−0.4pp 量级），错误固定率归零。
+- **可分性**：错误固定的 `resRms` 在 0015/0017 略高（+0.4m / +2.5m），但在
+  0020 反而更低；可见星仅高 1~3 颗。三站方向不一致 → 特征上不存在稳定判别面，
+  与 `PPP_AI_ASSESSMENT.md` §4 的「PPP-RTK 错误固定以基线级系统性偏移为主、
+  非可学习噪声」结论一致。
+
+**结论**：PPP-RTK 当前错误固定率已在 0.4%~1.1%，AI 收益空间上限 ≈0.4~1.1pp
+且不可判别；接口三在 PPP-RTK 上的正确动作是「保持冻结、不接入」，A/B 对比
+不产出数字，避免用伪造的 AI 指标污染评估。
+
+### 修改文件
+
+- `rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkAmbFix.java`（UC 白名单一行）
+- `rtklib-test/src/main/java/org/rtklib/java/test/PppRtkSsrReplay.java`（`ionoopt`/`navsys`/`nf` 参数化）
+
+### 附：0018 站全天实测数据（2026-10-31 真实 SSR，IFLC）
+
+原 0015/0017/0020 使用的是外部抓取数据；本次改用实时落盘数据源
+（`AutoRtkPostService/rinex_data`，RINEX 按本地时 UTC+8、SSR 按 UTC 小时），
+测站 `GS20…0018`，配置 `ionoopt=3 / nf=2 / navsys=0x20 / elmin=15°`，
+时段 00:00~22:00 UTC：
+
+| 指标 | 实测值 |
+|---|---|
+| 总历元 | 5264 |
+| FIX 历元 | **3947** |
+| 固定率 | **75.0%** |
+| 可见卫星 nsMax / nsAvg | 15 / 9.3 |
+| 收敛后（≥14:00）相邻 FIX 历元跳变 p50 | 0.0012 m（仅 9 次 >0.2m） |
+| 收敛期（00:00~13:00）相对收敛后位置的偏移 | 0.5 ~ 11.8 m |
+
+- **固定历元数 >1000 的门槛成立**，但**收益空间为 0**：以「收敛后 25% 历元位置中位数」
+  为参考真值，收敛期之外的错误固定率为 **0**；收敛期的偏移是系统性（逐小时单调
+  收敛）而非随机跳变，不构成可学习目标。
+- **小时级 A/B 对照**：IFLC 下挂 `rtk.aiObsCorrector` 前后，固定率、可见星数、
+  相位残差三项完全一致 → AI 未生效，与「阻断一：无注入点」的静态代码核查吻合。
+- 冷启动首个历元位置与收敛后位置相差 7.7 m（`APPPOS` 头坐标起步），说明偏移从
+  滤波初期即存在，属于慢收敛而非历元级跳变。
+
+### 附：BDS 宽巷信号对混用观察（非本次修复项，留作风险登记）
+
+实时流 RINEX 头北斗观测序列为 `C2I/C7I/C7D/C5P/C6I`，而 `Obsd.code` 只有 NFREQ
+个槽位，`C6I`（B3I）落在高索引槽。脚手架用 `promoteBdsSlot1()`
+（`-Drtk.bdsSecond=6I`）把 B3I 提升到 slot1，实测 slot1 为空的卫星从「全部」恢复
+到可用（nsAvg 0→9.3）。
+
+但提升只在目标码存在时生效：全天 46699 条 `WL-SAT` 记录中仍有 **6867 条（14.7%）**
+的 `code1` 回退到 `7I`（B2I），即同一星座内并存 **B1I/B3I** 与 **B1I/B2I** 两种
+信号对。而 `PppAmbFix` 的 WL 整数基准是**按星座求小数中位数**，两种信号对的
+λ_WL 不同（B3I 约 4.88 m、B2I 约 5.72 m），混对会让少数派卫星的宽巷小数被
+中位数判为离群。
+
+对照实验（hour00，`-Drtk.bdsStrict=true` 强制统一为 B1I/B3I，缺 B3I 的卫星直接
+清空 slot1）：
+
+| 模式 | WL 信号对 | FIX / 历元 | nsAvg |
+|---|---|---|---|
+| 非严格（默认） | 42 与 27 混用 | 198 / 240 | 13.23 |
+| 严格 | 全部 42 | 198 / 240 | 13.12 |
+
+固定历元数完全相同，说明混对**不是** 0018 收敛偏移的原因（IFLC 只需要任意两个
+频点，混对只影响宽巷整数基准的纯度）；严格模式少 0.1 颗/历元（丢掉缺 B3I 的卫星），
+故默认保持关闭，仅在需要「纯 B1I/B3I 基准」时用 `-Drtk.bdsStrict=true` 开启。
+
+> 待办（未执行）：若后续 BDS 宽巷固定率成为瓶颈，应在 `PppAmbFix` 中把 WL 中位数
+> 的统计单元从「星座」细化为「星座 + (code0, code1) 信号对」，而非依赖测试端统一槽位。
+
+### 附：脚手架使用注意
+
+`mvn exec:java` 直接调用**不会**触发 `compile`，改了 `rtklib-test` 源码后必须先
+`mvn -o -pl rtklib-test -am compile`，否则跑的是 `target/classes` 里的旧类
+（本次排查中曾因此误判「严格模式未生效」）。`CONFIG` 行已增加 `bdsSlot1=` /
+`strict=` 两个字段用于自检。

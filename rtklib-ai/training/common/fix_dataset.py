@@ -32,7 +32,10 @@ DIM = 6
 FEATURE_COLUMNS = [f"f{i}" for i in range(DIM)]
 FEATURE_NAMES = ("adr", "prr", "pcr", "ratio", "ns_fixed", "pdop")
 LABEL_COLUMN = "label"
-META_COLUMNS = ("epoch", "station", "day", "n_code_rows", "n_phase_rows")
+RUN_ID_COLUMN = "run_id"
+RUN_EPOCHS_COLUMN = "run_epochs"
+META_COLUMNS = ("epoch", "station", "day", RUN_ID_COLUMN, RUN_EPOCHS_COLUMN,
+                "n_code_rows", "n_phase_rows")
 REQUIRED_COLUMNS = tuple(FEATURE_COLUMNS) + (LABEL_COLUMN,) + META_COLUMNS
 
 _SCHEMA = pa.schema(
@@ -42,6 +45,8 @@ _SCHEMA = pa.schema(
         ("epoch", pa.int64()),
         ("station", pa.string()),
         ("day", pa.string()),
+        (RUN_ID_COLUMN, pa.string()),
+        (RUN_EPOCHS_COLUMN, pa.int32()),
         ("n_code_rows", pa.int32()),
         ("n_phase_rows", pa.int32()),
     ]
@@ -68,6 +73,14 @@ def validate(table: pa.Table) -> None:
         if any(v is None or str(v).strip() == "" for v in values):
             raise ValueError(f"列 {name} 存在空值：切分依据缺失的数据不得进入评估（§7.3）")
 
+    values = table[RUN_ID_COLUMN].to_pylist()
+    if any(v is None or str(v).strip() == "" for v in values):
+        raise ValueError(f"列 {RUN_ID_COLUMN} 存在空值：G-2 的固定率分母依赖运行身份")
+    epochs = np.asarray(table[RUN_EPOCHS_COLUMN].to_numpy(zero_copy_only=False),
+                        dtype=np.int64)
+    if epochs.size and np.any(epochs <= 0):
+        raise ValueError(f"列 {RUN_EPOCHS_COLUMN} 存在非正值：该 run 的 AR 历元数必须 ≥ 1")
+
     label = np.asarray(table[LABEL_COLUMN].to_numpy(zero_copy_only=False), dtype=np.float64)
     if label.size == 0:
         raise ValueError("数据集为空")
@@ -89,7 +102,7 @@ def write(table: pa.Table, path, note: str | None = None) -> None:
     """写出 Parquet；``note`` 写入 schema metadata（示例数据集须标注「仅演示」）。"""
     validate(table)
     meta = dict(table.schema.metadata or {})
-    meta[b"rtklib-ai"] = b"fix_validator_v1"
+    meta[b"rtklib-ai"] = b"fix_validator_v2"
     if note:
         meta[b"note"] = note.encode("utf-8")
     pq.write_table(table.replace_schema_metadata(meta), str(path))
@@ -107,11 +120,50 @@ def labels(table: pa.Table) -> np.ndarray:
     return np.asarray(table[LABEL_COLUMN].to_numpy(zero_copy_only=False), dtype=np.float32)
 
 
+def total_epochs(table: pa.Table) -> int:
+    """该表覆盖的 **AR 历元总数**（固定率分母）。
+
+    G-2「固定率绝对下降 ≤ 1.0 个百分点」的分母是**全部解算历元**，不是固定历元：
+    core 侧固定率 = 固定历元 / 全部历元。数据集每行只对应一个固定历元，
+    故必须按运行身份 ``(station, day, run_id)`` 去重后累加 ``run_epochs``。
+
+    注意：该口径**偏保守**——某 run 若一个历元都没固定，它在数据集中没有行，
+    其 AR 历元数不进分母，会把固定率略微高估、把 1pp 预算略微收紧。
+    宁可收紧，不可放宽（放宽会让 G-2 判据失真）。
+    """
+    keys = zip(table["station"].to_pylist(), table["day"].to_pylist(),
+               table[RUN_ID_COLUMN].to_pylist(),
+               table[RUN_EPOCHS_COLUMN].to_pylist())
+    seen: dict[tuple[str, str, str], int] = {}
+    for st, dy, rid, n in keys:
+        seen[(st, dy, rid)] = int(n)
+    return int(sum(seen.values()))
+
+
 def split(table: pa.Table, seed: int = 0, n_test_stations: int = 2,
-          n_val_stations: int = 1, val_day_fraction: float = 0.25):
+          n_val_stations: int = 1, val_day_fraction: float = 0.25,
+          test_candidates: "list[str] | None" = None,
+          val_candidates: "list[str] | None" = None):
     """两层切分（复用 :func:`dataset.two_layer_split`，两者共用 ``station``/``day`` 语义）。"""
     return two_layer_split(table, seed=seed, n_test_stations=n_test_stations,
-                           n_val_stations=n_val_stations, val_day_fraction=val_day_fraction)
+                           n_val_stations=n_val_stations,
+                           val_day_fraction=val_day_fraction,
+                           test_candidates=test_candidates,
+                           val_candidates=val_candidates)
+
+
+def station_epochs(table: pa.Table) -> dict[str, int]:
+    """逐站的 AR 历元总数（G-2 分母的逐站口径）。"""
+    keys = zip(table["station"].to_pylist(), table["day"].to_pylist(),
+               table[RUN_ID_COLUMN].to_pylist(),
+               table[RUN_EPOCHS_COLUMN].to_pylist())
+    seen: dict[tuple[str, str, str], tuple[str, int]] = {}
+    for st, dy, rid, n in keys:
+        seen[(st, dy, rid)] = (st, int(n))
+    out: dict[str, int] = {}
+    for st, n in seen.values():
+        out[st] = out.get(st, 0) + n
+    return out
 
 
 def make_demo(n_stations: int = 6, n_days: int = 3, n_epochs: int = 150,
@@ -127,6 +179,8 @@ def make_demo(n_stations: int = 6, n_days: int = 3, n_epochs: int = 150,
     station = np.repeat([f"S{i}" for i in range(n_stations)], n_days * n_epochs)
     day = np.tile(np.repeat([f"D{i}" for i in range(n_days)], n_epochs), n_stations)
     epoch = np.tile(np.arange(n_epochs), n_stations * n_days)
+    run_id = np.repeat("r0", n)
+    run_epochs = np.full(n, n_epochs, dtype=np.int32)
 
     adr = np.abs(rng.normal(0.8, 0.5, n))
     prr = np.abs(rng.normal(0.05, 0.03, n))
@@ -158,6 +212,8 @@ def make_demo(n_stations: int = 6, n_days: int = 3, n_epochs: int = 150,
             pa.array(epoch, type=pa.int64()),
             pa.array(station, type=pa.string()),
             pa.array(day, type=pa.string()),
+            pa.array(run_id, type=pa.string()),
+            pa.array(run_epochs, type=pa.int32()),
             pa.array(n_code_rows, type=pa.int32()),
             pa.array(n_phase_rows, type=pa.int32()),
         ],

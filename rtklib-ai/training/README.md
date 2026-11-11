@@ -15,14 +15,14 @@
 ### 自动安装
 
 ```powershell
-cd D:\rtklib\rtklib_java\rtklib-ai
+cd <repo-root>/rtklib-ai
 python -m pip install -r training/requirements.txt
 ```
 
 ### 环境自检（推荐先跑）
 
 ```powershell
-cd D:\rtklib\rtklib_java\rtklib-ai
+cd <repo-root>/rtklib-ai
 python -m training.common.check_env
 ```
 
@@ -57,7 +57,7 @@ training/
 **工作目录必须是 `rtklib-ai`**，因为入口按包路径 `-m training.xxx` 导入。
 
 ```powershell
-cd D:\rtklib\rtklib_java\rtklib-ai
+cd <repo-root>/rtklib-ai
 
 # 接口三：演示数据（生成 + 训练 + 导出 + 评估，一条命令跑通）
 python -m training.obs_corrector.train --demo --out-dir training/out
@@ -78,7 +78,11 @@ python -m training.fix_validator.train --dataset data/fix_validator.parquet --ou
 
 `--bias-max` 必须小于 core 侧钳位 10 m，`--scale-max` 必须 ≤ core 侧钳位 4.0，否则契约校验会失败。
 
-接口一常用参数：`--epochs`（30）、`--batch-size`（256）、`--lr`（3e-3）、`--hidden`（32）、`--patience`（5）、`--seed`、`--wrong-weight`（0 = 自动 `min(20, 正确数/错误数)`）、`--max-fix-drop-pp`（1.0）、`--min-confidence`（0.5，与 core 默认值一致）。
+接口一常用参数：`--epochs`（30）、`--batch-size`（256）、`--lr`（3e-3）、`--hidden`（32）、`--patience`（5）、`--n-val-stations`（2，阈值联合标定用的独立验证站数）、`--seed`、`--wrong-weight`（0 = 自动 `min(20, 正确数/错误数)`）、`--max-fix-drop-pp`（1.0）、`--min-confidence`（0.5，与 core 默认值一致）。
+
+`--n-val-stations ≥ 2` 是 G-3 的必要条件：阈值是绝对值，各站置信度分布不同，单站标定出的阈值到别的站会剔除更多历元（G-2 直接超标）。≥2 个独立验证站才能约束「单一全局阈值在每个站都满足 1 pp 预算」。
+
+阈值排序键是 `(达标站数, 最坏站下界, 平均下界, 固定率下降)` 四级依次比较。**不能只用「最坏站下界」单键**：当没有任何阈值能让所有标定站达标时，「几乎不剔除历元」的候选下界恰为 0，反而成为最优解，于是选出一个形同不干预的阈值，把「不可行」伪装成「已标定」。
 
 
 ## 4. 数据格式
@@ -174,7 +178,7 @@ python -m training.fix_validator.train --dataset data/fix_validator.parquet --ou
 
 训练集不是一次跑出来的：单个 RINEX 通常只有几百到几千个固定历元，而错误固定是 2%~8% 的少数类，按 §7.4 的 G-1 前置条件（错误固定事件 ≥ 100）需累计上万行。因此采集按「多次运行累积」设计，每次运行产出一个 CSV，靠 `run_id` 区分。
 
-### 6.1 标准用法（唯一入口）
+### 6.1 标准用法（整日单文件入口）
 
 `CollectSession` 把「注入 provider → 解算 → 清理 `ThreadLocal`」收成一个 try-with-resources：
 
@@ -189,6 +193,8 @@ try (CollectSession s = CollectSession.open(cfg)) {
 - 缺省 `runId` 自动生成（`yyyyMMddTHHmmss-xxxx`），文件名 `{station}_{day}_{runId}.csv`，天然不碰撞。
 - 同 `runId` 重复打开会抛 `IOException`（拒绝覆盖）。多跑一次就换一个 `runId`。
 - 注入点在执行后**还原**（而非清空）：宿主若已有自己的 provider，不会被采集会话抹掉；`body` 抛异常也照样还原。
+
+**第二条入口：按小时切片（`FixValidatorHourlyCollectTest`）**。面向现场私有数据（`<rinex-root>/<station>/<yyyy-MM-dd>/<hour>.obs|.nav`），每小时一次独立运行、滤波器逐小时重启，`runId` 用 `h07` 这类小时号，产物落在 `data/fix-validator/collect-hourly/`。它与上面共用 `CollectSession` 与特征提取，差别只有输入切片方式、输出目录和**不写 `truth.csv`**——这类数据的 RINEX 头 `APPROX POSITION XYZ` 与实测固定解相差数十米，不能当真值。因此这条线目前**采集得到、组装不了**：`assemble.py` 只接受显式真值文件，类注释里的 `--truth auto` 尚未实现（见 §6.7）。
 
 ### 6.2 采集器的行为
 
@@ -234,8 +240,13 @@ trace 的 AR/FIX 行 (epoch → x/y/z) ┼→ join → 3D 误差 → label → P
 ```
 
 ```bash
+# 有真值文件（打标签用真值坐标，同时交叉校验自动真值）
 python -m training.fix_validator.assemble \
     --collect-dir out/collect --truth truth.csv --out data/fix_validator.parquet
+
+# 无真值文件（现场私有数据）：--truth 可省略，默认走 --reference cluster
+python -m training.fix_validator.assemble \
+    --collect-dir out/collect-hourly --out data/fix_validator.parquet
 ```
 
 **join key 是 `(run_id, epoch)`，不是时间。** `FixQualityContext.epoch` 是进程内计数器，跨运行从 0 重来，所以 `run_id` 是主键的另一半。由于真值是静态已知坐标，打标签**不需要绝对时间**；trace 里的 `gpst` 只进诊断报告，不参与 join。
@@ -247,15 +258,26 @@ station,ref_x,ref_y,ref_z        # ECEF
 station,lat,lon,hgt              # 大地坐标（度/度/米，WGS84）
 ```
 
-判定规则：`|固定解 - 已知坐标| ≤ --threshold`（默认 0.05 m）记 `label=1`（正确），否则 `label=0`（**错误固定**，即接口一要拦的对象）。
+**参考坐标来源（`--reference`）**：
 
-三类拒绝（都写进 `*.assemble.json` 诊断报告，不静默）：
+| 取值 | 含义 | 适用 |
+|---|---|---|
+| `cluster`（默认） | 跨日一致的站内稳健中心 | 无真值文件；也可有真值文件时作自动口径 |
+| `truth` | 真值文件坐标（原始口径，便于对照） | 必须有 `--truth` |
+
+`cluster` 不是「把该站所有固定解混在一起聚类」——那会让样本多的整日系统性偏差把簇心拉过去，从而**自证为正确**。实现顺序是：逐日稳健中心 → 跨日**中位**作参考 → 逐日中心偏离超 `--max-day-offset`（默认 0.10 m）即该站该日**整体拒用** → 只剩 1 个观测日的站直接拒用（无第二个日中心可比对，自动真值必然自证）。若同时给了 `truth.csv`，报告会额外输出「跨日簇心 vs 真值文件」的偏移，作为口径的独立交叉校验。
+
+判定规则：`|固定解 - 参考坐标| <= --threshold`（默认 0.20 m）记 `label=1`（正确），否则 `label=0`（**错误固定**，即接口一要拦的对象）。默认值不是随手取的：G-1 要求剔除 30% 错误固定、G-2 只允许剔除 1 pp 的 AR 历元，即 `错误固定/AR 总历元 <= 3.33%`；本批数据固定率约 40%，折算后要求错误固定率 <= 8.4%，实测只有 0.20 m 档（6.9%）落在可行域，0.05 m 档为 34%，G-1 永远无法达成。
+
+拒绝情形（都写进 `*.assemble.json` 诊断报告，不静默）：
 
 | 情形 | 处理 |
 |---|---|
 | `_runs.csv` 中无 `status=ok` | 该运行跳过，不进数据 |
-| 站点在 `truth.csv` 里查不到 | 该运行跳过（无真值即无标签） |
+| `reference=truth` 但站点在 `truth.csv` 里查不到 | 该运行跳过（无真值即无标签） |
 | 单 run 的 epoch↔trace 覆盖率 < `--min-join-rate`（默认 0.90） | 整 run 跳过并给出原因 |
+| 该站日中心偏离跨日中位 > `--max-day-offset` | 该站该日全部 run 跳过（整日系统性偏差） |
+| 该站只有 1 个观测日 | 该站全部 run 跳过（跨日校验无从执行） |
 
 覆盖率门槛是**整 run 级别**而不是逐行丢弃：逐行丢弃会让「trace 采样率 50%」这类系统性缺陷退化成「数据少一半但看起来正常」，而指标上完全看不出来。
 
@@ -265,9 +287,22 @@ station,lat,lon,hgt              # 大地坐标（度/度/米，WGS84）
 2. `err_p99 / err_max` 是否与阈值量级相符（若 `max` 恰等于阈值，多半是真值站号错配）；
 3. `warnings` 里「站数 < 4」「错误固定 < 100」——前者切分做不了，后者 G-1 判不了。
 
-### 6.7 仍未完成
+### 6.7 状态（2026-11-10）
 
-真实数据进训练前的最后一环已打通（§6.6），但**尚未用真实 RINEX 跑过**。当前 `--demo` 与合成数据只证明链路正确，不构成任何效果承诺。
+两条采集线均已组装成 Parquet（`data/` 不入库）：
+
+| 线 | 规模 | 产物 |
+|---|---|---|
+| 整日线（公开数据） | 12 run / 6 站 / 2 天 / 16152 行 | `data/fix-validator/fix_validator.parquet` |
+| 小时线（现场私有数据） | 1192 run / 16 站 / 4 天 / 113962 行 | 同路径（覆盖前者，两条线**不得混用**） |
+
+小时线命令：`--collect-dir data/fix-validator/collect-hourly --truth data/fix-validator/truth.csv --reference cluster`。结果：AR 总历元 280900、固定率 40.57%、错误固定 7907（6.94%）、`err_p50` 3.50 cm；逐日中心偏离跨日中位 p50 0.009 m / max 0.085 m（容差 0.10 m）；**跨日簇心 vs 真值文件偏移 p50 1.6 cm / max 4.9 cm**——自动真值与独立真值文件 cm 级一致，标签口径可信。
+
+跨日校验的必要性有实测证据：站 **X** 在 2026-06-18 / 06-11 的日中心分别偏离 0.865 m / 0.194 m，被整体拒用；若关掉校验（`--max-day-offset 10.0`），错误固定从 7907 涨到 8380 行（473 行被整日偏差污染）。另有 277 run 因 join 覆盖率 0% 跳过（trace 缺失/未开 AR）。
+
+整日线仍有两项体检发现未消解（`wrong_fix_rate` 18.58%、`err_p50` 4.3~6.7 cm），属**真值口径错配**（天线相位中心 vs 标石、站号错配），**不要把整日线的错误固定率当基线引用**。详见 `docs/AI_ENHANCEMENT_DESIGN.md` §8.1。
+
+**训练与评估已在小时线上跑完（§8.2）**：判据口径、可行性前置、多站联合标定、留一站与留多站探针均已完成。结论：留一站 1/7 站、留多站 0/7 组配置满足 G-1+G-2，**G-3 不可达**；根因是 6 维特征跨站判别力不足且全局阈值不可迁移，不是标签或实现缺陷。接口一据此保持「未注入即关闭」，不进入默认开启流程。
 
 ## 7. 注意事项
 
@@ -275,6 +310,6 @@ station,lat,lon,hgt              # 大地坐标（度/度/米，WGS84）
 - **行序必须对账**：`sat`/`frq` 必须与推理侧 `idx = i * nf + frq` 的行序一致，否则训练标签与推理特征错位。
 - **归一化只拟合训练集**：`norm.json` 由训练集统计量写出，Java 侧原样加载。禁止按运行数据动态归一化。
 - **演示数据不承诺效果**：`make_demo()` 的标签由人工隐函数生成，`--demo` 的高改善率只证明链路跑通（§6.3）。
-- **采集与组装已可用，但未用真实 RINEX 验证**：Java 侧 `CollectSession` 产 CSV（§6.1），Python 侧 `assemble.py` 产 Parquet（§6.6）。链路已用合成数据端到端跑通，真实数据尚未跑过。
+- **采集与组装已用真实 RINEX 验证（§6.7）**：整日线与小时线均已产出 Parquet，链路正确性已确认；小时线标签口径经真值文件交叉校验到 cm 级，可直接用于训练与评估。
 - **接口一的阈值永远在 core 侧**：模型只输出 `[0,1]` 置信度，`AiOpts.fixValidatorMinConfidence` 决定接受与否。训练脚本扫阈值只为给出「建议值」，不写进 ONNX。
 - **接口一的固定率代价必须显式约束**：训练脚本在验证集上以「固定率绝对下降 ≤ `--max-fix-drop-pp`（默认 1.0 pp）」为约束最大化错误固定剔除。若不设此约束，模型可通过「全部拒绝」拿到 0 错误固定率，但固定率会崩。

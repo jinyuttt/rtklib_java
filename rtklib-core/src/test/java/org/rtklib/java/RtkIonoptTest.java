@@ -582,7 +582,7 @@ public class RtkIonoptTest {
     @Test
     @DisplayName("C版RTKLIB IFLC对比测试")
     void testCRtklibIflc() throws IOException, InterruptedException {
-        String rtklibDir = TestDataConfig.get("rtklib.c.dir", "D:\\RTKLIB_EX_2.5.0");
+        String rtklibDir = TestDataConfig.get("rtklib.c.dir", "");
         String rnx2rtkp = rtklibDir + "\\rnx2rtkp.exe";
         org.junit.jupiter.api.Assumptions.assumeTrue(java.nio.file.Files.exists(java.nio.file.Paths.get(rnx2rtkp)),
                 "C版rtklib可执行文件不可用 - 跳过C版对比测试");

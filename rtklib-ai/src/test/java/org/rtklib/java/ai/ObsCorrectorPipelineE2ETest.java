@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -14,12 +15,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.rtklib.java.TestDataConfig;
+import org.rtklib.java.ai.feature.ObsCorrectionFeatures;
 import org.rtklib.java.ai.spi.AiHooks;
 import org.rtklib.java.ai.spi.AiProvider;
 import org.rtklib.java.ai.spi.CodeCorrection;
 import org.rtklib.java.ai.spi.FixValidator;
 import org.rtklib.java.ai.spi.ObsCorrectionContext;
 import org.rtklib.java.ai.spi.ObsCorrector;
+import org.rtklib.java.ai.spi.SatFeature;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.CoordType;
 import org.rtklib.java.data.Position;
@@ -63,6 +66,9 @@ class ObsCorrectorPipelineE2ETest {
     /** 训练管道默认安全头饱和值（`train.py --bias-max` / `--scale-max`），须与 core 钳位一致。 */
     private static final double BIAS_MAX = 2.0;
     private static final double SCALE_MAX = 4.0;
+
+    /** A2-2 的错误固定判据：水平误差超过该值即记一次「错误固定」。 */
+    private static final double FALSE_FIX_H = 0.5;
 
     private static Path obsModel;
     private static Path zeroModel;
@@ -259,6 +265,176 @@ class ObsCorrectorPipelineE2ETest {
         }
     }
 
+    @Test
+    @DisplayName("A2 配对验收：固定率 / 错误固定率 / 位置 RMS / ns 四项指标（C 组 vs A 组同历元配对）")
+    void testA2PairedAcceptanceMetrics() {
+        Assumptions.assumeTrue(avail, "公开数据缺失");
+        Path model = Paths.get("training", "out", "obs_corrector.onnx");
+        Path norm = Paths.get("training", "out", "obs_corrector.norm.json");
+        Assumptions.assumeTrue(Files.isRegularFile(model),
+                "训练产物不存在，先执行 python -m training.obs_corrector.train --demo");
+
+        /* A 组：不注入任何接口三（core 原生分支）。
+         * 必须用**带 trace 的同一次运行**作为配对基准：baseline 字段来自另一次运行，
+         * 若按时间戳配对仍能对齐，但 ns/Q 只能从 trace 拿到，故这里重跑一次。 */
+        Map<String, EpochRec> groupA = runWithTrace(null);
+        assertEquals(baseline.totalEpochs, groupA.size(), "POSITION trace 行数必须等于历元总数");
+
+        Map<String, EpochRec> groupC;
+        DistCorrector dist = null;
+        try (OnnxAiProvider provider = new OnnxAiProvider(null, null, model,
+                Files.isRegularFile(norm) ? norm : null)) {
+            assertTrue(provider.isObsCorrectorAvailable(), "训练产物应能被 provider 加载");
+            dist = new DistCorrector(provider.obsCorrector());
+            groupC = runWithTrace(wrap(dist));
+        }
+
+        Map<String, Truth> truth = loadTruth();
+        assertFalse(truth.isEmpty(), "参考真值文件缺失，A2 的错误固定率/RMS 无法判定");
+
+        A2Metrics a = metrics(groupA, truth, baseline.totalEpochs);
+        A2Metrics c = metrics(groupC, truth, baseline.totalEpochs);
+        PairDiff diff = pairDiff(groupA, groupC);
+
+        log.info("A2 判定（A 组=未注入，C 组=训练产物注入，同一 opt/同一 RINEX）");
+        log.info("  A2-1 固定率：A={} ({}) → C={} ({}), Δ={} pp（判据 ≤ +1.0 pp 下降）",
+                a.fix, percent(a.fixRate()), c.fix, percent(c.fixRate()),
+                String.format("%.3f", (a.fixRate() - c.fixRate()) * 100));
+        log.info("  A2-2 错误固定率（水平误差 > {} m 记错）：A={}/{}={} → C={}/{}={}",
+                FALSE_FIX_H, a.falseFix, a.fix, percent(a.falseFixRate()),
+                c.falseFix, c.fix, percent(c.falseFixRate()));
+        log.info("  A2-3 位置 RMS（FIX+FLOAT 对参考真值，{} 个配对历元）："
+                        + "A: H={} m V={} m → C: H={} m V={} m",
+                a.rmsEpochs, m(a.rmsH), m(a.rmsV), m(c.rmsH), m(c.rmsV));
+        log.info("  A2-4 ns：A 均值={} → C 均值={}，配对 {} 历元中 ns 减少 {} 个、增加 {} 个",
+                String.format("%.3f", a.meanNs), String.format("%.3f", c.meanNs),
+                diff.paired, diff.nsDown, diff.nsUp);
+        log.info("  A2-4 解状态迁移：success 减少 {} 个历元、增加 {} 个历元（A success={}, C success={}）",
+                diff.lost, diff.gained, a.solved, c.solved);
+
+        /* 饱和体检：若大量行顶在 ±BIAS_MAX、且 scale 全钉在 1.0，说明两个输出头都已在
+         * 分布外塌缩，「A2 不通过」反映的是模型失效，而不是改正能力不足。 */
+        if (dist != null) {
+            dist.log("真实 RINEX 上的模型输出分布（C 组同一次运行，不额外解算）");
+            double[][] nm = loadNorm(norm);
+            dist.logFeatures("真实 RINEX 上的原始特征分布 vs 训练集归一化参数",
+                    nm == null ? null : nm[0], nm == null ? null : nm[1]);
+        }
+
+        /* 逐历元归因：success 从 A 掉到 C 的历元必须能说清「为什么」。 */
+        for (String g : diff.lostEpochs) {
+            EpochRec ra = groupA.get(g);
+            EpochRec rc = groupC.get(g);
+            log.warn("  [归因] gpst={} A(Q={}, ns={}) → C(Q={}, ns={})",
+                    g, ra.q, ra.ns, rc.q, rc.ns);
+        }
+        for (String g : diff.gainedEpochs) {
+            EpochRec ra = groupA.get(g);
+            EpochRec rc = groupC.get(g);
+            log.info("  [补偿] gpst={} A(Q={}, ns={}) → C(Q={}, ns={})",
+                    g, ra.q, ra.ns, rc.q, rc.ns);
+        }
+
+        /* 契约先立住：两组必须配对到同样的历元集合，否则后面的统计没有意义。 */
+        assertEquals(groupA.size(), groupC.size(), "A/C 两组历元集合必须一致");
+        assertEquals(a.solved - diff.lost, diff.paired,
+                "配对历元数必须等于「A 有解且 C 也有解」的历元数");
+        assertEquals(c.solved - diff.gained, diff.paired,
+                "配对历元数必须等于「C 有解且 A 也有解」的历元数");
+
+        /* 饱和归因（诊断，不参与 A2 判据）：把 bias 与 scale 拆开各跑一次，
+         * 判断「固定率下降」来自偏差改正还是方差膨胀，为后续修模型提供依据。 */
+        try (OnnxAiProvider provider = new OnnxAiProvider(null, null, model,
+                Files.isRegularFile(norm) ? norm : null)) {
+            ObsCorrector inner = provider.obsCorrector();
+            if (inner != null) {
+                for (Variant v : new Variant[]{Variant.BIAS_ONLY, Variant.SCALE_ONLY}) {
+                    A2Metrics vm = metrics(runWithTrace(wrap(new VariantCorrector(inner, v))),
+                            truth, baseline.totalEpochs);
+                    log.info("  [归因] {}：固定 {} ({})，错误固定率 {}，RMS H={} m V={} m，ns 均值 {}",
+                            v, vm.fix, percent(vm.fixRate()), percent(vm.falseFixRate()),
+                            m(vm.rmsH), m(vm.rmsV), String.format("%.3f", vm.meanNs));
+                }
+            }
+        }
+
+        /* A2 判据（§7.5.2）：四项同时成立才算「没有明显变差」。 */
+        assertTrue((a.fixRate() - c.fixRate()) * 100 <= 1.0,
+                "A2-1 不通过：固定率下降超过 1.0 pp，实际 " + String.format("%.3f", (a.fixRate() - c.fixRate()) * 100));
+        assertTrue(c.falseFixRate() <= a.falseFixRate() + 1e-9,
+                "A2-2 不通过：错误固定率上升，A=" + percent(a.falseFixRate()) + " C=" + percent(c.falseFixRate()));
+        assertTrue(c.rmsH <= a.rmsH * 1.02,
+                "A2-3 不通过：水平 RMS 恶化，A=" + m(a.rmsH) + " m C=" + m(c.rmsH) + " m");
+        assertTrue(c.rmsV <= a.rmsV * 1.02,
+                "A2-3 不通过：垂直 RMS 恶化，A=" + m(a.rmsV) + " m C=" + m(c.rmsV) + " m");
+        assertTrue(c.meanNs >= a.meanNs - 0.5,
+                "A2-4 不通过：ns 显著减少，A=" + String.format("%.3f", a.meanNs)
+                        + " C=" + String.format("%.3f", c.meanNs));
+    }
+
+    /** 归因变体：只留偏差 / 只留方差膨胀，用于定位饱和模型到底伤在哪一路。 */
+    private enum Variant {
+        FULL("FULL"),
+        BIAS_ONLY("BIAS_ONLY"),
+        SCALE_ONLY("SCALE_ONLY");
+
+        private final String label;
+
+        Variant(String label) {
+            this.label = label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
+    private static final class VariantCorrector implements ObsCorrector {
+
+        private final ObsCorrector delegate;
+        private final Variant variant;
+
+        VariantCorrector(ObsCorrector delegate, Variant variant) {
+            this.delegate = delegate;
+            this.variant = variant;
+        }
+
+        @Override
+        public CodeCorrection correct(ObsCorrectionContext ctx) {
+            CodeCorrection cc = delegate.correct(ctx);
+            if (cc == null || cc.biasMeters() == null || cc.varianceScale() == null) return cc;
+            double[] bias = cc.biasMeters().clone();
+            double[] scale = cc.varianceScale().clone();
+            if (variant == Variant.BIAS_ONLY) java.util.Arrays.fill(scale, 1.0);
+            if (variant == Variant.SCALE_ONLY) java.util.Arrays.fill(bias, 0.0);
+            return new CodeCorrection(bias, scale);
+        }
+    }
+
+    /** 把单个 {@link ObsCorrector} 包成 {@link AiProvider}，只装接口三、不装接口一。 */
+    private static AiProvider wrap(ObsCorrector oc) {
+        return new AiProvider() {
+            @Override
+            public FixValidator fixValidator() {
+                return null;
+            }
+
+            @Override
+            public ObsCorrector obsCorrector() {
+                return oc;
+            }
+        };
+    }
+
+    private static String percent(double v) {
+        return String.format("%.2f%%", v * 100);
+    }
+
+    private static String m(double v) {
+        return String.format("%.4f", v);
+    }
+
     private static void assertFinite(RtkProcessor.RtkResult r) {
         int n = 0;
         for (SolData sd : r.solutions) {
@@ -269,6 +445,173 @@ class ObsCorrectorPipelineE2ETest {
             n++;
         }
         assertTrue(n > 0, "应至少有解");
+    }
+
+    /**
+     * 用**现有** POSITION trace 采集逐历元 (Q, ns, ECEF)。
+     * <p>
+     * 为什么复用 trace 而不改 {@code RtkResult}：{@code RtkResult.solutions} 只保存成功历元，
+     * 失败历元的 ns/Q 不在其中，而 A2-4 的「success −1/−2 归因」恰恰需要失败历元的 ns。
+     * POSITION 在 rtkpos 尾部无条件 emit（含 stat=NONE 的历元），是现成的逐历元输出。
+     * </p>
+     */
+    private static Map<String, EpochRec> runWithTrace(AiProvider provider) {
+        List<String> lines = new java.util.ArrayList<>();
+        org.rtklib.java.trace.TraceConfig cfg = new org.rtklib.java.trace.TraceConfig();
+        cfg.enabled = true;
+        cfg.topics.add("POSITION");
+
+        RinexRtkProcessor p = new RinexRtkProcessor(opt());
+        p.setTraceConfig(cfg);
+        p.setTraceCallback(lines::add);
+
+        AiHooks.clear();
+        if (provider != null) AiHooks.install(provider);
+        try {
+            p.process(ROVER, BASE, NAV);
+        } finally {
+            AiHooks.clear();
+        }
+
+        Map<String, EpochRec> out = new java.util.LinkedHashMap<>();
+        for (String line : lines) {
+            Map<String, String> kv = traceKv(line);
+            if (!"POSITION".equals(kv.get("topic")) || !"UPDATE".equals(kv.get("action"))) continue;
+            String gpst = kv.get("gpst");
+            if (gpst == null) continue;
+            out.put(gpst, new EpochRec(gpst,
+                    (int) Math.round(num(kv.get("Q"))),
+                    (int) Math.round(num(kv.get("ns"))),
+                    num(kv.get("x")), num(kv.get("y")), num(kv.get("z"))));
+        }
+        return out;
+    }
+
+    private static Map<String, String> traceKv(String line) {
+        Map<String, String> kv = new java.util.HashMap<>();
+        for (String part : line.split("\\|")) {
+            int eq = part.indexOf('=');
+            if (eq > 0) kv.put(part.substring(0, eq), part.substring(eq + 1));
+        }
+        return kv;
+    }
+
+    private static double num(String s) {
+        if (s == null || s.isEmpty()) return 0.0;
+        try {
+            return Double.parseDouble(s);
+        } catch (NumberFormatException e) {
+            return 0.0;
+        }
+    }
+
+    /** 参考真值：{@code reference/urban_rtk_20000719.pos}，键为 GPS 周内秒（与 trace 的 gpst 一致）。 */
+    private record Truth(double latDeg, double lonDeg, double h, int q) {
+    }
+
+    private static Map<String, Truth> loadTruth() {
+        Path ref = Paths.get(TD, "reference", "urban_rtk_20000719.pos");
+        Map<String, Truth> m = new java.util.HashMap<>();
+        if (!Files.isRegularFile(ref)) return m;
+        try {
+            for (String line : Files.readAllLines(ref)) {
+                if (line.startsWith("%")) continue;
+                String[] p = line.trim().split("\\s+");
+                if (p.length < 6) continue;
+                m.put(p[1], new Truth(Double.parseDouble(p[2]), Double.parseDouble(p[3]),
+                        Double.parseDouble(p[4]), (int) Double.parseDouble(p[5])));
+            }
+        } catch (Exception e) {
+            log.warn("参考真值解析失败：{}", e.getMessage());
+        }
+        return m;
+    }
+
+    /** 单历元记录（Q 用 SOLQ_* 码：1=FIX、2=FLOAT、0=NONE）。 */
+    private record EpochRec(String gpst, int q, int ns, double x, double y, double z) {
+        boolean fixed() {
+            return q == Constants.SOLQ_FIX;
+        }
+
+        boolean solved() {
+            return q == Constants.SOLQ_FIX || q == Constants.SOLQ_FLOAT;
+        }
+    }
+
+    /** 单组 A2 统计。 */
+    private record A2Metrics(int total, int fix, int falseFix, int rmsEpochs,
+                             double rmsH, double rmsV, double meanNs, int solved) {
+        double fixRate() {
+            return total > 0 ? (double) fix / total : 0.0;
+        }
+
+        double falseFixRate() {
+            return fix > 0 ? (double) falseFix / fix : 0.0;
+        }
+    }
+
+    private static A2Metrics metrics(Map<String, EpochRec> recs, Map<String, Truth> truth, int total) {
+        int fix = 0, falseFix = 0, rmsN = 0, solved = 0;
+        double sumH2 = 0.0, sumV2 = 0.0, sumNs = 0.0;
+        for (EpochRec r : recs.values()) {
+            sumNs += r.ns;
+            if (r.solved()) solved++;
+            if (r.fixed()) fix++;
+            Truth t = truth.get(r.gpst);
+            if (t == null) continue;
+            double[] d = neuError(r, t);
+            if (r.fixed() && Math.sqrt(d[0] * d[0] + d[1] * d[1]) > FALSE_FIX_H) falseFix++;
+            if (r.solved()) {
+                sumH2 += d[0] * d[0] + d[1] * d[1];
+                sumV2 += d[2] * d[2];
+                rmsN++;
+            }
+        }
+        double rmsH = rmsN > 0 ? Math.sqrt(sumH2 / rmsN) : 0.0;
+        double rmsV = rmsN > 0 ? Math.sqrt(sumV2 / rmsN) : 0.0;
+        double meanNs = recs.isEmpty() ? 0.0 : sumNs / recs.size();
+        return new A2Metrics(total, fix, falseFix, rmsN, rmsH, rmsV, meanNs, solved);
+    }
+
+    /** ECEF → 相对真值的 (dN, dE, dU)，米。 */
+    private static double[] neuError(EpochRec r, Truth t) {
+        double[] ecef = {r.x, r.y, r.z};
+        double[] llh = new double[3];
+        org.rtklib.java.coord.CoordTransform.ecef2pos(ecef, llh);
+        double lat = llh[0] * Constants.R2D;
+        double lon = llh[1] * Constants.R2D;
+        double dN = (lat - t.latDeg) * Constants.RE_WGS84 * Constants.D2R;
+        double dE = (lon - t.lonDeg) * Constants.RE_WGS84
+                * Math.cos(t.latDeg * Constants.D2R) * Constants.D2R;
+        return new double[]{dN, dE, llh[2] - t.h};
+    }
+
+    /** A/C 配对差异：解状态迁移与 ns 变化，附逐历元归因清单。 */
+    private record PairDiff(int paired, int nsDown, int nsUp, int lost, int gained,
+                            List<String> lostEpochs, List<String> gainedEpochs) {
+    }
+
+    private static PairDiff pairDiff(Map<String, EpochRec> a, Map<String, EpochRec> c) {
+        int paired = 0, nsDown = 0, nsUp = 0, lost = 0, gained = 0;
+        List<String> lostEpochs = new java.util.ArrayList<>();
+        List<String> gainedEpochs = new java.util.ArrayList<>();
+        for (Map.Entry<String, EpochRec> e : a.entrySet()) {
+            EpochRec rc = c.get(e.getKey());
+            if (rc == null) continue;
+            EpochRec ra = e.getValue();
+            if (ra.solved() && rc.solved()) paired++;
+            if (rc.ns < ra.ns) nsDown++;
+            if (rc.ns > ra.ns) nsUp++;
+            if (ra.solved() && !rc.solved()) {
+                lost++;
+                lostEpochs.add(e.getKey());
+            }
+            if (!ra.solved() && rc.solved()) {
+                gained++;
+                gainedEpochs.add(e.getKey());
+            }
+        }
+        return new PairDiff(paired, nsDown, nsUp, lost, gained, lostEpochs, gainedEpochs);
     }
 
     private static double maxEcefDiff(RtkProcessor.RtkResult a, RtkProcessor.RtkResult b) {
@@ -312,6 +655,176 @@ class ObsCorrectorPipelineE2ETest {
         return new DiffStats(cnt, sorted[(int) Math.round(0.5 * (cnt - 1))],
                 sorted[(int) Math.round(0.95 * (cnt - 1))],
                 sorted[cnt - 1], over1);
+    }
+
+    /** 只统计、不改值：采集模型在真实数据上的 bias/scale 分布与原始特征分布，用于判定「饱和」。 */
+    private static final class DistCorrector implements ObsCorrector {
+
+        private static final String[] FEATURE_NAMES = {
+                "el", "az", "snrRover", "snrBase", "resp", "resc", "lock", "slip", "half",
+                "gf", "vsat", "fix", "sysId", "respWinMean", "respWinStd", "rescWinMean", "histLen"
+        };
+
+        private final ObsCorrector delegate;
+        private double[] bias = new double[1024];
+        private double[] scale = new double[1024];
+        private int n;
+
+        private final double[] fSum = new double[ObsCorrectionFeatures.DIM];
+        private final double[] fSqSum = new double[ObsCorrectionFeatures.DIM];
+        private final double[] fMin = new double[ObsCorrectionFeatures.DIM];
+        private final double[] fMax = new double[ObsCorrectionFeatures.DIM];
+        /** 非零行数：区分「该维在真实链路上结构性恒 0」与「偶发非零」。 */
+        private final long[] fNonZero = new long[ObsCorrectionFeatures.DIM];
+        private long fN;
+        private final double[][] samples = new double[3][ObsCorrectionFeatures.DIM];
+        private int nSamples;
+        /** 首历元逐星快照：直接回答「核心侧取数对不对」，不受全局统计掩盖。 */
+        private String firstEpochDump;
+
+        DistCorrector(ObsCorrector delegate) {
+            this.delegate = delegate;
+            java.util.Arrays.fill(fMin, Double.POSITIVE_INFINITY);
+            java.util.Arrays.fill(fMax, Double.NEGATIVE_INFINITY);
+        }
+
+        @Override
+        public CodeCorrection correct(ObsCorrectionContext ctx) {
+            CodeCorrection cc = delegate.correct(ctx);
+            if (cc == null || cc.biasMeters() == null || cc.varianceScale() == null
+                    || cc.biasMeters().length != ctx.ns() * ctx.nf()) return cc;
+            int need = n + cc.biasMeters().length;
+            if (need > bias.length) {
+                int cap = bias.length;
+                while (cap < need) cap <<= 1;
+                bias = java.util.Arrays.copyOf(bias, cap);
+                scale = java.util.Arrays.copyOf(scale, cap);
+            }
+            System.arraycopy(cc.biasMeters(), 0, bias, n, cc.biasMeters().length);
+            System.arraycopy(cc.varianceScale(), 0, scale, n, cc.varianceScale().length);
+            n = need;
+
+            /* 原始特征分布：f13~f16 依赖 impl 内部短窗，故必须取 impl 本历元真正用到的
+             * 聚合（delegate.correct 已先入窗），用 EMPTY 会把 f13~f16 人为压成 0。 */
+            boolean first = fN == 0;
+            ObsCorrectorImpl impl = delegate instanceof ObsCorrectorImpl
+                    ? (ObsCorrectorImpl) delegate : null;
+            StringBuilder dump = first ? new StringBuilder() : null;
+            for (SatFeature sf : ctx.sats()) {
+                for (int frq = 0; frq < ctx.nf(); frq++) {
+                    ObsCorrectionFeatures.WindowAgg agg = impl == null
+                            ? ObsCorrectionFeatures.WindowAgg.EMPTY : impl.windowAggregate(sf.sat(), frq);
+                    double[] raw = ObsCorrectionFeatures.extractRow(sf, frq, agg);
+                    for (int d = 0; d < ObsCorrectionFeatures.DIM; d++) {
+                        fSum[d] += raw[d];
+                        fSqSum[d] += raw[d] * raw[d];
+                        fMin[d] = Math.min(fMin[d], raw[d]);
+                        fMax[d] = Math.max(fMax[d], raw[d]);
+                        if (Math.abs(raw[d]) > 1e-9) fNonZero[d]++;
+                    }
+                    if (dump != null) {
+                        dump.append(String.format("  epoch=%d sat=%d(%d) frq=%d el=%.2f° az=%.2f°"
+                                        + " snrR=%.1f snrB=%.1f resp=%.4f resc=%.4f lock=%d"
+                                        + " slip=%d half=%d gf=%.4f vsat=%d fix=%d"
+                                        + " win(respMean=%.4f respStd=%.4f rescMean=%.4f n=%d)%n",
+                                ctx.epoch(), sf.sat(), sf.sys(), frq, raw[0], raw[1],
+                                raw[2], raw[3], raw[4], raw[5], (int) raw[6],
+                                (int) raw[7], (int) raw[8], raw[9], (int) raw[10], (int) raw[11],
+                                raw[13], raw[14], raw[15], agg.n()));
+                    }
+                    if (nSamples < samples.length) {
+                        System.arraycopy(raw, 0, samples[nSamples++], 0, ObsCorrectionFeatures.DIM);
+                    }
+                    fN++;
+                }
+            }
+            if (dump != null) firstEpochDump = dump.toString();
+            return cc;
+        }
+
+        void log(String title) {
+            if (n == 0) return;
+            double[] b = java.util.Arrays.copyOf(bias, n);
+            double[] s = java.util.Arrays.copyOf(scale, n);
+            java.util.Arrays.sort(b);
+            java.util.Arrays.sort(s);
+            int bSat = 0, bZero = 0, sOne = 0, sMax = 0;
+            for (double v : b) {
+                if (Math.abs(v) >= BIAS_MAX * 0.99) bSat++;
+                if (Math.abs(v) < 1e-3) bZero++;
+            }
+            for (double v : s) {
+                if (Math.abs(v - 1.0) < 1e-3) sOne++;
+                if (v >= SCALE_MAX * 0.99) sMax++;
+            }
+            log.info("{}：{} 行", title, n);
+            log.info("  bias   p01={} p50={} p99={} | 顶在 ±{} m 的行 {} ({}), 近似 0 的行 {} ({})",
+                    m(b[(int) Math.round(0.01 * (n - 1))]), m(b[(int) Math.round(0.50 * (n - 1))]),
+                    m(b[(int) Math.round(0.99 * (n - 1))]), BIAS_MAX,
+                    bSat, percent((double) bSat / n), bZero, percent((double) bZero / n));
+            log.info("  scale  p01={} p50={} p99={} | 钉在 1.0 的行 {} ({}), 顶在 {} 的行 {} ({})",
+                    m(s[(int) Math.round(0.01 * (n - 1))]), m(s[(int) Math.round(0.50 * (n - 1))]),
+                    m(s[(int) Math.round(0.99 * (n - 1))]),
+                    sOne, percent((double) sOne / n), SCALE_MAX,
+                    sMax, percent((double) sMax / n));
+        }
+
+        /** 打印真实特征分布，与训练集归一化参数对照，定位「分布外」的维度。 */
+        void logFeatures(String title, double[] normMean, double[] normStd) {
+            if (fN == 0) return;
+            log.info("{}（{} 行）：", title, fN);
+            for (int d = 0; d < ObsCorrectionFeatures.DIM; d++) {
+                double mean = fSum[d] / fN;
+                double var = Math.max(fSqSum[d] / fN - mean * mean, 0.0);
+                double std = Math.sqrt(var);
+                String z = "";
+                if (normStd != null && normStd[d] > 1e-8) {
+                    z = String.format(" | 训练 mean=%s std=%s → 均值偏移 z=%s",
+                            m(normMean[d]), m(normStd[d]), m((mean - normMean[d]) / normStd[d]));
+                }
+                log.info(String.format("  f%-2d %-12s real mean=%.4f std=%.4f min=%.4f max=%.4f nz=%.1f%%%s",
+                        d, FEATURE_NAMES[d], mean, std, fMin[d], fMax[d],
+                        100.0 * fNonZero[d] / fN, z));
+            }
+            if (firstEpochDump != null) {
+                log.info("  首历元逐星取数快照（f0~f16 = core 原始快照 + impl 实窗聚合）:\n{}",
+                        firstEpochDump);
+            }
+            for (int s = 0; s < nSamples; s++) {
+                StringBuilder sb = new StringBuilder("  样本行 " + s + ": ");
+                for (int d = 0; d < ObsCorrectionFeatures.DIM; d++) {
+                    sb.append(FEATURE_NAMES[d]).append('=').append(m(samples[s][d]).replace("-", "⁻")).append(' ');
+                }
+                log.info(sb.toString());
+            }
+        }
+    }
+
+    /** 读 ``norm.json`` 的 mean/std（只做最小解析，测试用）。 */
+    private static double[][] loadNorm(Path p) {
+        if (!Files.isRegularFile(p)) return null;
+        try {
+            String text = Files.readString(p);
+            double[] mean = parseJsonArray(text, "mean");
+            double[] std = parseJsonArray(text, "std");
+            return (mean == null || std == null) ? null : new double[][]{mean, std};
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static double[] parseJsonArray(String text, String key) {
+        int k = text.indexOf("\"" + key + "\"");
+        if (k < 0) return null;
+        int lb = text.indexOf('[', k);
+        int rb = text.indexOf(']', lb);
+        if (lb < 0 || rb < 0) return null;
+        String[] parts = text.substring(lb + 1, rb).split(",");
+        double[] out = new double[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            out[i] = Double.parseDouble(parts[i].trim());
+        }
+        return out;
     }
 
     /** 转发并校验输出契约的记录器，让测试能看到 impl 真实产出的偏差/方差分布。 */

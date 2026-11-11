@@ -93,7 +93,7 @@ public final class ObsCorrectionFeatures {
         f[IDX_SNR_BASE] = sanitize(pickD(sf.snrBase(), frq));
         f[IDX_RESP] = sanitize(pickD(sf.resp(), frq));
         f[IDX_RESC] = sanitize(pickD(sf.resc(), frq));
-        f[IDX_LOCK] = sanitize(pickI(sf.lock(), frq));
+        f[IDX_LOCK] = Math.max(0.0, sanitize(pickI(sf.lock(), frq)));
         f[IDX_SLIP] = pickI(sf.slip(), frq) != 0 ? 1.0 : 0.0;
         f[IDX_HALF] = pickI(sf.half(), frq) != 0 ? 1.0 : 0.0;
         f[IDX_GF] = sanitize(pickD(sf.gf(), frq));

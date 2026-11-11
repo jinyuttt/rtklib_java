@@ -32,6 +32,8 @@ public class GnssValidationDataHelper {
     public static final String WHU_FTP_HOST = "igs.gnsswhu.cn";
     public static final String BKG_HTTPS_BASE = "https://igs.bkg.bund.de/root_ftp/IGS";
 
+    private static final String PROP_CRX2RNX = "crx2rnx.path";
+
     private final String testDataDir;
     private final boolean offline;
 
@@ -420,9 +422,12 @@ public class GnssValidationDataHelper {
             p = Paths.get(projectRoot, "tools", "crx2rnx");
             if (Files.exists(p)) return p;
         }
+        String configured = System.getProperty(PROP_CRX2RNX, "").trim();
+        if (!configured.isEmpty()) {
+            Path p = Paths.get(configured);
+            if (Files.exists(p)) return p;
+        }
         String[] candidates = {
-                "D:\\pro\\RTKLIB_EX_2.5.0\\crx2rnx.exe",
-                "C:\\pro\\RTKLIB_EX_2.5.0\\crx2rnx.exe",
                 "/usr/bin/crx2rnx",
                 "/usr/local/bin/crx2rnx",
         };

@@ -1,5 +1,6 @@
 package org.rtklib.java.test;
 
+import org.rtklib.java.TestDataConfig;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
@@ -19,8 +20,8 @@ public class PppRtkPipeline {
 
     private static final Logger log = LoggerFactory.getLogger(PppRtkPipeline.class);
 
-    private static final String YAXIA_DIR = "D:\\rtcm3";
-    private static final String PRODUCT_DIR = "D:\\rtcm3\\product";
+    private static final String RTCM_DIR = TestDataConfig.getRtcmBaseDir();
+    private static final String PRODUCT_DIR = TestDataConfig.getProductDir();
 
     private static String sp3File;
     private static String clkFile;
@@ -62,10 +63,15 @@ public class PppRtkPipeline {
         log.info("  PPP-RTK Pipeline Test");
         log.info("============================================================");
 
-        String station = args.length > 0 ? args[0] : "DEVICE_ID_REDACTED";
-        String dateStr = args.length > 1 ? args[1] : "2026-06-29";
+        String station = args.length > 0 ? args[0] : TestDataConfig.getStation();
+        String dateStr = args.length > 1 ? args[1] : TestDataConfig.getStationDate();
 
-        String rtcmDir = YAXIA_DIR + "\\" + station + "\\" + dateStr;
+        if (station.isEmpty() || dateStr.isEmpty()) {
+            log.error("未配置 station.id / station.date，请写入 test-data.properties 或用参数传入");
+            return;
+        }
+
+        String rtcmDir = RTCM_DIR + "\\" + station + "\\" + dateStr;
         String rtcmFile = rtcmDir + "\\0.rtcm3";
 
         log.info("Station: {}  Date: {}  RTCM: {}", station, dateStr, rtcmFile);
@@ -297,9 +303,10 @@ public class PppRtkPipeline {
         if (vmf3File != null) p.loadVmf3Op(vmf3File);
         if (erpFile != null) p.loadErp(erpFile);
 
-        String blqFile = PRODUCT_DIR + "\\blq\\DEVICE_ID_REDACTED.blq";
-        if (new File(blqFile).exists()) {
-            OtlReader.readblq(blqFile, "DEVICE_ID_REDACTED", p.getRtk().opt.odisp[0]);
+        String station = TestDataConfig.getStation();
+        String blqFile = PRODUCT_DIR + "\\blq\\" + station + ".blq";
+        if (!station.isEmpty() && new File(blqFile).exists()) {
+            OtlReader.readblq(blqFile, station, p.getRtk().opt.odisp[0]);
             log.info("BLQ loaded: {}", blqFile);
         }
 
