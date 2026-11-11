@@ -50,7 +50,7 @@
 | [MATRIX_DIMENSION_REFERENCE.md](MATRIX_DIMENSION_REFERENCE.md) | H 矩阵构建、filter 压缩、ddcov、varerr 的维度与存储约定 | ✅ 活跃 | 2026-07-13 |
 | [ADJUST_TECHNICAL_REFERENCE.md](ADJUST_TECHNICAL_REFERENCE.md) | rtklib-adjust 多基线间接平差：数学模型、协方差构造、理论局限、模块边界（SBS+平差） | ✅ 活跃 | 2026-10-27 |
 | [ADJUST_USAGE.md](ADJUST_USAGE.md) | rtklib-adjust 使用说明、加权与诊断配置 | ✅ 活跃 | 2026-10-27 |
-| [JOINT_RTK_DESIGN.md](JOINT_RTK_DESIGN.md) | rtklib-joint 多基线联合 RTK（MBS）：与 core 同层的独立引擎、状态向量、大气共享 | ✅ 活跃（核心已实现并实测：单/双基线 FIX 91.5%；AR 通道缺陷已由 FIX-ALG-042 修复；§13 闸1/闸2/闸3 已落地（闸3 见 FIX-ALG-048），Phase B/D 与 §2.1.1 大气维度修正未实施，见文档 §0） | 2026-11-05 |
+| [JOINT_RTK_DESIGN.md](JOINT_RTK_DESIGN.md) | rtklib-joint 多基线联合 RTK（MBS）：与 core 同层的独立引擎、状态向量、大气共享 | ✅ 活跃（核心已实现并实测：单/双基线 FIX 91.5%；AR 通道缺陷已由 FIX-ALG-042 修复；§13 闸1/闸2/闸3 已落地（闸3 见 FIX-ALG-048）；§2.1.1 大气维度修正已于 2026-11-04 落地；Phase B/C/D 未实施，见文档 §0） | 2026-11-11 |
 | [JOINT_VS_ADJUST_ANALYSIS.md](JOINT_VS_ADJUST_ANALYSIS.md) | joint（观测层联合）vs adjust（结果层平差）对比：融合层级、故障隔离、FIX 后精度等价性、选型结论 | ✅ 活跃（v1.2 定稿） | 2026-10-27 |
 | [VRS_MODULE_DESIGN.md](VRS_MODULE_DESIGN.md) | rtklib-vrs 虚拟参考站生成：实现状态、单基站改正算法、RTCM3 编码器（含 MSM 信号裁剪与锁相指示）、四层验证策略、实测结果、已踩过的坑与已知限制 | ✅ 活跃 | 2026-10-27 |
 | [NETWORK_VRS_DESIGN.md](NETWORK_VRS_DESIGN.md) | rtklib-networkvrs 多基站网络 VRS：档 1 IDW 插值、档 2 网解 + 误差分解 + FKP；窄巷固定闭环、星历来源与逐历元 SSR 改正注入（`SsrCorrectionProvider`）、时间系统约定、实测结果 | ✅ 活跃（v1.0 定稿；窄巷固定 18/18 窗口，BRDC 与精密星历同量级；录制 SSR 流端到端复现待做，见 ROADMAP §1.2） | 2026-11-06 |

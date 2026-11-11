@@ -69,7 +69,7 @@ jrtk.na  = npPerBaseline + nBaseline * (niPerBaseline + ntPerBaseline);
 | FLOAT 位置方差 1/N | 共享 pos，N 组观测同时约束 | FLOAT |
 | 模糊度收敛加速 | pos 方差小 → 模糊度方差小 → LAMBDA 搜索空间缩小 | FLOAT |
 | FIX 率提升 | 模糊度浮点解更紧 → ratio 更高 → 更易固定 | 收敛期 |
-| 共享大气参数 | 设计目标为跨基线共享大气以压制残余噪声；**当前实现仍是每基线一份大气**（§2.1.1 未实施，原 `sharedIono/sharedTrop` 存根字段已于 2026-11-04 删除） | 全过程（尚未兑现） |
+| 共享大气参数 | 设计目标为跨基线共享大气以压制残余噪声；**已于 2026-11-04 按 §2.1.1 落地**：rover 侧电离层/对流层跨基线共享一份，基站侧每站各一份，`sharedIono`/`sharedTrop`/`sharedIonoMaxDist` 生效 | 全过程 |
 
 **关键**：joint 的精度优势主要在 **FLOAT 阶段和收敛期**。一旦模糊度全部 FIX，位置精度由几何和固定模糊度决定，与 adjust 等价。
 

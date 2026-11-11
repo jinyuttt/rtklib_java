@@ -422,7 +422,7 @@ org.rtklib.java.otl
 | 模块 | 功能 | 集成风险 |
 |------|------|----------|
 | `rtklib-core`（定位部分） | SPP/RTK/PPP/PPP-RTK 全模式定位 | **高** — 定位精度依赖算法实现正确性 |
-| `rtklib-joint` | 多基线观测层联合 RTK | **高** — 独立解算引擎，状态向量与大气维度划分仍在修正（§2.1.1 未落地） |
+| `rtklib-joint` | 多基线观测层联合 RTK | **高** — 独立解算引擎，无共享故障隔离；状态向量与大气维度划分已按 §2.1.1 落地（2026-11-04），代码无待实施项，按需激活（真实场景调优等场景驱动） |
 
 涉及 `pntpos/`（SPP）、`rtkpos/`（RTK）、`ppp/`（PPP）、`ppprtk/`（PPP-RTK）、`kalman/`（EKF）、`ambiguity/`（LAMBDA）六个子模块。辅助模块（rtcm/rinex/ephemeris/coord/time/ionosphere/troposphere/common）属于第一类，无风险。
 
