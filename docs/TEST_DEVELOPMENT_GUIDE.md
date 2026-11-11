@@ -366,3 +366,37 @@ git commit -m "test: add MyNewRtkTest for RTK Static with G+E+C short baseline"
 | RTK Fixed | `PMODE_FIXED` | ✅ | 需设置opt.ru已知坐标 |
 | PPP Kinematic | `PMODE_PPP_KINEMA` | ❌ | 需SP3+CLK精密产品 |
 | PPP Static | `PMODE_PPP_STATIC` | ❌ | 同PPP Kinematic |
+
+---
+
+## 8. 解算质量评估规范（强制）
+
+> 依据：[ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) 的 FIX-ALG-062。**固定率（FIX 历元占比）不得单独作为解算质量指标**——固定率只统计 `sol.stat` 标签，不校验标签是否正确，锁存类缺陷（FIX-ALG-054/057）可直接把错解伪装成 FIX。
+
+### 8.1 必带四件套
+
+任何「修复有效 / 优化收益」结论必须同时给出下表四项，缺任一项即视为无效对比：
+
+| # | 必带项 | 要求 |
+|---|---|---|
+| 1 | **绝对坐标 RMS** | 相对外部真值（IGS 周解 / 同日均值 / 已知控制点）；无真值时须显式标注「仅为离散度」 |
+| 2 | **错固率** | FIX 历元中偏离参考超过阈值的比例；必须写明阈值与参考基准（真值 / 质心） |
+| 3 | **相位残差统计** | mean / p50 / p90 / max，并给出 ≥0.5 m 的历元占比（固定解应为厘米级） |
+| 4 | **A/C/D 组双跑配对** | 同数据、同配置、逐历元配对；禁止跨数据集 / 跨配置横向比数字 |
+
+### 8.2 判读红线
+
+1. **固定率高 + 相位残差米级 = 数据或模型不自洽**，不是「解得好」。固定解相位残差应 ≤ 数厘米。
+2. **FIX 轨迹单调漂移**（如 1~2 分钟内水平位移达到米级）即为错固证据，CORS 站在该时间尺度上位移应远小于毫米级。
+3. **质心参考的错固率是真实误差的下界**，整簇偏移时会被低估，不能当作精度结论对外发布。
+4. **stat 曲线必须逐历元输出**（含 `hasSsr`、`ns`、`ratio`），只报汇总值无法识别锁存与死亡螺旋。
+
+### 8.3 最小输出模板
+
+```
+epochs=<n> fix=<n> ppp=<n> fixRate=<pct>
+visibleSats nsMax=<n> nsAvg=<x.xx>
+fixQuality vs<参考基准>: errFix(>0.5m)=<k>/<n> (<pct>%)
+fixQuality ENU_RMS: 2D=<x.xxxx> V=<x.xxxx> 3D=<x.xxxx> m
+phaseResRms(m): mean=<x.xxxx> p50=<x.xxxx> p90=<x.xxxx> max=<x.xxxx>
+```
