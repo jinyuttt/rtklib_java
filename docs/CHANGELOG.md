@@ -6,6 +6,43 @@
 
 ---
 
+## [3.4.2] - 2026-11-11
+
+> 补丁版本：PPP / PPP-AR / PPP-RTK 三条链路的「固定解锁存」与门限缺陷闭环（FIX-ALG-054~060），并落地接口一/接口三的采集层与训练脚本；无对外 API 破坏性变更。
+
+### Fixed
+
+- **PPP-RTK 固定解永久锁存 + 固定解坐标不更新**：`sol.stat` 未逐历元重置，上一历元 AR 写入的 `SOLQ_FIX` 会一直带到后续历元，`updateStat` 又缺 FIX 分支，导致「标签是 FIX、坐标却停在浮点解」；改为 `sol.stat` 逐历元重置 + `updateStat` 增加 FIX 分支（FIX-ALG-054）
+- **SPP 重初始化污染滤波器逐星状态**：`PppProcessor` 的 SPP 重初始化分支直接改写滤波器内部逐星数组，改用独立 scratch `Ssat[]`，仅在 `rtk.nx == 0` 时执行（FIX-ALG-055，FIX-ALG-054 暴露出的独立既有缺陷）
+- **SPP 重初始化 `navsys` 写死 GPS + SPP 结果污染 `sol.rr`**：重初始化选项改为继承 `opt.navsys`，并阻断 SPP 解回写 `sol.rr`，保证 AR/KF 的位置参考不被污染；收益在冷启动与 `nx` 归零重收敛（FIX-ALG-056）
+- **PPP-AR 固定解永久锁存 + FIX 绕过 `MIN_NSAT_SOL`**：`pppos`/`ppos` 逐历元入口新增 `clearFixLatch`（只清 FIX，保留 `outsingle=1` 时 SPP 的 SINGLE 语义），`updateStat` 的 FIX 标签同受 `MIN_NSAT_SOL=4` 降级，`PppArEngine` 入口加 ns 门控；修复后 FIX 必须逐历元由本历元 AR 重新获得（FIX-ALG-057）
+- **PPP-AR 系统白名单写死 `GPS|GAL|CMP`**：`PppAmbFix` 三处（WlNl / PartialAR / EwlWlNl）改为动态继承 `opt.navsys`，`navsys` 只配 GLO/QZS/IRN 时不再静默全跳过；无 OSB/FCB 覆盖的系统由既有 WL/NL 质量门自然剔除（FIX-ALG-058）
+- **PPP-RTK 好站全天 FIX 2270/3815（59.5%），修复前恒 <1000**：相位行 pre-fit 门限错用 `PrcOpt.maxinno[0]=5.0`（该值按 RTK `ddres` 索引约定为码行设计，PPP 侧 `code==0` 却是相位行）→ 一次约 9 m 接收机钟跳当历元把 13 颗星的相位行全部剔除（nv 28→15），此后长期只剩码行更新、可见星 4~6 无法恢复；相位行改按 C `ppp.c` 固定 30 m，码行仍取 `opt.maxinno[1]`，并删除原 `epoch<=60` 临时放宽（FIX-ALG-059）
+- **PPP-RTK UC 分支系统白名单写死 `GPS|GAL`**：`ppprtkAmbFixUc` 改为动态继承 `opt.navsys`（与 FIX-ALG-058 同类缺陷）（FIX-ALG-060）
+- **初始模糊度 sanity 门限参数化 + GAP 诊断输出**：原 500 m 门限偏松（抓不到 sat=107 这类实测 372 m 的异常初值），改为可配置开关并在超限时输出 GAP 诊断，便于 500 m / 100 m 对比实验（FIX-ALG-061，附带对 FIX-ALG-037/038 五处对外叙述不一致的勘误登记）
+
+### Added
+
+- **rtklib-ai 采集层**：新增 `ai/collect/CollectConfig`、`ObsCorrectorCollectSession`、`RecordingObsCorrector`，把「运行中实时录制观测改正特征」做成可复用会话，供接口一/接口三训练集导出
+- **`rtklib-test` 新增 `PppRtkSsrReplay`**：SSR 文件回放 + PPP-RTK 解算的一体化诊断入口（替代各 Demo 中硬编码路径的临时脚本）
+- **新增测试**：`PppArStatLatchTest`（FIX 锁存回归）、`PppInitBiasSanityTest`（初始模糊度门限回归）、`FixValidatorHourlyCollectTest`（按小时切片的第二条采集线）、`ObsCorrectorPairingTest`（观测改正特征与标签配对校验）；`FixValidatorCollectTest` 扩展 `nav` / `run-suffix` / `glo-mode` / `igg` / `niter` 参数，支持同一 (站, 日) 跑多套配置
+- **训练脚本**：`training/obs_corrector/` 新增 `a2_pairing.py` / `assemble.py` / `e2e_wls.py` / `train_e2e.py`；`training/fix_validator/{assemble,train}.py` 与 `common/{dataset,fix_dataset,metrics,export_onnx}.py` 同步扩展
+
+### Changed
+
+- **隐私脱敏（公开仓库合规）**：测试与诊断代码中硬编码的 `D:/`、`C:/` 绝对路径统一改为 `TestDataConfig` 标准接口、相对路径或系统属性/环境变量输入（`PppRtkSsrReplay`、`PppRtkPipeline`、`PppBdsPipeline`、`PppArDiag`、`PppRtkDemo`、`PppRtkRealtimeDemo`、`CJavaEpochDiffTest`、`urbancanyon` 三个测试等）；移除内置默认值与私有测站号，缺省时显式校验并给出用法提示；文档中完整设备号掩码为 `GS20…0006` 形式
+- **仓库卫生**：`.gitignore` 补充 `/rtklib-ai/out/`、`/rtklib-ai/training/artifacts/`、`/rtklib-ai/.tmp_smoke/`，`cp.txt` 泛化为 `**/cp.txt`；删除含 Maven 本地仓库绝对路径的 `cp.txt` 与一次性脚本 `_probe_ref.py`
+
+### Docs
+
+- 新增 `docs/GNSS-RTK-AI-report.md`（AI 接口一/接口三的完整评估报告与逐项数据）
+- `docs/AI_ENHANCEMENT_DESIGN.md`：升至 v1.10——并入原 `AI补充.md` 唯一有效资产（`enableAggressiveAi` 规格，标注「设计保留、代码未落地」）、新增 §8.6 输出钳位两模式、§8.4 方案 B 端到端结论、决策记录 D19
+- `docs/ALGORITHM_FIX_LOG.md`：新增 FIX-ALG-054~062（PPP/PPP-AR/PPP-RTK 锁存、SPP 重初始化、系统白名单、pre-fit 门限、初始模糊度门限、037/038 叙述勘误）
+- **评估规范升级**：FIX-ALG-062 归档 WUH20 2026-10-26 数据质量结论——82.4% 固定率是假象（ENU RMS 3D 1.17 m、错固率 86.7%、相位残差 p50 2.24 m、97 个连续 FIX 历元伴随 E 向 2.54 m/96 s 单调漂移），并强制「固定率不得单独作为质量指标」，必须附带绝对坐标 RMS + 错固率 + 相位残差统计 + A/C/D 双跑配对（同步更新 `TEST_DEVELOPMENT_GUIDE.md`）
+- `docs/PPP_AI_ASSESSMENT.md`、`rtklib-ai/training/README.md`：同步版本与采集/组装结论
+
+---
+
 ## [3.4.1] - 2026-11-10
 
 > 补丁版本：全部为 C 原版对齐与缺陷修复，无新增对外 API（`KalmanFilter.update` 仅新增重载，旧签名行为不变）。

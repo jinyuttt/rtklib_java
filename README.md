@@ -4,7 +4,9 @@ RTKLIB 的 Java 移植版本，基于 [RTKLIB 2.5.0](https://github.com/tomojita
 
 项目定位为**算法引擎库（Library）**而非独立软件，可嵌入 Java 应用中实现 GNSS 数据处理与定位解算。
 
-> **当前版本 v3.4.0（2026-11-06）**：rtklib-networkvrs 窄巷固定闭环（BRDC 与精密星历 ratio 均 > 3），新增 `ArDiagnostics` 归因诊断量与逐历元 SSR 改正注入 `SsrCorrectionProvider`；`EphModel` 星历时效改为按系统分档对齐 RTKLIB；周跳切弧判据的采样间隔尺度更正为全窗下中位数。算法修复的闭环索引与精度实测见 [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md)，版本级变更见 [CHANGELOG](docs/CHANGELOG.md)。
+> **当前版本 v3.4.2（2026-11-11）**：短基线 RTK 固定率由 0.07% 修正到 73.82%（C 原版 73.78%），根因是 Kalman 状态压缩多了一条 H 列过滤、把 `holdamb` 伪观测的交叉协方差丢掉；同版修掉 PPP / PPP-AR / PPP-RTK 三条链路的「固定解永久锁存」（`sol.stat` 未逐历元重置，标签是 FIX 而坐标停在浮点解），并补齐 ddres 对流层项、`MDAY` 闰年错位、`pppos` 迭代起点等 C 对齐缺陷。新增 `rtklib-ai` 模块（AI 三接口的 SPI 实现与训练管线，详见 [AI 增强设计](docs/AI_ENHANCEMENT_DESIGN.md)）。算法修复的闭环索引与精度实测见 [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md)，版本级变更见 [CHANGELOG](docs/CHANGELOG.md)。
+>
+> **评估口径提醒**：自 FIX-ALG-062 起，**固定率不得单独作为质量指标**——必须附带绝对坐标 RMS、错固率（误差 > 0.5 m 的 FIX 历元占比）、相位残差统计与 A/C/D 双跑配对。历史上一批「高固定率」结论已被证实是锁存造成的假 FIX 计数。
 
 > **功能边界**：Java版专注核心定位算法（SPP/RTK/PPP/PPP-AR/PPP-RTK），数据流通讯由 `rtklib-stream` 模块提供（NTRIP客户端 + NTRIP Caster 服务端 + 串口 + GGA 解析），不包含C版的TCP/UDP服务端、接收机原始协议（u-blox/NovAtel等）、NMEA输出等功能。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
@@ -240,6 +242,23 @@ org.rtklib.java.otl
 
 状态：**IM201 解码闭环**（头部→球谐系数→VTEC/STEC）；4076 卫星级改正数数值未解析，VTEC 未接入定位链路。协议细节见 [NETWORK_VRS_DESIGN.md §3.4](docs/NETWORK_VRS_DESIGN.md)。
 
+### rtklib-ai — AI 增强（可选模块）
+
+`rtklib-core` 只放 SPI（`AiProvider` / `AiHooks` / `AiOpts`），本模块提供实现与训练管线。**默认不启用**，未注入时 core 行为与无 AI 完全一致。
+
+- **接口一（假固定判别）**：`FixValidatorImpl` + `FixQualityFeatures`（6 维固定后残差类特征），判断当前 FIX 是否可信
+- **接口二（固定决策辅助）**：冻结，不实施
+- **接口三（观测改正）**：`ObsCorrectorImpl` + `ObsCorrectionFeatures`（逐卫星逐频点特征），在进入解算前修正观测值
+- **推理层**：`OnnxAiProvider` / `OnnxInference` / `BatchInference`（ONNX Runtime 1.17.3），`FeatureNorm` 归一化
+- **采集层**：`CollectConfig` / `CollectSession` / `ObsCorrectorCollectSession` / `RecordingFixValidator` / `RecordingObsCorrector`，把运行中的特征与标签实时录制为训练集
+- **训练管线**（`training/`，Python）：`fix_validator/`（接口一）、`obs_corrector/`（接口三）、`common/`（数据集/指标/ONNX 导出）
+
+状态：接口一/接口三**代码已落地**；接口二按决策冻结。完整评估与逐项数据见 [GNSS-RTK-AI-report.md](docs/GNSS-RTK-AI-report.md)。
+
+> **关于模型**：仓库内**不提供可用于生产的预训练权重**，仅有 `src/test/resources/models/` 下的 `dummy_*` 演示模型，用途是契约测试与流水线冒烟，不具备实际改正能力。GNSS 数据在不同环境下分布差异极大（星座组合与可见星几何、遮挡与多路径形态、接收机型号与天线、采样率与截止高度角），在 A 环境训练的模型直接搬到 B 环境通常不成立。**实际使用必须用本机场景数据自行训练模型**，采集 → 组装 → 训练 → 导出 ONNX 的完整流程见 [训练管线说明](rtklib-ai/training/README.md)。
+
+> **验证结论**：经真实北斗恶劣峡谷数据双跑验证：受限于人造标签的物理精度与端到端不可控性，本模块当前仅作保守的方差膨胀（降权）辅助，默认关闭。彻底废除只看固定率的评估模式，真实配对数据见 [AI 评估报告](docs/GNSS-RTK-AI-report.md)。
+
 ### rtklib-test — 验证与示例
 
 跨模块端到端验证套件与可运行示例。**不是库**，不被其它模块依赖，仅用于回归与实测。
@@ -247,7 +266,8 @@ org.rtklib.java.otl
 - **精度验证**：`SppValidationTest` / `RtkValidationTest` / `PppValidationTest` / `PppArValidationTest` / `PppRtkValidationTest`（GNSS 验证数据流水线）
 - **集成与自适应**：`RtkPppIntegrationTest`、`AdaptiveWiringE2ETest`、`AdaptiveEngineHarnessTest`
 - **链路检查**：`SsrAccessCheckTest`（CAS SSR 接入）、`ReplayBdsSigCheckTest`（录制回放）
-- **示例程序**（`src/main`）：`PppRtkDemo`、`PppRtkPipeline`、`PppRtkRealtimeDemo`、`PppBdsPipeline`、`PppArDiag`、`Sp3Diag`
+- **算法回归**：`PppArStatLatchTest`（FIX 锁存）、`PppInitBiasSanityTest`（初始模糊度门限）、`CJavaEpochDiffTest`（与 C 版逐历元对照）、`ShortBaselineOptSweepTest`（短基线开关扫描）
+- **示例程序**（`src/main`）：`PppRtkDemo`、`PppRtkPipeline`、`PppRtkRealtimeDemo`、`PppRtkSsrReplay`、`PppBdsPipeline`、`PppArDiag`、`Sp3Diag`
 
 ## 文档
 
@@ -266,7 +286,7 @@ org.rtklib.java.otl
 | [SPP 优化说明](docs/SPP_Extra_Optimizations.md) | SPP 优化项（EKF、M 估计、零速约束、多普勒+SNR 加权） |
 | [PPP 体系指南](docs/PPP_Optimization_Systems.md) | 浮点 PPP / PPP-AR / PPP-RTK 三分支的定位与测试纪律 |
 | [优化功能矩阵](docs/CORE_OPTIMIZATION_MATRIX.md) | 按定位模式×场景分类的优化功能矩阵，含静态实测结论、动态适用性、基线类型标记 |
-| [算法修复档案](docs/ALGORITHM_FIX_LOG.md) | FIX-ALG-001~029 逐条 C 依据 / 根因 / 验证（改算法前必读） |
+| [算法修复档案](docs/ALGORITHM_FIX_LOG.md) | FIX-ALG-001~062 逐条 C 依据 / 根因 / 验证（改算法前必读） |
 | [测试用例与数据指南](docs/DATA_GUIDE.md) | 测试规范、测试类总览、数据依赖、优化矩阵测试用例、上传规范 |
 | [轨道模块技术参考](docs/ORBIT_MODULE_REFERENCE.md) | TLE解析、SGP4/SDP4传播、六根数转换、二体传播 |
 | [开发路线图](docs/ROADMAP.md) | 各模块当前状态、未完成事项（按需激活/冻结/WONTFIX）、暂缓与恢复条件；历史梯队记录归档于 [docs/archive/ROADMAP_v3.3.0.md](docs/archive/ROADMAP_v3.3.0.md) |
@@ -276,8 +296,10 @@ org.rtklib.java.otl
 
 | 文档 | 说明 |
 |------|------|
-| [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md) | 一句话定位 + 精度实测汇总 + FIX-ALG 001~029 闭环索引 + HAS/IMU/CLAS 扩展路线 |
-| [变更日志](docs/CHANGELOG.md) | 版本级变更摘要（当前至 3.4.0） |
+| [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md) | 一句话定位 + 精度实测汇总 + FIX-ALG 闭环索引 + HAS/IMU/CLAS 扩展路线 |
+| [变更日志](docs/CHANGELOG.md) | 版本级变更摘要（当前至 3.4.2） |
+| [AI 增强设计](docs/AI_ENHANCEMENT_DESIGN.md) | AI 三接口 SPI 契约、特征定义、训练管线与降级策略（v1.10） |
+| [AI 评估报告](docs/GNSS-RTK-AI-report.md) | 接口一/接口三的完整评估结论与逐项实测数据 |
 | [发布说明](RELEASE.md) | v3.1.0 封存版发布稿：本版重点、配置项、兼容性、已知问题、验收口径 |
 | [SSR 接入手册](docs/SSR_ACCESS_PLAYBOOK.md) | 接入操作与验收（已闭环）：两行改动、五步接入、开关表、验收清单与已知坑 |
 
@@ -339,6 +361,14 @@ org.rtklib.java.otl
 |------|------|
 | [IGS SSR v1.00 标准原文](docs/reference/igs_ssr_v1.pdf) | 4076 字段定义（§8.4.1 Table 24~27）、VTEC 球谐模型（§6）、IDF 表（Table 6/7） |
 | [网络VRS设计文档 §3.4](docs/NETWORK_VRS_DESIGN.md) | 本项目对该协议的落地解读：位序表、系数个数公式、实测样本核对、IM202 存疑说明 |
+
+### rtklib-ai
+
+| 文档 | 说明 |
+|------|------|
+| [AI 增强设计](docs/AI_ENHANCEMENT_DESIGN.md) | SPI 契约、特征定义、输出钳位、训练管线与降级策略（v1.10） |
+| [AI 评估报告](docs/GNSS-RTK-AI-report.md) | 接口一/接口三评估结论与逐项实测数据 |
+| [训练管线说明](rtklib-ai/training/README.md) | 数据集组装、训练与 ONNX 导出流程 |
 
 ### rtklib-test
 
@@ -490,6 +520,7 @@ org.rtklib.java.otl
 | 因子图优化 FGO + IMU 预积分 | ✅ | FE-GUT 仿真数据集 |
 | 轨道模块 + 海潮负荷 | ✅ | Vallado（轨道）/ 武汉大学 PRIDE-PPPAR OTL 模块（海潮）对比 |
 | 自适应引擎框架 | 🟡 | 14类实现，编译通过；待集成测试验证 |
+| AI 增强（`rtklib-ai`） | 🟡 代码已落地；仓库仅含测试用演示模型 | SPI 注入不启用即零影响；接口二冻结；各环境需自行训练模型；详见 [AI 评估报告](docs/GNSS-RTK-AI-report.md) |
 
 剩余：PPP-RTK 区域大气约束、完好性保护级（HPL/VPL）、ARAIM、固定解完好性增强——均属研究深化方向，**无上游场景驱动，定版不再投入（WONTFIX）**。
 

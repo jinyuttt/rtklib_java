@@ -6,7 +6,7 @@
 
     <groupId>org.rtklib</groupId>
     <artifactId>rtklib-java</artifactId>
-    <version>3.4.1</version>
+    <version>3.4.2</version>
     <packaging>pom</packaging>
 
     <modules>
