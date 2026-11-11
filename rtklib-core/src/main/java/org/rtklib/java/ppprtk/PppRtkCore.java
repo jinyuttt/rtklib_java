@@ -18,6 +18,8 @@ import org.rtklib.java.time.TimeSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Locale;
+
 public final class PppRtkCore {
     private PppRtkCore() {
     }
@@ -578,19 +580,21 @@ public final class PppRtkCore {
                     }
                 }
 
-                // FIX-ALG-044: sanity-check initial ambiguity magnitude.
-                // IFLC initial bias = Lc-Pc, dominated by pseudorange noise (~1 m).
-                // Normal values are within ±50 m for most frequencies, up to ~500 m
-                // for noisy receivers/geometry. Values beyond 500 m are almost
-                // certainly corrupted pseudorange. Sats with 100-500 m bias should
-                // converge within 1-2 epochs via the offset correction and KF; this
-                // check only catches truly broken sats before they ever get init'd.
-                if (bias[i] != 0.0 && Math.abs(bias[i]) > 500.0) {
+                // FIX-ALG-044 / FIX-ALG-061: sanity-check initial ambiguity magnitude.
+                // 实测正常卫星初始 |Lc-Pc| 为 5 m 量级（FIX-ALG-061），越界即为伪距损坏。
+                // 门限可由 -Dppp.initBiasSanityLimit 覆盖，用于 500 m / 100 m 两组对比；
+                // 默认 500 m 时行为与 FIX-ALG-044 逐位一致。
+                double sanityLimit = PppCore.initBiasSanityLimit();
+                if (PppCore.isInitBiasOutlier(bias[i], sanityLimit)) {
                     if (rtk.epoch <= 3) {
-                        LOG.warn("[FIX-044] epoch={} sat={} frq={} init_bias={} outlier -> skip initx",
-                            rtk.epoch, sat, f, String.format("%.1f", bias[i]));
+                        LOG.warn("[FIX-044] epoch={} sat={} frq={} init_bias={} limit={} outlier -> skip initx",
+                            rtk.epoch, sat, f, String.format(Locale.US, "%.1f", bias[i]), sanityLimit);
                     }
                     bias[i] = 0.0;
+                } else if (Math.abs(bias[i]) > PppCore.INIT_BIAS_SANITY_CANDIDATE) {
+                    LOG.info("[FIX-061-GAP] epoch={} sat={} frq={} init_bias={} limit={} candidate={} -> accepted now, would be rejected if tightened",
+                        rtk.epoch, sat, f, String.format(Locale.US, "%.1f", bias[i]), sanityLimit,
+                        PppCore.INIT_BIAS_SANITY_CANDIDATE);
                 }
 
                 // FIX-ALG-043: skip permanently frozen sats (rejc frozen to 1000 during init phase)

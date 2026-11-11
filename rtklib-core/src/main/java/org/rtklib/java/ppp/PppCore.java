@@ -24,6 +24,8 @@ import org.rtklib.java.ppp.PppOsbModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Locale;
+
 public class PppCore {
     private static final Logger LOG = LoggerFactory.getLogger(PppCore.class);
     private PppCore() {
@@ -31,6 +33,19 @@ public class PppCore {
 
     public static final int MAX_ITER = 8;
     public static final int MIN_NSAT_SOL = 4;
+
+    /**
+     * FIX-ALG-044 初始模糊度 sanity 门限（米）。
+     * <p>实测正常卫星初始 {@code |Lc-Pc|} 为 5 m 量级（见 FIX-ALG-061），
+     * 超过本门限的观测视为伪距损坏，直接跳过初始化。</p>
+     */
+    public static final double INIT_BIAS_SANITY_DEFAULT = 500.0;
+    /** FIX-ALG-061 候选门限（米）：实测不误杀后取代 {@link #INIT_BIAS_SANITY_DEFAULT}。 */
+    public static final double INIT_BIAS_SANITY_CANDIDATE = 100.0;
+    /** FIX-ALG-061 门限覆盖属性名；缺省或非法值回退 {@link #INIT_BIAS_SANITY_DEFAULT}。 */
+    public static final String INIT_BIAS_SANITY_PROP = "ppp.initBiasSanityLimit";
+    private static final double INIT_BIAS_SANITY_LIMIT =
+        resolveInitBiasSanityLimit(System.getProperty(INIT_BIAS_SANITY_PROP));
 
     public static final double VAR_POS = 60.0 * 60.0;
     public static final double VAR_VEL = 10.0 * 10.0;
@@ -68,6 +83,53 @@ public class PppCore {
 
     public static int NC() {
         return Constants.NSYS;
+    }
+
+    /**
+     * FIX-ALG-061：解析初始模糊度 sanity 门限。
+     *
+     * <p>缺省（属性未设置）返回 {@link #INIT_BIAS_SANITY_DEFAULT}，保证默认路径
+     * 与 FIX-ALG-044 逐位一致；属性非法（非数字、非正、NaN/Inf）同样回退并告警，
+     * 不允许把滤波器置于「所有卫星都被判为粗差」的状态。</p>
+     *
+     * @param raw 属性原始值，可为 {@code null}
+     * @return 生效门限（米）
+     */
+    static double resolveInitBiasSanityLimit(String raw) {
+        if (raw == null || raw.trim().isEmpty()) return INIT_BIAS_SANITY_DEFAULT;
+        try {
+            double v = Double.parseDouble(raw.trim());
+            if (v > 0.0 && !Double.isInfinite(v) && !Double.isNaN(v)) {
+                LOG.info("[FIX-061] init bias sanity limit = {} m (default {})", v, INIT_BIAS_SANITY_DEFAULT);
+                return v;
+            }
+        } catch (NumberFormatException e) {
+            LOG.warn("[FIX-061] invalid {}={} -> fallback {} m",
+                INIT_BIAS_SANITY_PROP, raw, INIT_BIAS_SANITY_DEFAULT);
+            return INIT_BIAS_SANITY_DEFAULT;
+        }
+        LOG.warn("[FIX-061] non-positive {}={} -> fallback {} m",
+            INIT_BIAS_SANITY_PROP, raw, INIT_BIAS_SANITY_DEFAULT);
+        return INIT_BIAS_SANITY_DEFAULT;
+    }
+
+    /** FIX-ALG-061：当前生效的初始模糊度 sanity 门限（米）。 */
+    public static double initBiasSanityLimit() {
+        return INIT_BIAS_SANITY_LIMIT;
+    }
+
+    /** FIX-ALG-044 / FIX-ALG-061：初始模糊度是否越界（按当前生效门限）。 */
+    public static boolean isInitBiasOutlier(double bias) {
+        return isInitBiasOutlier(bias, INIT_BIAS_SANITY_LIMIT);
+    }
+
+    /**
+     * FIX-ALG-061：按指定门限判定初始模糊度是否越界。
+     *
+     * <p>{@code bias == 0} 表示该频点无可用观测（构造时置零），不算粗差。</p>
+     */
+    public static boolean isInitBiasOutlier(double bias, double limit) {
+        return bias != 0.0 && Math.abs(bias) > limit;
     }
 
     public static int NT(PrcOpt opt) {
@@ -554,12 +616,21 @@ public class PppCore {
                     }
                 }
 
-                // FIX-ALG-044: sanity-check initial ambiguity magnitude.
-                // See PppRtkCore.udbias for rationale. IFLC initial bias > 500 m is
-                // almost certainly corrupted pseudorange — skip initx instead of
-                // creating an infinite reject/reset loop each epoch.
-                if (bias[i] != 0.0 && Math.abs(bias[i]) > 500.0) {
+                // FIX-ALG-044 / FIX-ALG-061: sanity-check initial ambiguity magnitude.
+                // 实测正常卫星初始 |Lc-Pc| 为 5 m 量级，越界即为伪距损坏——跳过 initx，
+                // 避免每历元重复初始化形成死循环。门限可由 -Dppp.initBiasSanityLimit
+                // 覆盖，用于 500 m / 100 m 两组对比（见 FIX-ALG-061）。
+                double sanityLimit = initBiasSanityLimit();
+                if (isInitBiasOutlier(bias[i], sanityLimit)) {
+                    if (rtk.epoch <= 3) {
+                        LOG.warn("[FIX-044] epoch={} sat={} frq={} init_bias={} limit={} outlier -> skip init",
+                            rtk.epoch, sat, f, String.format(Locale.US, "%.1f", bias[i]), sanityLimit);
+                    }
                     bias[i] = 0.0;
+                } else if (Math.abs(bias[i]) > INIT_BIAS_SANITY_CANDIDATE) {
+                    LOG.info("[FIX-061-GAP] epoch={} sat={} frq={} init_bias={} limit={} candidate={} -> accepted now, would be rejected if tightened",
+                        rtk.epoch, sat, f, String.format(Locale.US, "%.1f", bias[i]), sanityLimit,
+                        INIT_BIAS_SANITY_CANDIDATE);
                 }
 
                 if (x[j] == 0.0 || slip[i] != 0 || bias[i] == 0.0) continue;
