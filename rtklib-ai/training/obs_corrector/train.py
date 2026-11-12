@@ -72,10 +72,13 @@ class _Normalizer:
         return (np.asarray(x, dtype=np.float32) - self.mean) / self.std
 
 
-def build_model(hidden: int, bias_max: float, scale_max: float):
-    """MLP + 契约安全头：``bias = B·tanh(z)``、``scale = 1 + (S-1)·sigmoid(z)``。
+def build_model(hidden: int, bias_max: float, scale_max: float, scale_min: float = 1.0):
+    """MLP + 契约安全头：``bias = B·tanh(z)``、``scale = S_min + (S_max-S_min)·sigmoid(z)``。
 
     输出天然落在 core 钳位区间内，避免「训练时越界、推理时被钳掉」的静默失真。
+    ``scale_min`` 默认 1.0（保守模式，单侧膨胀）；小于 1.0 时需 core 侧同时开启
+    ``AiOpts.enableAggressiveAi`` 并把 ``aggressiveMinScale`` 设为同一值，否则小于 1.0
+    的输出会在推理时被钳回下限（实验配置，非生产默认）。
     """
     import torch
     from torch import nn
@@ -88,13 +91,14 @@ def build_model(hidden: int, bias_max: float, scale_max: float):
             self.bias_head = nn.Linear(hidden, 1)
             self.scale_head = nn.Linear(hidden, 1)
             self.bias_max = bias_max
-            self.scale_span = scale_max - 1.0
+            self.scale_min = scale_min
+            self.scale_span = scale_max - scale_min
 
         def forward(self, x):
             h = torch.relu(self.fc1(x))
             h = torch.relu(self.fc2(h))
             bias = self.bias_max * torch.tanh(self.bias_head(h))
-            scale = 1.0 + self.scale_span * torch.sigmoid(self.scale_head(h))
+            scale = self.scale_min + self.scale_span * torch.sigmoid(self.scale_head(h))
             return torch.cat([bias, scale], dim=1)
 
     return ObsCorrectorNet()
@@ -430,6 +434,8 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=20261107)
     ap.add_argument("--bias-max", type=float, default=2.0, help="bias 头饱和值（米，须 < core 钳位 10 m）")
     ap.add_argument("--scale-max", type=float, default=4.0, help="scale 头上限（须 ≤ core 钳位 4.0）")
+    ap.add_argument("--scale-min", type=float, default=1.0,
+                    help="scale 头下限（默认 1.0 保守模式；< 1.0 为激进实验，需 core 侧 enableAggressiveAi 配合）")
     ap.add_argument("--collect-dir", type=Path,
                     help="采集目录（提供时按 §7.5.3 逐 run 统计 A3 辅助固定）")
     ap.add_argument("--eval-only", action="store_true",
@@ -483,7 +489,7 @@ def main(argv=None) -> int:
             print(f"  [警告] 声明与实测不一致：多出 {sorted(set(detected) - set(CONSTANT_COLS))}、"
                   f"缺少 {sorted(set(CONSTANT_COLS) - set(detected))}")
 
-        model = build_model(args.hidden, args.bias_max, args.scale_max)
+        model = build_model(args.hidden, args.bias_max, args.scale_max, args.scale_min)
         best = train(model, norm.apply(x_train), y_train, norm.apply(x_val), y_val,
                      args.epochs, args.batch_size, args.lr, args.patience, args.seed)
 
@@ -493,7 +499,8 @@ def main(argv=None) -> int:
                                constant_cols=list(CONSTANT_COLS))
         print(f"导出完成: {onnx_path} + {norm_path}")
 
-    contract = export_onnx.check_contract(onnx_path, args.bias_max, args.scale_max)
+    contract = export_onnx.check_contract(onnx_path, args.bias_max, args.scale_max,
+                                          args.scale_min)
     print(f"契约校验通过: 输入 {contract['input_shape']} / 输出 {contract['output_shape']}"
           f" / batch 探针 {sorted(contract['batch_probes'])}")
 

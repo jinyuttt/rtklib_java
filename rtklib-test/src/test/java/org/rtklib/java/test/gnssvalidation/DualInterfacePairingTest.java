@@ -60,6 +60,10 @@ import java.util.Set;
  * {@link FixValidatorHourlyCollectTest#createOpt()}，不在此处复制解算参数。
  * 接口一置信度阈值由 {@code pairing.fix-threshold} 传入（默认取运行时
  * {@link AiOpts#DEFAULT_FIX_VALIDATOR_MIN_CONFIDENCE}），跑批时应显式给出模型标定值。
+ * 接口三方差下限由 {@code pairing.aggressive} / {@code pairing.min-scale} 控制：
+ * 默认关闭（下限 1.0，单侧膨胀）；开启后下限取 {@code pairing.min-scale}
+ * （默认 {@link AiOpts#DEFAULT_AGGRESSIVE_MIN_SCALE}），仅供实验，需配套使用
+ * 训练侧 {@code --scale-min} 相同取值的模型。
  * </p>
  *
  * <p>
@@ -85,6 +89,11 @@ import java.util.Set;
  *   -Dpairing.fix-threshold=0.08 \
  *   -Dhourlyrtk.rinex-root=&lt;rinex-root&gt; -Dhourlyrtk.base=XXXX \
  *   -Dhourlyrtk.rovers=X1,X2 -Dhourlyrtk.days=2026-06-06
+ *
+ * 激进模式（实验，需配套 --scale-min 0.5 训练的模型）：
+ *   -Dpairing.aggressive=true -Dpairing.min-scale=0.5 \
+ *   -Dpairing.obs-model=rtklib-ai/training/out/aggressive/obs_corrector.onnx \
+ *   -Dpairing.obs-norm=rtklib-ai/training/out/aggressive/obs_corrector.norm.json
  * </pre>
  */
 @DisplayName("双接口协同四跑配对：A（原生）/ B（仅接口一）/ C（仅接口三）/ D（双接口）")
@@ -99,6 +108,13 @@ class DualInterfacePairingTest {
     private static final String PROP_OBS_MODEL = "pairing.obs-model";
     private static final String PROP_OBS_NORM = "pairing.obs-norm";
     private static final String PROP_FIX_THRESHOLD = "pairing.fix-threshold";
+    private static final String PROP_AGGRESSIVE = "pairing.aggressive";
+    private static final String PROP_MIN_SCALE = "pairing.min-scale";
+
+    private static final boolean AGGRESSIVE =
+            Boolean.parseBoolean(System.getProperty(PROP_AGGRESSIVE, "false").trim());
+    private static final double MIN_SCALE = Double.parseDouble(System.getProperty(
+            PROP_MIN_SCALE, String.valueOf(AiOpts.DEFAULT_AGGRESSIVE_MIN_SCALE)).trim());
 
     private static final String P_RINEX_ROOT = "hourlyrtk.rinex-root";
     private static final String P_BASE = "hourlyrtk.base";
@@ -165,6 +181,9 @@ class DualInterfacePairingTest {
 
         log.info("配对输出目录: {}  接口一: {} (阈值 {})  接口三: {}  基准站: {}  流动站: {}  观测日: {}",
                 outDir, fixModel, fixThreshold, obsModel, base, rovers, days);
+        log.info("接口三钳位: scale ∈ [{}, {}]（激进模式 {}）",
+                AGGRESSIVE ? MIN_SCALE : 1.0, AiOpts.DEFAULT_VARIANCE_SCALE_MAX,
+                AGGRESSIVE ? "开启，违反 §4.3.4 单侧膨胀，仅供实验" : "关闭，单侧膨胀");
 
         Set<String> done = loadDoneRuns(outDir);
         Csv solA = new Csv(outDir.resolve("pairing.A.sol.csv"), SOL_HEADER);
@@ -280,6 +299,8 @@ class DualInterfacePairingTest {
 
         RtkConfig rtkConfig = new RtkConfig();
         rtkConfig.ai.fixValidatorMinConfidence = threshold;
+        rtkConfig.ai.enableAggressiveAi = AGGRESSIVE;
+        rtkConfig.ai.aggressiveMinScale = MIN_SCALE;
 
         TraceConfig traceCfg = new TraceConfig();
         traceCfg.enabled = true;

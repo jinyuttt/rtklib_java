@@ -1751,11 +1751,11 @@ public final class RtkCore {
 
     /**
      * 接口三批量推理（§3.3）：每历元仅调用一次，结果写入 {@code bias}/{@code scale} 供 ddres 只读。
-     * <p>
      * 所有降级路径（异常、null、长度不符、非有限值）都回落到「不干预」（bias=0、scale=1），
      * 绝不 fail-closed；偏差超 {@code ai.obsCorrectorMaxBias} 时置 0（不钳到边界），
      * 方差超 {@code ai.varianceScaleMax} 时钳到上限并告警（§4.3.4）。
-     * </p>
+     * 方差下限默认 1.0（单侧膨胀）；仅当 {@code ai.enableAggressiveAi} 开启时放开到
+     * {@code ai.aggressiveMinScale}（实验配置，违反 §4.3.4 规则 1，默认关闭）。
      */
     private static void aiComputeCorrection(Rtk rtk, Obsd[] obs, int[] sat, int[] iu, int[] ir,
                                             int ns, int nf, double[] azel,
@@ -1834,6 +1834,7 @@ public final class RtkCore {
         AiOpts ai = rtk.rtkConfig == null ? null : rtk.rtkConfig.ai;
         double maxBias = ai == null ? AiOpts.DEFAULT_OBS_CORRECTOR_MAX_BIAS : ai.obsCorrectorMaxBias;
         double maxScale = ai == null ? AiOpts.DEFAULT_VARIANCE_SCALE_MAX : ai.varianceScaleMax;
+        double minScale = (ai != null && ai.enableAggressiveAi) ? ai.aggressiveMinScale : 1.0;
 
         for (int r = 0; r < rows; r++) {
             int idx = rowSat[r / nf] * nf + r % nf;
@@ -1848,8 +1849,8 @@ public final class RtkCore {
             } else {
                 aiBias[idx] = b;
             }
-            if (!Double.isFinite(s) || s < 1.0) {
-                aiScale[idx] = 1.0;
+            if (!Double.isFinite(s) || s < minScale) {
+                aiScale[idx] = minScale;
             } else if (s > maxScale) {
                 aiScale[idx] = maxScale;
                 if (!rtk.aiScaleClampLogged) {

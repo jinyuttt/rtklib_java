@@ -65,9 +65,14 @@ def export(model, onnx_path: Path, opset: int = 17, dim: int = DIM) -> Path:
 
 
 def check_contract(onnx_path: Path, bias_max: float = 10.0, scale_max: float = 4.0,
+                   scale_min: float = 1.0,
                    probes: tuple[int, ...] = (1, 7, 64), dim: int = DIM,
                    out_dim: int = OUT_DIM) -> dict:
-    """用 onnxruntime 实测契约：形状、动态 batch、输出范围。"""
+    """用 onnxruntime 实测契约：形状、动态 batch、输出范围。
+
+    ``scale_min`` 与训练侧 ``--scale-min`` 保持一致：默认 1.0（单侧膨胀，§4.3.4 规则 1）；
+    小于 1.0 时对应 core 的激进模式（``AiOpts.enableAggressiveAi`` + ``aggressiveMinScale``）。
+    """
     import onnxruntime as ort
 
     sess = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
@@ -92,8 +97,9 @@ def check_contract(onnx_path: Path, bias_max: float = 10.0, scale_max: float = 4
         bias, scale = y[:, 0], y[:, 1]
         if np.max(np.abs(bias)) > bias_max + 1e-6:
             raise ValueError(f"bias 超出 core 钳位上限 {bias_max} m: max|bias|={np.max(np.abs(bias))}")
-        if np.min(scale) < 1.0 - 1e-6 or np.max(scale) > scale_max + 1e-6:
-            raise ValueError(f"scale 超出 [{1.0}, {scale_max}]: [{np.min(scale)}, {np.max(scale)}]")
+        if np.min(scale) < scale_min - 1e-6 or np.max(scale) > scale_max + 1e-6:
+            raise ValueError(f"scale 超出 [{scale_min}, {scale_max}]: "
+                             f"[{np.min(scale)}, {np.max(scale)}]")
         report["batch_probes"][rows] = {
             "max_abs_bias": float(np.max(np.abs(bias))),
             "scale_range": [float(np.min(scale)), float(np.max(scale))],
