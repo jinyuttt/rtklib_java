@@ -4,7 +4,7 @@ import java.io.IOException;
 
 public class ShowFullBlqResults {
     public static void main(String[] args) throws IOException {
-        BlqExtractor extractor = new BlqExtractor();
+        BlqCalculator extractor = new BlqCalculator();
 
         String[] names = {"LHASA", "LINZHI", "CHENGDU", "MENGDIGOU"};
         double[] lats = {29.65, 29.65, 30.57, 29.50};

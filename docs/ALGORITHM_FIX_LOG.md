@@ -470,9 +470,9 @@
 | FIX-ALG-048 | 2026-11-05 | joint/BaseSkeletonNetwork.java | 闸3 骨架网 FIX 恒为 0：参考长度标定用 `stat < SOLQ_FLOAT` 判「非 FIX」（SOLQ_FIX=1 < SOLQ_FLOAT=2）导致 FIX 全被丢弃、且曾用 FLOAT 解采样污染参考长度；改为参考长度只接受 SOLQ_FIX，FIX/FLOAT 均可进监测；修复后 fix=215/235、587.302 m 与坐标几何值毫米级一致（JAVA-ONLY） |
 | FIX-ALG-049 | 2026-11-06 | networkvrs/netsol/BaselineWindowSolver.java、networkvrs/config/NetworkConfig.java | 窄巷固定率偏低根因是周跳切弧对「正常缺测」过敏：1.5×采样间隔阈值把 30 s 采样下缺 1 历元的正常间隔（2×30 s）判为失锁，63 次误切弧把长弧切成短弧，模糊度 σ 膨胀到 2~6 周、LAMBDA ratio 塌到噪声底；改为间隙阈值可配置 `maxArcGapFactor=3.0`，周跳仍由 0.05 m 阶跃判据负责；固定率 69.4%→80.6%、基线重复性 0.180→0.160 m、平均 ratio 5.38→6.04（40 历元窗口；默认 20 历元窗口 34.7%→37.5%，瓶颈不在切弧）。2026-11-06 复核更正：1.5× 失效的根因是「倍数 × 有偏尺度（前 20 间隔均值，被缺测抬高）」，非倍数本身，3.0 的语义是「允许连续缺 2 个历元」而非调出来的最优倍数；尺度已改为全窗下中位数（判据语义不变、零 API 变更，条目内「尺度更正」）；`maxArcGapSeconds` 绝对秒数方案评估后不做、正式关闭（条目内「评估后不做」）（JAVA-ONLY，core 零改动） |
 | FIX-ALG-050 | 2026-11-10 | rtkpos/RtkCore.java | ddres 对流层项按 C `rtkpos.c` 结构重写：卫星循环前逐星各调一次 `prectrop` 缓存 `tropu/tropr/dtdxu/dtdxr`，循环内补上 `v[nv]-=(tropu[ref]-tropu[j])-(tropr[ref]-tropr[j])` 并按 `IT(0)/IT(1)` 分列赋值 H（原实现缺 v 修正、两站偏导写进同一索引、每对星重复调 2 次） |
-| FIX-ALG-051 | 2026-11-10 | kalman/KalmanFilter.java、rtkpos/RtkCore.java | **短基线固定率 0.07%→73.82%（C 73.78%）**：`KalmanFilter.update` 的状态压缩比 C `filter()` 多一条「H 列非零」过滤（FIX-ALG-042 P4 为 joint 双基线引入），使 `holdamb` 伪观测只更新模糊度对角块、位置/对流层交叉协方差被丢弃 → maxV 单调发散、ep28 跨整周 2.1154 周 → LAMBDA 失败、nb 30→28 卫星排除死亡螺旋。改为可选参数 `skipZeroHCols`（默认 true 保持 joint 行为逐位不变），`relpos`/`holdamb` 两处显式 false 对齐 C；holdamb 触发 21→181 次/前 200 历元，同为 FIX 2122 个、平均差 −0.0169/0.0115/−0.0299 m、水平差 >0.1 m 历元数 0 |
+| FIX-ALG-051 | 2026-11-10 | kalman/KalmanFilter.java、rtkpos/RtkCore.java | **短基线固定率 0.07%→73.82%（C 73.78%）**：`KalmanFilter.update` 的状态压缩比 C `filter()` 多一条「H 列非零」过滤（FIX-ALG-042 P4 为 joint 双基线引入），与 C 的两条判据不一致。改为可选参数 `skipZeroHCols`（默认 true 保持 joint 行为逐位不变），`relpos`/`holdamb` 两处显式 false 对齐 C；holdamb 触发 21→181 次/前 200 历元，同为 FIX 2122 个、平均差 −0.0169/0.0115/−0.0299 m、水平差 >0.1 m 历元数 0。**机制未经隔离验证**：H 全零列增益本为零，「跳过 vs 包含」在浮点层面近似等价，本条与 FIX-ALG-050 同批生效且未做单独 A/B，增益可能与同批改动混叠（详见条目内「关于因果强度」） |
 | FIX-ALG-052 | 2026-11-10 | time/TimeSystem.java | `MDAY` 四年周期（1461 天）表闰年位置错位：29 天放在第 2 个 12 项块（1971）而非第 3 块（1972），使闰年（2020/2024 等）3 月 1 日以后 `time2epoch()` 反算日期整体早一天；改为与 C `mday` 表逐项一致（`epoch2time()` 闰年判据本就正确） |
-| FIX-ALG-053 | 2026-11-10 | ppp/PppCore.java | `pppos` 迭代起点对齐 C：`matcpy(xp/Pp ← rtk->x/P)` 原在迭代循环体内，每次迭代都从未提交的 `rtk` 状态重新起步，使「迭代精化」退化为「同一初值重复求解」；移到 `for (iter...)` 之前（C `ppp.c L1219-1238`） |
+| FIX-ALG-053 | 2026-11-10 | ppp/PppCore.java | ❌ **原修复方向反了（基于假文档），已于 3.4.3（Unreleased）回滚对齐 C 源码**：3.4.1 依据写反的 C 引文把 `matcpy(xp/Pp ← rtk->x/P)` 移到 `for (iter...)` 之前；实际 C `ppp.c` L1217 是 `for`、L1219-1220 是 `matcpy`，拷贝本就在循环体内。已恢复为每轮迭代前拷贝，与 C 逐行一致 |
 | FIX-ALG-057 | 2026-11-11 | ppp/PppCore.java、ppp/PppCoreEx.java、pppar/PppArEngine.java | PPP-AR 固定解永久锁存（FIX-054 同源）：`pppos`/`ppos` 逐历元入口新增 `clearFixLatch` 清除上一历元 AR 写入的 `SOLQ_FIX`（只清 FIX，保留 `outsingle=1` 时 SPP 的 SINGLE 语义），`updateStat` 的 FIX 标签同样受 `MIN_NSAT_SOL=4` 降级，`PppArEngine` 入口加 ns 门控 —— 修复后 FIX 必须逐历元由本历元 AR 重新获得 |
 | FIX-ALG-058 | 2026-11-11 | ppp/PppAmbFix.java | AR 系统白名单 `SYS_GPS\|SYS_GAL\|SYS_CMP` 写死改为动态继承 `opt.navsys`（三处：WlNl / PartialAR / EwlWlNl），navsys 只配 GLO/QZS/IRN 时不再静默全跳过；无 OSB/FCB 覆盖的系统由既有 WL/NL 质量门自然剔除 |
 | FIX-ALG-059 | 2026-11-11 | ppprtk/PppRtkCore.java | **PPP-RTK 好站全天 FIX 2270/3815（59.5%），修复前恒 <1000**：相位行 pre-fit 门限错用 `PrcOpt.maxinno[0]=5.0`（该值按 RTK `ddres` 索引约定为码行设计，PPP 侧 `code==0` 却是相位行）→ 一次 ~9m 接收机钟跳当历元把 13 颗星的相位行全部剔除（nv 28→15），此后长期只剩码行更新、可见星 4~6 无法恢复。相位行改按 C `ppp.c maxinno[0]=30.0` 固定 30m，码行仍取 `opt.maxinno[1]`，删除原 `epoch<=60` 临时放宽 |
@@ -1161,7 +1161,8 @@ OsbReader 照 WUM 常量逻辑实现。缺陷三处实锤：
   ppp/algo288、PPP_PRODUCT_SUBDIR=product288、PPP_TABLE_SUBDIR=table288、
   PPP_TEST_YEAR=2026、PPP_TEST_DOY=288；REF_ECEF 沿用 FIX-ALG-019 固定值，
   IGS14→IGS20 框架差为 cm 级常量偏置不影响 A/B 对比；ALGO 观测经
-  tools/CRX2RNX.exe 由 crx.gz 转换）：
+  crx2rnx 工具由 crx.gz 转换，该工具不随仓库分发，需自行获取 RNXCMP
+  （GSI）并放入 PATH 或用 `-Dcrx2rnx.path=<可执行文件>` 指定）：
 
 | 模式 | 总历元 | 固定率 | 2D RMS | 备注 |
 |---|---|---|---|---|
@@ -1197,7 +1198,7 @@ FIX-ALG-026 三轮标定/深挖实际数据集为 **ALGO 2024060 + WUM 常量 BI
   20262880000_01D_05M_ORB.SP3、30S_CLK.CLK、30S_ABS.BIA(259MB)、ATT.OBX
 - `test-data/gnss-validation/table288/`：igs20_2437.atx
 - `test-data/gnss-validation/ppp/algo288/`：ALGO00CAN_R_20262880000_01D_
-  30S_MO.crx.gz（Earthdata 手动下载）→ tools/CRX2RNX.exe → MO.rnx(31MB)；
+  30S_MO.crx.gz（Earthdata 手动下载）→ crx2rnx（RNXCMP，需自行获取）→ MO.rnx(31MB)；
   BRDM00DLR_S_20262880000_01D_MN.rnx
 
 ## FIX-ALG-028：WUM 3F 67.81cm 回归三因素闭环 + MW 组合 OSB 单次施加裁决
@@ -2728,7 +2729,7 @@ for (k = 0; k < nt; k++) {
 
 ---
 
-## FIX-ALG-051 / RTK 短基线固定率 0.07%→73.8%：Kalman 状态压缩多加了 H 全零列过滤（holdamb 死亡螺旋）（2026-11-10）
+## FIX-ALG-051 / RTK 短基线固定率 0.07%→73.8%：Kalman 状态压缩多加了 H 全零列过滤（holdamb 死亡螺旋）（2026-11-10，机制待隔离验证）
 
 **日期**: 2026-11-10
 **类别**: rtklib-core / Kalman 滤波状态压缩（C 对齐 + 作用域收敛）
@@ -2744,7 +2745,7 @@ C 原版（rtklibexplorer demo5，RTKLIB-2.5.0，`VER_RTKLIB "EX"`）73.78%。
    `nb` 由 30 降到 28，进入「卫星被逐个排除」的死亡螺旋。
 3. **唯一可追溯差异**：`KalmanFilter.update` 的状态压缩条件比 C 多一条 H 列非零检查。
 
-### 根因
+### 根因（机制未经隔离验证）
 
 C `rtkcmn.c filter()` 的状态压缩只有两条判据：
 
@@ -2757,18 +2758,26 @@ for (i=k=0;i<n;i++) {
 Java `KalmanFilter.update` 额外加了「H 中该列必须非零」，否则跳过该状态
 （这是 FIX-ALG-042 P4 为 joint 双基线防跨基线污染引入的优化）。
 
-对 `holdamb` 的伪观测而言，这个过滤是致命的：
+对 `holdamb` 的伪观测而言，H 只在已固定卫星的模糊度列上有 ±1，**位置、速度、
+对流层等状态列全为零**，但它们在 `P` 中与模糊度存在非零交叉协方差。这条额外
+判据使这些状态不进入压缩子空间，`holdamb` 的更新只落在模糊度相关的块上。
 
-- H 只在已固定卫星的模糊度列上有 ±1，**位置、速度、对流层等状态列全为零**；
-- 这些状态虽然不被本条观测直接约束，但与模糊度有**非零交叉协方差** `Pc`；
-  C 版把它们一起纳入压缩子空间，更新后 `Pc` 参与增益计算，位置/对流层随模糊度
-  被一并修正，模糊度与位置保持自洽；
-- Java 把它们排除后，只更新模糊度对角块 → 模糊度被「钉住」但位置没有跟着修正，
-  载波残差每历元把位置误差渗回模糊度状态，`maxV` 从 ep20 的 0.53 单调涨到 ep27 的 0.79，
-  ep28 越过整周触发周跳判定 → 固定失败 → 卫星排除 → 无法恢复。
+**关于因果强度**：从 `filter_` 的数学形式看，H 列全零的状态其增益
+`K = P·Hᵀ·S⁻¹` 本身即为零，其 `x` 与 `P` 行在一次更新中本就不会改变，
+因此「跳过它们」与「包含它们」在浮点层面近似等价。所以下面这条链
+（位置未被同步修正 → 残差单向累积 → `maxV` 单调发散 → ep28 跨周）只是
+**与观测现象一致的候选解释，并非已证明的唯一因果**。本条目与 FIX-ALG-050
+（`ddres` 对流层项重写）在同一工作区、同一次对照中一并生效，**未做隔离 A/B**，
+`0.07% → 73.82%` 的增益不能排除与同批改动混叠。
 
-注意：模糊度**稳态残留**（`varholdamb=0.1` 下约 0.13 周）本身不是根因，C 同样存在；
-根因是位置没被同步修正，使残差单向累积而不是稳态收敛。
+观测事实（可复现、与解释无关）：
+- `holdamb` 在整段数据只被调用 21 次（正常应接近逐历元）；
+- 逐历元 trace 显示 `ep28` 的 `maxV` 跳到 **2.1154 周**（跨整周），此后 LAMBDA 失败、
+  `nb` 由 30 降到 28，进入「卫星被逐个排除」的死亡螺旋；
+- 改为 `skipZeroHCols=false` 后 `maxV` 恢复为逐历元衰减的稳态残留
+  （ep20 0.5339 → ep28 0.1025 → ep44 0.0653 → ep200 0.1260），`holdamb` 触发 21→181 次。
+
+模糊度**稳态残留**（`varholdamb=0.1` 下约 0.13 周）本身不是问题，C 同样存在。
 
 ### 修复
 
@@ -2876,15 +2885,20 @@ private static final int[] MDAY = {
 
 ---
 
-## FIX-ALG-053 / pppos 迭代起点对齐 C：xp/Pp 只在循环前拷贝一次（2026-11-10）
+## FIX-ALG-053 / pppos 迭代起点对齐 C：xp/Pp 每轮迭代前拷贝（2026-11-10，2026-11-12 回滚）
 
-**日期**: 2026-11-10
+> ### 状态：❌ 原修复方向反了（基于假文档）。已于 3.4.3（Unreleased）回滚对齐 C 源码。
+>
+> 初版（3.4.1）依据一段写反的 C 引文，把 `xp/Pp` 的拷贝从迭代循环内移到了循环外，
+> 制造了新偏差；本条目已整体回滚，回滚记录见下方「修复（已回滚）」。
+
+**日期**: 2026-11-10（初版） / 2026-11-12（勘误回滚）
 **类别**: rtklib-core / PPP 迭代（C 对齐）
 **触发**: 逐行核对 `ppp.c pppos()` 与 Java `PppCore.pppos` 的迭代结构。
 
-### 根因
+### 根因（已作废）
 
-C 在进入迭代循环**之前**拷贝一次状态，之后每次迭代都在上一次滤波结果上继续精化：
+初版声称 C 在进入迭代循环**之前**拷贝一次状态：
 
 ```c
 matcpy(xp,rtk->x,rtk->nx,1);
@@ -2892,21 +2906,42 @@ matcpy(Pp,rtk->P,rtk->nx,rtk->nx);
 for (i=0;i<MAX_ITER;i++) { ... ppp_res -> filter -> ppp_res(postfit) ... }
 ```
 
-Java 把这两行拷贝放在了**循环体内部**，每次迭代都从未提交的 `rtk.x/rtk.P` 重新起步，
-迭代之间相互独立，等于把「迭代精化」退化成「同一初值重复求解」：
+**该引文与 C 源码不符。** `RTKLIB-2.5.0/src/ppp.c` 实际为：
 
-- 第 2 次迭代的线性化中心没有用到第 1 次更新的结果，收敛速度与收敛判据都失去意义；
-- 每次迭代的 `filter` 都基于同一份先验，若第 1 次被 postfit 拒绝，后续迭代只是重复同样的失败。
+```c
+for (i=0;i<MAX_ITER;i++) {                    /* L1217 */
 
-### 修复
+    matcpy(xp,rtk->x,rtk->nx,1);              /* L1219 */
+    matcpy(Pp,rtk->P,rtk->nx,rtk->nx);        /* L1220 */
 
-把两次 `System.arraycopy` 移到 `for (iter...)` 之前，与 C 的语句位置一致；
-循环内仍保留 `xp/Pp` 的原地更新与 postfit 通过后的提交逻辑（不变）。
+    /* prefit residuals */
+    ...
+```
+
+`for` 在 L1217，两次 `matcpy` 在 L1219-1220，即**拷贝在循环体内部**。初版把
+「L1219 行是 `matcpy`」误读成「拷贝在循环外」，漏看了上一行的 `for`。
+
+因此初版根因（「Java 把拷贝放进循环内 → 每次用未更新初值 → 迭代精化失效」）
+**不成立**：C 本来就在循环内做同一件事，Java 原实现是正确的。
+
+### 修复（已回滚）
+
+初版把两次 `System.arraycopy` 移到了 `for (iter...)` 之前，与 C 的语句位置相反，
+属于**新增偏差**而非对齐。
+
+2026-11-12 回滚：拷贝重新放回 `for (iter...)` 循环体顶部，与 C `ppp.c` L1217-1220
+逐行一致。`PppCore.pppos` 中对应注释同步改写，删除「C 是在循环外」的假陈述。
+
+回滚后的语义（与 C 一致）：每轮迭代都从未提交的 `rtk.x/rtk.P` 重新起步，
+只有在 postfit 通过后才 `matcpy` 回写 `rtk.x/rtk.P`（`ppp.c` L1232-1235：
+`matcpy(rtk->x,xp,...)` / `matcpy(rtk->P,Pp,...)` / `stat=SOLQ_PPP`）。
 
 ### 验证
 
-静态对照 C `ppp.c L1219-1238`；本次未单独跑 PPP 数据集 A/B（该改动属结构对齐，
-后续 PPP 回归任务中一并验证）。
+- 静态对照 C `ppp.c` L1217-1220（循环与拷贝位置）、L1232-1235（postfit 提交）。
+- 回滚后 `mvn -pl rtklib-core test`：410 项测试 0 失败。
+- 未单独跑 PPP 数据集 A/B。初版即无 A/B 数据，回滚后仍无；两者差异属结构层面，
+  应随下一次 PPP 回归一并验证。
 
 ### 修改文件
 

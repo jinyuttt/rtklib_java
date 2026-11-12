@@ -1,5 +1,18 @@
 package org.rtklib.java.orbit;
 
+/**
+ * [REF: Orekit 12] 轨道力学基础：位置速度（r/v）与经典六根数（COE）互转。
+ *
+ * <p><b>外部参考（核心数学）</b>：{@code rv2coe}/{@code coe2rv}/{@code solveKepler}/
+ * {@code hyperbolicMeanToEccentric} 移植自 Orekit 12（CS GROUP / Hipparchus 生态）
+ * 的 {@code KeplerianParametersConverter} 与 {@code KeplerianAnomalyUtility}：
+ * 仅抽取纯数学核心（Halley 修正牛顿迭代、Markley 风格初值分段近似、
+ * {@code eMeSinE} 级数展开避免大数相消），去除 Orekit 框架依赖；
+ * 详见 {@code docs/ORBIT_MODULE_REFERENCE.md} 第 5、6 节。</p>
+ *
+ * <p><b>本仓库不引入 Orekit 运行时依赖</b>（pom 无 org.hipparchus/orekit 依赖），
+ * 移植部分为自包含纯函数实现。</p>
+ */
 public final class OrbitalMechanics {
 
     private OrbitalMechanics() {}

@@ -5,6 +5,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 
+/**
+ * [JAVA-ONLY 原创] BLQ 文件写出（IERS 约定格式：$$ 头 + 11 分潮 × 3 方向振幅/相位）。
+ */
 public final class BlqWriter {
 
     private BlqWriter() {}

@@ -9,7 +9,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Path;
 
 /**
- * {@link RtcmSink} 的现成实现工厂。
+ * [JAVA-ONLY 原创] {@link RtcmSink} 的现成实现工厂。
  */
 public final class RtcmSinks {
 

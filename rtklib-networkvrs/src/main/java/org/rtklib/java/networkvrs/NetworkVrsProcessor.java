@@ -22,11 +22,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 网络 VRS 主入口（档 1 骨架）。
+ * [JAVA-ONLY 原创] 网络 VRS 主入口（档 1 骨架）。
  *
  * <p>流程：多站观测 → 历元对齐 → 逐卫星收集各站改正量 → IDW 插值到流动站位置。
  * 本阶段不做站间网解，色散/非色散改正量由 {@link CorrectionProvider} 提供
  * （档 2 接入网解与误差分解后替换实现）；插值结果后续交给 rtklib-vrs 生成 RTCM。</p>
+ *
+ * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
  */
 public class NetworkVrsProcessor {
 

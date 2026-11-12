@@ -32,7 +32,7 @@ public final class Main {
         }
 
         try {
-            BlqExtractor extractor = new BlqExtractor();
+            BlqCalculator extractor = new BlqCalculator();
             double[][][] blq = extractor.extract(lat, lon);
             BlqWriter.write(output, station, lat, lon, blq);
             LOG.info("BLQ file written to {}", output);

@@ -18,9 +18,12 @@ import java.util.NavigableMap;
 import java.util.TreeMap;
 
 /**
- * 逐历元 SSR 改正注入：把某一时刻可用的 SSR 改正写入 {@code nav.ssr[]}，
+ * [JAVA-ONLY 原创] 逐历元 SSR 改正注入：把某一时刻可用的 SSR 改正写入 {@code nav.ssr[]}，
  * 使网解在 {@link Constants#EPHOPT_SSRAPC}/{@link Constants#EPHOPT_SSRCOM}
  * 下按「广播星历 + SSR 改正」计算卫星位置与钟差。
+ *
+ * <p><b>归属声明</b>：本项目原创实现（时间线管理与外推策略为自行设计），
+ * 未移植任何外部开源项目代码；SSR 电文解码逻辑的归属见 {@code rtcm.Rtcm}。</p>
  *
  * <p>两种来源：</p>
  * <ul>

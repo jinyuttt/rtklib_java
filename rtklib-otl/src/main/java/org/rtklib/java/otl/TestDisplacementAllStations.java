@@ -4,7 +4,7 @@ import java.io.IOException;
 
 public class TestDisplacementAllStations {
     public static void main(String[] args) throws IOException {
-        BlqExtractor extractor = new BlqExtractor();
+        BlqCalculator extractor = new BlqCalculator();
 
         // 4 stations
         String[] names = {"LHASA", "LINZHI", "CHENGDU", "MENGDIGOU"};

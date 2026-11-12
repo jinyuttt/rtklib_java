@@ -7,11 +7,14 @@ import org.rtklib.java.networkvrs.config.NetworkConfig;
 import java.util.List;
 
 /**
- * FKP 平面拟合插值（档 2）。
+ * [JAVA-ONLY 原创] FKP 平面拟合插值（档 2）。
  *
  * <p>把各站改正量看作流动站局部水平面 (E, N) 上的平面 {@code v = c + a·E + b·N}，
  * 最小二乘拟合后在目标点（E=N=0）取值。最少 {@code fkpMinStations} 站；
  * 站点近共线（归一化面积低于阈值）时按配置回退 IDW 或抛异常。</p>
+ *
+ * <p><b>归属声明</b>：本项目原创实现（平面拟合的归一化坐标与退化判据为自行推导），
+ * 未移植任何外部开源项目代码。</p>
  */
 public class FkpInterpolator implements CorrectionInterpolator {
 

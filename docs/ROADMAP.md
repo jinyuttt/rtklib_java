@@ -18,7 +18,7 @@
 | rtklib-vrs | 单基站虚拟参考站 | **临时激活**（GNSS 领域按需启用，不纳入梯队规划）：真实双站 239 历元，VRS FIX 76.6% vs 原始基站 77.0% |
 | rtklib-joint | 多基线联合 RTK | **临时激活**（同上）：k 条基线共享同一 Kalman 滤波器的 Rover 坐标；真实 2 基站 + 1 测站，双基线 FIX 91.5% vs 单基线 91.2% |
 | rtklib-networkvrs | 多基站网络 VRS | 档 1（IDW 插值 + 相对主站改正）已完成并经真实三站数据验证；档 2（网解 + 误差分解 + FKP）窄巷固定已闭环：真实三站 18/18 窗口固定、ratio 10.7~23.8，BRDC 与精密星历结果同量级；SSR 改正链路贯通（`SsrCorrectionProvider` 统一 `byte[]` 摄入，文件回放与实时流同解码路径）。缺口：录制 SSR 流与三站观测时段不重叠，录制流端到端复现待做（见 §1.2） |
-| rtklib-otl | 海潮负荷 BLQ | 移植自武汉大学 PRIDE-PPPAR OTL 模块；提取独立程序对比验证通过；成熟稳定辅助模块 |
+| rtklib-otl | 海潮负荷 BLQ | 依据 IERS 2010 Conventions + FES2004 公开公式纯 Java 独立实现；4 站 BLQ 输出与数值基线逐字节一致；成熟稳定辅助模块 |
 | rtklib-research | 前沿研究（FGO/IACE/预积分） | FGO 框架 + IMU 预积分 + 场景自适应已齐；独立沙盒，不参与核心依赖链 |
 | rtklib-test | 测试/演示 | SPP/RTK 城市峡谷优化对比测试 + NTRIP 客户端实时演示 |
 

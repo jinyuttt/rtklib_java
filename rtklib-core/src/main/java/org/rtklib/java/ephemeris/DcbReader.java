@@ -15,9 +15,10 @@ import java.io.IOException;
 import java.util.Arrays;
 
 /**
- * DCB 码偏差文件读取。
+ * [REF: RTKLIB 2.5.0 C] DCB 码偏差文件读取。
  *
- * <p>对应 C 版：RTKLIB preceph.c readdcb() → readdcbf()（传统 DCB）/ readbiaf()（BIA/BSX）。
+ * <p>明确移植来源：RTKLIB 2.5.0（demo5）C 版 {@code preceph.c} 的 {@code readdcb()} →
+ * {@code readdcbf()}（传统 DCB）/ {@code readbiaf()}（BIA/BSX）。行号引用见下。</p>
  * 支持三种格式：
  * <ul>
  *   <li>传统 DCB（.DCB）：P1-C1/P2-C2 差分码偏差，卫星 + 接收机（C readdcbf，L378-417）</li>

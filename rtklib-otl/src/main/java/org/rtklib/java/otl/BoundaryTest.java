@@ -4,7 +4,7 @@ import java.io.IOException;
 
 public class BoundaryTest {
     public static void main(String[] args) throws IOException {
-        BlqExtractor extractor = new BlqExtractor();
+        BlqCalculator extractor = new BlqCalculator();
 
         System.out.println("==========================================================");
         System.out.println("BLQ Boundary and Edge Case Tests");
@@ -70,7 +70,7 @@ public class BoundaryTest {
         System.out.println("==========================================================");
     }
 
-    private static void testStandardBlqFormat(BlqExtractor extractor, String name,
+    private static void testStandardBlqFormat(BlqCalculator extractor, String name,
                                                 double lat, double lon) throws IOException {
         double[][][] blq = extractor.extract(lat, lon);
 
@@ -96,7 +96,7 @@ public class BoundaryTest {
         }
     }
 
-    private static void testStation(BlqExtractor extractor, String name,
+    private static void testStation(BlqCalculator extractor, String name,
                                      double lat, double lon) {
         try {
             double[][][] blq = extractor.extract(lat, lon);

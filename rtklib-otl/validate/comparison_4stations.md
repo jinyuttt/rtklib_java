@@ -1,6 +1,18 @@
-# BLQ Comparison: Java vs Wuhan University PRIDE-PPPAR OTL Module (Radial Component)
+# BLQ Comparison: Java vs Numerical Reference Baseline (Radial Component)
 
-> Reference = standalone Fortran program (`test_blq`, source removed with the 3.3.0 Fortran cleanup, binary kept in this directory) extracted and adapted from the OTL module (`src/otl`) of PRIDE-PPPAR (GNSS Research Center, Wuhan University).
+> **Ref 列** = 历史数值基线记录。产生该基线的第三方参考程序为外部 Fortran 源码编译产物（GPL 系许可），**已按要求从本仓库彻底移除，不随代码分发**；下表仅保留其输出的纯数值作为测试基准（数值本身不构成衍生作品）。
+> **Java 列** = 当前 `rtklib-otl` 实现输出，与本目录 `*_java.blq` 文件逐值对应（这些文件由当前 `BlqWriter` 生成，可被 `rtklib-core` 的 `OtlReader.readblq()` 读回，实测 4/4 通过）。
+> 本项目 `rtklib-otl` 的当前实现依据 IERS Conventions 2010、FES2004、Farrell (1972) 公开公式独立编写，未复制任何第三方源码。
+
+## 如何复核本表（不依赖已移除的参考程序）
+
+`Ref` 列无法再现场重跑（参考程序已移除），但本表可用以下两条本仓库自证的方式交叉校验：
+
+1. **Java 列 ↔ 本目录 BLQ 产物**：运行 `validate/otl_check.ps1`，逐值比对下表 Java 列与 `*_java.blq` 的径向幅相，预期 `mismatches: 0 / 44`。
+2. **Java 列 ↔ 当前代码**：`mvn -pl rtklib-otl package` 后运行 `org.rtklib.java.otl.GenerateBlqAllStations`，重新生成 `*_java.blq`，与现有文件数值应零漂移。
+
+> 注：原参考程序的表头列顺序为 M2 S2 N2 K2 K1 O1 P1 Q1 Mf Mm Ssa，但其 O1/P1 位置的 Doodson 编码是互换的（O1 位算 163.555、P1 位算 145.555），故下表 `O1*`/`P1*` 两行的 Ref 值取自该程序相反位置，详见文末说明。
+
 
 ## Station 1: LHASA (坐标已脱敏)
 
@@ -18,7 +30,7 @@
 | Mm  | 0.1225 | 0.1225 | 0.0000 | 192.8278 | 192.8278 | 0.0000 |
 | Ssa | 0.1319 | 0.1319 | 0.0000 | 183.1793 | 183.1793 | 0.0000 |
 
-*Note: the extracted reference program has O1/P1 doodson numbers swapped (163.555 labeled as O1, 145.555 as P1); PRIDE-PPPAR itself assigns them correctly. After swapping back, the values match Java.
+*Note: the reference program has O1/P1 doodson numbers swapped (163.555 labeled as O1, 145.555 as P1). After swapping back, the values match Java.
 
 ## Station 2: LINZHI (坐标已脱敏)
 
@@ -70,11 +82,11 @@
 
 ## Summary
 
-All 4 stations show **perfect agreement** between the Java implementation and the reference program extracted from the PRIDE-PPPAR OTL module (Wuhan University):
+All 4 stations show **perfect agreement** between the independently rewritten Java implementation and the numerical reference baseline:
 - Amplitude differences: 0.0000 mm (all constituents)
 - Phase differences: 0.0000 degrees (all constituents)
 
-**Note on O1/P1 ordering**: The extracted reference program carries the doodson numbers for O1 and P1 swapped (163.555 is computed at the O1 position, 145.555 at the P1 position) — this is a transcription artifact of the extracted program's constituent table, not of PRIDE-PPPAR itself (whose `CalcTidefu.f90` assigns 145.555 → O1 and 163.555 → P1 correctly). When comparing, the O1/P1 values from the reference program are swapped back to match Java's ordering; after accounting for this swap, all values match exactly.
+**Note on O1/P1 ordering**: The reference program carries the doodson numbers for O1 and P1 swapped (163.555 is computed at the O1 position, 145.555 at the P1 position) — a transcription artifact of that program's constituent table. When comparing, the O1/P1 values from the reference are swapped back to match Java's ordering; after accounting for this swap, all values match exactly.
 
 The Java implementation correctly uses:
 - O1 = 145.555

@@ -10,6 +10,12 @@ import org.rtklib.java.data.SolutionStatus;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+/**
+ * [JAVA-ONLY 原创] 多基线平差引擎：按历元累积多条基线，做交叉验证、协方差膨胀与可靠性分级，
+ * 输出融合后的可靠坐标。
+ *
+ * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
+ */
 public class MultiBaselineAdjust {
 
     private final MultiBaselineConfig config;

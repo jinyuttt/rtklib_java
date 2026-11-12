@@ -5,7 +5,7 @@ import org.rtklib.java.adjust.model.BaselineEpoch;
 import org.rtklib.java.data.*;
 
 /**
- * 协方差拼接核心。
+ * [JAVA-ONLY 原创] 协方差拼接核心。
  *
  * <p>从多条BaselineEntry提取协方差，动态组装mxm全局观测协方差矩阵R，
  * 并提供"融合后 rover 协方差"的信息矩阵融合工具。</p>

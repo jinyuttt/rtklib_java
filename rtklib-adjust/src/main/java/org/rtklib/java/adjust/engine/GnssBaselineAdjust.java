@@ -17,6 +17,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * [JAVA-ONLY 原创] 单历元基线平差：多基线交叉验证、协方差膨胀、可靠性分级与保护级计算。
+ *
+ * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
+ */
 public class GnssBaselineAdjust {
 
     /**

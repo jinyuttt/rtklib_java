@@ -23,7 +23,7 @@ import java.util.NavigableMap;
 import java.util.TreeMap;
 
 /**
- * 网络改正输出桥：把网络插值得到的相对主站改正量交给 rtklib-vrs 生成 RTCM3。
+ * [JAVA-ONLY 原创] 网络改正输出桥：把网络插值得到的相对主站改正量交给 rtklib-vrs 生成 RTCM3。
  *
  * <p>以主站观测为基准，逐历元构造 {@link ObservationEpoch} 驱动 {@link VrsGenerator}；
  * 改正量按 {@code 历元时间 + 卫星号} 查表，命中则替代模型改正，未命中回退为模型改正。</p>

@@ -5,7 +5,7 @@ import static org.rtklib.java.orbit.Sgp4Constants.TWOPI;
 import static org.rtklib.java.orbit.Sgp4Math.mod;
 
 /**
- * SGP4/SDP4 传播算法核心实现，逐行移植自 python-sgp4 的 propagation.py。
+ * [REF: python-sgp4] SGP4/SDP4 传播算法核心实现，逐行移植自 python-sgp4 的 propagation.py。
  *
  * <p>本类严格按 python-sgp4 (Brandon Rhodes) 的 propagation.py 顺序与变量名
  * 进行 Java 移植。所有公式与边界处理保持一致，仅在以下方面做必要适配：</p>

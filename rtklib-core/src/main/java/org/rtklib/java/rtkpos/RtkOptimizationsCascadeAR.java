@@ -16,15 +16,20 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * [JAVA-ONLY] 真逐级 Cascade AR（EWL→WL→NL 逐级约束固定）。
+ * [JAVA-ONLY 原创] + [REF: GREAT-PVT] 真逐级 Cascade AR（EWL→WL→NL 逐级约束固定）。
  *
- * <p>算法参考 GREAT-PVT（GREAT-WHU/GREAT, LibGREAT gambfix）逐级模糊度固定思想，
+ * 算法参考 GREAT-PVT（GREAT-WHU / GREAT，LibGREAT 的 {@code gambfix}）的逐级模糊度
+ * 固定思想：{@code processBatch()} 以 {@code mode} 参数分派 {@code "EWL"} /
+ * {@code "EWL24"} / {@code "EWL25"} / {@code "NL"} 各级，级间通过条件更新传递约束
+ * （其文档中称为 "Virtual observation equation"）。本类仅参考该分级与约束传递思想，
+ * 未复制其代码，实现落在 RTKLIB 双差状态空间上。
+ *
  * 结合 RTKLIB 双差（DD）状态空间实现。与 RTKLIB 2.5.0 无对齐锚点（官方 2.4.3 的
- * resamb_WLNL/TCAR 未移植），属 JAVA-ONLY 扩展，正确性通过数据集行为指标验证。
+ * resamb_WLNL/TCAR 未移植），属 [JAVA-ONLY 原创] 扩展，正确性通过数据集行为指标验证。
  * 由 {@link RtkConfig#enableCascadeAR} 开关控制，默认关闭；关闭或 IFLC 模式下
- * 不进入本路径，与标准 LAMBDA 路径逐值一致。</p>
+ * 不进入本路径，与标准 LAMBDA 路径逐值一致。
  *
- * <h3>与旧实现（伪级联）的差异</h3>
+ * 与旧实现（伪级联）的差异：
  * <ol>
  *   <li>每级构建独立的组合观测向量与协方差（z=C·y、Qz=C·Q·Cᵀ），独立执行 LAMBDA
  *       与独立 ratio 门限；旧实现三级共用同一 y/Qb，为冗余验证。</li>

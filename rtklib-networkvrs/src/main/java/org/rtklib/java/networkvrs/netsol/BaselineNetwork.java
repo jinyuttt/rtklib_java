@@ -7,10 +7,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 基线网：由站点坐标构建站间基线，并提供几何（共线）检查。
+ * [JAVA-ONLY 原创] 基线网：由站点坐标构建站间基线，并提供几何（共线）检查。
  *
  * <p>站数不超过 {@link #MAX_TRIANGLE_STATIONS} 时穷举所有距离合格的站对（3 站即三角形三条边，
  * 有冗余，利于误差分解）；站数更多时只保留每个站的最短边（最小生成树），避免 O(n²) 爆炸。</p>
+ *
+ * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
  */
 public final class BaselineNetwork {
 

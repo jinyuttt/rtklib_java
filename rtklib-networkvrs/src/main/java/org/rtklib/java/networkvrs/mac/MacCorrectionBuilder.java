@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * MAC 改正合成：把网解产出的「各站相对主站改正量」整理成可播发的
+ * [JAVA-ONLY 原创] MAC 改正合成：把网解产出的「各站相对主站改正量」整理成可播发的
  * {@link MacCorrectionSet}。
  *
  * <p>三条硬约束（对应设计文档 §5.3.5 / §5.3.6）：</p>

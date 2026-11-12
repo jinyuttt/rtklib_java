@@ -11,6 +11,16 @@ import org.rtklib.java.time.TimeSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * [JAVA-ONLY 原创] RTCM 3.x MSM（Multiple Signal Message，1071~1127）编码器。
+ *
+ * <p>覆盖 MSM1~MSM7 的消息头、卫星/信号/单元掩码、伪距/相位/多普勒/载噪比各字段的量化编码；
+ * 锁相指示由 {@link #updateLock} 跨历元维护：{@code LLI bit0} 置位或历元不连续即判失锁并清零计数，
+ * 否则逐历元累加到该 MSM 类型的上限（MSM4 为 15，MSM5~7 为 1023）。</p>
+ *
+ * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。
+ * MSM 字段布局取自 RTCM 3.x 公开协议标准，属格式规范引用而非代码来源。</p>
+ */
 public class Rtcm3MsmEncoder {
     private static final Logger log = LoggerFactory.getLogger(Rtcm3MsmEncoder.class);
 

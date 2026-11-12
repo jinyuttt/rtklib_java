@@ -5,7 +5,7 @@ import org.rtklib.java.coord.CoordTransform;
 import java.util.List;
 
 /**
- * 位移时间序列分析：从逐历元坐标序列估计位移速率、判断显著性。
+ * [JAVA-ONLY 原创] 位移时间序列分析：从逐历元坐标序列估计位移速率、判断显著性。
  *
  * <p>静态监测项目的最终成果不是"每个历元的坐标"，而是：</p>
  * <ul>

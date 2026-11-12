@@ -336,7 +336,9 @@ public class GnssValidationDataHelper {
         }
 
         // Fallback: pure Java Hatanaka decompression (limited - may not work for RINEX 3)
-        log.warn("No crx2rnx tool available, trying pure Java Hatanaka decompression (may be incorrect for RINEX 3)");
+        log.warn("No crx2rnx tool available (RNXCMP is not bundled with this repo; put it in PATH "
+                + "or pass -Dcrx2rnx.path=<executable>), trying pure Java Hatanaka decompression "
+                + "(may be incorrect for RINEX 3)");
 
         try {
             List<String> lines = Files.readAllLines(compactRinex);

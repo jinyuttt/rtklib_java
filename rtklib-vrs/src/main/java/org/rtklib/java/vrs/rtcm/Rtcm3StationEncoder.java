@@ -5,6 +5,12 @@ import org.rtklib.java.data.Sta;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * [JAVA-ONLY 原创] RTCM 3.x 测站信息编码器（1005/1006/1033 等）。
+ *
+ * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。
+ * 电文字段布局取自 RTCM 3.x 公开协议标准。</p>
+ */
 public class Rtcm3StationEncoder {
     private static final Logger log = LoggerFactory.getLogger(Rtcm3StationEncoder.class);
 

@@ -12,6 +12,23 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.Locale;
 
+/**
+ * [REF: PRIDE-PPPAR] PPP-AR 模糊度固定（宽巷 WL / 窄巷 NL 两级）。
+ *
+ * 外部参考（仅算法思想）：NL 弧段机制与弧段均值、NL 偏差门限
+ * （PRIDE-PPPAR 'Narrowlane decision' 的 {@code nl_maxdev}）、WL 门限
+ * （'Critical search' 的 {@code minsav}）以及弧段累加流程，参考武汉大学
+ * PRIDE Lab（PRIDE-PPPAR）公开发表的 PPP-AR 处理方法与参数语义；
+ * 本类在 RTKLIB PPP 状态空间上重新实现，未复制其源码，数据组织
+ * （RTKLIB 的 {@code ssat}/{@code P}/{@code IB} 状态结构）、门限落点
+ * （无差分按星座中位数对齐，而非其单差 {@code rwl}）与控制流均不同。
+ *
+ * 为何不归因 RTKLIB C：RTKLIB 2.5.0/2.5.1 及 RTKLIB-EX 的 {@code ppp_ar.c}
+ * 为空桩（仅 {@code return 0}），不存在 WL/NL 实现，故本类无 C 版对齐锚点。
+ *
+ * [JAVA-ONLY 原创]：整数域交叉验证（delta gate，FIX-ALG-026/028）、
+ * NL 弧段在 Kalman 状态向量上的落点设计、以及与 {@code PppCore} 的接口衔接均为本项目原创。
+ */
 public class PppAmbFix {
     private PppAmbFix() {
     }
@@ -101,9 +118,8 @@ public class PppAmbFix {
             }
 
             // Skip satellites without OSB data when using OSB mode.
-            // PRIDE-PPPAR lsq.f90 L382-395: AR eligibility requires nbias_used >= 4, i.e.
-            // all four signals (L1/L2 phase + code) bias-corrected; incomplete-OSB
-            // satellites stay in the float solution only.
+            // PRIDE-PPPAR 语义: AR 资格要求 L1/L2 相位与码共四路偏差均已改正
+            // (nbias_used >= 4)；OSB 不全的卫星只保留在浮点解中。
             if (nav.fcbFromOsb && nav.fcbWlByCode != null) {
                 int code0 = rtk.ssat[sat - 1].code[0][0];
                 int code1 = rtk.ssat[sat - 1].code[1][0];
@@ -188,11 +204,9 @@ public class PppAmbFix {
             }
         }
 
-        // Pass 2: PRIDE-PPPAR bdeci deviation gate (fixamb_rounding.f90: dev >= wl_maxdev
-        // -> prob=0 -> reject). Undifferenced WL values share a common receiver UPD offset
-        // under the integer-clock datum, so the deviation is measured against the epoch
-        // median — the undifferenced counterpart of PRIDE's single-difference rwl, where
-        // the receiver offset cancels between the two satellites of the pair.
+        // Pass 2: PRIDE-PPPAR bdeci 偏差门限语义（dev >= wl_maxdev -> 拒绝）。
+        // 无差分 WL 值在整数钟基准下共享同一接收机 UPD 偏移，故偏差相对历元
+        // 中位数度量——这是 PRIDE 单差 rwl（星间抵消接收机偏移）的无差分对应做法。
         //
         // 中位数必须按星座分别求：不同系统宽巷落在各自信号对上（GPS L1/L2、GAL E1/E5a、
         // BDS B1I/B3I），接收机端宽巷 UPD 各不相同。混在一起求一个中位数，会把系统间的
@@ -606,7 +620,8 @@ public class PppAmbFix {
 
         /* JAVA-ONLY NL arc accumulation: must run after the filter update
          * (this entry point is called post-update) so the accumulated series
-         * matches the states consumed at fix time (PRIDE-PPPAR lsq_add_obs). */
+         * matches the states consumed at fix time (与 PRIDE-PPPAR 弧段在
+         * 观测更新后累加时序一致). */
         accumulateNlArc(rtk, opt, nav);
 
         int nb = 0;
@@ -654,8 +669,8 @@ public class PppAmbFix {
                 }
             }
 
-            // PRIDE-PPPAR lsq.f90: AR eligibility requires complete OSB (L1/L2 phase + code);
-            // incomplete-OSB satellites stay in the float solution only
+            // PRIDE-PPPAR 语义: AR 资格要求完整 OSB（L1/L2 相位 + 码），
+            // OSB 不全的卫星只保留在浮点解中
             if (nav.fcbFromOsb && nav.fcbWlByCode != null) {
                 int code1 = rtk.ssat[sat - 1].code[1][0];
                 if (getOsb(nav, sat, code0) == 0.0 || getOsb(nav, sat, code1) == 0.0
@@ -1097,7 +1112,8 @@ public class PppAmbFix {
     }
 
     /**
-     * NL弧段累加 [JAVA-ONLY]（PRIDE-PPPAR lsq_add_obs.f90 弧段累加机制的窄巷应用）。
+     * NL弧段累加 [JAVA-ONLY]（PRIDE-PPPAR 弧段累加机制的窄巷应用，落在 RTKLIB
+     * 卫星状态 {@code xrnl}/{@code rn}/{@code ninl} 上）。
      *
      * <p>每历元将滤波后的模糊度状态换算为窄巷周值（x[IB]/λ_NL），按高度角权重 wele
      * （el>=30°取1.0，否则2·sin(el)，与WL/EWL弧段一致）累加进当前弧段；周跳

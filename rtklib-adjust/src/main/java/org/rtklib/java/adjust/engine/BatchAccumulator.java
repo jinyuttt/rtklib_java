@@ -3,6 +3,11 @@ package org.rtklib.java.adjust.engine;
 import org.rtklib.java.adjust.model.AdjustResult;
 import org.rtklib.java.adjust.model.ReliabilityGrade;
 
+/**
+ * [JAVA-ONLY 原创] 批量窗口累积器：在滑动窗口内累加坐标与权重，供批量平差取平均。
+ *
+ * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
+ */
 public class BatchAccumulator {
 
     private final int windowSize;

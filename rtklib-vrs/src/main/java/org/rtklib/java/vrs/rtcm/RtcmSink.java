@@ -1,7 +1,7 @@
 package org.rtklib.java.vrs.rtcm;
 
 /**
- * RTCM3 字节出口，与输入侧的 {@link org.rtklib.java.rtcm.RtcmDataHandler} 对称。
+ * [JAVA-ONLY 原创] RTCM3 字节出口，与输入侧的 {@link org.rtklib.java.rtcm.RtcmDataHandler} 对称。
  *
  * <p>库只负责把每条编码好的消息以字节数组交出，字节的去向（写文件、推 socket、
  * 投递到队列、攒成内存块）全部由调用方实现。</p>

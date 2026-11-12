@@ -9,6 +9,12 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
+/**
+ * [JAVA-ONLY 原创] 负荷 Love 数表读取（{@code /otl/Love_load_cm.dat}）。
+ *
+ * <p><b>归属声明</b>：解析逻辑由本项目实现；Love 数数值本身来自公开发表的
+ * 负荷 Love 数表（IERS / 相关文献），属数据引用而非代码来源。</p>
+ */
 public final class LoveNumberLoader {
 
     private static final Logger LOG = LoggerFactory.getLogger(LoveNumberLoader.class);

@@ -11,11 +11,13 @@ import java.util.NavigableMap;
 import java.util.TreeMap;
 
 /**
- * 多站历元对齐。
+ * [JAVA-ONLY 原创] 多站历元对齐。
  *
  * <p>以历元最多的站为参考，逐个历元在其他站的 15s/30s 网格上寻找容差内最近历元；
  * 匹配站数达到 {@code minStations} 才输出。不同站网格存在相位差（实测 0/3/12 s）时，
  * 超出容差的历元会被丢弃而不是硬凑。</p>
+ *
+ * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
  */
 public class MultiStationSynchronizer {
 

@@ -6,6 +6,20 @@
 
 ---
 
+## [Unreleased]
+
+> 补丁版本：FIX-ALG-053 的错误修复回滚（对齐 C 源码），无对外 API 变更。
+
+### Fixed
+
+- **回滚 FIX-ALG-053（假陈述纠正）**：在 3.4.1 中，基于对 C 源码（`ppp.c`）的错误切片解读，将 `xp/Pp` 的拷贝移到了迭代循环外。经重新逐行核对 C 源码（`ppp.c:1217-1220` 确实在循环内），确认 3.4.1 的修改方向反了，制造了新的偏差。本版本已将 `xp/Pp` 拷贝移回循环内，并对齐了 C 版语义，同步修正了代码注释中的错误表述。
+
+### Changed
+
+- **`rtklib-otl` 独立重写（许可证合规）**：原 `AstroArg` / `SphericalHarmonic` / `BlqExtractor` 为外部 Fortran 源码的逐行移植，按保守口径属 GPL-3.0 衍生作品，与项目 BSD-2-Clause 冲突。现按 IERS Conventions (2010) 第 7 章负荷潮球谐合成、IERS 2010 表 5.3 基本天文幅角、Doodson (1921) 编码、Schureman (1958) 交点潮调制、Farrell (1972) 负荷 Love 数等公开公式独立实现，改为面向对象分层（`BlqCalculator` / `OceanLoadingModel` / `GeodeticSite` / `LegendreTable` / `AstronomicalArgument` / `DoodsonArgument` / `NodalCorrection` / `ComplexNumber` / `TidalConstituent`），不再与任何 `.f90` 存在函数名、变量名、数组打包索引或循环结构的对应关系。对外 API（`extract` / `extractDisplacement`）签名不变，全部入口类已切换。数值等价性：4 站 BLQ 输出与历史数值基线逐字节一致（振幅/相位差异 0.0000，基线数值保留为测试基准，产生该基线的外部 Fortran 参考程序及其全部编译产物已从仓库移除并加入 `.gitignore`），位移序列差异 < 1e-10 mm，23 站边界测试 100% 通过；`validate/` 下 4 个 BLQ 产物已由当前 `BlqWriter` 重新生成，`rtklib-core` 的 `OtlReader.readblq()` 读回 4/4 通过（修复了旧基线文件列名行缺站名导致读不出的缺陷，数值零漂移）
+
+---
+
 ## [3.4.2] - 2026-11-11
 
 > 补丁版本：PPP / PPP-AR / PPP-RTK 三条链路的「固定解锁存」与门限缺陷闭环（FIX-ALG-054~060），并落地接口一/接口三的采集层与训练脚本；无对外 API 破坏性变更。

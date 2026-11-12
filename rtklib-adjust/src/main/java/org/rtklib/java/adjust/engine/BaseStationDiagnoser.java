@@ -10,6 +10,12 @@ import org.rtklib.java.pntpos.SppProcessor;
 
 import java.util.*;
 
+/**
+ * [JAVA-ONLY 原创] 基站诊断：对每条基线做 Baarda w-test（α = 0.001，双侧临界 3.29），
+ * 在 k ≥ 3 时按残差统计定位异常基站。
+ *
+ * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
+ */
 public class BaseStationDiagnoser {
 
     private final AdjustDiagnosisConfig config;

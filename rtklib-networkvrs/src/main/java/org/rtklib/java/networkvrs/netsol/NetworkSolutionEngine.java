@@ -19,11 +19,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 网络解算主流程（档 2）：多站同步 → 双差 → 窗口网解（含 AR）→ 误差分解。
+ * [JAVA-ONLY 原创] 网络解算主流程（档 2）：多站同步 → 双差 → 窗口网解（含 AR）→ 误差分解。
  *
  * <p>输出为逐历元「各站相对主站的改正量」，交给 {@link NetworkVrsProcessor}
  * 用 IDW/FKP 插值到流动站位置。任一基线未能固定时才用单站码组合先验兜底，
  * 因此每历元都有可用输出。</p>
+ *
+ * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码；
+ * 流程编排与兜底策略均为自行设计。</p>
  */
 public final class NetworkSolutionEngine {
 

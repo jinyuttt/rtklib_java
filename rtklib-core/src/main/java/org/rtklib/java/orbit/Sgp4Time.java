@@ -1,7 +1,7 @@
 package org.rtklib.java.orbit;
 
 /**
- * 时间与日期转换工具，逐行移植自 python-sgp4 的 ext.py / functions.py / propagation.py。
+ * [REF: python-sgp4] 时间与日期转换工具，逐行移植自 python-sgp4 的 ext.py / functions.py / propagation.py。
  *
  * <p>包含：</p>
  * <ul>

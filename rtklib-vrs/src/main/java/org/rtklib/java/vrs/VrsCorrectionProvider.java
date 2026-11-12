@@ -3,7 +3,7 @@ package org.rtklib.java.vrs;
 import org.rtklib.java.data.GTime;
 
 /**
- * 外部改正量提供者：用网络插值等外部方法给出的改正量替代模型计算。
+ * [JAVA-ONLY 原创] 外部改正量提供者：用网络插值等外部方法给出的改正量替代模型计算。
  *
  * <p>返回值语义与 {@link VrsCorrection} 一致，均为相对基准站的增量（米）：
  * {@code [0]} 色散项（电离层，加到伪距、从载波中减去），

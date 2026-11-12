@@ -174,23 +174,28 @@ org.rtklib.java.adjust
 
 从FES2004全球海潮模型直接提取BLQ海潮负荷系数，或计算任意时刻的OTL位移时间序列。独立模块，与rtklib-core无代码级耦合。
 
-- **BLQ系数提取**：`BlqExtractor.extract(lat, lon)` → 3分量 × 11分潮的振幅/相位
-- **位移时间序列**：`BlqExtractor.extractDisplacement(lat, lon, startMjd, endMjd, interval)` → ENU位移(mm)
-- **标准BLQ输出**：`BlqWriter.write()` 生成兼容GOTIC2/RTKLIB格式的BLQ文件
+- **BLQ系数提取**：`BlqCalculator.extract(lat, lon)` → 3分量 × 11分潮的振幅/相位
+- **位移时间序列**：`BlqCalculator.extractDisplacement(lat, lon, startMjd, endMjd, interval)` → ENU位移(mm)
+- **标准BLQ输出**：`BlqWriter.write()` 生成兼容GOTIC2/RTKLIB格式的BLQ文件（站名置于列名行前两字符之后，可被 `rtklib-core` 的 `OtlReader.readblq()` 读回）
 - **球谐综合**：最大100阶，FES2004球谐系数 + Farrell Love数
-- **命令行工具**：`java -jar rtklib-otl.jar -lat 29.65 -lon 91.13 -sta LHASA -o lhasa.blq`
+- **命令行工具**：`java -jar rtklib-otl-3.4.2-shaded.jar -lat 29.65 -lon 91.13 -sta LHASA -o lhasa.blq`
 
-算法源自武汉大学 PRIDE-PPPAR 的 OTL 模块（`src/otl`）。验证：4站 Java vs 由该模块提取改造的独立 Fortran 程序 `test_blq`（源程序随 3.3.0 Fortran 清理移除，二进制存于 `validate/`）振幅/相位差异均为0.0000；25站边界测试（极区89°、赤道、海岸线、极端经度）100%通过。详见 [海潮负荷模块技术参考](docs/OTL_MODULE_REFERENCE.md)。
+OTL 理论基于 IERS 2010 Conventions，参考了 FES2004 全球海潮模型。本项目为纯 Java 独立实现。验证：4站 BLQ 输出与数值参考基线逐字节一致（振幅/相位差异均为0.0000）；23站边界测试（极区89°、赤道、海岸线、极端经度）100%通过。详见 [海潮负荷模块技术参考](docs/OTL_MODULE_REFERENCE.md)。
 
 ```
 org.rtklib.java.otl
-├── BlqExtractor      BLQ系数提取 + 位移时间序列计算
-├── BlqWriter         标准BLQ格式文件输出
-├── BlqConsts         物理常数、分潮名称与Doodson数
-├── Fes2004Loader     FES2004球谐系数加载
-├── SphericalHarmonic 归一化Legendre函数及导数（Belikov递推）
-├── AstroArg          天文参数(ASTRO5)、节点改正、Doodson解码
-└── LoveNumberLoader  Farrell Love数加载
+├── BlqCalculator        BLQ系数提取 + 位移时间序列合成
+├── OceanLoadingModel    FES2004系数 + 负荷Love数数据集合
+├── GeodeticSite         测站几何与重力参数（WGS84 + Somigliana）
+├── LegendreTable        完全归一化Legendre函数及一/二阶导数
+├── AstronomicalArgument 历元天文幅角（IERS 2010 表5.3）
+├── DoodsonArgument      Doodson编码分解与相位合成
+├── NodalCorrection      交点潮调制因子f、相位改正u、相位偏置
+├── ComplexNumber        复数振幅表示
+├── BlqWriter            标准BLQ格式文件输出
+├── BlqConsts            物理常数、分潮名称与Doodson数
+├── Fes2004Loader        FES2004球谐系数加载
+└── LoveNumberLoader     Farrell Love数加载
 ```
 
 ### rtklib-vrs — 虚拟参考站生成
@@ -518,7 +523,7 @@ org.rtklib.java.otl
 | 联合 RTK（joint） | 🟡 已实现 | 单/双基线真实数据 FIX 91.5%（与 SBS 91.2% 持平） |
 | IGS SSR 4076 解码 | 🟡 IM201 闭环 | 公共头部 + 子类型识别 + IM201 球谐 + VTEC/STEC 合成；4076 卫星级数值未解析，VTEC 未接入定位链路 |
 | 因子图优化 FGO + IMU 预积分 | ✅ | FE-GUT 仿真数据集 |
-| 轨道模块 + 海潮负荷 | ✅ | Vallado（轨道）/ 武汉大学 PRIDE-PPPAR OTL 模块（海潮）对比 |
+| 轨道模块 + 海潮负荷 | ✅ | Vallado（轨道）/ 4 站 BLQ 数值基线逐字节一致（海潮） |
 | 自适应引擎框架 | 🟡 | 14类实现，编译通过；待集成测试验证 |
 | AI 增强（`rtklib-ai`） | 🟡 代码已落地；仓库仅含测试用演示模型 | SPI 注入不启用即零影响；接口二冻结；各环境需自行训练模型；详见 [AI 评估报告](docs/GNSS-RTK-AI-report.md) |
 
@@ -532,13 +537,85 @@ org.rtklib.java.otl
 
 > **注**：NTRIP Caster 已不在上表内——`rtklib-stream` 于 v3.3.0 实现了 Caster 服务端（Sourcetable/订阅/鉴权/GGA 上行），这是相对 C 版的能力扩展，非移植项。
 
-## 参考来源
+## 附录：开源引用与致谢（Attribution）
 
-- [RTKLIB 2.5.0](https://github.com/tomojitakasu/RTKLIB) - 原始 C 语言实现
-- [RTKLIB Manual](http://www.rtklib.com/rtklib_document.htm) - 算法原理与使用说明
+本项目的代码归属分两级标注，源文件头部统一声明：
+
+- `[JAVA-ONLY 原创]`：本项目从零推导/自行设计的实现，不依赖任何现成开源代码；
+- `[REF: 外部项目]`：核心算法思想、公式推导或解码逻辑参考/移植自外部开源项目。
+
+`[REF: ...]` 标注可直接在源码中检索（`grep "[REF: "`），下表与源码标注一一对应。
+
+### A.1 代码来源清单
+
+| # | 项目 | 作者 / 团队 | 许可证 | 参考模块（Java 侧） | 引用方式 |
+|---|---|---|---|---|---|
+| 1 | [RTKLIB 2.5.0](https://github.com/tomojitakasu/RTKLIB) | Tomoji Takasu | BSD-2-Clause | 全 core 主干：`rtkpos.c`（[RtkCore](rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java)）、`ppp.c`（[PppCore](rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java)）、`pntpos.c`/`rtkcmn.c`/`ephemeris.c`/`ionosphere.c`/`troposphere.c`/`rtcm3.c`/`solution.c`/`postpos.c`/`tides.c`；`preceph.c` 的 `readdcb()` → [DcbReader](rtklib-core/src/main/java/org/rtklib/java/ephemeris/DcbReader.java) | 逐行移植 |
+| 2 | [RTKLIB-EX (demo5) 2.5.1](https://github.com/rtklibexplorer/RTKLIB) | rtklibexplorer | BSD-2-Clause | `ppp.c:1258-1261` 的 `xp/Pp` 迭代语义；`rtkpos.c` 的 `manage_amb_LAMBDA()` 多次尝试框架 → [RtkOptimizationsPartialAR](rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkOptimizationsPartialAR.java)；部分 SSR 电文补丁 → [Rtcm](rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java) | 逐行移植 / 框架参考 |
+| 3 | [cssrlib](https://github.com/hirokawa/cssrlib) | Rui Hirokawa | MIT | RTCM 1043 SBAS 星历字段布局（`rtcm.py` 的 `decode_sbs_eph`）→ [Rtcm.decodeType1043](rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java) | 字段布局移植 |
+| 4 | [python-sgp4](https://github.com/brandon-rhodes/python-sgp4) | Brandon Rhodes | MIT | `propagation.py` / `io.py` / `sgp4init` → [Sgp4Propagation](rtklib-core/src/main/java/org/rtklib/java/orbit/Sgp4Propagation.java)、[TleParser](rtklib-core/src/main/java/org/rtklib/java/orbit/TleParser.java)、[Sgp4Time](rtklib-core/src/main/java/org/rtklib/java/orbit/Sgp4Time.java) | 逐行移植 |
+| 5 | [Orekit 12](https://gitlab.orekit.org/orekit/orekit) | CS GROUP（原 CS Systèmes d'Information） | Apache-2.0 | `KeplerianParametersConverter` / `KeplerianAnomalyUtility` 的 `rv2coe`/`coe2rv`/`solveKepler`/双曲开普勒求解 → [OrbitalMechanics](rtklib-core/src/main/java/org/rtklib/java/orbit/OrbitalMechanics.java) | 纯数学核心抽取（不引入运行时依赖） |
+| 6 | [PRIDE-PPPAR](https://github.com/WU-PRIDE/PRIDE-PPPAR) | 武汉大学 PRIDE Lab（张传银 等） | **GPL-3.0** | ① WL/NL 门限与弧段机制（`nl_maxdev`、'Critical search' 的 `minsav`、`fixamb_search` 的取整搜索思想）→ [PppAmbFix](rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFix.java)；② OTL 四支 `.f90` → **曾逐行移植，已整体废弃重写**（详见 [A.4](#a4-rtklib-otl-的独立性说明已处置)） | ① **仅思想参考**（未复制源码，数据结构/门限落点/控制流均不同）；② 旧版属衍生作品，**已删除并重写**，当前实现为独立实现 |
+| 7 | [GREAT-PVT](https://github.com/GREAT-WHU/GREAT-PVT) | GREAT-WHU（武汉大学） | **GPL-3.0** | `gambfix` 的 EWL→WL→NL 分级与级间约束传递思想（`gambiguity.cpp` 的 `processBatch(mode)`、虚拟观测段）→ [RtkOptimizationsCascadeAR](rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkOptimizationsCascadeAR.java) | **仅思想参考**（未复制源码） |
+
+### A.2 数据与标准引用（非代码来源）
+
+以下内容为公开发布的数据产品或技术标准，其数值/格式不构成代码来源，不产生许可证传染：
+
+| 数据 / 标准 | 提供方 | 用途 |
+|---|---|---|
+| FES2004 海潮网格 | LEGOS / CNES | 海潮负荷（[Fes2004Loader](rtklib-otl/src/main/java/org/rtklib/java/otl/Fes2004Loader.java) 解析自研） |
+| IERS Conventions 2010 负荷 Love 数 | IERS | 负荷潮系数（[LoveNumberLoader](rtklib-otl/src/main/java/org/rtklib/java/otl/LoveNumberLoader.java) 解析自研） |
+| Farrell (1972) 负荷 Love 数表 | W. E. Farrell | 点负荷格林函数（[FarrellLoveNumbers](rtklib-otl/src/main/java/org/rtklib/java/otl/FarrellLoveNumbers.java) 常量封装自研） |
+| BLQ 格式（IERS 约定） | IERS | [BlqWriter](rtklib-otl/src/main/java/org/rtklib/java/otl/BlqWriter.java) 写出格式 |
+| RTCM 3.x 标准电文（含 1043/SSR） | RTCM SC-104 | 编解码字段定义（公开协议，非代码来源） |
+| FCB / OSB 产品（WHU、CNES、IGS-MGEX） | WHU / CNES / IGS | PPP-AR 偏差改正（[FcbReader](rtklib-core/src/main/java/org/rtklib/java/ephemeris/FcbReader.java) 解析自研） |
+| ASTRO5 天文幅角（R. D. Ray, NASA/GSFC, 2003） | NASA/GSFC 公开文献 | 潮汐天文幅角公式 |
+| IERS Conventions 2010 表 5.3 基本天文幅角 | IERS | 月球/太阳平均黄经多项式（[AstronomicalArgument](rtklib-otl/src/main/java/org/rtklib/java/otl/AstronomicalArgument.java) 独立实现） |
+| Doodson (1921) 潮汐幅角编码 / Schureman (1958) 交点潮调制 | 公开文献 | 分潮相位合成与 f、u 调制（[DoodsonArgument](rtklib-otl/src/main/java/org/rtklib/java/otl/DoodsonArgument.java)、[NodalCorrection](rtklib-otl/src/main/java/org/rtklib/java/otl/NodalCorrection.java) 独立实现） |
+| GPT3 5°网格（TU Wien） | TU Wien | 气压/温度/比湿先验值（[Gpt3GridReader](rtklib-core/src/main/java/org/rtklib/java/ephemeris/Gpt3GridReader.java) 按 Landskron & Böhm (2018) 模型独立实现） |
+| Landskron & Böhm (2018) VMF3/GPT3 模型；Askne & Nordius (1987) 水汽压公式 | 公开文献 | 高程归约与网格插值公式（同上，独立实现） |
+
+### A.3 BSD-2-Clause 兼容性校验
+
+本项目整体采用 BSD-2-Clause。逐项判定：
+
+| 上游许可证 | 兼容性 | 依据 | 分发义务 |
+|---|---|---|---|
+| BSD-2-Clause（RTKLIB 2.5.0 / RTKLIB-EX） | ✅ 兼容 | 同族宽松许可 | 保留原版权声明、条件与免责声明 |
+| MIT（cssrlib / python-sgp4） | ✅ 兼容 | MIT 为宽松许可，可并入 BSD-2-Clause 作品 | 保留 MIT 版权与许可声明 |
+| Apache-2.0（Orekit 12） | ✅ 兼容 | 宽松许可，允许再分发与再许可 | 保留版权/NOTICE；若上游含 NOTICE 文件须随附 |
+| GPL-3.0（PRIDE-PPPAR） | ✅ 当前无冲突 | ①WL/NL 门限与弧段仅参考算法思想与参数语义，未复制源码；②OTL 四支 `.f90` 的逐行移植版本已整体删除并按公开标准重写（见 [A.4](#a4-rtklib-otl-的独立性说明已处置)） | 无；若未来再次复制其源码则转为不兼容 |
+| GPL-3.0（GREAT-PVT） | ✅ 当前无冲突 | 仅参考算法思想，未复制源码，不构成衍生作品 | 无；若未来复制其源码则转为不兼容 |
+
+**结论**：RTKLIB 2.5.0、RTKLIB-EX、cssrlib、python-sgp4、Orekit 五类来源均与 BSD-2-Clause 兼容；PRIDE-PPPAR 的 WL/NL 部分与 GREAT-PVT 仅作思想参考，不含逐行移植代码；PRIDE-PPPAR 的 OTL 四支 `.f90` 逐行移植版本已删除并重写为独立实现，当前不存在许可证冲突。
+
+### A.4 `rtklib-otl` 的独立性说明（已处置）
+
+`rtklib-otl` 曾存在按外部 Fortran 源码逐行移植的早期版本。该版本已整体废弃并重写：
+
+- 现实现以 IERS Conventions (2010) 第 7 章的海洋潮汐负荷球谐合成公式、IERS 2010 表 5.3 的基本天文幅角、Doodson (1921) 幅角编码、Schureman (1958) 交点潮调制级数、Farrell (1972) 负荷 Love 数定义为依据，属公开物理公式的独立实现；
+- 代码组织改为面向对象分层（测站几何、球谐基函数表、幅角值对象、调制量值对象、复数振幅），不再与任何 `.f90` 文件存在函数名、变量名、数组打包索引或循环结构的对应关系；
+- 正确性以数值等价性验证代替结构对照：4 站 BLQ 振幅/相位与参考基线逐字节一致（差异 0.0000），位移时间序列差异 < 1e-10 mm。
+
+因此 `rtklib-otl` 当前归属为 `[JAVA-ONLY 原创]`，可按 BSD-2-Clause 分发。
+
+### A.5 原创模块归属（对照）
+
+以下模块为纯 `[JAVA-ONLY 原创]`，**无任何外部开源代码依赖**，归属权不得错配给 RTKLIB-EX 或其他项目：
+
+| 模块 | 原创内容 |
+|---|---|
+| `rtklib-vrs` | 单基站 VRS 生成、MSM 编码、锁相指示跨历元维护（`lockCnt`/`lockEpoch`/`msmEpochSeq`） |
+| `rtklib-otl` | 海潮负荷球谐合成、完全归一化 Legendre 函数与导数、天文幅角/Doodson 编码/交点潮调制、测站几何与重力参数（依据 IERS 2010、FES2004、Farrell 1972 公开公式独立实现） |
+| `rtklib-networkvrs` | 多站同步、双差观测构建、网解引擎、基线窗口求解与级联固定、误差分解、FKP/IDW 空间插值、MAC 改正构建 |
+| `rtklib-adjust` | 多基线平差引擎、网络平差、基站诊断、残差白度检验（自相关系数 + 游程检验组合） |
+| core 内 JAVA-ONLY 扩展 | 死循环熔断（FIX-ALG-037/044）、状态清理（周跳/历元状态复位）、AI 钩子（`AiHooks`/`FixValidator`）、`RtkOptimizations` 系列可选分支、FCB 读取 |
+
+> core 主干仍以 RTKLIB 2.5.0 C 版为对齐基准，`[REF: RTKLIB 2.5.0 C]` 与上述 JAVA-ONLY 扩展在同一文件中并存时，注释已逐项区分。
 
 > C版对齐状态、方法命名规则、测试验证状态详见 [技术文档](docs/RTKLIB_JAVA_TECHNICAL_REFERENCE.md) 第16~18章。
 
 ## License
 
-本项目基于 RTKLIB 原始代码移植，遵循 RTKLIB 的 BSD-2-Clause 许可证。
+本项目基于 RTKLIB 原始代码移植，遵循 RTKLIB 的 BSD-2-Clause 许可证。第三方来源的许可证与兼容性判定见上节 [A.3](#a3-bsd-2-clause-兼容性校验)。

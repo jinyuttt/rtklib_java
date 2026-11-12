@@ -9,6 +9,20 @@ import org.ejml.simple.SimpleMatrix;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * [JAVA-ONLY 原创] + [REF: RTKLIB-EX 2.5.1] 部分模糊度固定（子集搜索）。
+ *
+ * <p><b>[REF: RTKLIB-EX 2.5.1]</b>：{@code rtkpos.c} 的 {@code manage_amb_LAMBDA()}
+ * （注释原文 "partial fix techniques and multiple attempts"）提供了「首次全解 → 失败后
+ * 剔除部分卫星 → 重跑 LAMBDA」的多次尝试框架，本类沿用该框架思想（非代码移植）。</p>
+ *
+ * <p><b>[JAVA-ONLY 原创]</b>：子集选择策略为按模糊度方差从大到小排序后逐级剔除（RTKLIB-EX
+ * 按卫星列表顺序剔除下一颗并改写 lock），该选择策略、子集尝试上限、最小卫星数与 ratio 门限
+ * 均由 {@link RtkConfig} 配置化，属本项目自行设计。</p>
+ *
+ * <p><b>未标注 GREAT-PVT</b>：本类未采用 GREAT-PVT {@code gambfix} 的 EWL→WL→NL 级联
+ * （该级联思想由 {@link RtkOptimizationsCascadeAR} 承接），故不归因于该项目。</p>
+ */
 public final class RtkOptimizationsPartialAR {
     private static final Logger LOG = LoggerFactory.getLogger(RtkOptimizationsPartialAR.class);
 

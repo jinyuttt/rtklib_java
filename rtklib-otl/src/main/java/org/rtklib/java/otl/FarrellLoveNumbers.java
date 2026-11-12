@@ -1,5 +1,11 @@
 package org.rtklib.java.otl;
 
+/**
+ * [JAVA-ONLY 原创] Farrell 负荷 Love 数常量表（按阶数硬编码）。
+ *
+ * <p><b>归属声明</b>：数值取自 Farrell (1972) 公开发表的负荷 Love 数表，
+ * 表结构封装由本项目实现，不涉及外部项目代码。</p>
+ */
 public final class FarrellLoveNumbers {
 
     private FarrellLoveNumbers() {}

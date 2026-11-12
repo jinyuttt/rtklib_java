@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * TLE 文件读取与两行根解析器，逐行移植自 python-sgp4 的 io.py。
+ * [REF: python-sgp4] TLE 文件读取与两行根解析器，逐行移植自 python-sgp4 的 io.py。
  *
  * <p>移植自 io.py 的 twoline2rv() 函数。支持两种文件格式：</p>
  * <ul>

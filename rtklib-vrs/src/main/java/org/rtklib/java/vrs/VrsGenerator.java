@@ -24,6 +24,15 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 
+/**
+ * [JAVA-ONLY 原创] 单基站 VRS 生成器：把实际基站的观测流改写成虚拟参考站位置的 RTCM 3.x 输出。
+ *
+ * <p>职责：VRS 位置/站点名注入 → 逐历元调用 {@link VrsCorrection} 做几何/对流层/电离层改正
+ * → 交给 {@link Rtcm3Encoder} 编码 1005/1033/MSM/星历等电文。</p>
+ *
+ * <p><b>归属声明</b>：本类为本项目从零推导的原创实现，未移植任何外部开源项目代码。
+ * 其中引用的 RTCM 3.x 消息格式、IGS 产品格式属公开接口规范（协议文档），不构成代码来源。</p>
+ */
 public class VrsGenerator implements RtcmDataHandler {
     private static final Logger log = LoggerFactory.getLogger(VrsGenerator.class);
 

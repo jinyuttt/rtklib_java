@@ -8,6 +8,15 @@ import org.rtklib.java.data.Sta;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * [JAVA-ONLY 原创] RTCM 3.x 编码器：位流写入、CRC-24Q 校验、电文分帧，并保存跨历元锁相状态。
+ *
+ * <p>字段 {@code lockCnt}/{@code lockEpoch}/{@code msmEpochSeq} 用于 MSM 锁相指示（lock indicator）
+ * 的跨历元维护：连续无失锁的历元数递增，失锁（LLI bit0）或历元断续则归零。</p>
+ *
+ * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。
+ * RTCM 3.x 电文格式取自公开协议标准，属格式规范引用而非代码来源。</p>
+ */
 public class Rtcm3Encoder {
     private static final Logger log = LoggerFactory.getLogger(Rtcm3Encoder.class);
 

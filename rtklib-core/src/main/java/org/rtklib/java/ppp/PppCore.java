@@ -26,6 +26,25 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Locale;
 
+/**
+ * PPP 核心（RTKLIB C 版 {@code ppp.c} 中 {@code pppos} / {@code ppp_res} 的 Java 对齐实现）。
+ *
+ * <p><b>对齐基准</b>：主体逻辑逐行对齐 RTKLIB 2.5.0（demo5）C 版 {@code ppp.c}。
+ * 任何与 C 版不一致之处必须在此或方法内显式注明，否则按回归处理。</p>
+ *
+ * <p><b>[JAVA-ONLY 原创] 扩展</b>（C 版无对应实现，归属本项目）：
+ * <ul>
+ *   <li>FIX-ALG-037：IFLC 频率对协商，按卫星搜索可用频率对并选最大频差（噪声最小）；</li>
+ *   <li>FIX-ALG-044/061：初始模糊度 sanity 熔断——{@code |Lc-Pc|} 越界即跳过 initx，
+ *       避免伪距损坏卫星每历元重复初始化形成死循环；</li>
+ *   <li>NL 弧段周跳时的 MW/GF 检测历史清理与 bias 状态重置（状态清理扩展）；</li>
+ *   <li>{@code enablePppIsbClockInit}、{@code enableIonoEstRobust} 等可选扩展，默认关闭。</li>
+ * </ul>
+ * </p>
+ *
+ * <p><b>勘误（回滚对齐 C）</b>：FIX-ALG-053 曾把 {@code xp}/{@code Pp} 拷贝移到迭代循环外，
+ * 属于对 {@code ppp.c:1217-1220} 的错误切片解读；3.4.2 已回滚为循环内拷贝，与 C 版语义一致。</p>
+ */
 public class PppCore {
     private static final Logger LOG = LoggerFactory.getLogger(PppCore.class);
     private PppCore() {
@@ -271,13 +290,14 @@ public class PppCore {
 
         int stat = Constants.SOLQ_SINGLE;
 
-        /* C ppp.c pppos: matcpy(xp,rtk->x,...) once before the iteration loop,
-         * so each iteration refines the previous filter result instead of
-         * restarting from the un-committed rtk state. */
-        System.arraycopy(rtk.x, 0, xp, 0, nx);
-        System.arraycopy(rtk.P, 0, Pp, 0, nx * nx);
-
         for (int iter = 0; iter < MAX_ITER; iter++) {
+            /* C ppp.c pppos: matcpy(xp,rtk->x,...) and matcpy(Pp,rtk->P,...)
+             * are executed at the top of each iteration, i.e. every iteration
+             * restarts from the un-committed rtk->x/rtk->P and only commits
+             * back after a postfit pass. */
+            System.arraycopy(rtk.x, 0, xp, 0, nx);
+            System.arraycopy(rtk.P, 0, Pp, 0, nx * nx);
+
             int nv = pppRes(0, obs, n, rs, dts, var, svh, exc, nav, xp, rtk, v, H, R, azel, nx);
 
             if (iter == 0) {

@@ -16,7 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 档 1 改正量提供者：观测直接估计的色散项 + 模型计算的非色散项。
+ * [JAVA-ONLY 原创] 档 1 改正量提供者：观测直接估计的色散项 + 模型计算的非色散项。
  *
  * <ul>
  *   <li>电离层：双频码几何无关组合 {@code P1-P2}（固定 B1I/B3I），用载波相位变化做 Hatch 平滑；

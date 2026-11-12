@@ -11,6 +11,12 @@ import org.rtklib.java.time.TimeSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * [JAVA-ONLY 原创] RTCM 3.x 星历编码器（GPS/GLO/GAL/QZS/BDS/IRN 的 1019/1020/1042/1044/1046 等）。
+ *
+ * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。
+ * 电文字段布局取自 RTCM 3.x 公开协议标准。</p>
+ */
 public class Rtcm3EphEncoder {
     private static final Logger log = LoggerFactory.getLogger(Rtcm3EphEncoder.class);
 

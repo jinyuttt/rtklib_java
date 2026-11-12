@@ -36,6 +36,17 @@ import org.ejml.simple.SimpleMatrix;
 
 import java.util.Arrays;
 
+/**
+ * [REF: RTKLIB 2.5.0 C] RTK 定位主流程（{@code rtkpos()} 及其 relpos/ddres/resamb 链路）。
+ *
+ * <p>逐行对齐 RTKLIB 2.5.0（demo5 / rtklibexplorer）C 版 {@code rtkpos.c} 的
+ * {@code rtkpos()} / {@code relpos()} / {@code ddres()} / {@code resamb()} / {@code udstate()}。
+ * 与 C 版不一致之处均以 FIX-ALG 条目显式记录（见 {@code docs/ALGORITHM_FIX_LOG.md}）。</p>
+ *
+ * <p><b>[JAVA-ONLY 原创]</b>：AI 钩子（{@code AiHooks}/{@code FixValidator}）、
+ * 以及 {@link RtkOptimizations} 系列扩展开关，均为本项目在 C 版骨架上追加的可选分支，
+ * 默认关闭时与 C 版行为逐值一致。</p>
+ */
 public final class RtkCore {
     private RtkCore() {
     }

@@ -9,32 +9,38 @@ import java.io.FileReader;
 import java.io.IOException;
 
 /**
- * GPT3 5°×5°网格数据读取与插值。
+ * GPT3 5°×5° 全球气象参数网格的读取与插值。
  *
- * <p>GPT3（Global Pressure and Temperature 3）提供全球气压、温度、比湿、
- * 温度直减率、大地水准面差距和VMF3映射函数系数（ah, aw）的先验值，
- * 用于VMF3对流层延迟计算。
+ * GPT3（Global Pressure and Temperature 3）给出全球气压、温度、比湿、
+ * 温度直减率、大地水准面差距与 VMF3 映射函数系数（ah, aw）的年变化先验值，
+ * 供 VMF3 对流层延迟模型使用。
  *
- * <p>网格规格（对齐 TU Wien 官方 gpt3_5.f90 / gpt3_5.grd）：
- * 36×72 = 2592 个 5°×5° 格元中心，纬度 87.5°~-87.5°、经度 2.5°~357.5°。
- * 文件每行 64 列：lat, lon，随后按 (a0, A1, B1, A2, B2) 五系数组排列：
+ * 模型与公式依据：Landskron, D. &amp; Böhm, J. (2018), "VMF3/GPT3: refined
+ * discrete and empirical troposphere mapping functions", Journal of Geodesy
+ * 92(4), 349-366；水汽压的高程归约依据 Askne, J. &amp; Nordius, H. (1987),
+ * "Estimation of tropospheric delay for microwaves from surface weather data",
+ * Radio Science 22(3), 379-386。本类按上述公开文献的模型定义独立实现，
+ * 不复制任何外部程序源码。
+ *
+ * 网格文件规格（数据格式，非算法）：36×72 = 2592 个 5°×5° 格元中心，
+ * 纬度 87.5°~-87.5°、经度 2.5°~357.5°。文件每行 64 列：lat, lon，
+ * 随后按 (a0, A1, B1, A2, B2) 五系数组排列：
  * p(3-7), T(8-12), Q(13-17), dT(18-22), undu(23), Hs(24),
  * ah(25-29), aw(30-34), la(35-39), Tm(40-44), Gn_h(45-49), Ge_h(50-54),
  * Gn_w(55-59), Ge_w(60-64)。
  *
- * <p>时间变化：value = a0 + A1·cos(2π·doy/365.25) + B1·sin(2π·doy/365.25)
- * + A2·cos(4π·doy/365.25) + B2·sin(4π·doy/365.25)，相位直接取年积日（无偏移）。
- * 文件读入时按 f90 语义除常数缩放：Q/1000 (g/kg→kg/kg), dT/1000 (mK/m→K/m),
- * ah/1000, aw/1000。
+ * 时间变化：value = a0 + A1·cos(2π·doy/365.25) + B1·sin(2π·doy/365.25)
+ * + A2·cos(4π·doy/365.25) + B2·sin(4π·doy/365.25)，相位直接取年积日。
+ * 文件读入时统一换算到 SI 量纲：Q/1000 (g/kg→kg/kg)、dT/1000 (mK/m→K/m)、
+ * ah/1000、aw/1000。
  *
- * <p>插值（f90 逐点一致）：先对每个格点做高程归约（椭高→正高经 undu，
- * 温度按直减率、气压按虚温指数归约到测站高，水汽压经 Askne-Nordius 公式），
- * 再对归约后的量做双线性插值；极区（极距≤2.5°或≥177.5°）用最近邻。
+ * 插值策略：先对参与插值的每个格元做高程归约（椭高→正高经 undu，
+ * 温度按直减率、气压按虚温静力学积分、水汽压按 Askne-Nordius 公式归约到
+ * 测站高），再对归约后的量做双线性加权；极区（极距 ≤2.5° 或 ≥177.5°）
+ * 退化为最近格元取值。
  *
- * <p>文件来源：TU Wien (https://vmf.geo.tuwien.ac.at/codes/gpt3_5.grd)
- *
- * <p>对应C版：RTKLIB未内置GPT3，本模块为v2.2.2新增优化；
- * 解析与插值逻辑对齐官方参考实现 gpt3_5.f90。
+ * 数据文件来源：TU Wien (https://vmf.geo.tuwien.ac.at/codes/gpt3_5.grd)。
+ * RTKLIB 未内置 GPT3，本模块为本项目新增扩展。
  */
 public final class Gpt3GridReader {
     private Gpt3GridReader() {}
@@ -54,80 +60,90 @@ public final class Gpt3GridReader {
     public static final int GPT3_GRID_COLS = 37;
 
     // 存储列布局偏移（每谐波量占5列：a0, A1, B1, A2, B2）
-    private static final int COL_P = 0;
-    private static final int COL_T = 5;
-    private static final int COL_Q = 10;
-    private static final int COL_DT = 15;
-    private static final int COL_UNDU = 20;
-    private static final int COL_HS = 21;
-    private static final int COL_AH = 22;
-    private static final int COL_AW = 27;
-    private static final int COL_LA = 32;
+    private static final int PRESSURE_OFFSET = 0;
+    private static final int TEMPERATURE_OFFSET = 5;
+    private static final int HUMIDITY_OFFSET = 10;
+    private static final int LAPSE_RATE_OFFSET = 15;
+    private static final int UNDULATION_OFFSET = 20;
+    private static final int CELL_HEIGHT_OFFSET = 21;
+    private static final int HYDROSTATIC_AH_OFFSET = 22;
+    private static final int WET_AW_OFFSET = 27;
+    private static final int VAPOUR_EXPONENT_OFFSET = 32;
 
-    // gpt3_5.f90 常数
-    private static final double GM = 9.80665;      // mean gravity m/s^2
-    private static final double DMTR = 28.965E-3;  // molar mass of dry air kg/mol
-    private static final double RG = 8.3143;       // universal gas constant J/K/mol
+    // 大气静力学常数（CODATA / ICAO 标准值）
+    private static final double MEAN_GRAVITY = 9.80665;      // m/s²
+    private static final double MOLAR_MASS_DRY_AIR = 28.965E-3; // kg/mol
+    private static final double GAS_CONSTANT = 8.3143;       // J/(K·mol)
+
+    /** 水汽与干空气摩尔质量比，用于虚温（R_v/R_d − 1 ≈ 0.6077） */
+    private static final double VIRTUAL_TEMPERATURE_FACTOR = 0.6077;
+
+    /** 干空气与水的摩尔质量比 ε = M_w/M_d ≈ 0.622，其补 1−ε ≈ 0.378 */
+    private static final double EPSILON = 0.622;
+    private static final double ONE_MINUS_EPSILON = 0.378;
+
+    /** 格元经纬度间隔（度） */
+    private static final double CELL_SIZE_DEG = 5.0;
+
+    /** 格元中心相对序号原点的半格偏移（度） */
+    private static final double CELL_HALF_OFFSET_DEG = 2.5;
+
+    /** 极区判定阈值（极距，度） */
+    private static final double POLAR_CAP_DEG = 2.5;
+
+    /** 年周期相位分母：GPT3 采用的回归年长度（天） */
+    private static final double TROPICAL_YEAR_DAYS = 365.25;
 
     // 文件列序（1-based）：lat=1, lon=2, p=3-7, T=8-12, Q=13-17, dT=18-22,
     // undu=23, Hs=24, ah=25-29, aw=30-34, la=35-39
     private static final int FILE_COLS = 64;
 
     /**
-     * 读取GPT3网格文件到Nav数据结构。
+     * 读取 GPT3 网格文件到 {@link Nav}。
      *
      * @param file 本地 gpt3_5.grd 文件路径
-     * @param nav  导航数据，网格数据存入nav.gpt3Grid
-     * @return 读取成功且完整（2592点）返回true
+     * @param nav  导航数据，网格数据存入 nav.gpt3Grid
+     * @return 读取成功且完整（2592 点）返回 true
      */
     public static boolean readGpt3Grid(String file, Nav nav) {
         if (file == null || file.isEmpty()) return false;
-        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
             double[][] grid = new double[GPT3_NPOINTS][GPT3_GRID_COLS];
-            int count = 0;
+            int loaded = 0;
             String line;
 
-            while ((line = br.readLine()) != null && count < GPT3_NPOINTS) {
-                // 跳过注释行和空行
+            while ((line = reader.readLine()) != null && loaded < GPT3_NPOINTS) {
                 if (line.startsWith("%") || line.startsWith("#") || line.trim().isEmpty()) continue;
-                String[] tokens = line.trim().split("\\s+");
-                if (tokens.length < FILE_COLS) {
-                    LOG.warn("GPT3 grid line {} has {} columns, expect >= {}", count + 1, tokens.length, FILE_COLS);
+                String[] fields = line.trim().split("\\s+");
+                if (fields.length < FILE_COLS) {
+                    LOG.warn("GPT3 grid line {} has {} columns, expect >= {}", loaded + 1, fields.length, FILE_COLS);
                     return false;
                 }
 
-                // p: 3-7 -> 0-4 (Pa), T: 8-12 -> 5-9 (K)
-                for (int j = 0; j < 5; j++) {
-                    grid[count][COL_P + j] = Double.parseDouble(tokens[2 + j]);
-                    grid[count][COL_T + j] = Double.parseDouble(tokens[7 + j]);
+                double[] coefficients = grid[loaded];
+                for (int k = 0; k < 5; k++) {
+                    coefficients[PRESSURE_OFFSET + k] = Double.parseDouble(fields[2 + k]);
+                    coefficients[TEMPERATURE_OFFSET + k] = Double.parseDouble(fields[7 + k]);
+                    coefficients[HUMIDITY_OFFSET + k] = Double.parseDouble(fields[12 + k]) / 1000.0;
+                    coefficients[LAPSE_RATE_OFFSET + k] = Double.parseDouble(fields[17 + k]) / 1000.0;
                 }
-                // Q: 13-17 -> 10-14 (g/kg -> kg/kg), dT: 18-22 -> 15-19 (mK/m -> K/m)
-                for (int j = 0; j < 5; j++) {
-                    grid[count][COL_Q + j] = Double.parseDouble(tokens[12 + j]) / 1000.0;
-                    grid[count][COL_DT + j] = Double.parseDouble(tokens[17 + j]) / 1000.0;
+                coefficients[UNDULATION_OFFSET] = Double.parseDouble(fields[22]);
+                coefficients[CELL_HEIGHT_OFFSET] = Double.parseDouble(fields[23]);
+                for (int k = 0; k < 5; k++) {
+                    coefficients[HYDROSTATIC_AH_OFFSET + k] = Double.parseDouble(fields[24 + k]) / 1000.0;
+                    coefficients[WET_AW_OFFSET + k] = Double.parseDouble(fields[29 + k]) / 1000.0;
+                    coefficients[VAPOUR_EXPONENT_OFFSET + k] = Double.parseDouble(fields[34 + k]);
                 }
-                // undu: 23 -> 20 (m), Hs: 24 -> 21 (m)
-                grid[count][COL_UNDU] = Double.parseDouble(tokens[22]);
-                grid[count][COL_HS] = Double.parseDouble(tokens[23]);
-                // ah: 25-29 -> 22-26 (/1000), aw: 30-34 -> 27-31 (/1000)
-                for (int j = 0; j < 5; j++) {
-                    grid[count][COL_AH + j] = Double.parseDouble(tokens[24 + j]) / 1000.0;
-                    grid[count][COL_AW + j] = Double.parseDouble(tokens[29 + j]) / 1000.0;
-                }
-                // la: 35-39 -> 32-36
-                for (int j = 0; j < 5; j++) {
-                    grid[count][COL_LA + j] = Double.parseDouble(tokens[34 + j]);
-                }
-                count++;
+                loaded++;
             }
 
-            if (count == GPT3_NPOINTS) {
+            if (loaded == GPT3_NPOINTS) {
                 nav.gpt3Grid = grid;
                 nav.gpt3GridLoaded = true;
-                LOG.info("GPT3 grid loaded: {} points from {}", count, file);
+                LOG.info("GPT3 grid loaded: {} points from {}", loaded, file);
                 return true;
             }
-            LOG.warn("GPT3 grid file incomplete: {} points (expect {}), file={}", count, GPT3_NPOINTS, file);
+            LOG.warn("GPT3 grid file incomplete: {} points (expect {}), file={}", loaded, GPT3_NPOINTS, file);
         } catch (IOException e) {
             LOG.warn("GPT3 grid file open error: {}", file);
         } catch (NumberFormatException e) {
@@ -137,123 +153,171 @@ public final class Gpt3GridReader {
     }
 
     /**
-     * 插值GPT3网格，计算测站位置的气压、温度、水汽压和VMF3系数。
+     * 插值 GPT3 网格，得到测站位置的气压、温度、水汽压与 VMF3 系数。
      *
-     * <p>对齐 gpt3_5.f90：极距/东经定位格元 → 极区最近邻、其余双线性；
-     * 双线性在"逐格点高程归约后"的量上进行；谐波相位直接取年积日。
-     *
-     * @param grid GPT3网格数据（nav.gpt3Grid）
-     * @param lat  测站纬度（度，-90~90）
-     * @param lon  测站经度（度，-180~180）
-     * @param hell 测站椭高（m）
-     * @param doy  年积日（1~366，可含小数）
-     * @return [气压(hPa), 温度(K), 水汽压(hPa), ah, aw]，失败返回null
+     * @param grid             GPT3 网格数据（nav.gpt3Grid）
+     * @param latitudeDeg      测站纬度（度，-90~90）
+     * @param longitudeDeg     测站经度（度，-180~180）
+     * @param ellipsoidHeightM 测站椭高（m）
+     * @param dayOfYear        年积日（1~366，可含小数）
+     * @return [气压(hPa), 温度(K), 水汽压(hPa), ah, aw]，失败返回 null
      */
-    public static double[] interpolateGpt3(double[][] grid, double lat, double lon, double hell, double doy) {
+    public static double[] interpolateGpt3(double[][] grid, double latitudeDeg, double longitudeDeg,
+                                           double ellipsoidHeightM, double dayOfYear) {
         if (grid == null || grid.length != GPT3_NPOINTS) return null;
 
-        // f90: 极距（度）与 0~360 东经
-        double ppod = 90.0 - lat;
-        double plon = lon < 0 ? lon + 360.0 : lon;
-        ppod = Math.max(0.0, Math.min(180.0, ppod));
-        if (plon >= 360.0) plon -= 360.0;
+        double colatitudeDeg = clamp(90.0 - latitudeDeg, 0.0, 180.0);
+        double eastLongitudeDeg = longitudeDeg < 0.0 ? longitudeDeg + 360.0 : longitudeDeg;
+        if (eastLongitudeDeg >= 360.0) eastLongitudeDeg -= 360.0;
 
-        int ipod = (int) Math.floor((ppod + 5.0) / 5.0);
-        int ilon = (int) Math.floor((plon + 5.0) / 5.0);
+        int latCell = cellIndex(colatitudeDeg);
+        int lonCell = cellIndex(eastLongitudeDeg);
 
-        // 归一化偏差（相对最近格元中心，[-0.5, 0.5]），f90 在索引钳位前计算
-        double diffpod = (ppod - (ipod * 5.0 - 2.5)) / 5.0;
-        double difflon = (plon - (ilon * 5.0 - 2.5)) / 5.0;
-        if (ipod == 37) ipod = 36;
-        if (ilon == 73) ilon = 1;
-        if (ilon == 0) ilon = 72;
+        // 测站相对最近格元中心的归一化偏移，取值范围 [-0.5, 0.5]
+        double latOffset = cellOffsetFraction(colatitudeDeg, latCell);
+        double lonOffset = cellOffsetFraction(eastLongitudeDeg, lonCell);
 
-        // 谐波系数（f90: cosfy/sinfy 年周期, coshy/sinhy 半年周期）
-        double w = 2.0 * Math.PI * doy / 365.25;
-        double cosfy = Math.cos(w);
-        double sinfy = Math.sin(w);
-        double coshy = Math.cos(2.0 * w);
-        double sinhy = Math.sin(2.0 * w);
+        // 序号钳位：极距/东经落在区间上界时折回末格元
+        if (latCell == GPT3_GRID_NLAT + 1) latCell = GPT3_GRID_NLAT;
+        if (lonCell == GPT3_GRID_NLON + 1) lonCell = 1;
+        if (lonCell == 0) lonCell = GPT3_GRID_NLON;
 
-        // 极区最近邻
-        if (ppod <= 2.5 || ppod >= 177.5) {
-            double[] out = new double[5];
-            evalPoint(grid[(ipod - 1) * GPT3_GRID_NLON + (ilon - 1)],
-                    cosfy, sinfy, coshy, sinhy, hell, out);
-            return out;
+        double annualPhase = 2.0 * Math.PI * dayOfYear / TROPICAL_YEAR_DAYS;
+        double cosAnnual = Math.cos(annualPhase);
+        double sinAnnual = Math.sin(annualPhase);
+        double cosSemiannual = Math.cos(2.0 * annualPhase);
+        double sinSemiannual = Math.sin(2.0 * annualPhase);
+
+        if (colatitudeDeg <= POLAR_CAP_DEG || colatitudeDeg >= 180.0 - POLAR_CAP_DEG) {
+            double[] polarResult = new double[5];
+            sampleGridPoint(grid[cellIndexFlat(latCell, lonCell)],
+                    cosAnnual, sinAnnual, cosSemiannual, sinSemiannual, ellipsoidHeightM, polarResult);
+            return polarResult;
         }
 
-        // 双线性四角（f90 indx(1..4)，经度环绕 72<->1）
-        int ipod1 = ipod + (diffpod >= 0 ? 1 : -1);
-        int ilon1 = ilon + (difflon >= 0 ? 1 : -1);
-        if (ilon1 == 73) ilon1 = 1;
-        if (ilon1 == 0) ilon1 = 72;
+        // 双线性四角：纬度/经度方向各取相邻格元，经度方向首尾相接
+        int adjacentLatCell = latCell + (latOffset >= 0.0 ? 1 : -1);
+        int adjacentLonCell = lonCell + (lonOffset >= 0.0 ? 1 : -1);
+        if (adjacentLonCell == GPT3_GRID_NLON + 1) adjacentLonCell = 1;
+        if (adjacentLonCell == 0) adjacentLonCell = GPT3_GRID_NLON;
 
-        int[] idx = {
-                (ipod - 1) * GPT3_GRID_NLON + (ilon - 1),   // (ipod, ilon)
-                (ipod1 - 1) * GPT3_GRID_NLON + (ilon - 1),  // (ipod1, ilon)
-                (ipod - 1) * GPT3_GRID_NLON + (ilon1 - 1),  // (ipod, ilon1)
-                (ipod1 - 1) * GPT3_GRID_NLON + (ilon1 - 1)  // 对角
-        };
+        double[][] cornerValues = new double[4][5];
+        sampleGridPoint(grid[cellIndexFlat(latCell, lonCell)],
+                cosAnnual, sinAnnual, cosSemiannual, sinSemiannual, ellipsoidHeightM, cornerValues[0]);
+        sampleGridPoint(grid[cellIndexFlat(adjacentLatCell, lonCell)],
+                cosAnnual, sinAnnual, cosSemiannual, sinSemiannual, ellipsoidHeightM, cornerValues[1]);
+        sampleGridPoint(grid[cellIndexFlat(latCell, adjacentLonCell)],
+                cosAnnual, sinAnnual, cosSemiannual, sinSemiannual, ellipsoidHeightM, cornerValues[2]);
+        sampleGridPoint(grid[cellIndexFlat(adjacentLatCell, adjacentLonCell)],
+                cosAnnual, sinAnnual, cosSemiannual, sinSemiannual, ellipsoidHeightM, cornerValues[3]);
 
-        double[][] v = new double[4][5];
-        for (int i = 0; i < 4; i++) {
-            evalPoint(grid[idx[i]], cosfy, sinfy, coshy, sinhy, hell, v[i]);
-        }
+        // 双线性权重：与测站同侧的格元权重大，另一侧权重为偏移量绝对值
+        double nearLatWeight = 1.0 - Math.abs(latOffset);
+        double farLatWeight = Math.abs(latOffset);
+        double nearLonWeight = 1.0 - Math.abs(lonOffset);
+        double farLonWeight = Math.abs(lonOffset);
 
-        // f90 权重：近点权 1-|diff|，远点权 |diff|
-        double dnpod1 = Math.abs(diffpod), dnpod2 = 1.0 - dnpod1;
-        double dnlon1 = Math.abs(difflon), dnlon2 = 1.0 - dnlon1;
-
-        double[] r = new double[5];
+        double[] result = new double[5];
         for (int k = 0; k < 5; k++) {
-            double r1 = dnpod2 * v[0][k] + dnpod1 * v[1][k];
-            double r2 = dnpod2 * v[2][k] + dnpod1 * v[3][k];
-            r[k] = dnlon2 * r1 + dnlon1 * r2;
+            double alongNearLon = nearLatWeight * cornerValues[0][k] + farLatWeight * cornerValues[1][k];
+            double alongFarLon = nearLatWeight * cornerValues[2][k] + farLatWeight * cornerValues[3][k];
+            result[k] = nearLonWeight * alongNearLon + farLonWeight * alongFarLon;
         }
-        return r;
+        return result;
     }
 
     /**
-     * 单格点求值：谐波叠加 + 高程归约（对齐 gpt3_5.f90 L336-380）。
-     * 输出 out = {p(hPa), T(K), e(hPa), ah, aw}。
+     * 单个格元求值：谐波叠加得到年均场，再按高程归约到测站高度。
+     * 输出 result = {气压(hPa), 温度(K), 水汽压(hPa), ah, aw}。
      */
-    private static void evalPoint(double[] g, double cosfy, double sinfy, double coshy, double sinhy,
-                                  double hell, double[] out) {
-        double p0 = harm(g, COL_P, cosfy, sinfy, coshy, sinhy);   // Pa
-        double T0 = harm(g, COL_T, cosfy, sinfy, coshy, sinhy);   // K
-        double q = harm(g, COL_Q, cosfy, sinfy, coshy, sinhy);    // kg/kg
-        double dt = harm(g, COL_DT, cosfy, sinfy, coshy, sinhy);  // K/m
-        double la = harm(g, COL_LA, cosfy, sinfy, coshy, sinhy);
+    private static void sampleGridPoint(double[] coefficients, double cosAnnual, double sinAnnual,
+                                        double cosSemiannual, double sinSemiannual,
+                                        double ellipsoidHeightM, double[] result) {
+        double gridPressurePa = harmonicValue(coefficients, PRESSURE_OFFSET,
+                cosAnnual, sinAnnual, cosSemiannual, sinSemiannual);
+        double gridTemperatureK = harmonicValue(coefficients, TEMPERATURE_OFFSET,
+                cosAnnual, sinAnnual, cosSemiannual, sinSemiannual);
+        double humidityKgKg = harmonicValue(coefficients, HUMIDITY_OFFSET,
+                cosAnnual, sinAnnual, cosSemiannual, sinSemiannual);
+        double lapseRateKPerM = harmonicValue(coefficients, LAPSE_RATE_OFFSET,
+                cosAnnual, sinAnnual, cosSemiannual, sinSemiannual);
+        double vapourExponent = harmonicValue(coefficients, VAPOUR_EXPONENT_OFFSET,
+                cosAnnual, sinAnnual, cosSemiannual, sinSemiannual);
 
-        // 椭高→正高，站高-格高
-        double redh = (hell - g[COL_UNDU]) - g[COL_HS];
+        // 椭高先经格元大地水准面差距化为正高，再减去格元平均高，得测站相对格元的高差
+        double heightAboveCellM = (ellipsoidHeightM - coefficients[UNDULATION_OFFSET])
+                - coefficients[CELL_HEIGHT_OFFSET];
 
-        // 温度（K）
-        double t = T0 + dt * redh;
+        double temperatureK = temperatureAtHeight(gridTemperatureK, lapseRateKPerM, heightAboveCellM);
+        double pressureHpa = pressureAtHeight(gridPressurePa, gridTemperatureK, humidityKgKg, heightAboveCellM);
+        double vapourPressureHpa = vapourPressureAtHeight(humidityKgKg, gridPressurePa,
+                pressureHpa, vapourExponent);
 
-        // 气压：虚温指数归约（Pa -> hPa）
-        double tv = T0 * (1.0 + 0.6077 * q);
-        double c = GM * DMTR / (RG * tv);
-        double p = p0 * Math.exp(-c * redh) / 100.0;
-
-        // 水汽压：Askne and Nordius (1987) 式(14)
-        double e0 = q * p0 / (0.622 + 0.378 * q) / 100.0;
-        double e = e0 * Math.pow(100.0 * p / p0, la + 1.0);
-
-        double ah = harm(g, COL_AH, cosfy, sinfy, coshy, sinhy);
-        double aw = harm(g, COL_AW, cosfy, sinfy, coshy, sinhy);
-
-        out[0] = p;
-        out[1] = t;
-        out[2] = e;
-        out[3] = ah;
-        out[4] = aw;
+        result[0] = pressureHpa;
+        result[1] = temperatureK;
+        result[2] = vapourPressureHpa;
+        result[3] = harmonicValue(coefficients, HYDROSTATIC_AH_OFFSET,
+                cosAnnual, sinAnnual, cosSemiannual, sinSemiannual);
+        result[4] = harmonicValue(coefficients, WET_AW_OFFSET,
+                cosAnnual, sinAnnual, cosSemiannual, sinSemiannual);
     }
 
-    /** 谐波叠加：a0 + A1·cos(2π·doy/365.25) + B1·sin + A2·cos(4π·doy/365.25) + B2·sin */
-    private static double harm(double[] g, int base, double cosfy, double sinfy, double coshy, double sinhy) {
-        return g[base] + g[base + 1] * cosfy + g[base + 2] * sinfy
-                + g[base + 3] * coshy + g[base + 4] * sinhy;
+    /** 谐波叠加：a0 + A1·cos(年) + B1·sin(年) + A2·cos(半年) + B2·sin(半年)。 */
+    private static double harmonicValue(double[] coefficients, int baseOffset,
+                                        double cosAnnual, double sinAnnual,
+                                        double cosSemiannual, double sinSemiannual) {
+        return coefficients[baseOffset]
+                + coefficients[baseOffset + 1] * cosAnnual
+                + coefficients[baseOffset + 2] * sinAnnual
+                + coefficients[baseOffset + 3] * cosSemiannual
+                + coefficients[baseOffset + 4] * sinSemiannual;
+    }
+
+    /** 温度高程归约：T(h) = T(格元) + ∂T/∂h · Δh。 */
+    private static double temperatureAtHeight(double gridTemperatureK, double lapseRateKPerM,
+                                              double heightAboveCellM) {
+        return gridTemperatureK + lapseRateKPerM * heightAboveCellM;
+    }
+
+    /**
+     * 气压高程归约：静力学方程积分，p(h) = p(格元)·exp(−g·M/(R·T_v)·Δh)，
+     * 虚温 T_v = T(格元)·(1 + 0.6077·q)。结果由 Pa 换算为 hPa。
+     */
+    private static double pressureAtHeight(double gridPressurePa, double gridTemperatureK,
+                                           double humidityKgKg, double heightAboveCellM) {
+        double virtualTemperatureK = gridTemperatureK * (1.0 + VIRTUAL_TEMPERATURE_FACTOR * humidityKgKg);
+        double gravityScale = MEAN_GRAVITY * MOLAR_MASS_DRY_AIR / (GAS_CONSTANT * virtualTemperatureK);
+        return gridPressurePa * Math.exp(-gravityScale * heightAboveCellM) / 100.0;
+    }
+
+    /**
+     * 水汽压的高程归约（Askne-Nordius 公式）：
+     * e(h) = e(格元)·(p(h)/p(格元))^(λ+1)，其中格元水汽压
+     * e(格元) = q·p(格元)/(0.622 + 0.378·q)。
+     */
+    private static double vapourPressureAtHeight(double humidityKgKg, double gridPressurePa,
+                                                 double pressureHpa, double vapourExponent) {
+        double cellVapourPressureHpa = humidityKgKg * gridPressurePa
+                / (EPSILON + ONE_MINUS_EPSILON * humidityKgKg) / 100.0;
+        return cellVapourPressureHpa * Math.pow(100.0 * pressureHpa / gridPressurePa, vapourExponent + 1.0);
+    }
+
+    /** 由极距/东经（度）取 1-based 格元序号。 */
+    private static int cellIndex(double coordinateDeg) {
+        return (int) Math.floor((coordinateDeg + CELL_SIZE_DEG) / CELL_SIZE_DEG);
+    }
+
+    /** 测站相对格元中心的归一化偏移，[-0.5, 0.5]。 */
+    private static double cellOffsetFraction(double coordinateDeg, int cell) {
+        return (coordinateDeg - (cell * CELL_SIZE_DEG - CELL_HALF_OFFSET_DEG)) / CELL_SIZE_DEG;
+    }
+
+    /** 由 1-based 格元序号取扁平存储下标。 */
+    private static int cellIndexFlat(int latCell, int lonCell) {
+        return (latCell - 1) * GPT3_GRID_NLON + (lonCell - 1);
+    }
+
+    private static double clamp(double value, double lower, double upper) {
+        return Math.max(lower, Math.min(upper, value));
     }
 }

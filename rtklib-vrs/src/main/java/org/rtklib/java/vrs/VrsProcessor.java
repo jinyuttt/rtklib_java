@@ -20,6 +20,11 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * [JAVA-ONLY 原创] VRS 处理入口：读入 RTCM/RINEX 观测流并驱动 {@link VrsGenerator} 输出虚拟参考站流。
+ *
+ * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
+ */
 public class VrsProcessor {
     private static final Logger log = LoggerFactory.getLogger(VrsProcessor.class);
 

@@ -15,14 +15,16 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 单基线窗口网解：批处理最小二乘 + 宽巷/窄巷级联固定。
+ * [JAVA-ONLY 原创] 单基线窗口网解：批处理最小二乘 + 宽巷/窄巷级联固定。
  *
  * <p>窗口内未知量：站 B 坐标增量 δx(3) 与每颗卫星的双差 IF 模糊度 N_if(米)。
  * 观测模型已扣除 Saastamoinen 模型对流层双差（由 {@link DdObservationBuilder} 预先算好），
  * 因此残差中的非色散部分即为「对流层模型误差 + 轨道残差」，交由误差分解处理。</p>
  *
  * <p>求解后先用 MW 组合固定宽巷，再把 IF 模糊度换算为 N1 并用 LAMBDA 固定；
- * ratio 达标才输出固定解，否则保留浮点解。</p>
+ * ratio 达标才输出固定解，否则保留浮点解。级联固定的组合方式与门限为本项目自行设计。</p>
+ *
+ * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
  */
 public final class BaselineWindowSolver {
 

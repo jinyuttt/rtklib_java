@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 网平差：自由网平差、约束平差、坐标系统转换。
+ * [JAVA-ONLY 原创] 网平差：自由网平差、约束平差、坐标系统转换。
  *
  * <p>与前端的逐历元 {@link GnssBaselineAdjust} 不同，本类面向<b>整时段</b>批处理：
  * 把一次观测时段内的全部基线向量一次性联合解算，用于输出最终坐标成果。

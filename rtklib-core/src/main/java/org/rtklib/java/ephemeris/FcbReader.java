@@ -12,7 +12,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * FCB（Fractional Cycle Bias）产品读取器，用于PPP-AR模糊度固定。
+ * [JAVA-ONLY 原创] FCB（Fractional Cycle Bias）产品读取器，用于 PPP-AR 模糊度固定。
+ *
+ * <p>RTKLIB C 版（2.5.0/2.5.1）与 RTKLIB-EX 均无 FCB 读取实现（其 {@code ppp_ar.c} 为空桩），
+ * 本类为本项目自研；FCB 文件格式属 WHU/CNES/IGS-MGEX 公开发布的产品格式约定，
+ * 格式定义不构成代码来源，产品数据本身属数据引用。</p>
  *
  * <p>FCB产品提供宽巷(WL)和窄巷(NL)的小数偏差改正值，使浮点模糊度
  * 能够正确取整为整数模糊度，从而实现PPP-AR（Ambiguity Resolution）。

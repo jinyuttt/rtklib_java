@@ -18,6 +18,17 @@ import java.util.List;
  * RTCM3 message decoder.
  * Aligned with RTKLIB rtcm3.c structure.
  * Supports the main observation (legacy + MSM), ephemeris, station, and SSR messages.
+ *
+ * <p><b>归属说明</b>：主体结构与 RTKLIB C 版 {@code rtcm3.c} 对齐。以下解码逻辑另参考了外部项目：</p>
+ * <ul>
+ *   <li><b>[REF: cssrlib]</b> 1043 SBAS 星历布局（{@code decode_sbs_eph}，作者 Rui Hirokawa）——
+ *       RTKLIB 2.5.0 未实现 1043，字段表取自 cssrlib；</li>
+ *   <li><b>[REF: RTKLIB 2.5.1]</b> 部分 SSR 电文的后续补丁语义（如 1252~1270 的 PRN 偏移约定
+ *       {@code offp}，QZS=192 / SBS=120）。</li>
+ * </ul>
+ *
+ * <p>其余电文（1071~1127 MSM、1019~1046 星历、1005/1006/1033 测站等）按 RTCM 3.x 公开协议
+ * 与 RTKLIB C 版实现，不涉及其他外部项目。</p>
  */
 public class Rtcm implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -960,7 +971,7 @@ public class Rtcm implements Serializable {
         return true;
     }
     /**
-     * RTCM 1043 — SBAS 卫星星历（非 BDS-3 B-CNAV1！）
+     * [REF: cssrlib] RTCM 1043 — SBAS 卫星星历（非 BDS-3 B-CNAV1！）
      *
      * <p>布局依据 cssrlib/rtcm.py 的 {@code decode_sbs_eph}（RTCM 3.x 标准字段表），
      * 218 bit 单帧完整星历。RTKLIB 2.5.0/2.5.1/EX 均未实现此类型。</p>

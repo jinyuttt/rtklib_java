@@ -16,6 +16,13 @@ import org.rtklib.java.vrs.config.VrsOptionalConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * [JAVA-ONLY 原创] VRS 观测改正：把基站观测按几何距离差、对流层延迟差、电离层延迟差平移到虚拟站位置。
+ *
+ * <p><b>归属声明</b>：本项目原创实现（改正项的物理组合与数值流程均为自行推导），
+ * 未移植任何外部开源项目代码；所用对流层/电离层模型见 `troposphere`、`ionosphere` 包，
+ * 其归属另行声明。</p>
+ */
 public class VrsCorrection {
     private static final Logger log = LoggerFactory.getLogger(VrsCorrection.class);
 

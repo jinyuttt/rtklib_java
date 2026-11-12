@@ -78,6 +78,25 @@ test_output*
 **/joint-test-data.properties
 **/mb-adjust-real-data.properties
 
+# 外部 Fortran 源码编译产物（第三方二进制，禁止入库，避免许可证传染）
+/rtklib-otl/validate/test_blq
+/rtklib-otl/validate/test_blq_run
+/rtklib-otl/validate/count_records
+/rtklib-otl/validate/debug_m2
+/rtklib-otl/validate/debug_pnm
+/rtklib-otl/validate/*.f90
+/rtklib-otl/validate/*.exe
+/rtklib-otl/validate/Dockerfile*
+
+# 第三方二进制工具（RNXCMP 由 GSI 发布，需自行获取，不入库）
+/tools/CRX2RNX
+/tools/CRX2RNX.exe
+/tools/RNX2CRX
+/tools/RNX2CRX.exe
+/tools/crx2rnx
+/tools/rnx2crx
+
+
 # Reference source code (not part of Java project)
 orekit_src/
 python-sgp4/
