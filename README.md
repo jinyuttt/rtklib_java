@@ -443,7 +443,7 @@ org.rtklib.java.otl
 
 本项目按**实测验证程度**将支持场景分为两级，使用者应据此评估集成风险。
 
-### ✅ 已实测验证
+### 已实测验证
 
 以下场景已有公开/私有数据端到端验证（与参考解一致，或已记录实测指标）：
 
@@ -469,7 +469,7 @@ org.rtklib.java.otl
 | 精密产品读取 | — | IGS CODE WHU (SP3/CLK/IONEX/OSB/ATX) | 文件解析验证 |
 | 多基线间接平差 | Adjust | 本地RTCM3 2基站9小时 | σ₀+Baarda验证 |
 
-### 🔧 框架已实现，待场景数据验证
+### 框架已实现，待场景数据验证
 
 以下功能代码已实现且通过单元测试，但缺少真实场景数据端到端验证。按数据可得性分三级：
 
@@ -506,32 +506,32 @@ org.rtklib.java.otl
 
 基础功能已完善，覆盖主流GNSS定位算法与工程落地。详细规划见 [开发路线图](docs/ROADMAP.md)。
 
-**Phase 1 ✅ — 基础能力建设**：RTKLIB C 版核心算法全移植（SPP/RTK/PPP/PPP-RTK）、LAMBDA、RTCM3、RINEX3、Kalman、精密产品、NTRIP、轨道模块、海潮负荷。
+**Phase 1 完成 — 基础能力建设**：RTKLIB C 版核心算法全移植（SPP/RTK/PPP/PPP-RTK）、LAMBDA、RTCM3、RINEX3、Kalman、精密产品、NTRIP、轨道模块、海潮负荷。
 
-**Phase 2 🟡 — 高级优化与独立模块**（基本完成）：
+**Phase 2 进行中 — 高级优化与独立模块**（基本完成）：
 
 | 模块 | 状态 | 测试方式 |
 |------|------|----------|
-| SPP 单点定位 + EKF + 抗差 + 零速约束 | ✅ | 真实RINEX数据 vs C版参考结果 |
-| RTK 相对定位 + 6项高级优化 | ✅ | 真实RINEX数据 vs C版参考结果 |
-| PPP + PPP-AR + 5项高级优化 | ✅ | 真实RINEX+精密星历数据 |
-| PPP-RTK 基础（SSR改正） | ✅ | SSR 解码→`nav.ssr`→`SsrCorrector`→`ppprtkos()` 链路；解码经公开 SSR 样本单测（`SsrDecodeSmokeTest`） |
-| Compact SSR / CLAS / HAS 解码 | ✅ | 单元测试（CLAS MT4073 子类型 1-12、HAS MT1~MT9）/ CSSRlib 交叉验证 |
-| 多基线间接平差 | ✅ | 真实RTCM实测数据 |
-| VRS 单基站生成 | ✅ | 真实双站 RTCM3（239 历元/15 s），VRS@基站位置 P/L 逐位一致 |
-| 网络 VRS 多基站 | 🟡 已实现（档 1/档 2） | 档 1（IDW）/档 2（网解+误差分解+FKP）已实现并真实三站验证；BRDC 下仅宽巷固定、窄巷待 SSR/精密星历；档 3 MAC 冻结 |
-| 联合 RTK（joint） | 🟡 已实现 | 单/双基线真实数据 FIX 91.5%（与 SBS 91.2% 持平） |
-| IGS SSR 4076 解码 | 🟡 IM201 闭环 | 公共头部 + 子类型识别 + IM201 球谐 + VTEC/STEC 合成；4076 卫星级数值未解析，VTEC 未接入定位链路 |
-| 因子图优化 FGO + IMU 预积分 | ✅ | FE-GUT 仿真数据集 |
-| 轨道模块 + 海潮负荷 | ✅ | Vallado（轨道）/ 4 站 BLQ 数值基线逐字节一致（海潮） |
-| 自适应引擎框架 | 🟡 | 14类实现，编译通过；待集成测试验证 |
-| AI 增强（`rtklib-ai`） | 🟡 代码已落地；仓库仅含测试用演示模型 | SPI 注入不启用即零影响；接口二冻结；各环境需自行训练模型；详见 [AI 评估报告](docs/GNSS-RTK-AI-report.md) |
+| SPP 单点定位 + EKF + 抗差 + 零速约束 | 通过 | 真实RINEX数据 vs C版参考结果 |
+| RTK 相对定位 + 6项高级优化 | 通过 | 真实RINEX数据 vs C版参考结果 |
+| PPP + PPP-AR + 5项高级优化 | 通过 | 真实RINEX+精密星历数据 |
+| PPP-RTK 基础（SSR改正） | 通过 | SSR 解码→`nav.ssr`→`SsrCorrector`→`ppprtkos()` 链路；解码经公开 SSR 样本单测（`SsrDecodeSmokeTest`） |
+| Compact SSR / CLAS / HAS 解码 | 通过 | 单元测试（CLAS MT4073 子类型 1-12、HAS MT1~MT9）/ CSSRlib 交叉验证 |
+| 多基线间接平差 | 通过 | 真实RTCM实测数据 |
+| VRS 单基站生成 | 通过 | 真实双站 RTCM3（239 历元/15 s），VRS@基站位置 P/L 逐位一致 |
+| 网络 VRS 多基站 | 部分实现（档 1/档 2） | 档 1（IDW）/档 2（网解+误差分解+FKP）已实现并真实三站验证；BRDC 下仅宽巷固定、窄巷待 SSR/精密星历；档 3 MAC 冻结 |
+| 联合 RTK（joint） | 部分实现 | 单/双基线真实数据 FIX 91.5%（与 SBS 91.2% 持平） |
+| IGS SSR 4076 解码 | 部分完成（IM201 闭环） | 公共头部 + 子类型识别 + IM201 球谐 + VTEC/STEC 合成；4076 卫星级数值未解析，VTEC 未接入定位链路 |
+| 因子图优化 FGO + IMU 预积分 | 通过 | FE-GUT 仿真数据集 |
+| 轨道模块 + 海潮负荷 | 通过 | Vallado（轨道）/ 4 站 BLQ 数值基线逐字节一致（海潮） |
+| 自适应引擎框架 | 进行中 | 14类实现，编译通过；待集成测试验证 |
+| AI 增强（`rtklib-ai`） | 部分完成；代码已落地；仓库仅含测试用演示模型 | SPI 注入不启用即零影响；接口二冻结；各环境需自行训练模型；详见 [AI 评估报告](docs/GNSS-RTK-AI-report.md) |
 
 剩余：PPP-RTK 区域大气约束、完好性保护级（HPL/VPL）、ARAIM、固定解完好性增强——均属研究深化方向，**无上游场景驱动，定版不再投入（WONTFIX）**。
 
-**梯队 0/1 ✅ — 性能基准与工程质量**（已完成 2026-10-12）：JMH 微基准 + 端到端计时基线、RtkCore/PppCore 工作数组复用、SLF4J 日志统一、异常捕获改进、SSR 对流层直接改正、34 个关键算法单元测试。
+**梯队 0/1 完成 — 性能基准与工程质量**（已完成 2026-10-12）：JMH 微基准 + 端到端计时基线、RtkCore/PppCore 工作数组复用、SLF4J 日志统一、异常捕获改进、SSR 对流层直接改正、34 个关键算法单元测试。
 
-**梯队 2/3 🔴 — 已关闭**：3A Kalman 优化与 3.5B null 消除经 JMH 基准实测后放弃；CI 真实数据回归、CLAS STEC 多项式、场景验证等依赖外部数据/条件，随 v3.1.0 封存整体 WONTFIX。恢复条件见 [开发路线图 §2](docs/ROADMAP.md)。
+**梯队 2/3 已关闭**：3A Kalman 优化与 3.5B null 消除经 JMH 基准实测后放弃；CI 真实数据回归、CLAS STEC 多项式、场景验证等依赖外部数据/条件，随 v3.1.0 封存整体 WONTFIX。恢复条件见 [开发路线图 §2](docs/ROADMAP.md)。
 
 **项目设计不做**（功能定义不符合本项目定位，非缺口、非暂缓）：TCP 客户端、TCP/UDP 服务端、接收机原始协议（u-blox/NovAtel 等）、NMEA 输出、GPX/KML 输出、大地水准面/基准转换。详见 [实现差异文档第14章](docs/RTKLIB_Differences.md)。
 
@@ -582,11 +582,11 @@ org.rtklib.java.otl
 
 | 上游许可证 | 兼容性 | 依据 | 分发义务 |
 |---|---|---|---|
-| BSD-2-Clause（RTKLIB 2.5.0 / RTKLIB-EX） | ✅ 兼容 | 同族宽松许可 | 保留原版权声明、条件与免责声明 |
-| MIT（cssrlib / python-sgp4） | ✅ 兼容 | MIT 为宽松许可，可并入 BSD-2-Clause 作品 | 保留 MIT 版权与许可声明 |
-| Apache-2.0（Orekit 12） | ✅ 兼容 | 宽松许可，允许再分发与再许可 | 保留版权/NOTICE；若上游含 NOTICE 文件须随附 |
-| GPL-3.0（PRIDE-PPPAR） | ✅ 当前无冲突 | ①WL/NL 门限与弧段仅参考算法思想与参数语义，未复制源码；②OTL 四支 `.f90` 的逐行移植版本已整体删除并按公开标准重写（见 [A.4](#a4-rtklib-otl-的独立性说明已处置)） | 无；若未来再次复制其源码则转为不兼容 |
-| GPL-3.0（GREAT-PVT） | ✅ 当前无冲突 | 仅参考算法思想，未复制源码，不构成衍生作品 | 无；若未来复制其源码则转为不兼容 |
+| BSD-2-Clause（RTKLIB 2.5.0 / RTKLIB-EX） | 兼容 | 同族宽松许可 | 保留原版权声明、条件与免责声明 |
+| MIT（cssrlib / python-sgp4） | 兼容 | MIT 为宽松许可，可并入 BSD-2-Clause 作品 | 保留 MIT 版权与许可声明 |
+| Apache-2.0（Orekit 12） | 兼容 | 宽松许可，允许再分发与再许可 | 保留版权/NOTICE；若上游含 NOTICE 文件须随附 |
+| GPL-3.0（PRIDE-PPPAR） | 当前无冲突 | ①WL/NL 门限与弧段仅参考算法思想与参数语义，未复制源码；②OTL 四支 `.f90` 的逐行移植版本已整体删除并按公开标准重写（见 [A.4](#a4-rtklib-otl-的独立性说明已处置)） | 无；若未来再次复制其源码则转为不兼容 |
+| GPL-3.0（GREAT-PVT） | 当前无冲突 | 仅参考算法思想，未复制源码，不构成衍生作品 | 无；若未来复制其源码则转为不兼容 |
 
 **结论**：RTKLIB 2.5.0、RTKLIB-EX、cssrlib、python-sgp4、Orekit 五类来源均与 BSD-2-Clause 兼容；PRIDE-PPPAR 的 WL/NL 部分与 GREAT-PVT 仅作思想参考，不含逐行移植代码；PRIDE-PPPAR 的 OTL 四支 `.f90` 逐行移植版本已删除并重写为独立实现，当前不存在许可证冲突。
 
