@@ -166,12 +166,12 @@ cd rtklib-otl
 mvn package
 ```
 
-生成 `target/rtklib-otl-3.4.2-shaded.jar`（含FES2004数据、Love数表与 slf4j/logback 依赖的可执行 fat jar，主类 `org.rtklib.java.otl.Main`）。
+生成 `target/rtklib-otl-3.5.0.jar`（shade 插件直接替换主产物，为含FES2004数据、Love数表与 slf4j/logback 依赖的可执行 fat jar，主类 `org.rtklib.java.otl.Main`）。
 
 ### 6.2 运行
 
 ```bash
-java -jar target/rtklib-otl-3.4.2-shaded.jar -lat 29.65 -lon 91.13 -sta LHASA -o lhasa.blq
+java -jar target/rtklib-otl-3.5.0.jar -lat 29.65 -lon 91.13 -sta LHASA -o lhasa.blq
 ```
 
 | 参数 | 必填 | 默认值 | 说明 |

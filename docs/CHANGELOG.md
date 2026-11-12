@@ -6,17 +6,25 @@
 
 ---
 
-## [Unreleased]
+## [3.5.0] - 2026-11-12
 
-> 补丁版本：FIX-ALG-053 的错误修复回滚（对齐 C 源码），无对外 API 变更。
+> 许可证合规重构版本：OTL 与 GPT3 模块按公开文献独立重写、第三方编译产物与 GPL 衍生代码从仓库与 Git 历史中彻底移除；同时落地接口三的激进模式实验配置（默认关闭）。无对外 API 破坏性变更。
 
 ### Fixed
 
 - **回滚 FIX-ALG-053（假陈述纠正）**：在 3.4.1 中，基于对 C 源码（`ppp.c`）的错误切片解读，将 `xp/Pp` 的拷贝移到了迭代循环外。经重新逐行核对 C 源码（`ppp.c:1217-1220` 确实在循环内），确认 3.4.1 的修改方向反了，制造了新的偏差。本版本已将 `xp/Pp` 拷贝移回循环内，并对齐了 C 版语义，同步修正了代码注释中的错误表述。
 
+### Added
+
+- **接口三激进模式实验配置（默认关闭）**：`AiOpts` 新增 `enableAggressiveAi`（默认 `false`）与 `aggressiveMinScale`（默认 `0.1`）。开启后 `RtkCore` 把 `varianceScale` 的钳位下限由固定 `1.0` 放宽到 `aggressiveMinScale`，而 `bias` 上限与 `varianceScaleMax` 保持不变；训练侧新增 `--scale-min`，测试侧新增 `-Dpairing.aggressive` / `-Dpairing.min-scale`，契约校验区间随参数动态调整。**默认值行为与 3.4.2 逐位一致**，不改变任何现有解算结果；激进模式仅用于实验对照，不参与交付口径（详见 [AI 增强设计 §4.6](AI_ENHANCEMENT_DESIGN.md)）
+
 ### Changed
 
 - **`rtklib-otl` 独立重写（许可证合规）**：原 `AstroArg` / `SphericalHarmonic` / `BlqExtractor` 为外部 Fortran 源码的逐行移植，按保守口径属 GPL-3.0 衍生作品，与项目 BSD-2-Clause 冲突。现按 IERS Conventions (2010) 第 7 章负荷潮球谐合成、IERS 2010 表 5.3 基本天文幅角、Doodson (1921) 编码、Schureman (1958) 交点潮调制、Farrell (1972) 负荷 Love 数等公开公式独立实现，改为面向对象分层（`BlqCalculator` / `OceanLoadingModel` / `GeodeticSite` / `LegendreTable` / `AstronomicalArgument` / `DoodsonArgument` / `NodalCorrection` / `ComplexNumber` / `TidalConstituent`），不再与任何 `.f90` 存在函数名、变量名、数组打包索引或循环结构的对应关系。对外 API（`extract` / `extractDisplacement`）签名不变，全部入口类已切换。数值等价性：4 站 BLQ 输出与历史数值基线逐字节一致（振幅/相位差异 0.0000，基线数值保留为测试基准，产生该基线的外部 Fortran 参考程序及其全部编译产物已从仓库移除并加入 `.gitignore`），位移序列差异 < 1e-10 mm，23 站边界测试 100% 通过；`validate/` 下 4 个 BLQ 产物已由当前 `BlqWriter` 重新生成，`rtklib-core` 的 `OtlReader.readblq()` 读回 4/4 通过（修复了旧基线文件列名行缺站名导致读不出的缺陷，数值零漂移）
+
+- **`Gpt3GridReader` 独立重写（许可证合规）**：原实现按官方 `gpt3_5.f90` 逐行移植，变量名、循环结构与数组索引与外部 Fortran 源码一一对应，按保守口径属 GPL-3.0 衍生作品。现按 Landskron & Böhm (2018) 网格插值算法与 Askne & Nordius (1987) 大气加权平均温度公式独立实现，删除全部 `.f90` 变量名、行号引用与逐点一致注释，改为按算法语义命名与分层。数值等价性：12 点固定基准转储与重写前逐位一致（`Gpt3GridReaderTest` 以 `1e-8` 容差固化），PPP 全天解算结果零漂移
+
+- **第三方编译产物与 GPL 关联源文件清理**：RTKLIB-EX 可执行文件（27 个 `.exe`）、Fortran 参考程序（4 支 `.f90`）及其全部编译产物、`libopenblas.a` 等已从当前主干移除；并已用 `git filter-repo` 对 Git 历史做全量重写，抹除上述路径的全部历史提交对象，`refs/original` 与 reflog 同步清理。`.gitignore` 增加 9 条永久防护规则。仓库当前仅含 BSD-2-Clause 独立实现代码，重写后 `git log --all -- '*.f90' '*.exe'` 与二进制路径均无输出
 
 ---
 

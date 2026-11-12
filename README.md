@@ -4,7 +4,7 @@ RTKLIB 的 Java 移植版本，基于 [RTKLIB 2.5.0](https://github.com/tomojita
 
 项目定位为**算法引擎库（Library）**而非独立软件，可嵌入 Java 应用中实现 GNSS 数据处理与定位解算。
 
-> **当前版本 v3.4.2（2026-11-11）**：短基线 RTK 固定率由 0.07% 修正到 73.82%（C 原版 73.78%），根因是 Kalman 状态压缩多了一条 H 列过滤、把 `holdamb` 伪观测的交叉协方差丢掉；同版修掉 PPP / PPP-AR / PPP-RTK 三条链路的「固定解永久锁存」（`sol.stat` 未逐历元重置，标签是 FIX 而坐标停在浮点解），并补齐 ddres 对流层项、`MDAY` 闰年错位、`pppos` 迭代起点等 C 对齐缺陷。新增 `rtklib-ai` 模块（AI 三接口的 SPI 实现与训练管线，详见 [AI 增强设计](docs/AI_ENHANCEMENT_DESIGN.md)）。算法修复的闭环索引与精度实测见 [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md)，版本级变更见 [CHANGELOG](docs/CHANGELOG.md)。
+> **当前版本 v3.5.0（2026-11-12）**：许可证合规重构版本。`rtklib-otl` 负荷潮模块与 GPT3 气象网格读取器已按 IERS Conventions (2010)、Doodson (1921)、Schureman (1958)、Farrell (1972)、Landskron & Böhm (2018)、Askne & Nordius (1987) 等公开文献独立重写，不再与任何外部 Fortran 源码存在函数名、变量名、数组索引或循环结构对应关系；仓库内全部第三方编译产物（RTKLIB-EX 可执行文件、Fortran 参考程序及其二进制、`libopenblas.a`）已从当前主干与 Git 历史中彻底移除，并加入 `.gitignore` 永久防护。对外 API 保持不变，OTL 数值与历史基线逐字节一致，GPT3 输出与重写前逐位一致（12 点回归测试固化）。同版新增 `rtklib-ai` 接口三的激进模式实验配置（默认关闭）。算法修复的闭环索引与精度实测见 [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md)，版本级变更见 [CHANGELOG](docs/CHANGELOG.md)。
 >
 > **评估口径提醒**：自 FIX-ALG-062 起，**固定率不得单独作为质量指标**——必须附带绝对坐标 RMS、错固率（误差 > 0.5 m 的 FIX 历元占比）、相位残差统计与 A/C/D 双跑配对。历史上一批「高固定率」结论已被证实是锁存造成的假 FIX 计数。
 
@@ -178,7 +178,7 @@ org.rtklib.java.adjust
 - **位移时间序列**：`BlqCalculator.extractDisplacement(lat, lon, startMjd, endMjd, interval)` → ENU位移(mm)
 - **标准BLQ输出**：`BlqWriter.write()` 生成兼容GOTIC2/RTKLIB格式的BLQ文件（站名置于列名行前两字符之后，可被 `rtklib-core` 的 `OtlReader.readblq()` 读回）
 - **球谐综合**：最大100阶，FES2004球谐系数 + Farrell Love数
-- **命令行工具**：`java -jar rtklib-otl-3.4.2-shaded.jar -lat 29.65 -lon 91.13 -sta LHASA -o lhasa.blq`
+- **命令行工具**：`java -jar rtklib-otl-3.5.0.jar -lat 29.65 -lon 91.13 -sta LHASA -o lhasa.blq`
 
 OTL 理论基于 IERS 2010 Conventions，参考了 FES2004 全球海潮模型。本项目为纯 Java 独立实现。验证：4站 BLQ 输出与数值参考基线逐字节一致（振幅/相位差异均为0.0000）；23站边界测试（极区89°、赤道、海岸线、极端经度）100%通过。详见 [海潮负荷模块技术参考](docs/OTL_MODULE_REFERENCE.md)。
 
@@ -302,10 +302,10 @@ org.rtklib.java.otl
 | 文档 | 说明 |
 |------|------|
 | [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md) | 一句话定位 + 精度实测汇总 + FIX-ALG 闭环索引 + HAS/IMU/CLAS 扩展路线 |
-| [变更日志](docs/CHANGELOG.md) | 版本级变更摘要（当前至 3.4.2） |
-| [AI 增强设计](docs/AI_ENHANCEMENT_DESIGN.md) | AI 三接口 SPI 契约、特征定义、训练管线与降级策略（v1.10） |
+| [变更日志](docs/CHANGELOG.md) | 版本级变更摘要（当前至 3.5.0） |
+| [AI 增强设计](docs/AI_ENHANCEMENT_DESIGN.md) | AI 三接口 SPI 契约、特征定义、训练管线与降级策略（v1.11） |
 | [AI 评估报告](docs/GNSS-RTK-AI-report.md) | 接口一/接口三的完整评估结论与逐项实测数据 |
-| [发布说明](RELEASE.md) | v3.1.0 封存版发布稿：本版重点、配置项、兼容性、已知问题、验收口径 |
+| [发布说明](RELEASE.md) | v3.5.0 发布稿：许可证合规重构、配置项、兼容性、已知问题、验收口径 |
 | [SSR 接入手册](docs/SSR_ACCESS_PLAYBOOK.md) | 接入操作与验收（已闭环）：两行改动、五步接入、开关表、验收清单与已知坑 |
 
 ### rtklib-product
@@ -371,7 +371,7 @@ org.rtklib.java.otl
 
 | 文档 | 说明 |
 |------|------|
-| [AI 增强设计](docs/AI_ENHANCEMENT_DESIGN.md) | SPI 契约、特征定义、输出钳位、训练管线与降级策略（v1.10） |
+| [AI 增强设计](docs/AI_ENHANCEMENT_DESIGN.md) | SPI 契约、特征定义、输出钳位、训练管线与降级策略（v1.11） |
 | [AI 评估报告](docs/GNSS-RTK-AI-report.md) | 接口一/接口三评估结论与逐项实测数据 |
 | [训练管线说明](rtklib-ai/training/README.md) | 数据集组装、训练与 ONNX 导出流程 |
 

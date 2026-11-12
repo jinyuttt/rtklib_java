@@ -1,65 +1,64 @@
 # Release Notes
 
 > 本文面向**使用者**：说明本次发布带来什么、怎么升级、有什么坑。
-> 逐条技术明细见 [docs/CHANGELOG.md](docs/CHANGELOG.md)，数值修正的根因与验证见 [docs/ALGORITHM_FIX_LOG.md](docs/ALGORITHM_FIX_LOG.md)（FIX-ALG-020 ~ 029）。
+> 逐条技术明细见 [docs/CHANGELOG.md](docs/CHANGELOG.md)，数值修正的根因与验证见 [docs/ALGORITHM_FIX_LOG.md](docs/ALGORITHM_FIX_LOG.md)。
 
 | 项 | 内容 |
 |---|---|
-| 发布状态 | 封存版 **v3.1.0**（2026-10-23） |
-| 最后更新 | 2026-10-23 |
+| 发布状态 | **v3.5.0**（2026-11-12） |
+| 最后更新 | 2026-11-12 |
 | 运行环境 | Java 17、Maven 3.8+ |
-| 主要依赖 | EJML 0.41、SLF4J、Logback |
-| 产物 | `rtklib-core`、`rtklib-stream`、`rtklib-adjust`、`rtklib-product` 四个 jar |
+| 主要依赖 | EJML 0.41、SLF4J、Logback、ONNX Runtime（`rtklib-ai` 可选） |
+| 产物 | `rtklib-core`、`rtklib-stream`、`rtklib-adjust`、`rtklib-product`、`rtklib-otl`、`rtklib-ai` 等 jar |
 
-> 注意：`pom.xml` 与各模块版本均为 `3.1.0`，tag 必须与 pom 版本一致（`release.yml` 会校验，不一致直接失败）。
+> 注意：`pom.xml` 与各模块版本均为 `3.5.0`，tag 必须与 pom 版本一致（`release.yml` 会校验，不一致直接失败）。
 >
-> **v3.1.0 为封存版本**：算法内容与 v2.4.0 完全一致（无算法变更），新增 [docs/PROJECT_FINAL_SUMMARY.md](docs/PROJECT_FINAL_SUMMARY.md)（终期技术摘要），仅版本号与文档同步。
+> **v3.5.0 为许可证合规重构版本**：算法与对外 API 不变，`rtklib-otl` 与 `rtklib-core` 的 GPT3 读取器按公开文献独立重写，仓库内第三方编译产物与 GPL 关联源文件已从主干与 Git 历史中彻底移除。**Git 历史已重写，已有克隆必须重新 clone**（见第四章）。
 
 ---
 
 ## 一、本版重点
 
-### 1. PPP-AR 从"不可用"到"可生产"
+### 1. `rtklib-otl` 独立重写（GPL-3.0 → BSD-2 边界清理）
 
-| 配置 | 修复前 | 修复后 |
-|---|---|---|
-| 三频 3F（EWL+WL+NL） | 固定率 0% | **65.7%**，ENU RMS E 2.16 / N 2.81 / U 5.08 cm，与浮点基线同量级、无假 Fix |
-| 双频 PartialAR | 固定 50 次**全为假 Fix**（~2 m 偏差） | 固定 38 次**全为真**，E 分量 32.9 cm → 1.56 cm |
-| 双频主路径 / FixHold | 固定率 0%（ratio≈1.0） | 已恢复（IFLC 对角协方差下改用逐星取整） |
+原 `AstroArg` / `SphericalHarmonic` / `BlqExtractor` 为外部 Fortran 源码的逐行移植，按保守口径构成 GPL-3.0 衍生作品，与本项目 BSD-2-Clause 冲突。
 
-WUM 2024 DOY060 数据上，3F 固定解 2D 精度 **3.00 cm**，优于 C 版 RTKLIB 参考结果的 3.54 cm。
+- 现按 IERS Conventions (2010) 第 7 章负荷潮球谐合成、IERS 2010 表 5.3 基本天文幅角、Doodson (1921) 编码、Schureman (1958) 交点潮调制、Farrell (1972) 负荷 Love 数等公开公式独立实现
+- 改为面向对象分层：`BlqCalculator` / `OceanLoadingModel` / `GeodeticSite` / `LegendreTable` / `AstronomicalArgument` / `DoodsonArgument` / `NodalCorrection` / `ComplexNumber` / `TidalConstituent`
+- 不再与任何 `.f90` 存在函数名、变量名、数组打包索引或循环结构对应关系
+- **对外 API 不变**：`extract` / `extractDisplacement` 签名保持，全部入口类已切换
 
-### 2. 非组合 PPP（IONOOPT=EST）从 0 到满解
+数值等价性：4 站 BLQ 输出与历史基线**逐字节一致**（振幅/相位差异 0.0000），位移序列差异 < 1e-10 mm，23 站边界测试（极区 89°、赤道、海岸线、极端经度）100% 通过。
 
-- 修复 `udbias_ppp` / `udiono_ppp` 超时重置链（对齐 C `ppp.c`）：被剔除卫星的过期偏差不再永久滞留，电离层状态可重建。
-- ALGO 2880 历元：EST 六组配置由 401~509 提升到 **2880/2880**；EST+DCB 4→1537，EST+多系统+DCB 0→1760。
-- IFLC 基线 2679→2880，无副作用。
+### 2. `Gpt3GridReader` 独立重写
 
-### 3. 精密产品支持扩展
+- 原实现按官方 `gpt3_5.f90` 逐行移植，现按 Landskron & Böhm (2018) 网格插值算法与 Askne & Nordius (1987) 大气加权平均温度公式独立实现
+- 删除全部 `.f90` 变量名、行号引用与逐点一致注释
+- 数值等价性：12 点固定基准转储与重写前**逐位一致**（`Gpt3GridReaderTest` 以 `1e-8` 容差固化），PPP 全天解算零漂移
 
-- **DCB 产品读取**（`DcbReader`，移植 C `readdcb`）：支持 `.BIA` / `.BSX`（Bias-SINEX OSB/DSB）与 `.DCB`（P1-C1/P2-C2），已接入 RINEX 与 RTCM 两条 PPP 路径。
-- **时变 OSB（30 s BIA）**：按时间戳序列取值，不再把时变文件当全天常量覆盖；同时兼容 GBM 与 WUM 两种列布局（含 SVN 列空缺），修复此前 27 颗星的 OSB 被静默丢弃。
+### 3. 第三方编译产物与 Git 历史清理
 
-### 4. 对流层 GPT3 + VMF3
+- RTKLIB-EX 可执行文件（27 个 `.exe`）、Fortran 参考程序（4 支 `.f90`）及其全部编译产物、`libopenblas.a` 等已从主干移除
+- 已用 `git filter-repo` 对 Git 历史做全量重写，抹除上述路径的全部历史提交对象，`refs/original` 与 reflog 同步清理
+- `.gitignore` 增加 9 条永久防护规则，防止回归
+- 校验：`git log --all -- '*.f90' '*.exe'` 无输出；仓库当前仅含 BSD-2-Clause 独立实现代码
 
-- 修正映射函数（原实现缺失连续分数分母，等效于未做斜延迟改正）与 ZHD 单位错配（低估 100 倍），并补齐 c 系数谐波与 bw 分段。
-- 实测全天 2880 历元：加载官方 `gpt3_5.grd` 后 **HKWS U 0.806 m（基线 0.821）、HKSL 1.662 m（基线 1.684）**，3D 均优于 NMF 基线。
-- 网格文件可选；不加载时退回内置简化模型（U 向约 +50%，不建议生产使用）。
+### 4. 接口三激进模式实验配置（默认关闭）
 
-### 5. PPP-RTK 路由修复
+- `AiOpts` 新增 `enableAggressiveAi`（默认 `false`）与 `aggressiveMinScale`（默认 `0.1`）
+- 开启后 `RtkCore` 把 `varianceScale` 钳位下限由固定 `1.0` 放宽到 `aggressiveMinScale`，`bias` 上限与 `varianceScaleMax` 保持不变
+- 训练侧新增 `--scale-min`，测试侧新增 `-Dpairing.aggressive` / `-Dpairing.min-scale`
+- **默认值行为与 3.4.2 逐位一致**，不改变任何现有解算结果；激进模式仅用于实验对照，不参与交付口径（详见 [AI 增强设计 §4.6](docs/AI_ENHANCEMENT_DESIGN.md)）
 
-- `RtkCore.rtkpos()` 事后 PPP 分支此前不含 `enablePppRtk` 判定，`PMODE_PPPRTK_STATIC/KINEMA` 在 RINEX 路径永远走不到 `ppprtkos()`。现已与实时路径对齐；无 SSR 数据时自动退化为普通 PPP。
+### 5. 继承自 3.4.2 的算法修复
 
-### 6. NTRIP 2.0 兼容性补全
-
-- Sourcetable 现已支持 `Transfer-Encoding: chunked` 与 `Content-Encoding: gzip`，并同时兼容 NTRIP 1.0 与 2.0 的状态行。
-- 挂载点数据流路径（含分块解码）行为不变；实时验证：WUH20 流 30 s / 74 KB / 262 帧 CRC 全部通过。
+本版包含 3.4.2 的全部修复：短基线 RTK 固定率 0.07% → 73.82%（C 原版 73.78%）、PPP / PPP-AR / PPP-RTK 三条链路「固定解永久锁存」闭环、`ddres` 对流层项、`MDAY` 闰年错位、`pppos` 迭代起点等 C 对齐缺陷。详见 [docs/CHANGELOG.md](docs/CHANGELOG.md) 的 `[3.4.2]` 小节。
 
 ---
 
 ## 二、新增与变更的配置项
 
-所有新增开关**默认关闭**，关闭时与 RTKLIB 2.5.0 C 版逐值一致；打开才引入 Java 扩展行为。
+所有新增开关**默认关闭**，关闭时与既有版本逐值一致；打开才引入扩展行为。
 
 | 开关 | 默认 | 说明 |
 |---|---|---|
@@ -74,15 +73,17 @@ WUM 2024 DOY060 数据上，3F 固定解 2D 精度 **3.00 cm**，优于 C 版 RT
 | `vmf3OpFile` | `null` | VMF3 逐时次系数文件（可选，覆盖 ah/aw/bH/bW） |
 | `useGpt3Grid` | `false` | 增加湿延迟状态维度，改变滤波模型，需单独验证 |
 | `enableCompactSsr` | `false` | 紧凑 SSR（QZSS CLAS 等）解码入口 |
+| `enableAggressiveAi` | `false` | **v3.5.0 新增，实验项**。放开接口三 `varianceScale` 下限到 `aggressiveMinScale`；不参与交付口径 |
+| `aggressiveMinScale` | `0.1` | **v3.5.0 新增**。激进模式下的 `varianceScale` 下限，仅在 `enableAggressiveAi=true` 时生效 |
 
 ---
 
 ## 三、兼容性与行为变更
 
-1. **默认路径数值不变**：未开启任何扩展开关时，结果与 RTKLIB 2.5.0 C 版逐值一致（本版已验证 IFLC 浮点基线零回归）。
-2. **PPP-AR 结果会变**：开启 AR 后，3F / Partial 的固定率与固定解位置与旧版不同，属修复而非回退；如需与历史结果对比，请固定配置与产品版本。
-3. **对流层结果会变**：仅在使用 `enableGpt3Vmf3` 时生效；未开启时仍走原 NMF/Saastamoinen 基线。
-4. **NTRIP Sourcetable 返回值**：现在返回纯表格文本（不带块长行/压缩字节），依赖旧"原始字节流"的调用方需注意。
+1. **对外 API 不变**：`rtklib-otl` 的 `extract` / `extractDisplacement` 签名未变，仅内部类重组（`AstroArg` / `SphericalHarmonic` / `BlqExtractor` → 面向对象分层）。若外部代码直接引用了这三个已删除的类，需改用新入口。
+2. **默认路径数值不变**：未开启任何扩展开关时，结果与上一版本逐值一致。OTL 输出逐字节一致，GPT3 输出逐位一致（12 点基准固化）。
+3. **Git 历史已重写**：`main`、`feature/ppp-corrections-and-boundary` 与全部 tag 已强制推送；已有克隆无法 `git pull`，必须重新 `git clone`。
+4. **对流层结果会变**：仅在使用 `enableGpt3Vmf3` 时生效；未开启时仍走原 NMF/Saastamoinen 基线。
 5. **产品文件**：`.BIA`/`.BSX`/`.DCB` 统一按 `ns → m`（×1e-9×c）转换；GAL 仅映射 L1/E5a，E5b 按 C 版语义丢弃。
 
 ---
@@ -91,12 +92,13 @@ WUM 2024 DOY060 数据上，3F 固定解 2D 精度 **3.00 cm**，优于 C 版 RT
 
 | 场景 | 建议 |
 |---|---|
+| 已有本地克隆 | **必须重新 `git clone`**，历史已重写，`pull` 会因分叉失败 |
 | 静态短基线 RTK | 维持既有配置；本版 RTK 侧无行为变更 |
 | 事后 PPP（IFLC） | 可直接升级，浮点结果不变 |
 | 想用 PPP-AR | **优先三频 3F**；双频 IFLC 存在整周平移自由度固有受限（见已知问题） |
-| 非组合 PPP（EST） | 建议开启 `enableIonoEstRobust` 并配置 DCB 产品 |
 | 需要高精度对流层 | 开启 `enableGpt3Vmf3` 并下载官方 `gpt3_5.grd` 放入 `test-data/product/gpt3/` |
-| 实时流接入 | 可直接使用；Sourcetable 现可解析 chunked/gzip 响应 |
+| 接口三观测改正 | 默认不注入；第一阶段 A1/A2/A3 已通过，仅允许显式注入，第二阶段净收益验收未完成 |
+| 接口三激进模式 | 仅作实验对照，**不要用于生产**；默认关闭 |
 
 ---
 
@@ -105,10 +107,12 @@ WUM 2024 DOY060 数据上，3F 固定解 2D 精度 **3.00 cm**，优于 C 版 RT
 1. **双频 IFLC 的整周平移自由度**：无差分中位数对齐存在整周自由度，公共小数部分跨 0.5 边界会引入 ±1 周系统偏差；`δ 门` 可拦截但会让固定率降到 0（安全回退浮点）。**生产环境建议用 3F**。
 2. **`PppCoreEx` 浮点解质量退化**：同一数据 ENU RMS 约为 `PppCore` 的数十倍，AR 因此难以固定，待排查 `pppResEx()` 与 `pppres()` 差异。
 3. **GBM 产品的 3F 固定率仍为 0%**：候选完备性门槛（OSB 缺失星过多）导致可用星不足，非回归问题，暂不阻塞发布。
-4. **ISB/IFCB/IFB 与部分 EST 配置**：U 向精度仍有显著劣化（+200%~+500%），与本次对流层修复无关，独立问题待查。
+4. **ISB/IFCB/IFB 与部分 EST 配置**：U 向精度仍有显著劣化（+200%~+500%），独立问题待查。
 5. **紧凑 SSR 仅完成解码链路**：QZSS CLAS（MT4073）解码已实现；**Galileo HAS 的 IDD 接入尚未实现**，且无公开事后数据可用于验证。
 6. **RINEX 2 导航文件不支持**：`RinexParser` 仅解析 RINEX 3 导航记录头。
 7. **NTRIP 仅客户端**：不含 Caster/Server；响应状态用子串匹配 `200`，未严格解析状态码。
+8. **接口一训练目标不可达**：原 G-1/G-2 组合（1 pp / 30%）在当前 6 维特征集下不可达（留一站 1/7、留多站 0/7 满足），根因为跨站判别力与全局阈值可迁移性不足；可交付口径已改为成对档（详见 [AI 增强设计 §8.2](docs/AI_ENHANCEMENT_DESIGN.md)）。
+9. **接口三仅第一阶段验收**：A1/A2/A3（能用/无害/有作用）已通过，模型默认不注入；第二阶段净收益（G-1'~G-5'）未完成。方案 B（端到端坐标 Loss）判定不交付，仅作实验 provider 保留。
 
 ---
 
@@ -116,10 +120,13 @@ WUM 2024 DOY060 数据上，3F 固定解 2D 精度 **3.00 cm**，优于 C 版 RT
 
 | 项目 | 数据 | 方式 |
 |---|---|---|
+| OTL 数值等价 | 4 站 BLQ 基线 + 23 站边界 | BLQ 输出逐字节一致；位移差异 < 1e-10 mm；23 站 100% 通过 |
+| GPT3 数值等价 | 12 点固定基准 | `Gpt3GridReaderTest`，容差 `1e-8` |
+| Git 历史洁净 | 全仓历史 | `git log --all -- '*.f90' '*.exe'` 无输出；二进制路径无对象 |
 | PPP-AR | ALGO 站 2024 DOY060，WUM 精密产品 | `PppArValidationTest` 7/7 通过 |
-| PPP-AR（GBM） | ALGO 2026 DOY288，GBM 产品 | 7/7 通过；3F 0% 见已知问题 3 |
 | 对流层 GPT3 | HKWS / HKSL 2018 DOY157，全天 2880 历元 | `PppIndividualOptTest`，逐配置 A/B/C 对照 |
-| NTRIP | 本地模拟 Caster + WUH20 实时流 | `NtripSourcetableDecodeTest` 3/3；实时 262 帧 CRC 通过 |
+| 接口三第一阶段 | 单站 + 配对采集 | A1/A2/A3 判据（详见 [AI 增强设计 §7.5](docs/AI_ENHANCEMENT_DESIGN.md)） |
+| 全模块编译 | 13 个模块 | `mvn -q -DskipTests package` 全绿 |
 
 回归原则：每次改动均以"未开启该开关时与基线逐值一致"为准入条件。
 
@@ -127,9 +134,10 @@ WUM 2024 DOY060 数据上，3F 固定解 2D 精度 **3.00 cm**，优于 C 版 RT
 
 ## 七、发布清单（维护者）
 
-- [x] `pom.xml` 版本号升级至 `3.1.0`
-- [x] `docs/CHANGELOG.md` 将 `[Unreleased]` 改为正式版本与日期
-- [x] 打新 tag `v3.1.0`（**不可复用旧 tag**，否则不会触发新 workflow）
-- [ ] `mvn test` 全绿（含 `-pl rtklib-stream`、`-pl rtklib-core`）
-- [ ] `mvn package -DskipTests` 产出四个 jar
-- [ ] 确认 release 产物不含测试数据
+- [x] `pom.xml` 与各模块版本号升级至 `3.5.0`（13 个 pom）
+- [x] `docs/CHANGELOG.md` 将 `[Unreleased]` 改为 `[3.5.0] - 2026-11-12`
+- [x] Git 历史重写完成（`git filter-repo`），`refs/original` 与 reflog 已清理
+- [ ] 打新 tag `v3.5.0`（**不可复用旧 tag**，否则不会触发新 workflow）
+- [ ] `mvn test` 全绿（含 `-pl rtklib-core`、`-pl rtklib-otl`）
+- [ ] `mvn package -DskipTests` 产出全部模块 jar
+- [ ] 确认 release 产物不含测试数据与第三方二进制
