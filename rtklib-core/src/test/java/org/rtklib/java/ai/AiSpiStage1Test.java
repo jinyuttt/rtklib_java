@@ -25,6 +25,7 @@ import org.rtklib.java.rinex.RinexRtkProcessor;
 import org.rtklib.java.rtkpos.RtkProcessor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -47,7 +48,7 @@ class AiSpiStage1Test {
     }
 
     @Test
-    @DisplayName("AiOpts 默认值：置信度 0.5 / 膨胀上限 4.0 / 偏差上限 10m")
+    @DisplayName("AiOpts 默认值：置信度 0.5 / 膨胀上限 4.0 / 偏差上限 10m / 激进模式关")
     void aiOptsDefaults() {
         AiOpts ai = new AiOpts();
         assertEquals(0.5, ai.fixValidatorMinConfidence, 0.0);
@@ -55,6 +56,44 @@ class AiSpiStage1Test {
         assertEquals(10.0, ai.obsCorrectorMaxBias, 0.0);
         assertTrue(ai.traceRejects);
         assertTrue(ai.traceDegrades);
+        assertFalse(ai.enableAggressiveAi, "激进模式默认必须关闭（I-1 / §4.6）");
+        assertEquals(AiOpts.DEFAULT_AGGRESSIVE_MIN_SCALE, ai.aggressiveMinScale, 0.0);
+    }
+
+    @Test
+    @DisplayName("AiOpts.validate：aggressiveMinScale 非法回退 0.1、超 1.0 钳到 1.0")
+    void aiOptsValidateAggressiveMinScale() {
+        AiOpts ai = new AiOpts();
+        ai.aggressiveMinScale = 0.0;
+        ai.validate();
+        assertEquals(AiOpts.DEFAULT_AGGRESSIVE_MIN_SCALE, ai.aggressiveMinScale, 0.0);
+
+        ai.aggressiveMinScale = -0.5;
+        ai.validate();
+        assertEquals(AiOpts.DEFAULT_AGGRESSIVE_MIN_SCALE, ai.aggressiveMinScale, 0.0);
+
+        ai.aggressiveMinScale = 1.5;
+        ai.validate();
+        assertEquals(1.0, ai.aggressiveMinScale, 0.0, "超 1.0 钳到 1.0，等价保守模式");
+
+        ai.aggressiveMinScale = 0.5;
+        ai.validate();
+        assertEquals(0.5, ai.aggressiveMinScale, 0.0, "合法区间内不得改写");
+    }
+
+    @Test
+    @DisplayName("RtkConfig 深拷贝携带激进模式字段")
+    void rtkConfigDeepCopiesAggressiveFields() {
+        RtkConfig src = new RtkConfig();
+        src.ai.enableAggressiveAi = true;
+        src.ai.aggressiveMinScale = 0.5;
+
+        RtkConfig copy = new RtkConfig(src);
+        assertTrue(copy.ai.enableAggressiveAi);
+        assertEquals(0.5, copy.ai.aggressiveMinScale, 0.0);
+
+        copy.ai.aggressiveMinScale = 0.3;
+        assertEquals(0.5, src.ai.aggressiveMinScale, 0.0, "AiOpts 必须深拷贝");
     }
 
     @Test
