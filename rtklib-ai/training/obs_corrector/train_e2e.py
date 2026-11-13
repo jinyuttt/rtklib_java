@@ -265,6 +265,10 @@ def main(argv=None) -> int:
     ap.add_argument("--bias-max", type=float, default=2.0)
     ap.add_argument("--scale-max", type=float, default=3.0,
                     help="varianceScale 上界（默认 3.0：收紧以抑制对差站的过度降权）")
+    ap.add_argument("--scale-min", type=float, default=1.0,
+                    help="varianceScale 下界（默认 1.0，单侧膨胀）；小于 1.0 时对应 core 的"
+                         "激进模式（AiOpts.enableAggressiveAi + aggressiveMinScale），"
+                         "需在配对侧同时传 -Dpairing.aggressive=true -Dpairing.min-scale 相同值")
     ap.add_argument("--group", dest="group_mode", default="run", choices=("run", "epoch"),
                     help="WLS 分组：run=整段静态解（默认，信号不被单历元噪声淹没）；"
                          "epoch=逐历元单步（与 TDL-GNSS 写法一致，作对照）")
@@ -332,7 +336,7 @@ def main(argv=None) -> int:
     import torch
 
     torch.manual_seed(args.seed)
-    model = a_train.build_model(args.hidden, args.bias_max, args.scale_max)
+    model = a_train.build_model(args.hidden, args.bias_max, args.scale_max, args.scale_min)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     best = {"loss": float("inf"), "state": None, "epoch": -1}
     bad = 0
@@ -378,7 +382,8 @@ def main(argv=None) -> int:
     export_onnx.write_norm(norm_path, norm.mean, norm.std,
                            note="training/obs_corrector/train_e2e.py（方案 B：坐标 Loss，仅训练集拟合）",
                            constant_cols=list(a_train.CONSTANT_COLS))
-    contract = export_onnx.check_contract(onnx_path, args.bias_max, args.scale_max)
+    contract = export_onnx.check_contract(onnx_path, args.bias_max, args.scale_max,
+                                          args.scale_min)
     print(f"导出完成: {onnx_path.name} + {norm_path.name}"
           f"（输入 {contract['input_shape']} / 输出 {contract['output_shape']}）")
 
@@ -431,6 +436,7 @@ def main(argv=None) -> int:
                "val": {"h": l0_val[0], "v": l0_val[1]}},
         "hyper": {"lambda_bias": args.lambda_bias, "lambda_scale": args.lambda_scale,
                   "bias_max": args.bias_max, "scale_max": args.scale_max,
+                  "scale_min": args.scale_min,
                   "hidden": args.hidden, "lr": args.lr, "batch_runs": args.batch_runs},
         "eval": evals,
         "contract": contract,
