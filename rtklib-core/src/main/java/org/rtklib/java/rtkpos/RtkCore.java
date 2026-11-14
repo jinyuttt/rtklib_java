@@ -9,6 +9,8 @@ import org.rtklib.java.ai.spi.FixQualityContext;
 import org.rtklib.java.ai.spi.FixValidator;
 import org.rtklib.java.ai.spi.ObsCorrectionContext;
 import org.rtklib.java.ai.spi.ObsCorrector;
+import org.rtklib.java.ai.spi.RefStarContext;
+import org.rtklib.java.ai.spi.RefStarValidator;
 import org.rtklib.java.ai.spi.SatFeature;
 import org.rtklib.java.common.ObsCode;
 import org.rtklib.java.config.AiOpts;
@@ -270,6 +272,18 @@ public final class RtkCore {
         double[] aiScale = (aiCorrector != null) ? new double[ns * nf] : null;
         boolean aiCorrectionDone = false;
 
+        /* [AI-4] 接口四门禁（§3.5）：与接口三同一写法——IFLC 时 nf 已归一为 1，
+         * 逐频点参考星分组的物理含义不成立，故 core 侧直接不调用，等价于未注入。
+         * aiRefOverride 每历元重建并填 -1（不换）；ddres 内只读查表，故跑 2~3 次仍幂等。 */
+        RefStarValidator aiRefStar = (opt.ionoopt != Constants.IONOOPT_IFLC)
+                ? AiHooks.resolveRefStarValidator(rtk) : null;
+        double[] aiRefRisk = (aiRefStar != null) ? new double[ns] : null;
+        int[] aiRefOverride = (aiRefStar != null) ? new int[6 * nf * 2] : null;
+        if (aiRefOverride != null) {
+            Arrays.fill(aiRefOverride, -1);
+        }
+        boolean aiRefDone = false;
+
         RtkTrace.traceStage0(v1ctrl, v1cb, rtk.epoch, obs, nu, nr, nav, rtk.ssat);
         Trace.emit("SATELLITE", "START", v2cfg, v2cb, rtk.epoch, obs[0].time,
                 "rover_ns", nu, "base_ns", nr, "common_ns", ns);
@@ -365,8 +379,15 @@ public final class RtkCore {
                 aiComputeCorrection(rtk, obs, sat, iu, ir, ns, nf, azel,
                         aiBias, aiScale, aiCorrector, v2cfg, v2cb);
             }
+            /* [AI-4] 每历元一次批量推理 + 一次性切换决策（§3.3）：位置同接口三，
+             * 必须在 zdres(rover) 之后（azel 才是本历元值），首次 ddres 之前。 */
+            if (i == 0 && aiRefStar != null && !aiRefDone) {
+                aiRefDone = true;
+                aiDecideRefStar(rtk, obs, sat, iu, ir, ns, nf, y, azel, aiRefRisk, aiRefOverride,
+                        aiRefStar, v2cfg, v2cb);
+            }
             if ((nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
-                    iu, ir, ns, nf, nav, v, H, R, vflg, aiBias, aiScale, false)) < 4) {
+                    iu, ir, ns, nf, nav, v, H, R, vflg, aiBias, aiScale, false, aiRefOverride)) < 4) {
                 stat = Constants.SOLQ_NONE;
                 break;
             }
@@ -489,7 +510,7 @@ public final class RtkCore {
                  * 循环内的 ddres（niter 次）与 AR 固定解后的 ddres（基于 xa）都不是标签口径，
                  * 必须保持关闭，否则同一 (epoch, sat, frq) 会出现多行互相矛盾的标签。 */
                 nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
-                            iu, ir, ns, nf, nav, v, H, R, vflg, aiBias, aiScale, true);
+                            iu, ir, ns, nf, nav, v, H, R, vflg, aiBias, aiScale, true, aiRefOverride);
 
                 // [OPT-RES-EDIT] 残差时序周跳检测与伪距-载波一致性校验
                 RtkOptimizationsResEdit.checkCycleSlip(rtk, v, R, vflg, nv);
@@ -531,7 +552,7 @@ public final class RtkCore {
 
                 if (zdOk) {
                     nv = ddres(rtk, obs, dt, xp, Pp, sat, y, e, azel, freq,
-                        iu, ir, ns, nf, nav, v, null, R, vflg, aiBias, aiScale, false);
+                        iu, ir, ns, nf, nav, v, null, R, vflg, aiBias, aiScale, false, aiRefOverride);
                     boolean valOk = nv > 0 && valpos(rtk, v, R, vflg, nv, 4.0);
 
                     if (valOk) {
@@ -1897,11 +1918,285 @@ public final class RtkCore {
         return vsat;
     }
 
+    /**
+     * 参考星择优（原生评分，逐 {@code (m,f)} 组）。
+     *
+     * 与原 {@code ddres} 内联循环逐句等价；抽出来是为了让接口四能问「原生评分的第 2 名是谁」，
+     * 而不必重写一遍评分逻辑——两处若各写一份，接口四的「第 2 名」断言就失去意义。
+     *
+     * @param exclude 已入选的下标（{@code sat[]} 维度），{@code null} 表示不排除
+     * @param nex     {@code exclude} 的有效长度
+     * @return {@code sat[]} 下标，无可用卫星返回 -1
+     */
+    private static int selectRefIdx(Rtk rtk, int[] sat, int[] iu, int[] ir, int ns, int nf,
+                                    double[] y, double[] azel, int sysMask, int f,
+                                    int[] exclude, int nex) {
+        int frq = f % nf;
+        int refIdx = -1;
+        double bestRefScore = Double.NEGATIVE_INFINITY;
+        for (int j = 0; j < ns; j++) {
+            if (exclude != null && aiExcluded(exclude, nex, j)) continue;
+            int sysj = SatUtils.satsys(sat[j], null);
+            if ((sysj & sysMask) == 0) continue;
+            if (sysj == Constants.SYS_SBS) continue;
+            if (!validobs(iu[j], ir[j], f, nf, y)) continue;
+            if (refIdx >= 0 && (rtk.ssat[sat[j] - 1].slip[frq] & Constants.LLI_SLIP) != 0) continue;
+            double el_j = azel[1 + iu[j] * 2];
+            if (rtk.rtkConfig.rtk.enableSnrMedian && frq < rtk.snrMedian.length
+                    && rtk.snrMedian[frq] > Double.NEGATIVE_INFINITY) {
+                double snr_j = rtk.ssat[sat[j] - 1].snrRover[frq];
+                double snrMedianVal = rtk.snrMedian[frq];
+                double snrScore = 1.0 - Math.abs(snr_j - snrMedianVal) / Math.max(snrMedianVal, 1.0);
+                double score = el_j + snrScore * rtk.rtkConfig.rtk.snrMedianKPhase;
+                if (refIdx < 0 || score > bestRefScore) {
+                    refIdx = j;
+                    bestRefScore = score;
+                }
+            } else {
+                if (refIdx < 0 || el_j >= azel[1 + iu[refIdx] * 2]) {
+                    refIdx = j;
+                }
+            }
+        }
+        return refIdx;
+    }
+
+    private static boolean aiExcluded(int[] exclude, int nex, int j) {
+        for (int k = 0; k < nex; k++) {
+            if (exclude[k] == j) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 接口四：推理 + 一次性切换决策（§3.3）。
+     *
+     * 顺序固定为「推理 → 决策 → 写 override」，三个动作都在本历元首次 {@code ddres} 之前完成，
+     * 故 {@code ddres} 的 2~3 次调用读到的都是同一份决定，天然幂等。
+     * 决策只允许「降一级到原生评分第 2 名」，禁止顺延到第 3 名（R2-b）。
+     */
+    private static void aiDecideRefStar(Rtk rtk, Obsd[] obs, int[] sat, int[] iu, int[] ir,
+                                        int ns, int nf, double[] y, double[] azel,
+                                        double[] aiRefRisk, int[] aiRefOverride,
+                                        RefStarValidator validator,
+                                        TraceConfig cfg, TraceCallback cb) {
+        AiOpts ao = (rtk.rtkConfig == null) ? null : rtk.rtkConfig.ai;
+        if (ao == null) return;
+        int W = Math.max(1, ao.refStarWindowEpochs);
+        AiRefStarState st = rtk.aiRefStarState;
+        if (st == null || st.window != W) {
+            st = new AiRefStarState(W);
+            rtk.aiRefStarState = st;
+        }
+        Arrays.fill(aiRefRisk, 0.0);
+
+        double obsSec = (double) obs[0].time.time + obs[0].time.sec;
+        double epochDt = st.prevObsSec > 0.0 ? obsSec - st.prevObsSec : rtk.tt;
+        st.prevObsSec = obsSec;
+
+        int[] sysMap = new int[]{Constants.SYS_GPS | Constants.SYS_SBS, Constants.SYS_GLO,
+                Constants.SYS_GAL, Constants.SYS_CMP, Constants.SYS_QZS, Constants.SYS_IRN};
+
+        /* 行序：与接口三同一口径（rover 侧高度角 >= elmin），剔除「基准站有星历、
+         * 流动站无几何」的退化行；此类卫星在 ddres 中 validobs 失败，不会成为参考星。 */
+        int[] rowSat = new int[ns];
+        int nsel = 0;
+        for (int i = 0; i < ns; i++) {
+            if (!(azel[iu[i] * 2 + 1] >= rtk.opt.elmin)) continue;
+            rowSat[nsel++] = i;
+        }
+        if (nsel == 0) {
+            return;
+        }
+
+        /* H1 硬约束：resp/resc 对参考星恒 0，若原样下传，模型只需看 resp == 0 就能反推
+         * 「它当过参考星」——那是标签泄漏，不是特征。故 core 侧强制置 0，
+         * 「它当过参考星」的合法信息改由 refCount（wasRef 掩码）显式提供。 */
+        double[] zeroResp = new double[Constants.NFREQ];
+        SatFeature[] feats = new SatFeature[nsel];
+        double[] snrMean = new double[nsel];
+        double[] snrStd = new double[nsel];
+        int[] refCnt = new int[nsel];
+        for (int r = 0; r < nsel; r++) {
+            int i = rowSat[r];
+            Ssat ss = rtk.ssat[sat[i] - 1];
+            feats[r] = new SatFeature(
+                    sat[i],
+                    SatUtils.satsys(sat[i], null),
+                    azel[iu[i] * 2],
+                    azel[iu[i] * 2 + 1],
+                    aiDoubles(ss.snrRover),
+                    aiDoubles(ss.snrBase),
+                    zeroResp,
+                    zeroResp,
+                    ss.lock,
+                    ss.slip,
+                    ss.half,
+                    ss.gf,
+                    aiVsat(obs, iu[i], ir[i], nf),
+                    ss.fix);
+            double[] win = aiSnrWindow(st, sat[i] - 1);
+            snrMean[r] = win[0];
+            snrStd[r] = win[1];
+            refCnt[r] = aiRefCount(st, sat[i] - 1);
+        }
+
+        double[] risk;
+        try {
+            risk = validator.refStarRisk(new RefStarContext(
+                    rtk.epoch, nsel, nf, epochDt, feats, snrMean, snrStd, refCnt));
+        } catch (Throwable t) {
+            aiRefDegrade(rtk, cfg, cb, obs, "exception", t.toString());
+            return;
+        }
+        if (risk == null || risk.length != nsel) {
+            aiRefDegrade(rtk, cfg, cb, obs, "invalid_output",
+                    risk == null ? "null" : ("len=" + risk.length + "/" + nsel));
+            return;
+        }
+        for (int r = 0; r < nsel; r++) {
+            double v = risk[r];
+            if (!Double.isFinite(v)) {
+                aiRefDegrade(rtk, cfg, cb, obs, "non_finite", "row=" + r);
+                return;
+            }
+            aiRefRisk[rowSat[r]] = Math.min(1.0, Math.max(0.0, v));
+        }
+
+        int fStart = (rtk.opt.mode > Constants.PMODE_DGPS ? 0 : nf);
+        int poolSize = Math.max(2, ao.refStarFallbackTopK);
+        int[] exclude = new int[poolSize];
+        int[] mask = new int[Constants.MAXSAT];
+        int switches = 0;
+
+        for (int m = 0; m < 6; m++) {
+            for (int f = fStart; f < nf * 2; f++) {
+                int key = m * (nf * 2) + f;
+                int nex = 0;
+                int first = -1;
+                int second = -1;
+                for (int t = 0; t < poolSize; t++) {
+                    int idx = selectRefIdx(rtk, sat, iu, ir, ns, nf, y, azel, sysMap[m], f, exclude, nex);
+                    if (idx < 0) break;
+                    exclude[nex++] = idx;
+                    if (t == 0) first = idx;
+                    if (t == 1) second = idx;
+                }
+                if (first < 0) continue;
+                st.eligibleEpochs[key]++;
+
+                int effective = first;
+                if (second >= 0 && ao.refStarFallbackTopK >= 2
+                        && !st.rateStopped[key]
+                        && rtk.epoch >= st.holdUntilEpoch[key]
+                        && aiRefRisk[first] > ao.refStarRiskMax) {
+                    /* H4：fallback 不得比原参考星低太多高度角——低仰角卫星的多路径与
+                     * 大气误差更重，换过去等于把一个更差的星按「更可信」使用。 */
+                    double elFirst = azel[iu[first] * 2 + 1];
+                    double elSecond = azel[iu[second] * 2 + 1];
+                    double dropDeg = (elFirst - elSecond) * Constants.R2D;
+                    if (dropDeg <= ao.refStarMaxElDrop) {
+                        effective = second;
+                        aiRefOverride[key] = second;
+                        st.holdUntilEpoch[key] = rtk.epoch + ao.refStarHoldEpochs;
+                        st.switchCount[key]++;
+                        switches++;
+                        Trace.emit("AI4", "REFSTAR_SWITCH", cfg, cb, rtk.epoch, obs[0].time,
+                                "group", key, "from", sat[first], "to", sat[second],
+                                "risk", aiRefRisk[first], "el_drop_deg", dropDeg);
+                    }
+                }
+                mask[sat[effective] - 1] |= (1 << f);
+            }
+        }
+
+        /* 参考星掩码与 SNR 入窗（均在推理之后写）：窗口语义为「近 W 历元，不含当历元」，
+         * 当历元值只用于下一历元，避免同一历元自证。 */
+        int rpos = st.refHistPos;
+        int spos = st.snrHistPos;
+        for (int s = 0; s < Constants.MAXSAT; s++) {
+            st.refHist[s][rpos] = mask[s];
+            st.snrHist[s][spos] = Double.NaN;
+        }
+        for (int i = 0; i < ns; i++) {
+            st.snrHist[sat[i] - 1][spos] = rtk.ssat[sat[i] - 1].snrRover[0];
+        }
+        st.refHistPos = (rpos + 1) % W;
+        st.snrHistPos = (spos + 1) % W;
+        if (st.refHistCount < W) st.refHistCount++;
+
+        /* 切换率熔断（§3.4）：某组切换历元占比超限即永久停用该组，不做「调参凑数」。
+         * 分母门槛 100 历元——首历元 1 次切换就是 100%，不设门槛会立刻误熔断。 */
+        for (int m = 0; m < 6; m++) {
+            for (int f = fStart; f < nf * 2; f++) {
+                int key = m * (nf * 2) + f;
+                int n = st.eligibleEpochs[key];
+                if (!st.rateStopped[key] && n >= 100
+                        && st.switchCount[key] > ao.refStarSwitchRateMax * n) {
+                    st.rateStopped[key] = true;
+                    if (!st.rateStopLogged) {
+                        st.rateStopLogged = true;
+                        LOG.warn("接口四切换率超限（组 {}：{} / {}），该组停止干预（§3.4）: epoch={}",
+                                key, st.switchCount[key], n, rtk.epoch);
+                    }
+                }
+            }
+        }
+
+        Trace.emit("AI4", "REFSTAR", cfg, cb, rtk.epoch, obs[0].time,
+                "ns", nsel, "nf", nf, "dt", epochDt, "switch", switches);
+    }
+
+    private static void aiRefDegrade(Rtk rtk, TraceConfig cfg, TraceCallback cb,
+                                     Obsd[] obs, String reason, String detail) {
+        if (!rtk.aiRefStarState.degradeLogged) {
+            rtk.aiRefStarState.degradeLogged = true;
+            LOG.warn("接口四输出非法（{}: {}），本历元按不干预处理（epoch={}）",
+                    reason, detail, rtk.epoch);
+        }
+        if (rtk.rtkConfig != null && rtk.rtkConfig.ai != null && rtk.rtkConfig.ai.traceDegrades) {
+            Trace.emit("AI4", "AI_DEGRADE", cfg, cb, rtk.epoch, obs[0].time,
+                    "interface", "ref_star_validator", "reason", reason, "detail", detail);
+        }
+    }
+
+    private static int aiRefCount(AiRefStarState st, int si) {
+        int[] ring = st.refHist[si];
+        int c = 0;
+        for (int k = 0; k < st.window; k++) {
+            if (ring[k] != 0) c++;
+        }
+        return c;
+    }
+
+    private static double[] aiSnrWindow(AiRefStarState st, int si) {
+        double[] ring = st.snrHist[si];
+        double sum = 0.0;
+        int n = 0;
+        for (int k = 0; k < st.window; k++) {
+            double v = ring[k];
+            if (!Double.isFinite(v)) continue;
+            sum += v;
+            n++;
+        }
+        if (n == 0) return new double[]{0.0, 0.0};
+        double mean = sum / n;
+        double ss = 0.0;
+        for (int k = 0; k < st.window; k++) {
+            double v = ring[k];
+            if (!Double.isFinite(v)) continue;
+            double d = v - mean;
+            ss += d * d;
+        }
+        return new double[]{mean, Math.sqrt(ss / n)};
+    }
+
     private static int ddres(Rtk rtk, Obsd[] obs, double dt, double[] x, double[] P,
                              int[] sat, double[] y, double[] e, double[] azel,
                              double[] freq, int[] iu, int[] ir, int ns, int nf,
                              Nav nav, double[] v, double[] H, double[] R, int[] vflg,
-                             double[] aiBias, double[] aiScale, boolean traceRow) {
+                             double[] aiBias, double[] aiScale, boolean traceRow,
+                             int[] aiRefOverride) {
         PrcOpt opt = rtk.opt;
         /* A3 逐行 trace 的开关（§7.5.3）：只在评估期开启，关闭时仅多一次短路的
          * 布尔判断，逐行不构造任何 kv 数组，故不进入生产热路径。 */
@@ -1957,29 +2252,17 @@ public final class RtkCore {
                 int frq = f % nf;
                 boolean code = f >= nf;
 
-                int refIdx = -1;
-                double bestRefScore = Double.NEGATIVE_INFINITY;
-                for (j = 0; j < ns; j++) {
-                    int sysj = SatUtils.satsys(sat[j], null);
-                    if ((sysj & sysMap[m]) == 0) continue;
-                    if (sysj == Constants.SYS_SBS) continue;
-                    if (!validobs(iu[j], ir[j], f, nf, y)) continue;
-                    if (refIdx >= 0 && (rtk.ssat[sat[j] - 1].slip[frq] & Constants.LLI_SLIP) != 0) continue;
-                    double el_j = azel[1 + iu[j] * 2];
-                    if (rtk.rtkConfig.rtk.enableSnrMedian && frq < rtk.snrMedian.length
-                        && rtk.snrMedian[frq] > Double.NEGATIVE_INFINITY) {
-                        double snr_j = rtk.ssat[sat[j] - 1].snrRover[frq];
-                        double snrMedianVal = rtk.snrMedian[frq];
-                        double snrScore = 1.0 - Math.abs(snr_j - snrMedianVal) / Math.max(snrMedianVal, 1.0);
-                        double score = el_j + snrScore * rtk.rtkConfig.rtk.snrMedianKPhase;
-                        if (refIdx < 0 || score > bestRefScore) {
-                            refIdx = j;
-                            bestRefScore = score;
-                        }
-                    } else {
-                        if (refIdx < 0 || el_j >= azel[1 + iu[refIdx] * 2]) {
-                            refIdx = j;
-                        }
+                int refIdx = selectRefIdx(rtk, sat, iu, ir, ns, nf, y, azel, sysMap[m], f, null, 0);
+                /* [AI-4] 覆盖查表（§3.3）：决策阶段已把该组合法的 fallback 写进
+                 * aiRefOverride，此处只读。任何不满足 validobs 或带周跳的写值都被忽略，
+                 * 保证模型无法把参考星换到观测缺失/周跳的卫星上（H2）。
+                 * ddres 每历元跑 2~3 次，但数组内容不变，故幂等。 */
+                if (aiRefOverride != null) {
+                    int ov = aiRefOverride[m * (nf * 2) + f];
+                    if (ov >= 0 && ov < ns
+                            && validobs(iu[ov], ir[ov], f, nf, y)
+                            && (rtk.ssat[sat[ov] - 1].slip[frq] & Constants.LLI_SLIP) == 0) {
+                        refIdx = ov;
                     }
                 }
                 if (refIdx < 0) {

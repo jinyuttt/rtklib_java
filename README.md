@@ -4,7 +4,7 @@ RTKLIB 的 Java 移植版本，基于 [RTKLIB 2.5.0](https://github.com/tomojita
 
 项目定位为**算法引擎库（Library）**而非独立软件，可嵌入 Java 应用中实现 GNSS 数据处理与定位解算。
 
-> **当前版本 v3.5.0（2026-11-12）**：许可证合规重构版本。`rtklib-otl` 负荷潮模块与 GPT3 气象网格读取器已按 IERS Conventions (2010)、Doodson (1921)、Schureman (1958)、Farrell (1972)、Landskron & Böhm (2018)、Askne & Nordius (1987) 等公开文献独立重写，不再与任何外部 Fortran 源码存在函数名、变量名、数组索引或循环结构对应关系；仓库内全部第三方编译产物（RTKLIB-EX 可执行文件、Fortran 参考程序及其二进制、`libopenblas.a`）已从当前主干与 Git 历史中彻底移除，并加入 `.gitignore` 永久防护。对外 API 保持不变，OTL 数值与历史基线逐字节一致，GPT3 输出与重写前逐位一致（12 点回归测试固化）。同版新增 `rtklib-ai` 接口三的激进模式实验配置（默认关闭）。算法修复的闭环索引与精度实测见 [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md)，版本级变更见 [CHANGELOG](docs/CHANGELOG.md)。
+> **当前版本 v3.5.0（2026-11-12）**：许可证合规重构版本，对外 API 与数值结果保持不变。详见 [终期技术摘要](docs/PROJECT_FINAL_SUMMARY.md) 与 [CHANGELOG](docs/CHANGELOG.md)。
 >
 > **评估口径提醒**：自 FIX-ALG-062 起，**固定率不得单独作为质量指标**——必须附带绝对坐标 RMS、错固率（误差 > 0.5 m 的 FIX 历元占比）、相位残差统计与 A/C/D 双跑配对。历史上一批「高固定率」结论已被证实是锁存造成的假 FIX 计数。
 
@@ -263,6 +263,13 @@ org.rtklib.java.otl
 > **关于模型**：仓库内**不提供可用于生产的预训练权重**，仅有 `src/test/resources/models/` 下的 `dummy_*` 演示模型，用途是契约测试与流水线冒烟，不具备实际改正能力。GNSS 数据在不同环境下分布差异极大（星座组合与可见星几何、遮挡与多路径形态、接收机型号与天线、采样率与截止高度角），在 A 环境训练的模型直接搬到 B 环境通常不成立。**实际使用必须用本机场景数据自行训练模型**，采集 → 组装 → 训练 → 导出 ONNX 的完整流程见 [训练管线说明](rtklib-ai/training/README.md)。
 
 > **验证结论**：经真实北斗恶劣峡谷数据双跑验证：受限于人造标签的物理精度与端到端不可控性，本模块当前仅作保守的方差膨胀（降权）辅助，默认关闭。彻底废除只看固定率的评估模式，真实配对数据见 [AI 评估报告](docs/GNSS-RTK-AI-report.md)。
+
+当前版本 v3.5.0（2026-11-12）：许可证合规重构版本。rtklib-otl 负荷潮模块与 GPT3 气象网格读取器已按 IERS Conventions (2010)、Doodson (1921)、Schureman (1958)、Farrell (1972)、Landskron & Böhm (2018)、Askne & Nordius (1987) 等公开文献独立重写，不再与任何外部 Fortran 源码存在函数名、变量名、数组索引或循环结构对应关系；仓库内全部第三方编译产物（RTKLIB-EX 可执行文件、Fortran 参考程序及其二进制、libopenblas.a）已从当前主干与 Git 历史中彻底移除，并加入 .gitignore 永久防护。对外 API 保持不变，OTL 数值与历史基线逐字节一致，GPT3 输出与重写前逐位一致（12 点回归测试固化）。同版新增 rtklib-ai 接口三的激进模式实验配置（默认关闭）。算法修复的闭环索引与精度实测见 终期技术摘要，版本级变更见 CHANGELOG。### AI 接口实验支线
+
+- 接口四（参考星风险判别）为实验 provider，默认关闭，仅显式注入。
+- 风险分学的是滑相前兆，不是 NLOS 判别；不要把它当污染判别器用。
+- 没有步骤 0（is_ref trace + 重跑采集），训练产物无效，R1-6 不可验证。
+- 契约测试不需要数据：`mvn -pl rtklib-test -Dtest=RefStarContractTest test` 即可验证架构通了。该用例满足「不注入、无 AI 启用条件」：未注入时解析为 `null`、`Rtk` 不分配任何接口四状态，即 I-1 零回归。
 
 ### rtklib-test — 验证与示例
 

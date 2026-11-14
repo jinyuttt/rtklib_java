@@ -2,6 +2,7 @@ package org.rtklib.java.data;
 
 import org.rtklib.java.ai.spi.FixValidator;
 import org.rtklib.java.ai.spi.ObsCorrector;
+import org.rtklib.java.ai.spi.RefStarValidator;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.trace.TraceControl;
@@ -135,6 +136,9 @@ public class Rtk implements Serializable {
     // AI 实例级覆盖：优先级高于 AiHooks 注入点，null 表示不覆盖
     public transient FixValidator aiFixValidator;
     public transient ObsCorrector aiObsCorrector;
+    public transient RefStarValidator aiRefStarValidator;
+    // 接口四跨历元状态：仅注入接口四时分配，未注入为 null（I-1）
+    public transient AiRefStarState aiRefStarState;
     // AI 降级告警去重（每会话一次，避免逐历元刷屏，§4.1）
     public transient boolean aiDegradeLogged;
     // 接口三钳位告警去重（偏差置 0 / 方差上限各一次，§4.3.4）
@@ -176,6 +180,8 @@ public class Rtk implements Serializable {
         this.rtkConfig = new RtkConfig();
         this.aiFixValidator = null;
         this.aiObsCorrector = null;
+        this.aiRefStarValidator = null;
+        this.aiRefStarState = null;
         this.qScale = 1.0;
         this.snrMedian = new double[Constants.NFREQ];
         this.snrMedianHistory = new double[Constants.NFREQ][20];

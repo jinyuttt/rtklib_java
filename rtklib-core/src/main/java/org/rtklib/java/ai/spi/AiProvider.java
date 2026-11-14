@@ -15,4 +15,14 @@ public interface AiProvider {
 
     /** 接口三：伪距偏差改正。返回 {@code null} = 本 provider 不提供接口三。 */
     ObsCorrector obsCorrector();
+
+    /**
+     * 接口四：参考星风险判别。返回 {@code null} = 本 provider 不提供接口四。
+     *
+     * 默认实现返回 {@code null}：接口四是实验 provider（D20），默认关闭、仅显式注入。
+     * 既有实现不必改动即自动「不提供」，core 侧行为与未注入逐位一致（I-1）。
+     */
+    default RefStarValidator refStarValidator() {
+        return null;
+    }
 }

@@ -78,6 +78,21 @@ public final class AiHooks {
         return p == null ? null : p.obsCorrector();
     }
 
+    /**
+     * 解析接口四实现。
+     *
+     * @param rtk 当前解算实例，可为 {@code null}
+     * @return 实例字段优先；否则取注入点；都为空返回 {@code null}（不干预）
+     */
+    public static RefStarValidator resolveRefStarValidator(Rtk rtk) {
+        if (rtk != null) {
+            validateAiOpts(rtk);
+            if (rtk.aiRefStarValidator != null) return rtk.aiRefStarValidator;
+        }
+        AiProvider p = TL.get();
+        return p == null ? null : p.refStarValidator();
+    }
+
     private static void validateAiOpts(Rtk rtk) {
         if (rtk.rtkConfig != null && rtk.rtkConfig.ai != null) {
             rtk.rtkConfig.ai.validate();
