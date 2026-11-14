@@ -2202,6 +2202,11 @@ public final class RtkCore {
          * 布尔判断，逐行不构造任何 kv 数组，故不进入生产热路径。 */
         boolean traceDdres = traceRow && rtk.traceConfig != null && rtk.traceConfig.enabled
                 && rtk.traceCallback != null && rtk.traceConfig.topics.contains("AI3");
+        /* [AI-4] 参考星轨迹 trace（§5.2 步骤 0）：只用于生成接口四标签 is_ref。
+         * 与接口四是否注入<b>无关</b>——未注入时它记录的正是原生参考星，即标签本身。
+         * 关闭时仅多一次布尔短路，不构造任何 kv 数组，不进入生产热路径。 */
+        boolean traceIsRef = traceRow && rtk.traceConfig != null && rtk.traceConfig.enabled
+                && rtk.traceCallback != null && rtk.traceConfig.topics.contains("AI4");
         int nx = rtk.nx;int i, j, k, m, f, nv = 0;
         int[] nb = new int[Constants.NFREQ * 7 * 2 + 2];
         int b = 0;
@@ -2268,7 +2273,12 @@ public final class RtkCore {
                 if (refIdx < 0) {
                     continue;
                 }
-
+                if (traceIsRef) {
+                    Trace.emit("AI4", "IS_REF", rtk.traceConfig, rtk.traceCallback,
+                            rtk.epoch, obs[0].time,
+                            "sat", sat[refIdx], "i", refIdx, "frq", frq,
+                            "code", code ? 1 : 0, "group", m * (nf * 2) + f, "ns", ns);
+                }
 
                 int cntBefore = nv;
                 for (j = 0; j < ns; j++) {

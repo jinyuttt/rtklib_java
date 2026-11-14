@@ -86,6 +86,17 @@ public record CollectConfig(
         return outputDir.resolve(station + "_" + day + "_" + runId + ".obs.csv");
     }
 
+    /**
+     * 接口四采集的 15 维特征落盘路径。
+     * <p>
+     * 与接口三同样必须分开：接口四主键是 {@code (epoch, sat, frq)}，但标签来自
+     * {@code AI4/IS_REF}（当历元真实参考星），与接口三的码残差标签是两套东西。
+     * </p>
+     */
+    public Path refStarCsvPath() {
+        return outputDir.resolve(station + "_" + day + "_" + runId + ".refstar.csv");
+    }
+
     /** 跨运行累积的运行清单，记录每次运行的站/日/行数，供组装阶段过滤残缺运行。 */
     public Path manifestPath() {
         return outputDir.resolve("_runs.csv");
@@ -103,6 +114,9 @@ public record CollectConfig(
         }
         if (!overwrite && Files.exists(obsCsvPath())) {
             throw new IOException("接口三采集文件已存在，拒绝覆盖（runId 必须唯一）: " + obsCsvPath());
+        }
+        if (!overwrite && Files.exists(refStarCsvPath())) {
+            throw new IOException("接口四采集文件已存在，拒绝覆盖（runId 必须唯一）: " + refStarCsvPath());
         }
     }
 

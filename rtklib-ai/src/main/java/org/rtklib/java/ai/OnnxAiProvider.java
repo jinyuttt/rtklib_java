@@ -5,10 +5,12 @@ import java.nio.file.Path;
 
 import org.rtklib.java.ai.feature.FeatureNorm;
 import org.rtklib.java.ai.feature.ObsCorrectionFeatures;
+import org.rtklib.java.ai.feature.RefStarFeatures;
 import org.rtklib.java.ai.inference.OnnxInference;
 import org.rtklib.java.ai.spi.AiProvider;
 import org.rtklib.java.ai.spi.FixValidator;
 import org.rtklib.java.ai.spi.ObsCorrector;
+import org.rtklib.java.ai.spi.RefStarValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,34 +44,43 @@ public final class OnnxAiProvider implements AiProvider, AutoCloseable {
     public static final String OBS_CORRECTOR_MODEL = "obs_corrector.onnx";
     /** 接口三归一化参数文件名（优先读取；缺失则退化恒等归一化）。 */
     public static final String OBS_CORRECTOR_NORM = "obs_corrector.norm.json";
+    /** 接口四模型文件名（放在模型目录下；缺失即接口四不启用）。 */
+    public static final String REF_STAR_MODEL = "refstar_sliprisk.onnx";
+    /** 接口四归一化参数文件名（优先读取；缺失则退化恒等归一化）。 */
+    public static final String REF_STAR_NORM = "refstar_sliprisk.norm.json";
     /** 兼容名：模型目录下只有一份 {@code norm.json} 时使用（§5.1）。 */
     public static final String SHARED_NORM = "norm.json";
 
     private final OnnxInference inference;
     private final OnnxInference obsInference;
+    private final OnnxInference refStarInference;
     private final FixValidator fixValidator;
     private final ObsCorrector obsCorrector;
+    private final RefStarValidator refStarValidator;
 
     /**
-     * 按模型目录加载（接口一与接口三各自独立降级）。
+     * 按模型目录加载（三个接口各自独立降级）。
      *
-     * @param modelDir 模型目录，内含 {@value #FIX_VALIDATOR_MODEL} / {@value #OBS_CORRECTOR_MODEL}
+     * @param modelDir 模型目录，内含 {@value #FIX_VALIDATOR_MODEL} /
+     *                 {@value #OBS_CORRECTOR_MODEL} / {@value #REF_STAR_MODEL}
      */
     public OnnxAiProvider(Path modelDir) {
         this(modelDir == null ? null : modelDir.resolve(FIX_VALIDATOR_MODEL),
                 resolveNorm(modelDir),
                 modelDir == null ? null : modelDir.resolve(OBS_CORRECTOR_MODEL),
-                resolveObsNorm(modelDir));
+                resolveObsNorm(modelDir),
+                modelDir == null ? null : modelDir.resolve(REF_STAR_MODEL),
+                resolveRefStarNorm(modelDir));
     }
 
     /**
-     * 显式指定接口一模型与归一化文件（测试与自定义部署使用；接口三不启用）。
+     * 显式指定接口一模型与归一化文件（测试与自定义部署使用；接口三/四不启用）。
      *
      * @param modelPath 模型路径
      * @param normPath  归一化参数路径，{@code null} 或不存在 → 恒等归一化
      */
     public OnnxAiProvider(Path modelPath, Path normPath) {
-        this(modelPath, normPath, null, null);
+        this(modelPath, normPath, null, null, null, null);
     }
 
     /**
@@ -81,6 +92,21 @@ public final class OnnxAiProvider implements AiProvider, AutoCloseable {
      * @param obsNormPath  接口三归一化参数路径
      */
     public OnnxAiProvider(Path modelPath, Path normPath, Path obsModelPath, Path obsNormPath) {
+        this(modelPath, normPath, obsModelPath, obsNormPath, null, null);
+    }
+
+    /**
+     * 显式指定三个接口的模型与归一化文件（任一为 {@code null} 即该接口不启用）。
+     *
+     * @param modelPath      接口一模型路径
+     * @param normPath       接口一归一化参数路径
+     * @param obsModelPath   接口三模型路径
+     * @param obsNormPath    接口三归一化参数路径
+     * @param refStarPath    接口四模型路径
+     * @param refStarNormPath 接口四归一化参数路径
+     */
+    public OnnxAiProvider(Path modelPath, Path normPath, Path obsModelPath, Path obsNormPath,
+                          Path refStarPath, Path refStarNormPath) {
         OnnxInference loaded = null;
         FixValidator validator = null;
         if (modelPath != null && Files.isRegularFile(modelPath)) {
@@ -122,10 +148,33 @@ public final class OnnxAiProvider implements AiProvider, AutoCloseable {
             log.warn("接口三模型不存在({})，降级为不干预（core 走原生分支）", obsModelPath);
         }
 
+        OnnxInference refLoaded = null;
+        RefStarValidator refValidator = null;
+        if (refStarPath != null && Files.isRegularFile(refStarPath)) {
+            try {
+                refLoaded = OnnxInference.load(refStarPath);
+                FeatureNorm refNorm = FeatureNorm.load(refStarNormPath, RefStarFeatures.DIM);
+                refValidator = new RefStarValidatorImpl(refLoaded, refNorm);
+                log.info("接口四已启用: model={}, norm={}, 输入维={}",
+                        refStarPath, refNorm.isIdentity() ? "<identity>" : refStarNormPath,
+                        refLoaded.inputDim());
+            } catch (Throwable t) {
+                if (refLoaded != null) refLoaded.close();
+                refLoaded = null;
+                refValidator = null;
+                log.warn("接口四模型加载失败({})，降级为不干预（core 走原生分支）: {}",
+                        refStarPath, t.toString());
+            }
+        } else {
+            log.warn("接口四模型不存在({})，降级为不干预（core 走原生分支）", refStarPath);
+        }
+
         this.inference = loaded;
         this.fixValidator = validator;
         this.obsInference = obsLoaded;
         this.obsCorrector = corrector;
+        this.refStarInference = refLoaded;
+        this.refStarValidator = refValidator;
     }
 
     private static Path resolveNorm(Path modelDir) {
@@ -144,6 +193,14 @@ public final class OnnxAiProvider implements AiProvider, AutoCloseable {
         return Files.isRegularFile(shared) ? shared : null;
     }
 
+    private static Path resolveRefStarNorm(Path modelDir) {
+        if (modelDir == null) return null;
+        Path dedicated = modelDir.resolve(REF_STAR_NORM);
+        if (Files.isRegularFile(dedicated)) return dedicated;
+        Path shared = modelDir.resolve(SHARED_NORM);
+        return Files.isRegularFile(shared) ? shared : null;
+    }
+
     @Override
     public FixValidator fixValidator() {
         return fixValidator;
@@ -153,6 +210,17 @@ public final class OnnxAiProvider implements AiProvider, AutoCloseable {
     @Override
     public ObsCorrector obsCorrector() {
         return obsCorrector;
+    }
+
+    /**
+     * 接口四实现；返回 {@code null} 即「本 provider 不提供接口四」，core 走原生分支。
+     *
+     * 接口四是实验接口：模型目录里没有 {@value #REF_STAR_MODEL} 时本方法返回 {@code null}，
+     * 此时即使注入本 provider，core 的行为也与未注入逐位一致（I-1）。
+     */
+    @Override
+    public RefStarValidator refStarValidator() {
+        return refStarValidator;
     }
 
     /** 是否成功加载接口一（{@code false} 表示本 provider 等价于未注入）。 */
@@ -165,6 +233,11 @@ public final class OnnxAiProvider implements AiProvider, AutoCloseable {
         return obsCorrector != null;
     }
 
+    /** 是否成功加载接口四。 */
+    public boolean isRefStarAvailable() {
+        return refStarValidator != null;
+    }
+
     @Override
     public void close() {
         if (inference != null) {
@@ -172,6 +245,9 @@ public final class OnnxAiProvider implements AiProvider, AutoCloseable {
         }
         if (obsInference != null) {
             obsInference.close();
+        }
+        if (refStarInference != null) {
+            refStarInference.close();
         }
     }
 }
