@@ -478,6 +478,8 @@
 | FIX-ALG-059 | 2026-11-11 | ppprtk/PppRtkCore.java | **PPP-RTK 好站全天 FIX 2270/3815（59.5%），修复前恒 <1000**：相位行 pre-fit 门限错用 `PrcOpt.maxinno[0]=5.0`（该值按 RTK `ddres` 索引约定为码行设计，PPP 侧 `code==0` 却是相位行）→ 一次 ~9m 接收机钟跳当历元把 13 颗星的相位行全部剔除（nv 28→15），此后长期只剩码行更新、可见星 4~6 无法恢复。相位行改按 C `ppp.c maxinno[0]=30.0` 固定 30m，码行仍取 `opt.maxinno[1]`，删除原 `epoch<=60` 临时放宽 |
 | FIX-ALG-060 | 2026-11-11 | ppprtk/PppRtkAmbFix.java | `ppprtkAmbFixUc` 系统白名单 `SYS_GPS\|SYS_GAL` 写死改为动态继承 `opt.navsys`（与 FIX-ALG-058 同类缺陷）；**同批实测确认 PPP-RTK 非 IFLC（UC/EST，nf=3）链路整体退化**：0015 hour00 `fix=0 / ns=1 / vsat0=0`，故接口三 AI 在 PPP-RTK 链上既无合法注入点、也无可用非 IFLC 载体，A/B 对比不可执行（详见该条目「接口三 A/B 可行性核查」） |
 | FIX-ALG-062 | 2026-11-11 | 文档/评估规范（零代码改动） | **WUH20 2026-10-26 录制数据质量结论**：119 历元 fixRate 82.4%，但 ENU RMS（对 FIX 质心）3D 1.17 m、errFix(>0.5 m) 86.7%、相位残差 mean 1.73 m/p50 2.24 m；97 个连续 FIX 历元伴随 E 向 2.54 m/96 s 单调漂移 ⇒ 该批数据物理质量极差、82.4% 为假象。旧版「78→92」是 FIX-ALG-054/057 之前 `sol.stat` 锁存造成的假 FIX 计数。**强制新规范：固定率不得单独作为质量指标，必须附带绝对坐标 RMS + 错固率 + 相位残差统计 + A/C/D 双跑配对** |
+| FIX-ALG-063 | 2026-11-14 | ppprtk/PppRtkAmbFix.java、test/ppprtk/PppRtkFixValidatorTest.java | **PPP-RTK 非组合（UC）分支 ratio 方向反写**：`ratio = s[0]/s[1]` 是「最优/次优」恒 ≤1，永远过不了 `arRatio=3.0` 门限，UC 路径即使 LAMBDA 给出健康候选也 100% 拒绝固定；改为标准「次优/最优」`s[1]/s[0]` 并钳位 999.0。与 FIX-ALG-060 的「滤波器退化 ns=1」为**独立成因**，两者叠加才是 UC 全天 fix=0 的完整解释；边界差异（`<` vs `<=`）与端到端分层固定率见 63.6 / 63.7 |
+| FIX-ALG-066 | 2026-11-15 | ppprtk/PppRtkAmbFix.java、ppp/PppAmbFix.java | **LAMBDA factorLD 高失败率根因：周域模糊度协方差未做合同变换**：米→周是逐轴对角变换 `D=diag(1/λ_i)`，协方差必须做 `Q_ij=P_ij/(λ_i·λ_j)`；旧实现按第 i 行波长 `λ_i²` 缩放，仅在 `λ_i==λ_j` 时成立，双频混排（BDS B1I 0.1920 / B3I 0.2364 m）使 Q 非对称（合成数据实测 max\|Qij−Qji\| 达 8.8 周²），LD 对角元转负返回 -1。真实数据复验（WUH20 04 段 + LA 00 段，均 `ionoopt=4`/`nf=3`/`navsys=0x29`）：`info=-1` 由 99、97 双双归零，`asym` 恒 0（102/102、420/420）；WUH20 剩余 78/102 为 `info=-2` 搜索溢出（全部 nb≥34），属大维数搜索空间退化，与 Q 对称性无关 |
 
 ## FIX-ALG-020 EST 模式死锁：DCB 产品加载 + enableIonoEstRobust 开关
 
@@ -3936,3 +3938,417 @@ if (rtk.epoch <= INIT_PHASE_EPOCH) {
 2. 该批数据可用性存疑（相位残差 ~2 m；SSR 帧跨度 04:26:25~04:28:06 与观测窗口基本对齐，
    问题不在 SSR 缺帧），后续不应再作为 AR 有效性验证的主数据集。
 3. 62.4 的四件套已同步写入 `docs/TEST_DEVELOPMENT_GUIDE.md` 第 8 节。
+
+## FIX-ALG-063：PPP-RTK 非组合（UC）分支 ratio 方向反写（2026-11-14）
+
+- **日期**：2026-11-14
+- **类别**：rtklib-core / PPP-RTK AR（`PppRtkAmbFix.ppprtkAmbFixUc`）+ 回归测试
+- **触发**：解封接口 D（PPP-RTK 固定校验）时按「算-验-提交」三段式重构 `PppRtkAmbFix`，
+  核对 PRIDE-PPPAR 参考实现时发现 UC 分支 ratio 语义反向。
+- **引入提交**：`e9931ce`（2026-09-24），非本次重构引入。
+
+### 63.1 缺陷
+
+```java
+// 修复前（最优/次优，恒 ≤1）
+ratio = (s[1] > 0) ? s[0] / s[1] : 999.0;
+// 修复后（次优/最优，标准 ratio）
+ratio = (s[0] > 0) ? Math.min(s[1] / s[0], 999.0) : 999.0;
+```
+
+`Lambda` 搜索输出**升序**：`s[0]` 为最优（最小残差平方和）、`s[1]` 为次优。
+标准 ratio 定义为 **次优/最优**（`s[1]/s[0]`，≥1）；旧代码取 **最优/次优**（≤1），
+`ratio < arRatio` 恒成立，故 UC 分支**即使 LAMBDA 给出健康候选也 100% 拒绝固定**。
+
+### 63.2 依据（五重交叉验证，均为既有文档/参考实现，非新增口径）
+
+| # | 来源 | 事实 |
+|---|---|---|
+| 1 | `ambiguity/Lambda.java` | 搜索结果升序排序，注释明确 `s[0]=最优, s[1]=次优, 用于ratio检验` |
+| 2 | PRIDE-PPPAR `src/arsig/fixamb_search.f90` | `ratio = disall(2)/disall(1)`，校验 `ratio .le. min_ratio` 拒绝 |
+| 3 | PRIDE-PPPAR `src/arsig/cal_features.f90` | 8 特征第 3 位 `ratio_o = dist(2)/dist(1)` |
+| 4 | PRIDE-PPPAR `src/arsig/xgb_model.c` | 特征归一化后 `features[2]` 阈值 `-0.48359218`，反推 raw ratio 均值 ≈10.2（若按最优/次优则应 <1，矛盾） |
+| 5 | `ai/spi/PppRtkFixContext.java` | `ratioNl` 注释即为「LAMBDA 次优/最优残差平方和比值」 |
+
+**处置原则**：文档是统一唯一依据 —— 本次按依据修代码，不为了迁就代码改文档。
+
+### 63.3 与 FIX-ALG-060 的关系（两个独立成因）
+
+| 成因 | 机制 | 影响面 |
+|---|---|---|
+| FIX-ALG-060 记录的滤波器退化 | `ns=1`、`vsat0=0`，全天无可用浮点解 | 连候选都没有 |
+| 本条 ratio 方向反写 | 有候选也恒判失败 | 候选存在时仍 100% 不固定 |
+
+两者**不可合并归因**：060 的「ns=1」是滤波器层面的观测事实，与 ratio 判定无关；
+本条只影响「候选 → 固定」这一步的判别门限。
+
+### 63.4 验证
+
+1. **回归用例**（`PppRtkFixValidatorTest`，新增 2 条）：
+   - `ratioIsSecondBestOverBest`：4 星 UC 场景、`arRatio=3.0`、次优/最优≈21 → 必须 `SOLQ_FIX`
+   - `ratioRejectsAmbiguousCase`：取整歧义场景、次优≈最优、ratio≈1 → 必须 `SOLQ_FLOAT`（该用例显式设 `arRatio=3.0`，ratio≈1 落在 `1 < 3.0` 区间，锁的是**门限拒绝**而非「歧义本身导致失败」）
+2. **用例有效性反证**：临时还原为旧写法，`ratioIsSecondBestOverBest` 失败
+   （`expected: <1> but was: <2>`，即 `SOLQ_FIX` 被误判为 `SOLQ_FLOAT`），证明该用例确实锁死方向。
+3. **全量回归**：`mvn -pl rtklib-core test` → `Tests run: 441, Failures: 0, Errors: 0, Skipped: 51`，BUILD SUCCESS。
+
+### 63.5 遗留
+
+1. 真实数据上 UC 路径固定率仍受 FIX-ALG-060 的滤波器退化限制；本条只保证「有候选时不再被误拒」，
+   端到端 A/B 需在 `ns` 恢复正常的配置下复测 —— 已在 63.7 完成首轮 A/B 与分层统计。
+2. `PppRtkFixContext` 的 UC 退化哨兵当前用 `Double.NaN`，与 PRIDE 的退化处理口径待对齐（未改）。
+
+### 63.6 与 PRIDE 的边界差异（`<` vs `<=`，记录不修改）
+
+| 项 | 当前实现 | PRIDE-PPPAR |
+|---|---|---|
+| 位置 | `ppprtk/PppRtkAmbFix.java:179` | `src/arsig/fixamb_search.f90:100` |
+| 拒绝条件 | `if (ratio < arRatio)` | `if (ratio .le. min_ratio)` |
+| 差异触发面 | 仅当 `ratio` **恰好等于** 门限时：当前实现**通过**，PRIDE **拒绝** | 同左 |
+
+**影响评估**：
+- 差异只落在 `ratio == arRatio` 这一个点上（`ratio` 为 `s[1]/s[0]` 的浮点比值），
+  默认门限 `3.0` 下命中概率可忽略；本次两组实测数据 ratio 取值区间为 `[1.001, 3.234]`，
+  未出现恰好等于 3.0 的样本，A/B 结果不受该差异影响。
+- **处置：记录差异，暂不改代码**。理由有二：
+  1. 本次 A/B 与分层统计均以 `<` 口径测得，改判据会让已有实测数字失去可比性；
+  2. 改成 `<=` 属于未验证的行为变更（恰好等于门限的候选会由 FIX 变 FLOAT），
+     当前没有证据表明 PRIDE 的严格口径在本产品数据上更优。
+- **已知缺口**：现有两条回归用例（ratio≈1 与 ratio≈21）都不触及门限边界，
+  `ratio == arRatio` 的行为未被测试锁定。若后续决定对齐 PRIDE，需同步补一条边界用例。
+
+### 63.7 端到端分层验证（ns>1 / ns=1 固定率）
+
+**口径**：同一数据、同一配置，仅替换 `rtklib-core` jar（旧 jar 为 ratio 方向反写版本，
+新 jar 为本条修复版本）；工具 `PppRtkSsrReplay`，UC 配置 `ionoopt=4`（非 IFLC）、`nf=3`。
+
+| 数据集 | 历元 | SSR 帧 | 旧 jar 固定率 | 新 jar 固定率 |
+|---|---|---|---|---|
+| WUH20 `2026-10-26` 04:26 段 | 119 | 396 | 0/119 = 0.0% | 1/119 = **0.84%** |
+| LA2026090003 `2026-10-31` hour 00（UTC 16:00） | 237 | 577 | 未测 | 0/237 = 0.0% |
+
+**分层固定率（新 jar）**：
+
+| 数据集 | `ns>1` 历元数 | `ns>1` 固定率 | `ns=1` 历元数 | `ns=1` 固定率 |
+|---|---|---|---|---|
+| WUH20 04:26 段 | 119 | 1/119 = 0.84% | 0 | 不适用（无此类历元） |
+| LA2026090003 hour 00 | 232 | 0/232 = 0.0% | 5 | 0/5 = 0.0% |
+
+**唯一 FIX 历元质量核查（WUH20 04:26:36）**：`ns=24`、`ratio=3.234`（该段首个越过 3.0 的候选）、
+`resRms=0.3552`（落在邻域 0.30–0.37 区间内）、高程 `0.742 m` 恰处于收敛轨迹
+`1.312 → 0.998 → 0.742 → 0.498` 的平滑段，**无位置跳变** → 不是离群误固定。
+
+**LA2026090003 固定率为 0 的归因（观测事实，非代码缺陷）**：该段 ratio 取值区间 `[1.001, 2.846]`，
+**无一历元达到 3.0**；漏斗更早的出口还有 LAMBDA `factorLD` 失败（法方程非正定）与
+`nb<4`（可固定模糊度不足）。即「候选质量整体不达门限」，与 ratio 判定方向、`<`/`<=` 边界均无关。
+
+**AR 漏斗（按「每历元 1 次尝试」去重后）**：
+
+| 数据集 | 尝试次数 | `nb<4` 提前退出 | LAMBDA `factorLD` 失败 | 进入 ratio 判定 | ratio ≥ 3.0 |
+|---|---|---|---|---|---|
+| WUH20 04:26 段 | 119 | 14 | 99 | 6 | 1 |
+| LA2026090003 hour 00 | 237 | 19 | 97 | 121 | 0 |
+
+**统计口径说明**：AR 的 DEBUG 行数与历元数不成比例 —— LA 段 AR 日志 716 行，按漏斗分类合计 474 条
+恰为 237 历元的 2 倍（即每条被重复输出 1 次）；WUH20 段 124 行、漏斗合计 119 条与历元数基本 1:1。
+上表已按去重后的口径统计；本节所有固定率计数一律以逐历元唯一的 `EPOCH` 行为准，
+不以 AR 日志行数直接作为历元计数。
+
+**ratio 分布**：LA 段进入判定的 121 个样本 `p50=1.063`、`p90=1.201`、仅 1 个 ≥2.5 —— 模糊度候选空间近乎退化；
+WUH20 段仅 6 个判定样本（`p50=1.452`、`max=3.234`），叠加 `factorLD` 失败 99/119，
+说明该段固定率低的直接瓶颈在**模糊度协方差非正定**而非 ratio 门限。
+
+**结论**：
+1. 修复的直接效果 = 不再把 `s[1]/s[0] ≥ 门限` 的合法候选误拒（WUH20 由 0 例 → 1 例即为证据）；
+2. 固定率绝对值仍低，主因有两层：AR 漏斗在 ratio 判定之前就已大面积退出
+   （WUH20 `factorLD` 失败 99/119、LA 97/237），而进入判定的样本 ratio 中位数仅 1.06–1.45，
+   整体低于 3.0 门限（观测/SSR 质量与滤波收敛所致），**与 ratio 判定方向无关**；
+3. 按 62.4 口径，1 例 FIX 不足以证明「固定正确」，需在 `ns` 健康且 ratio 分布覆盖门限的
+   数据集上做批量验证（列为后续工作）；
+4. LAMBDA `factorLD`（模糊度协方差非正定）高失败率是本轮新暴露的瓶颈，
+   需单独立项核查（模糊度方差-协方差构造与过程噪声设置），**不在本条（ratio 方向）修复范围内**。**2026-11-15 已闭环：根因为周域协方差缩放未做合同变换，见 FIX-ALG-066。**
+
+**复现**：`mvn -o -pl rtklib-test exec:java -Dlogback.configurationFile=...\.tmp\logback-ar-debug.xml
+-Dexec.mainClass=org.rtklib.java.test.PppRtkSsrReplay -Dexec.args="run -1 0 0 <station>"`，
+日志见 `.tmp/uc_fixed.log`（WUH20）与 `.tmp/la_uc_clean.log`（LA2026090003）。
+
+## FIX-ALG-064：架构偏差 —— PppRtkSsrReplay 绕过 SsrCorrectionProvider 的时序语义（2026-11-14）
+
+- **日期**：2026-11-14
+- **类别**：rtklib-test / 回放器（`PppRtkSsrReplay.scanSsr`）——**架构偏差记录**，非算法改动
+- **触发**：03 小时（`SSRA01CAS0\20261031\03.rtcm3`）重跑时首历元 `freshSats=0/13`、`ns=0`，
+  而文件已确认加载成功（11715 帧、span=[03:00:20 ~ 04:00:16]、与观测历元 03:00:30 对齐）。
+
+### 64.1 偏差
+
+`SsrCorrectionProvider` 的既定语义（`NETWORK_VRS_DESIGN.md` §4.3.2/§4.3.3）：
+按**毫秒参考历元**维护 `TreeMap` 时间线，取 `floorEntry`（≤ 当前历元的最新记录），
+按 `ddeph` 线性外推并把 `t0` 归算到当前历元，`DEFAULT_MAX_AGE_SEC = 90`。
+
+`PppRtkSsrReplay` 未走 provider，而是：
+
+1. `scanSsr` 按**文件字节偏移顺序**逐条 `Rtcm.input` 收集 `SsrFrame`（顺序 = 录制落盘顺序）；
+2. 用**单调指针** `fi` 做时间门：`while (frames[fi].time <= t) feed(frames[fi++])`。
+
+指针只前进不后退，因此**只要某一帧的时间晚于当前观测历元，它之后所有时间更早的帧就永久无法喂入**。
+这与 provider 的「按历元时间取最新未过期帧」是两套不同语义 —— 回放器把「文件位置序」当成了「历元时间序」。
+
+### 64.2 实测证据（根因唯一性）
+
+录制流是**多系统交叉写入**的，同一秒内的 BDS 帧排在 GPS 帧之后：
+
+```
+frame#32 type=1057 decodedTime=03:00:35   ← GPS 已推进到 03:00:35
+frame#34 type=1258 decodedTime=03:00:21   ← BDS 才补写 03:00:21
+frame#37 type=1259 decodedTime=03:00:21
+frame#40 type=1260 decodedTime=03:00:21
+frame#43 type=1270 decodedTime=03:00:21
+```
+
+本场景 `navsys=0x20`（仅 BDS），观测 13 颗全为 BDS（sat=106~142）。
+首历元 03:00:30 时指针停在 frame#32（03:00:35 > 03:00:30），BDS 帧全部被挡在门外
+→ `nav.ssr` 零填充 → `isSsrValid=false` → `fresh=0`、`ns=0`。
+从第二个历元（03:00:45）起指针越过 frame#32，BDS 帧才开始进入，故 `fresh` 立刻回到 8~9。
+
+**排除项**：`SsrCorrector` 的龄期判据带 `Math.abs`（`t1=timediff(time,s.t0[0])`、`t2=timediff(time,s.t0[1])`），
+不存在比较方向写反；`t_eph/t_clk` 在收到帧的卫星上均被正确填充（整小时全喂时 `t0orb=t0clk=04:00:16`、
+`deph` 厘米级、`dclk` 米级）；BDT/GPST 基准差在 `maxAge=60s` 下亦不足以造成全星过期。
+`nav.ssr` 是**原地覆盖写**（每星只保留最后一帧），不存在「按下标取第一帧」或「往前回退找帧」的逻辑。
+
+### 64.3 处置（最小修复，不动 core 算法）
+
+`scanSsr` 收帧完成后按历元时间**稳定排序**，再交给原单调门：
+
+```java
+st.frames.sort(Comparator.comparingDouble(f -> f.time.time + f.time.sec));
+```
+
+排序键取 `time + sec`（`GTime` 为 `long time` + `double sec`，仅按 `time` 排序会丢失亚秒序）。
+`List.sort` 为稳定排序，同一时刻的帧保持文件原顺序。
+实时流「先到先应用」对逐星是等价的（`nav.ssr` 按星独立覆盖），乱序纯属录制产物，故回放侧排序不改变实时语义。
+
+### 64.4 断言（回归哨兵）
+
+`SsrFrame` 增加 `sats`（该帧实际改动的卫星号）：按消息号映射系统（1057~1062 GPS、1063~1068 GLO、
+1240~1245 GAL、1246~1251 QZS、1252~1257 SBS、1258~1263 CMP、1265~1270 依次 GPS/GLO/GAL/QZS/SBS/CMP），
+用 `nav.ssr` 状态哈希在解码前后做差分，得到本帧触碰的卫星。
+
+排序前后各做一次「每颗卫星帧序列 time 单调不减」检查，排序后必须为 0 违例：
+
+```
+ASSERT PASS hour=03 perSatNonDecreasing preSortViolations=none
+```
+
+`preSortViolations=none` 是**预期**结果：录制流中每颗星自身的帧序本来就是单调的，
+乱序发生在**跨系统交错**（BDS 帧整体晚于 GPS 帧落盘），因此每星断言必然通过；
+该断言锁的是「排序不得把同星帧序搞反」，不是「排序应当消除违例」。
+
+### 64.5 验证（03 小时，`GS2025090006`，UTC 03:00）
+
+| 指标 | 修复前 | 修复后 |
+|---|---|---|
+| epoch1 `fresh` | **0** | **9** |
+| epoch1 `ns` | **0**（`stat=0`） | **8**（`stat=6`） |
+| `freshMin` / `freshMax` | 0 / 9 | **8 / 9** |
+| `freshEpochs` | 238/239 | **239/239** |
+| `fresh=0` 历元数 | 1 | **0** |
+| `nsAvg` / `nsMax` | 7.81 / 8 | 7.84 / 8 |
+| `phaseResRms` mean | 0.9078 | 0.9036 |
+| `ratio` | 全程 0.00 | 全程 0.00 |
+
+结论：本条**只解释并消除「首历元空解」**（`fresh=0`/`ns=0`），根因唯一且已闭环。
+残差 ~0.9 m、`ratio` 恒 0、`ns` 不到 13 与帧序无关，属**独立成因**，不在本条范围。
+
+### 64.6 遗留
+
+1. **是否改用 provider 待定**：改用 `SsrCorrectionProvider.fromRtcm(...).applyAt(nav, t, sats)` 可与实时流同源，
+   但 `applyAt` 会把 `t0` 归算到当前历元，使 `isSsrValid` 恒为真，与「原样按龄期判定」的口径冲突，
+   需先确认口径再动。
+2. **过期处置策略两处不一致**（**2026-11-15 已闭环，见 FIX-ALG-065**）：`NETWORK_VRS_DESIGN.md` §4.3.3
+   原写「超龄 → 该星本历元回落广播星历」，而 `PppRtkCore` 为「无新鲜 SSR → `vsat=0`/剔除，不回退广播星历」。
+   经 RTKLIB `satpos_ssr` 与 PRIDE-PPPAR 双参考核查，确认**不存在**回退路径，文档已按「provider 中性 +
+   消费者各自处置」重写，`PppRtkCore` 剔除逻辑保持不变。
+3. 台账定位：本条为**架构偏差**（测试工具绕过既有 provider 语义），不涉及 `rtklib-core` 生产路径。
+
+---
+
+## FIX-ALG-065：SSR 超龄/无改正处置口径统一（provider 中性 + 消费者分治，2026-11-15）
+
+- **日期**：2026-11-15
+- **模块/位置**：`docs/NETWORK_VRS_DESIGN.md` §4.3.3、`rtklib-networkvrs/src/main/java/org/rtklib/java/networkvrs/netsol/DdObservationBuilder.java`（`satPos` / `applySsr` 注释）、`docs/USAGE_GUIDE.md` §6.6、`docs/CORE_OPTIMIZATION_MATRIX.md` §3.1 P11
+- **类别**：C 对齐修复（**仅文档与注释口径统一，无数值行为变更**）
+- **C 版依据**：
+  - `src/ephemeris.c` `satpos_ssr`：SSR 轨道/钟差改正缺失、龄期超 `MAXAGESSR`（90 s）、iod 不一致、改正数超 `MAXECORSSR`/`MAXCCORSSR` 时一律 `return 0` 并置 `svh=-1`；`ppp_res` 见 `svh<0` 直接剔除该星，**全函数无广播星历回退分支**。
+  - `PRIDE-PPPAR/src/lsq/lsq.f90`：无精密轨道/钟差时只标记 `var=-10`（轨道）/`var=-20`（钟差）并跳过该星观测，同样不回退广播星历；回退仅存在于 SPP 单点场景。
+- **问题现象**：同一份实现被三处文档写成互相矛盾的语义——
+  - `NETWORK_VRS_DESIGN.md` §4.3.3：「超龄返回 `null`，该卫星本历元不用 SSR（回落到广播星历）」；
+  - `USAGE_GUIDE.md` §6.6 条件表与注意事项：「无 SSR 自动回退广播星历」「SSR 中断时退化为广播星历 PPP」；
+  - `CORE_OPTIMIZATION_MATRIX.md` P11 行：「无SSR→回退标准PPP」。
+  而 `PppRtkCore` 实际实现为「无新鲜 SSR → `vsat=0` / 剔除」，`DdObservationBuilder` 实际实现为「无改正保持广播值」——文档与代码、代码与代码三方不一致。
+- **根因**：
+  1. `SsrCorrectionProvider.applyAt` 只做「写入有效改正」一件事，超龄时置 `update=0` 而不表态处置方式；文档把「provider 不写改正」误述为「provider 回退广播星历」，属于**责任错置**。
+  2. PPP-RTK（单站解）与 VRS 网解（短基线双差）对同一缺失的处置本就不同，文档未区分消费者，把两条路径写成同一条规则。
+- **修改内容**（仅文档与注释）：
+  1. `NETWORK_VRS_DESIGN.md` §4.3.3 时效门限改为中性表述：「超龄时 `applyAt` 不写入改正（`update = 0`），该星本历元无可用改正；provider 只表态有无改正，处置由消费者决定」，并新增消费者处置对照表。
+  2. `DdObservationBuilder`：类注释、`satPos`、`applySsr` 三处显式声明「SSR 模式保留广播值」是本模块专属处置，**适用前提为基线 < 50 km**（站间双差把米级轨道误差当共模量消掉），基线更长须改走剔除口径；删去原文中未加条件的「米级轨道差可忽略」隐含假设。
+  3. `USAGE_GUIDE.md` §6.6：条件表行与「限制与注意」改为「无 SSR 或龄期超限的卫星剔除，不回退广播星历」，`loadSp3` 注释从「SSR 缺失时回退」改为「`EPHOPT_PREC` 时使用」。
+  4. `CORE_OPTIMIZATION_MATRIX.md` P11 局限性改为「无SSR→该星剔除（不回退广播星历）」，与 `PppRtkCore` 实现一致。
+  5. 回填 FIX-ALG-064 §64.6 第 2 条遗留，标注已闭环。
+- **验证**：本次不触碰任何算法代码（`SsrCorrector` 的 `MAXAGESSR=90.0` / `MAXECORSSR=10.0` / `MAXCCORSSR=1E-6*CLIGHT` 与 C 逐值一致且未改动；`PppRtkCore` 的 `[SSR-GATE]` 剔除逻辑未改动），故不产生数值差异，既有测试用例全部保持有效；核对方式为三处文档表述与 `PppRtkCore` / `DdObservationBuilder` 实际分支逐一对照。
+- **对齐结论**：与 C `satpos_ssr` 及 PRIDE-PPPAR PPP 层「无改正即剔除、不回退广播星历」完全一致；VRS 网解保留广播值是**有前提的 JAVA-ONLY 场景优化**（基线 < 50 km），不再是默认全局语义。
+
+---
+
+## FIX-ALG-066：周域模糊度协方差缩放未做合同变换，LAMBDA factorLD 高失败率（2026-11-15）
+
+- **日期**：2026-11-15
+- **类别**：rtklib-core / PPP 与 PPP-RTK 模糊度固定（`PppRtkAmbFix.ppprtkAmbFixUc`、`PppAmbFix` WL/NL）
+- **关联**：回填 FIX-ALG-063 §63.4 遗留项「factorLD 高失败率需单独立项核查」
+- **结论**：根因已闭环（2026-11-15 真实数据复验，见 §66.7）；AR 固定率相关遗留问题不在本条范围内。
+
+### 66.1 现象
+
+WUH20 `factorLD` 失败 99/119（83%）、LA2026090003 失败 97/237（41%），失败发生在 `Lambda.lambda` 的第一阶段，尚未进入 ratio 判定，故 ratio 中位数偏低只是该漏斗下游的表象。
+
+### 66.2 排查（按指定顺序，未跳步）
+
+1. **前置归一化核查**：`ppprtkAmbFixUc` 调用 `Lambda.lambda` 之前不存在 `Qb /= s[0]` 之类的归一化；对照 C 版调用链（`rtkpos.c` 的 PPP-AR 分支）同样没有该步骤 → 两者一致，排除。
+2. **实现对齐核查**：`Lambda.java` 行优先化后与 C `lambda.c` 逐行等价（`factorLD` 中 `D[j]=Q[j+j*n]`、`L[i+j*n]=Q[i+j*n]/D[j]` 的 i/j 语义转换正确）→ 排除移植错误。
+3. **诊断埋点**：新增 `Lambda.debugAr()`（`PPP_DEBUG_AR=1` 或 `-Dppp.debugAr=1`）、`Lambda.qDiagnostics()`（nb / 迹 / 对角极值及下标 / 非对称度 max|Qij-Qji| / Gershgorin 条件数上界）、`lambda(..., failInfo)` 记录首个非正对角元下标；`PppRtkAmbFix` 与 `PppAmbFix` 的 WL、NL 分支全部接入。
+4. **根因定位**：问题在喂给 `factorLD` 的 Q 构造，而非 `factorLD` 本身。
+
+### 66.3 根因
+
+米 → 周的单位变换是逐轴对角变换 `D = diag(1/lam_i)`，即 `a = D·x`，因此协方差必须做完整合同变换
+
+    Q_ij = P_ij / (lam_i * lam_j)
+
+旧实现为 `Q[i*nb+j] = P[...] / (lam * lam)`，其中 `lam` 只取第 i 行卫星的波长，等价于把 `D·P·D` 的对角缩放当成唯一缩放，**只在 `lam_i == lam_j` 时成立**：
+
+- 单频/单系统（所有波长相同）→ 结果正确，缺陷被完全掩盖；
+- 双频混排（WUH20 的 BDS B1I 0.1920 m 与 B3I 0.2364 m 交替）→ Q 不再对称（实测 max|Qij-Qji| 达 8.8 周²）。LD 分解中 `D[i] = Q_ii - Σ L[k][i]²·D[k]` 的减项来自按 `lam_k²` 缩放的互协方差，与被减项 `Q_ii`（按 `lam_i²` 缩放）不同源，相关度升高时 `D[i]` 直接转负 → `factorLD` 返回 -1。
+
+### 66.4 合成数据验证（n=8，λ 交替 0.1920/0.2364 m，P 取等相关模型）
+
+| 相关度 rho | 同波长对照（旧缩放） | 混波长 + 旧缩放 `lam_i²` | 混波长 + 合同变换 `lam_i*lam_j` |
+|---|---|---|---|
+| 0.5 | info=0, asym=0 | info=0, asym=4.6 | info=0, asym=0 |
+| 0.8 | info=0, asym=0 | **info=-1, failIdx=5, asym=7.4** | info=0, asym=0 |
+| 0.9 | info=0, asym=0 | **info=-1, failIdx=5, asym=8.3** | info=0, asym=0 |
+| 0.95 | info=0, asym=0 | **info=-1, failIdx=5, asym=8.8** | info=0, asym=0 |
+| 0.99 | info=0, asym=0 | **info=-1, failIdx=5, asym=9.1** | info=0, asym=0 |
+
+要点：失败只出现在「波长混排 + 旧缩放」；失败下标固定（5，对应 λ=0.2364 的那一路），与「失败集中在少数固定索引 → 先查该索引的 Q 构造」的判断规则吻合；换成合同变换后 asym 恒为 0 且 info=0。合成用例为一次性验证脚本，未入库。
+
+### 66.5 修改
+
+1. `PppRtkAmbFix.ppprtkAmbFixUc`：先填 `lamArr[i]`，再双重循环 `Q[i*nb+j] = P[...] / (lamArr[i]*lamArr[j])`（`d<=0` 置 0，与原 `lam==0` 行为一致）。
+2. `PppAmbFix` WL 分支：`QbWl` 改为先收集每星 `lamWl`，再按 `lamWl_i*lamWl_j` 填充（原按单星 `lamWl²` 填充，多系统 0.862 / 1.025 m 混排同样不对称）。
+3. `PppAmbFix` NL 分支：`QbNl` 改为先收集每星 `lamNl`，循环结束后按 `lamNl_i*lamNl_j` 填充（仅 `ionoopt != IONOOPT_IFLC` 分支构造 QbNl）。
+
+### 66.6 验证
+
+- `rtklib-core` 编译与 test-compile 通过；`org.rtklib.java.ppp.*Test` 与 `org.rtklib.java.ppprtk.*Test` 共 65 项全部通过（含 `PppRtkFixValidatorTest` 9 项），无回归。
+- 数据集复验：2026-11-15 已执行（两站均显式进入 UC 分支），结果与判读见 §66.7。
+
+### 66.7 真实数据复验（2026-11-15）
+
+复现命令（`PppRtkSsrReplay` 默认 `ionoopt=3` / `nf=2` 走 IFLC，必须显式改参数才会进 `ppprtkAmbFixUc`）：
+
+```
+PPP_DEBUG_AR=1 mvn -o -pl rtklib-test exec:java -Dlogback.configurationFile=.tmp\logback-ar-debug.xml \
+  -Drtk.ionoopt=4 -Drtk.nf=3 -Drtk.navsys=0x29 -Dexec.args="run -1 0 0 <station>"
+```
+
+日志：`.tmp/verify_wuh20_uc.log`（WUH20 04:26 段，119 历元）、`.tmp/verify_la_uc.log`（LA2026090003 2026-10-31 UTC 00 段，237 历元）。
+
+#### 66.7.1 混波长前提成立（新增埋点 `[AR-AMB]`，逐模糊度打印 `sat/freq/lam`）
+
+| 数据集 | 参与 LAMBDA 的 nb | `lamDistinct` 分布（出现次数） | 波长示例（m） |
+|---|---|---|---|
+| WUH20 | 6 ~ 50 | 2(2) / 3(2) / 5(2) / 6(96) | G10 0.1903、C07 0.1920、G28 第二频 0.2442 |
+| LA | 4 ~ 50 | 1(11) / 2(7) / 3(206) / 4(196) | G/E 0.1903 与 C 0.1920 混排 |
+
+结论：`lamArr` 确实存在多个不同值，合同变换修复**改变数值**，不属于「全同波长 → 修复不改变数值、失败另有原因」的情形，继续第二步。
+
+#### 66.7.2 复验结果
+
+| 指标 | WUH20 修复前 | WUH20 修复后 | LA 修复前 | LA 修复后 |
+|---|---|---|---|---|
+| `[AR-Q]` asym 非零条数 | 未采集（埋点晚于修复，无留存日志） | **0/102** | 未采集（同左） | **0/420** |
+| `[AR-Q-FAIL]` 条数（失败明细行） | 未采集（埋点晚于修复） | **0** | 未采集（同左） | **0** |
+| LAMBDA `info=-1`（factorLD 失败） | 99 | **0** | 194 行（去重 97） | **0** |
+| LAMBDA `info=-2`（搜索溢出） | 0（LD 先失败，未到达该阶段） | **78/102**，全部 nb≥34（nb=50 占 31） | 0 | 0 |
+| 进入 ratio 判定的样本 | 6 | 24 | 242 行（去重 121） | 420 行（去重 210） |
+| ratio p50 / max | 1.452 / 3.234 | 1.041 / 3.384 | 1.063 / 2.846 | 1.037 / 1.865 |
+| ratio ≥ 3.0 的样本 | 1 | 1 | 0 | 0 |
+| FIX 历元 | 1/119 | 1/119 | 0/237 | 0/237 |
+| `EPOCH` 行 ratio 非零 | 0/119 | 0/119 | 0/237 | 0/237 |
+
+#### 66.7.3 判读
+
+1. **factorLD 根因闭环**：`[AR-Q-FAIL]` 与 `info=-1` 全部归零（WUH20 99→0、LA 97→0），修复后真实数据 `asym` 恒为 0（WUH20 102/102、LA 420/420）。真实数据修复前的 `asym` 无留存（`[AR-Q]` 埋点晚于修复启用），其 4~9 周² 量级来自 §66.4 合成数据（4.6 / 7.4 / 8.3 / 8.8 / 9.1），修复后同样归零。合同变换在真实混波长数据上成立，合成结论被实测复现。 补充：WUH20 侧的 `.tmp\wuh20_replay\ssr\04.rtcm3` 才是真 SSR（1057/1058/1059、1240/1241/1242、1258/1259/1260 与 1265/1267/1270，`hasSsrEpochs=119/119`），两站的对照场景并不等价（见下条）。
+2. **WUH20 出现新的失败模式，但不是 factorLD**：修复后 LD 恒成功，78/102 次调用在 `search` 阶段溢出（`info=-2`），失败集中在 nb≥34（nb=50 占 31 次）。这是大维数模糊度协方差近似退化（同星跨频相关接近 1）导致搜索枚举超过 `LOOPMAX=10000`，与 Q 对称性无关；LA 段 nb 较小，未触发。修复前的 99 次失败全部是 `info=-1`，该失败模式此前被 LD 失败完全遮蔽。
+3. **`EPOCH` 行 ratio 恒 0 是下游结构性问题，与 factorLD 无关**：`PppRtkAmbFix` 全文件只写 `rtk.sol.stat = SOLQ_FIX`，从不给 `rtk.sol.ratio` 赋值，因此 UC 路径无论 LAMBDA 是否成功、ratio 多大，输出 ratio 恒为 0。真实判定样本的 ratio 只能从 `PPP-RTK AR: nb=.. ratio=..` 调试行读取。
+4. **AR 固定率未改善**（WUH20 1/119、LA 0/237，与修复前持平）：进入判定的样本 ratio 中位数仍只有 1.04~1.05，最大 3.384（仅 1 例过门限）。LA 修复后 max 由 2.846 降到 1.865 属**选择效应**：修复前只有 121 个 LD 通过的样本进入统计，修复后全部 210 个样本都进入判定，分布整体下移。
+5. **LA 段用的文件根本不是 SSR 数据**：`D:\autopostservicewin\_ssr_pad\2026-10-31\00.rtcm3`（以及 `08.rtcm3` 等整目录文件）实测只含 3 种 RTCM 电文 —— 1006（测站 ARP）、1042（北斗广播星历）、1124（北斗 MSM4 观测），**无任何 SSR 改正电文**（1057~1068 / 1240~1251 / 1258~1263 / 1265~1270 一个都没有）。目录名 `_ssr_pad` 与内容不符，回放器把整目录当作 SSR 源使用，因此 `HOUR` 行 `ssrFrames=573` 实为「RTCM 电文总数」而非 SSR 帧数（`scanSsr` 对每条成功解码的电文都建帧，只有 SSR 类型才会写 `nav.ssr`），`hasSsrEpochs=0/237` 才是真相。由此产生的副作用已实测：`proc.feed` 收到 1006 会打印 `RTCM 1006: captured station position ECEF` 共 48 次并改写 `rtk.sol.rr`/`rtk.rb`，收到 1124 会走 `PppProcessor.processEpoch` 在测站坐标上跑 PPP 历元（日志中 `ppprtkos ENTRY epoch=1/2/3` 即来自此路径）。结论：LA 两次跑都不是 PPP-RTK，而是「无 SSR 且喂入了测站自身观测/星历」的浮点 PPP；修复前后条件一致，可用于验证 factorLD 不失败，但不能作为 PPP-RTK 场景的验收证据，也不能据此判断固定率。
+
+#### 66.7.4 结论
+
+FIX-ALG-066 的根因（周域协方差缩放未做合同变换）已在真实数据上闭环；AR 固定率仍低的直接瓶颈已转移到「搜索溢出 `info=-2`（仅 WUH20 大维数）」与「`rtk.sol.ratio` 未写回 + 候选 ratio 整体低于门限」，需另立条目，不在本条范围内。
+
+#### 66.7.5 真实 SSR 数据集交叉验证：GS2025090006（2026-10-31 UTC 03 段）
+
+数据集：`D:\gnss-val-workspace\_tmp_rinex\GS2025090006`（`hour` 布局，239 历元 @15 s）+ `_tmp_ssr`（00~23 逐小时 RTCM3，含 1057/1058/1059、1240/1241/1242、1258/1259/1260 与相位偏差 1265/1267/1270，**这才是真 SSR**）。
+
+**小时基准陷阱**：该目录的文件名按 **UTC** 小时命名（`03.rtcm3` 内部时间戳 03:00:20~04:00:16），而 `rtk.ssrHourBasis` 默认 `local`，取到 `11.rtcm3`（内部时间戳 11:xx），与 UTC 03 的观测相差 8 h。实测后果：`hasSsrEpochs=0/239`，退化为无 SSR 的浮点 PPP，却仍报 fixRate 78.7%（errFix 50.0%、phaseResRms p50 3.35 m）——再次复现 FIX-ALG-062 的「高固定率假象」。加 `-Drtk.ssrHourBasis=utc` 后 `hasSsrEpochs=239/239`、`fresh=8~9`。
+
+该站观测头只有 `C` 系统（24 种 BDS 观测类型），`navsys` 默认 `0x20`（BDS-only），`nsAvg≈7.8`，几何偏弱。
+
+| 配置 | 分支 | fix | `[AR-Q]` asym 非零 | `[AR-Q-FAIL]` | ratio 范围 | phaseResRms p50 |
+|---|---|---|---|---|---|---|
+| 默认（local 基准，无 SSR） | IFLC | 188/239 (78.7%) | — | — | — | 3.35 m |
+| `ssrHourBasis=utc` | IFLC | 56/239 (23.4%) | — | — | — | 0.87 m |
+| `ssrHourBasis=utc` + `ionoopt=4`/`nf=3` + `PPP_DEBUG_AR=1` | UC | 2/239 (0.8%) | **0/185** | **0** | 1.000 ~ 30.632 | 0.91 m |
+
+UC 段细节：`[AR-AMB]` 的 `lamDistinct` 分布为 1(6) / 2(3) / **3(176)**，波长混排前提在真实 SSR 数据上同样成立；`nb` 分布 4~22（nb=22 出现 59 次）；422 次 AR 调用中 54 次因 `nb<4` 提前退出，其余全部通过 LD 分解，`ratio` 中位约 1.01、仅 2 次（`nb=4`，ratio=7.194 / 30.632）过 3.0 门限。
+
+**判读**：合同变换修复在本数据集上第三次得到确认（asym 恒 0、factorLD 零失败）。固定率低与本修复无关：`phaseResRms`（PPP 路径下 `ssat.resc` 存的是**相位**后验残差——`code==0` 为相位分支，见 `PppCore` 的 `if (code == 0) resc[frq]=res; else resp[frq]=res;`）中位 0.91 m，与 §64.5 在同一数据集上记录的 ~0.9 m 完全一致，属 FIX-ALG-064 遗留的**独立成因**；`ns` 也仍是 8（观测每历元 13 星），同属该遗留问题。`xaDelta` 由 0 涨到 10.4 m、高程 2169.16→2169.84 m 的记录保留，但本条不将其归因于 Q 对称性。
+
+#### 66.7.6 数据源清点与 SSR 信号映射核查
+
+`D:\gnss-val-workspace` 是完整数据仓库，实测构成：
+
+| 目录 | 内容 | 时间基准 |
+|---|---|---|
+| `_tmp_rinex` | 4 站 × 24 小时（`GS2025090006/0015/0017/0020`），每站 `00~23\<站>.obs/.nav` | **路径按北京时间、内容按 UTC** |
+| `_tmp_ssr` | `00~23.rtcm3` 逐小时 | **文件名按 UTC**（`03.rtcm3` 内部时间戳 03:00:20~04:00:16） |
+| `lake\ssr\SSRA01CAS0` | `YYYYMMDD\HH.rtcm3` 按日归档 | 日目录 + 小时文件 |
+| `products` | `CLK`/`SP3`/`BIA`/`VMF3`/`ERP`/`ATX`，按 `YYYYMMDD` 日目录 | 精密产品，不在本条范围 |
+
+关键坑：`hourFilePath` 对 `hour` 布局取 `utcHour + 8` 作目录名，故 **UTC 03 的观测在 `_tmp_rinex\<站>\11`**（`11` 目录内容首历元 03:00:30 UTC）；`_tmp_ssr` 文件名就是 UTC 小时，因此必须 `-Drtk.ssrHourBasis=utc`，否则取到 `11.rtcm3`（UTC 11）错位 8 小时。
+
+`diag` 模式（`-Dexec.args=diag -1 3 3 GS2025090006` + `ssrHourBasis=utc`）输出：
+
+```
+SSR message inventory: 1057=1032 1058=1005 1059=996
+                       1240=1032 1241=1005 1242=996
+                       1258=1033 1259=1006 1260=997
+                       1265=871  1267=871  1270=871
+```
+
+BDS 的轨道/钟差/码偏差/相位偏差电文齐全（无 GPS 相位偏差 1060，但本数据 BDS-only，无影响）。逐星状态中 `cbias`/`pbias` 同时覆盖 `2I(1561.10M)` 与 `6I(1268.52M)`，与 RINEX 观测头 `C2I/L2I` + `C6I/L6I` 槽位一致（`promoteBdsSlot1` 默认把 `6I` 提为 slot1）。
+
+**结论：SSR 信号映射正确，不是 0.9 m 残差的成因。** 四站同一小时（UTC 03，IFLC 默认分支，`ssrHourBasis=utc`）实测：
+
+| 站 | epochs | fix | fixRate | nsAvg | phaseResRms p50 |
+|---|---|---|---|---|---|
+| GS2025090006 | 239 | 56 | 23.4% | 7.84 | 0.87 m |
+| GS2025090015 | 238 | 105 | 44.1% | 6.94 | 1.15 m |
+| GS2025090017 | 239 | 148 | 61.9% | 7.90 | 0.95 m |
+| GS2025090020 | 238 | 7 | 2.9% | 7.42 | 0.62 m |
+
+四站固定率离散（2.9%~61.9%）而残差同量级（0.6~1.2 m），说明问题**系统级而非单站级**；与 `ns` 只有 7~8（观测 13 星）、候选 `ratio` 贴 1.0 一起，指向 §64.5 已登记的独立成因，需另立条目，不在 FIX-ALG-066 范围。
+
+### 66.8 对齐结论
+
+C 版 `lambda.c` 的 `factorLD` 不做任何输入归一化，对 Q 的唯一要求就是「对称正定」；本次修复恢复的正是这一前提，未引入任何与 C 不一致的额外处理。单系统/单频场景数值不变（`lam_i == lam_j`），既有单系统基线不受影响。

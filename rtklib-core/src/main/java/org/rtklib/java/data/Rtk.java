@@ -2,6 +2,9 @@ package org.rtklib.java.data;
 
 import org.rtklib.java.ai.spi.FixValidator;
 import org.rtklib.java.ai.spi.ObsCorrector;
+import org.rtklib.java.ai.spi.PppRtkFixValidator;
+import org.rtklib.java.ai.spi.PppSolutionValidator;
+import org.rtklib.java.ai.spi.PppVarianceScaler;
 import org.rtklib.java.ai.spi.RefStarValidator;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
@@ -144,6 +147,15 @@ public class Rtk implements Serializable {
     // 接口三钳位告警去重（偏差置 0 / 方差上限各一次，§4.3.4）
     public transient boolean aiBiasClampLogged;
     public transient boolean aiScaleClampLogged;
+
+    // PPP 体系 AI 三接口实例级覆盖：优先级高于 AiHooks 注入点，null 表示不覆盖
+    public transient PppSolutionValidator aiPppSolutionValidator;
+    public transient PppVarianceScaler aiPppVarianceScaler;
+    public transient PppRtkFixValidator aiPppRtkFixValidator;
+    // PPP AI 三接口跨历元簿记与熔断状态：仅注入时分配，未注入为 null（I-1）
+    public transient AiPppState aiPppState;
+    // 确定性 qr 门限本历元是否满足降级判据（归因字段，只读 sol.qr，不改变数值，§3.3）
+    public transient boolean pppQrDegraded;
 
     public Rtk() {
         this.sol = new Sol();

@@ -635,7 +635,7 @@ PPP-RTK 同样是**独立解算模式**（`PMODE_PPPRTK_KINEMA = 10`、`PMODE_PP
 |------|-------------|------|
 | 模式常量 | `opt.mode = PMODE_PPPRTK_KINEMA` / `PMODE_PPPRTK_STATIC` | 决定 dynamics、输出语义与自适应分类（`AdaptiveMode.PPP_RTK`） |
 | 内核开关 | `cfg.pppRtk.enable = true` + `ppp.setRtkConfig(cfg)` | **真正决定派发**：`PppProcessor` 按此开关选择 `PppRtkCore`，只改 `opt.mode` 不会切换内核 |
-| SSR 改正 | 实时 SSR 流 / SSR 产品写入 `nav.ssr` | 有 SSR 才应用轨道/钟差/高频钟差改正；无 SSR 自动回退广播星历（等同普通 PPP，不报错） |
+| SSR 改正 | 实时 SSR 流 / SSR 产品写入 `nav.ssr` | 有 SSR 才应用轨道/钟差/高频钟差改正；无 SSR 或改正龄期超限的卫星**剔除**，不回退广播星历（对齐 RTKLIB `satpos_ssr`） |
 
 **派发优先级**：`cfg.pppRtk.enable` > `PppCoreEx`（PPP 扩展）> `PppCore`。PPP-RTK 模式下 `cfg.pppAr.*` 的 Fix-and-Hold / Partial AR **不参与**（该链路属于 `PppCoreEx`），PPP-RTK 使用自己的 `cfg.pppRtk.enableAR` / `enableFixHold`。
 
@@ -656,7 +656,7 @@ cfg.ppp.ssrMaxAge = 60.0;                   // SSR 改正数最大龄期 (s)
 
 PppProcessor ppp = new PppProcessor(opt, handler, null);
 ppp.setRtkConfig(cfg);                      // 必须注入
-ppp.loadSp3("igs.sp3");                     // 备用星历（SSR 缺失时回退）
+ppp.loadSp3("igs.sp3");                     // 精密星历（opt.sateph = EPHOPT_PREC 时使用；SSR 模式不据此回退）
 ppp.loadClk("igs.clk");
 ppp.loadFcb("igs.fcb");                     // IFLC 下 AR 必需（FCB/UPD/OSB 任一）
 
@@ -667,7 +667,7 @@ PppProcessor.PppResult result = ppp.finish();
 
 **限制与注意**：
 - `solstatic` 仅对 `PMODE_PPP_STATIC` 生效，`PMODE_PPPRTK_STATIC` 不会单解输出（构造时按 `opt.mode == PMODE_PPP_STATIC` 判定）。
-- SSR 未覆盖的卫星自动跳过改正，仍以广播星历参与解算；SSR 中断时退化为广播星历 PPP，恢复后自动重新应用改正。
+- SSR 未覆盖或改正龄期超 `cfg.ppp.ssrMaxAge` 的卫星**剔除**，不回退广播星历（对齐 RTKLIB `satpos_ssr` 与 PRIDE-PPPAR）；SSR 中断期间可用星数下降，恢复后自动重新应用改正。
 - PPP-RTK 的收敛依赖 SSR 覆盖与相位偏差质量，无相位偏差时只能得到浮点解。
 
 ---

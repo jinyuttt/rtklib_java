@@ -108,6 +108,19 @@ public final class PppRtkCore {
         int nx = ppprtknx(opt);
         double ssrMaxAge = cfg != null ? cfg.ppp.ssrMaxAge : 60.0;
         boolean hasSsr = SsrCorrector.hasSsrData(nav.ssr);
+        boolean ssrRequired = opt.ionoopt == Constants.IONOOPT_SSR || hasSsr;
+        int nSsrFresh = 0;
+        if (ssrRequired) {
+            for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
+                if (SsrCorrector.isSsrValid(nav.ssr, obs[i].sat, obs[i].time, ssrMaxAge)) nSsrFresh++;
+            }
+        }
+        boolean ssrUnusable = ssrRequired && nSsrFresh == 0;
+        if (ssrUnusable && (rtk.epoch <= 3 || rtk.epoch % 30 == 0)) {
+            LOG.error("[SSR-GATE] epoch={} SSR 数据过期或缺失：hasSsr={} freshSats=0/{} maxAge={}s ionoopt=SSR"
+                    + " -> 本历元无可用改正数，不做 AR/LAMBDA 固定",
+                rtk.epoch, hasSsr, n, String.format(Locale.US, "%.1f", ssrMaxAge));
+        }
 
         // rtk.epoch 已在 RtkProcessor.processEpoch 中按观测历元自增，此处不再重复自增
         // （重复自增会使 epoch<=30 的初始化窗口只剩 15 个真实历元，导致预热收敛期被截断）
@@ -170,18 +183,15 @@ public final class PppRtkCore {
         EphModel.satposs(obs[0].time, obs, n, nav, rs, dts, var, svh, opt.sateph);
 
         if (hasSsr) {
-            SsrCorrector.applyOrbitCorrection(nav.ssr, rs, obs, n);
-            SsrCorrector.applyClockCorrection(nav.ssr, dts, obs, n);
-            SsrCorrector.applyHrClockCorrection(nav.ssr, dts, obs, n);
+            // [FIX-ALG-038] 严格对齐 RTKLIB satpos_ssr：龄期超限或改正数异常的卫星（svh=-1 语义）
+            // 不施加 SSR 改正，由 ppprtkRes 的 SSR-GATE 直接剔除，严禁回退广播星历。
+            SsrCorrector.applyOrbitCorrection(nav.ssr, rs, obs, n, ssrMaxAge);
+            SsrCorrector.applyClockCorrection(nav.ssr, dts, obs, n, ssrMaxAge);
+            SsrCorrector.applyHrClockCorrection(nav.ssr, dts, obs, n, ssrMaxAge);
         }
 
-        // [FIX-ALG-038] SSR validity check intentionally skipped for now.
-        // In PPP-RTK, SSR corrections are optional enhancements; broadcast ephemeris
-        // fallback should always be allowed. applyOrbitCorrection already skips
-        // satellites without SSR data. The original unconditional exclusion prevented
-        // BDS-2 satellites without SSR from participating at all.
-        // TODO: Re-implement conditional exclusion (expired SSR → exclude, no SSR → fallback)
-        // after verifying SSR data coverage and age for all satellite systems.
+        // [FIX-ALG-038] SSR 有效性判定已下沉到 SsrCorrector（RTKLIB satpos_ssr 语义）：
+        // 龄期超限、iod 不一致、改正数值异常的卫星不施加 SSR 改正，并在 ppprtkRes 中剔除。
 
         if (opt.posopt[3] != 0) {
             PppCore.testeclipse(obs, n, nav, rs);
@@ -256,7 +266,12 @@ public final class PppRtkCore {
 
         if (stat == Constants.SOLQ_PPP) {
             if (cfg != null && cfg.pppRtk.enableAR) {
-                PppRtkAmbFix.ppprtkAmbFix(rtk, nav);
+                if (ssrUnusable) {
+                    LOG.error("[SSR-GATE] epoch={} SSR 过期或缺失（freshSats=0/{}），跳过 PPP-RTK AR 与 LAMBDA 固定",
+                        rtk.epoch, n);
+                } else {
+                    PppRtkAmbFix.ppprtkAmbFix(rtk, nav);
+                }
             }
             updateStat(rtk, obs, n, stat, nx);
         }
@@ -438,6 +453,10 @@ public final class PppRtkCore {
         double[] x = rtk.x;
         double[] P = rtk.P;
         PrcOpt opt = rtk.opt;
+        double ssrMaxAge = rtk.rtkConfig != null ? rtk.rtkConfig.ppp.ssrMaxAge : 60.0;
+        // [FIX-ALG-038] SSR 鍒嗘敮鐢熸晥锛堝瓨鍦?SSR 鏀规鏁帮級鍗宠涓?SSR 妯″紡锛氭棤鏂伴矞鏀规鐨勫崼鏄熷墧闄わ紝
+        // 涓ョ鍥為€€骞挎挱鏄熷巻锛圧TKLIB satpos_ssr 鐨?svh=-1 / validobs 璇箟锛夈€?
+        boolean ssrRequired = SsrCorrector.hasSsrData(nav.ssr);
 
         for (int i = 0; i < Constants.MAXSAT; i++) {
             for (int j = 0; j < opt.nf; j++) {
@@ -550,6 +569,12 @@ public final class PppRtkCore {
             for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
                 int sat = obs[i].sat;
                 int j = IB(sat, f, opt);
+                // [SSR-GATE] SSR 过期/缺失的卫星不得进入模糊度状态与 AR 候选集（vsat=0）
+                if (ssrRequired
+                    && !SsrCorrector.isSsrValid(nav.ssr, sat, obs[i].time, ssrMaxAge)) {
+                    for (int jj = 0; jj < Constants.NFREQ; jj++) rtk.ssat[sat - 1].vsat[jj] = 0;
+                    continue;
+                }
 
                 double[] Lc = new double[1];
                 double[] Pc = new double[1];
@@ -587,16 +612,17 @@ public final class PppRtkCore {
                 double sanityLimit = PppCore.initBiasSanityLimit();
                 if (PppCore.isInitBiasOutlier(bias[i], sanityLimit)) {
                     if (rtk.epoch <= 3) {
-                        LOG.warn("[FIX-044] epoch={} sat={} frq={} init_bias={} limit={} outlier -> skip initx",
+                        LOG.warn("[FIX-044] epoch={} sat={} frq={} init_bias={} limit={} outlier -> 剔除该频点（不初始化模糊度，不参与 AR 候选）",
                             rtk.epoch, sat, f, String.format(Locale.US, "%.1f", bias[i]), sanityLimit);
                     }
                     bias[i] = 0.0;
                 } else if (Math.abs(bias[i]) > PppCore.INIT_BIAS_SANITY_CANDIDATE) {
-                    LOG.info("[FIX-061-GAP] epoch={} sat={} frq={} init_bias={} limit={} candidate={} -> accepted now, would be rejected if tightened",
-                        rtk.epoch, sat, f, String.format(Locale.US, "%.1f", bias[i]), sanityLimit,
-                        PppCore.INIT_BIAS_SANITY_CANDIDATE);
+                    if (rtk.epoch <= 3) {
+                        LOG.debug("[FIX-061-GAP] epoch={} sat={} frq={} init_bias={} limit={} candidate={} -> 仅诊断提示：非组合模式 L-P 含整周模糊度，100 m 级属正常量级，不剔除",
+                            rtk.epoch, sat, f, String.format(Locale.US, "%.1f", bias[i]), sanityLimit,
+                            PppCore.INIT_BIAS_SANITY_CANDIDATE);
+                    }
                 }
-
                 // FIX-ALG-043: skip permanently frozen sats (rejc frozen to 1000 during init phase)
                 if (rtk.ssat[sat - 1].rejc[f] >= 100) continue;
 
@@ -616,6 +642,12 @@ public final class PppRtkCore {
             for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
                 int sat = obs[i].sat;
                 int j = IB(sat, f, opt);
+                // [SSR-GATE] SSR 过期/缺失的卫星不得进入模糊度状态与 AR 候选集（vsat=0）
+                if (ssrRequired
+                    && !SsrCorrector.isSsrValid(nav.ssr, sat, obs[i].time, ssrMaxAge)) {
+                    for (int jj = 0; jj < Constants.NFREQ; jj++) rtk.ssat[sat - 1].vsat[jj] = 0;
+                    continue;
+                }
 
                 P[j * nx + j] += PppCore.SQR(opt.prn[0]) * Math.abs(rtk.tt);
 
@@ -653,6 +685,7 @@ public final class PppRtkCore {
         double[] dants = new double[Constants.NFREQ];
         double[] dion_vari = new double[2];
         double[] varr = new double[n * 2 * NF(opt)];
+        double ssrMaxAge = rtk.rtkConfig != null ? rtk.rtkConfig.ppp.ssrMaxAge : 60.0;
         int nv = 0;
         int stat = 0;
 
@@ -697,6 +730,19 @@ public final class PppRtkCore {
         CoordTransform.ecef2pos(rr, pos);
 
         boolean hasSsr = SsrCorrector.hasSsrData(nav.ssr);
+        boolean ssrRequired = opt.ionoopt == Constants.IONOOPT_SSR || hasSsr;
+        int nSsrFresh = 0;
+        if (ssrRequired) {
+            for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
+                if (SsrCorrector.isSsrValid(nav.ssr, obs[i].sat, obs[i].time, ssrMaxAge)) nSsrFresh++;
+            }
+        }
+        boolean ssrUnusable = ssrRequired && nSsrFresh == 0;
+        if (ssrUnusable && (rtk.epoch <= 3 || rtk.epoch % 30 == 0)) {
+            LOG.error("[SSR-GATE] epoch={} SSR 数据过期或缺失：hasSsr={} freshSats=0/{} maxAge={}s ionoopt=SSR"
+                    + " -> 本历元无可用改正数，不做 AR/LAMBDA 固定",
+                rtk.epoch, hasSsr, n, String.format(Locale.US, "%.1f", ssrMaxAge));
+        }
 
         for (int i = 0; i < n && i < Constants.MAXOBS; i++) {
             int sat = obs[i].sat;
@@ -732,6 +778,14 @@ public final class PppRtkCore {
                 if (dbg) { rejCnt[3]++; rejLog.append(sat).append(":excl(vs=")
                         .append(rtk.ssat[sat - 1].vs).append(",svh=").append(svh[i])
                         .append(",rs0=").append(rs[i * 6] == 0.0 ? 1 : 0).append(") "); }
+                continue;
+            }
+
+            // [SSR-GATE] 无新鲜 SSR 改正的卫星直接剔除，避免用过期改正数算出废残差
+            if (ssrRequired
+                && !SsrCorrector.isSsrValid(nav.ssr, sat, obs[i].time, ssrMaxAge)) {
+                if (dbg) { rejCnt[6]++; rejLog.append(sat).append(":ssr-stale "); }
+                exc[i] = 1;
                 continue;
             }
 

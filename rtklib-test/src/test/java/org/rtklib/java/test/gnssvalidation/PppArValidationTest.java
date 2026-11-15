@@ -9,6 +9,7 @@ import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.data.*;
 import org.rtklib.java.product.ProductDownloader;
 import org.rtklib.java.rinex.RinexPppProcessor;
+import org.rtklib.java.ppp.PppCoreEx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -393,5 +394,50 @@ public class PppArValidationTest {
         if (updFile != null) cfg.pppAr.updFile = updFile;
 
         evaluatePppArAccuracy(opt, cfg, "PPP-AR(3F-EWL+WL+NL)");
+    }
+
+    @Test
+    @DisplayName("5.8 PPP-AR链路: KF正定化护甲在AR入口生效")
+    void testArEntryCovariancePsd() {
+        if (!dataAvailable || !arProductAvailable) {
+            log.info("跳过[AR-PSD]: 数据或模糊度产品(FCB/UPD/OSB)不可用");
+            return;
+        }
+
+        PppCoreEx.resetArCovPsdStats();
+
+        SolOpt solOpt = new SolOpt();
+        solOpt.solstatic = 0;
+        RinexPppProcessor ppp = new RinexPppProcessor(createPppArOpt(), solOpt, createPppArConfig(), null);
+        ppp.setAtxPath(atxPath);
+        if (fcbFile != null) ppp.setFcbPath(fcbFile);
+        if (osbFile != null) ppp.setOsbPath(osbFile);
+        if (updFile != null) ppp.setUpdPath(updFile);
+        if (biaFile != null) ppp.setOsbPath(biaFile);
+        ppp.process(obsFile, navFile, sp3File, clkFile);
+
+        double minDiag = PppCoreEx.lastArCovMinDiag();
+        double minAmbDiag = PppCoreEx.lastArAmbMinDiag();
+        double minEig = PppCoreEx.lastArCovMinEig();
+        double minPivot = PppCoreEx.lastArCovMinPivot();
+        long violations = PppCoreEx.arCovPsdViolations();
+        long negDiagEpochs = PppCoreEx.arCovNegDiagEpochs();
+
+        assertTrue(Double.isFinite(minAmbDiag), "AR链路未进入固定入口, 未观测到模糊度子块协方差");
+        assertTrue(minAmbDiag > 0.0, "模糊度子块出现非正对角元: " + minAmbDiag);
+
+        double relTol = 1e-10 * Math.max(Math.abs(minAmbDiag), 1.0);
+        log.info("[AR-PSD] 全阵最小对角元={}, 模糊度子块最小对角元={}, 抽样最小特征值={}, LDL最小枢轴={}, 相对容差={}, 负对角元历元={}, 非正定历元={}",
+                minDiag, minAmbDiag, minEig, minPivot, relTol, negDiagEpochs, violations);
+
+        assertEquals(0L, negDiagEpochs, "AR入口协方差出现负对角元历元");
+        assertTrue(Double.isFinite(minPivot), "未触发AR入口LDL枢轴量检查");
+        assertTrue(minPivot >= -relTol,
+                "模糊度子块LDL枢轴量显著为负(minPivot=" + minPivot + ", tol=" + relTol + ")");
+        if (Double.isFinite(minEig)) {
+            assertTrue(minEig >= -relTol,
+                    "模糊度子块特征值显著为负(minEig=" + minEig + ", tol=" + relTol + ")");
+        }
+        assertEquals(0L, violations, "模糊度子块出现非正定历元");
     }
 }

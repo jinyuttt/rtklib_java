@@ -1,6 +1,7 @@
 package org.rtklib.java.ppp;
 
 import org.rtklib.java.common.ObsCode;
+import org.rtklib.java.ai.spi.PppVarianceScaler;
 import org.rtklib.java.common.RtklibCommon;
 import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.constants.Constants;
@@ -267,9 +268,9 @@ public class PppCore {
         EphModel.satposs(obs[0].time, obs, n, nav, rs, dts, var, svh, opt.sateph);
 
         if (SsrCorrector.hasSsrData(nav.ssr)) {
-            SsrCorrector.applyOrbitCorrection(nav.ssr, rs, obs, n);
-            SsrCorrector.applyClockCorrection(nav.ssr, dts, obs, n);
-            SsrCorrector.applyHrClockCorrection(nav.ssr, dts, obs, n);
+            SsrCorrector.applyOrbitCorrection(nav.ssr, rs, obs, n, SsrCorrector.MAXAGESSR);
+            SsrCorrector.applyClockCorrection(nav.ssr, dts, obs, n, SsrCorrector.MAXAGESSR);
+            SsrCorrector.applyHrClockCorrection(nav.ssr, dts, obs, n, SsrCorrector.MAXAGESSR);
         }
 
         if (opt.posopt[3] != 0) {
@@ -643,14 +644,16 @@ public class PppCore {
                 double sanityLimit = initBiasSanityLimit();
                 if (isInitBiasOutlier(bias[i], sanityLimit)) {
                     if (rtk.epoch <= 3) {
-                        LOG.warn("[FIX-044] epoch={} sat={} frq={} init_bias={} limit={} outlier -> skip init",
+                        LOG.warn("[FIX-044] epoch={} sat={} frq={} init_bias={} limit={} outlier -> 剔除该频点（不初始化模糊度，不参与 AR 候选）",
                             rtk.epoch, sat, f, String.format(Locale.US, "%.1f", bias[i]), sanityLimit);
                     }
                     bias[i] = 0.0;
                 } else if (Math.abs(bias[i]) > INIT_BIAS_SANITY_CANDIDATE) {
-                    LOG.info("[FIX-061-GAP] epoch={} sat={} frq={} init_bias={} limit={} candidate={} -> accepted now, would be rejected if tightened",
-                        rtk.epoch, sat, f, String.format(Locale.US, "%.1f", bias[i]), sanityLimit,
-                        INIT_BIAS_SANITY_CANDIDATE);
+                    if (rtk.epoch <= 3) {
+                        LOG.debug("[FIX-061-GAP] epoch={} sat={} frq={} init_bias={} limit={} candidate={} -> 仅诊断提示：非组合模式 L-P 含整周模糊度，100 m 级属正常量级，不剔除",
+                            rtk.epoch, sat, f, String.format(Locale.US, "%.1f", bias[i]), sanityLimit,
+                            INIT_BIAS_SANITY_CANDIDATE);
+                    }
                 }
 
                 if (x[j] == 0.0 || slip[i] != 0 || bias[i] == 0.0) continue;
@@ -851,6 +854,17 @@ public class PppCore {
         double[] varr = new double[n * 2 * NF(opt)];
         int nv = 0;
         int stat = 1;
+
+        /* 接口 B：未注入时 aiScaler 为 null，下面所有 AI 分支全部跳过（I-1 零回归）。
+         * 行序 → (sat, frq) 映射只在注入时记录，供 R 对角施加使用（§4.4）。 */
+        PppVarianceScaler aiScaler = R != null ? PppAiInject.varianceScaler(rtk) : null;
+        int[] aiRowSat = null;
+        int[] aiRowFrq = null;
+        if (aiScaler != null) {
+            PppWorkBuffer aiWb = aiWorkBuffer(rtk, n * 2 * NF(opt) + Constants.MAXSAT + 3);
+            aiRowSat = aiWb.rowSat;
+            aiRowFrq = aiWb.rowFrq;
+        }
 
         // For post-fit residual check
         int[] obsi = new int[n * 2];
@@ -1073,6 +1087,10 @@ public class PppCore {
                     rtk.ssat[sat - 1].vsat[frq] = 1;
                     rtk.ssat[sat - 1].code[frq][0] = obs[i].code[frq];
                 }
+                if (aiScaler != null && nv < aiRowSat.length) {
+                    aiRowSat[nv] = sat;
+                    aiRowFrq[nv] = frq;
+                }
                 nv++;
             }
         }
@@ -1101,6 +1119,9 @@ public class PppCore {
             for (int j = 0; j < nv; j++) {
                 for (int i = 0; i < nv; i++) R[j * nv + i] = 0.0;
                 R[j * nv + j] = varr[j];
+            }
+            if (aiScaler != null) {
+                PppAiInject.applyVarianceScale(rtk, nv, aiRowSat, aiRowFrq, varr, R, aiScaler);
             }
         }
 
@@ -1848,6 +1869,28 @@ public class PppCore {
         return 0.0;
     }
 
+    /**
+     * 取（必要时惰性创建）接口 B 的行序映射缓冲。
+     * <p>
+     * 仅在 provider 已注入时调用，未注入时工作缓冲维持原状，不额外分配（I-1）。
+     * </p>
+     */
+    private static PppWorkBuffer aiWorkBuffer(Rtk rtk, int maxnv) {
+        PppWorkBuffer wb;
+        if (rtk.workBufPpp instanceof PppWorkBuffer) {
+            wb = (PppWorkBuffer) rtk.workBufPpp;
+        } else {
+            wb = new PppWorkBuffer();
+            rtk.workBufPpp = wb;
+        }
+        wb.ensureInit();
+        if (wb.rowSat == null || wb.rowSat.length < maxnv) {
+            wb.rowSat = new int[maxnv];
+            wb.rowFrq = new int[maxnv];
+        }
+        return wb;
+    }
+
     public static final class PppWorkBuffer {
         // Fixed-size arrays (MAXOBS/MAXSAT sized, allocated once)
         double[] rs;       // MAXOBS * 6
@@ -1861,6 +1904,7 @@ public class PppCore {
         double[] xp, Pp;
         double[] v, H, R;
         double[] xpPrev;
+        int[] rowSat, rowFrq;
 
         void ensureInit() {
             if (rs == null) {
@@ -1894,6 +1938,10 @@ public class PppCore {
             }
             if (R == null || R.length < maxnv * maxnv) {
                 R = new double[maxnv * maxnv];
+            }
+            if (rowSat == null || rowSat.length < maxnv) {
+                rowSat = new int[maxnv];
+                rowFrq = new int[maxnv];
             }
         }
     }

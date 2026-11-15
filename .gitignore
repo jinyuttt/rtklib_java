@@ -184,3 +184,8 @@ cascade_epochs_*.csv
 /tmp_*.txt
 /TimeCheck.java
 /data/
+
+# AI 跨模块合并暂存目录（合并期工作区，不入库）
+**/.ai-staging/
+# 本地临时探针文件
+/.tmp_probe*.txt

@@ -2,6 +2,7 @@ package org.rtklib.java.ambiguity;
 
 import org.ejml.simple.SimpleMatrix;
 import org.rtklib.java.common.MatrixUtil;
+import java.util.Locale;
 
 /**
  * LAMBDA/MLAMBDA整周模糊度固定算法。
@@ -68,6 +69,18 @@ public final class Lambda {
      * @return 0:成功 -1:LD分解失败 -2:搜索溢出
      */
     public static int lambda(int n, int m, double[] a, double[] Q, double[] F, double[] s) {
+        return lambda(n, m, a, Q, F, s, null);
+    }
+
+    /**
+     * 带诊断出参的重载。
+     *
+     * <p>failInfo[0] 返回 factorLD 失败时首个非正对角元下标（原始行序），
+     * 成功或未进入分解时置 -1。仅用于诊断，不改变数值结果。</p>
+     */
+    public static int lambda(int n, int m, double[] a, double[] Q, double[] F, double[] s,
+                             int[] failInfo) {
+        if (failInfo != null && failInfo.length > 0) failInfo[0] = -1;
         if (n <= 0 || m <= 0) return -1;
 
         double[] L = new double[n * n];
@@ -79,7 +92,7 @@ public final class Lambda {
         for (int i = 0; i < n; i++) Z[i * n + i] = 1.0;
 
         int info;
-        if ((info = factorLD(n, Q, L, D)) != 0) return info;
+        if ((info = factorLD(n, Q, L, D, failInfo)) != 0) return info;
 
         reduction(n, L, D, Z);
 
@@ -105,6 +118,51 @@ public final class Lambda {
     }
 
     /**
+     * AR 调试开关：环境变量 PPP_DEBUG_AR=1 或系统属性 ppp.debugAr=1 时开启，
+     * 仅控制诊断输出，不影响解算结果。
+     */
+    public static boolean debugAr() {
+        return "1".equals(System.getenv("PPP_DEBUG_AR"))
+                || "1".equals(System.getProperty("ppp.debugAr"));
+    }
+
+    /**
+     * Q 诊断摘要：nb、迹、对角元极值及其下标、非对称度 max|Qij-Qji|、
+     * 对角比与 Gershgorin 条件数上界。仅用于定位 factorLD 失败。
+     */
+    public static String qDiagnostics(int n, double[] Q) {
+        if (n <= 0 || Q == null || Q.length < n * n) return "n/a";
+        double trace = 0.0, dmin = Double.MAX_VALUE, dmax = -Double.MAX_VALUE, asym = 0.0;
+        int imin = -1, imax = -1;
+        for (int i = 0; i < n; i++) {
+            double d = Q[i * n + i];
+            trace += d;
+            if (d < dmin) { dmin = d; imin = i; }
+            if (d > dmax) { dmax = d; imax = i; }
+            for (int j = 0; j < n; j++) {
+                double e = Math.abs(Q[i * n + j] - Q[j * n + i]);
+                if (e > asym) asym = e;
+            }
+        }
+        double gmax = -Double.MAX_VALUE, gmin = Double.MAX_VALUE;
+        for (int i = 0; i < n; i++) {
+            double off = 0.0;
+            for (int j = 0; j < n; j++) {
+                if (i != j) off += Math.abs(Q[i * n + j]);
+            }
+            double c = Math.abs(Q[i * n + i]) + off;
+            double r = Math.abs(Q[i * n + i]) - off;
+            if (c > gmax) gmax = c;
+            if (r < gmin) gmin = r;
+        }
+        double diagRatio = dmin > 0.0 ? dmax / dmin : Double.POSITIVE_INFINITY;
+        double condG = gmin > 0.0 ? gmax / gmin : Double.POSITIVE_INFINITY;
+        return String.format(Locale.US,
+                "nb=%d trace=%.4g diag[min=%.4g@%d max=%.4g@%d ratio=%.4g] asym=%.4g condGersh=%.4g",
+                n, trace, dmin, imin, dmax, imax, diagRatio, asym, condG);
+    }
+
+    /**
      * LD分解：Q = L' * diag(D) * L。
      *
      * <p>对应RTKLIB LD()。将协方差矩阵Q分解为下三角矩阵L和对角矩阵D。</p>
@@ -118,6 +176,10 @@ public final class Lambda {
      * @return 0:成功 -1:矩阵非正定
      */
     static int factorLD(int n, double[] Q, double[] L, double[] D) {
+        return factorLD(n, Q, L, D, null);
+    }
+
+    static int factorLD(int n, double[] Q, double[] L, double[] D, int[] failInfo) {
         int i, j, k, info = 0;
         double a;
         double[] A = new double[n * n];
@@ -126,6 +188,7 @@ public final class Lambda {
 
         for (i = n - 1; i >= 0; i--) {
             if ((D[i] = A[i * n + i]) <= 0.0) {
+                if (failInfo != null && failInfo.length > 0) failInfo[0] = i;
                 info = -1;
                 break;
             }

@@ -39,6 +39,19 @@ public class AiOpts implements Serializable {
     /** 接口四风险标签与 SNR 窗口的默认窗口长度 W（§3.4）。 */
     public static final int DEFAULT_REF_STAR_WINDOW_EPOCHS = 5;
 
+    /** 接口 A（PPP 解有效性判别）置信度阈值默认值（§3.5）。 */
+    public static final double DEFAULT_PPP_SOLUTION_MIN_CONFIDENCE = 0.5;
+    /** 接口 D（PPP-RTK 固定校验）置信度阈值默认值（§5）。 */
+    public static final double DEFAULT_PPP_RTK_FIX_MIN_CONFIDENCE = 0.5;
+    /** 确定性基线（非 AI）位置方差门限默认值（§3.2）；{@code Double.MAX_VALUE} 表示关闭。 */
+    public static final double DEFAULT_PPP_QR_THRESHOLD = Double.MAX_VALUE;
+    /** 接口 B（PPP 观测方差缩放）方差膨胀上限默认值（§4.6）。 */
+    public static final double DEFAULT_PPP_VARIANCE_SCALE_MAX = 4.0;
+    /** PPP AI 单次推理耗时预算默认值（毫秒，§1.4 S5）；{@code <= 0} 表示不做预算度量。 */
+    public static final double DEFAULT_PPP_AI_MAX_INFERENCE_MS = 50.0;
+    /** PPP AI 单接口连续降级触发熔断的默认历元数（§1.4 S5）。 */
+    public static final int DEFAULT_PPP_AI_MAX_CONSECUTIVE_FAILURES = 10;
+
     /** 接口一：置信度低于此值则固定解降为浮点（默认 0.5）。 */
     public double fixValidatorMinConfidence = DEFAULT_FIX_VALIDATOR_MIN_CONFIDENCE;
 
@@ -89,6 +102,33 @@ public class AiOpts implements Serializable {
     /** 接口四：风险标签与 SNR 窗口的窗口长度 W（默认 5，必须 >= 1）。 */
     public int refStarWindowEpochs = DEFAULT_REF_STAR_WINDOW_EPOCHS;
 
+    /**
+     * 接口 A：解有效性置信度低于此值才降级为 {@code SOLQ_NONE}（默认 0.5，取值 {@code [0,1]}）。
+     * 接口 A 只能降级，误降级的代价高于漏降级（§3.5）。
+     */
+    public double pppSolutionMinConfidence = DEFAULT_PPP_SOLUTION_MIN_CONFIDENCE;
+
+    /**
+     * 接口 D：PPP-RTK 固定解置信度低于此值才否决固定、保持浮点（默认 0.5，取值 {@code [0,1]}）。
+     * 接口 D 只能否决、不能优选，误否决的代价高于漏否决（§5）。
+     */
+    public double pppRtkFixMinConfidence = DEFAULT_PPP_RTK_FIX_MIN_CONFIDENCE;
+
+    /**
+     * 确定性基线（非 AI）：位置方差和 {@code qr[0]+qr[1]+qr[2]} 超过此值即降级（§3.2）。
+     * <p>默认 {@code Double.MAX_VALUE} 即分支关闭，保证 I-1 零回归。</p>
+     */
+    public double pppQrThreshold = DEFAULT_PPP_QR_THRESHOLD;
+
+    /** 接口 B：方差膨胀因子上限，超出则钳到该值（默认 4.0，必须 >= 1.0，§4.6）。 */
+    public double pppVarianceScaleMax = DEFAULT_PPP_VARIANCE_SCALE_MAX;
+
+    /** PPP AI：单次推理耗时预算（毫秒，默认 50，{@code <= 0} 表示不做预算度量，§1.4 S5）。 */
+    public double pppAiMaxInferenceMs = DEFAULT_PPP_AI_MAX_INFERENCE_MS;
+
+    /** PPP AI：单接口连续降级历元数达到此值即熔断（默认 10，必须 >= 1，§1.4 S5）。 */
+    public int pppAiMaxConsecutiveFailures = DEFAULT_PPP_AI_MAX_CONSECUTIVE_FAILURES;
+
     public AiOpts() {
     }
 
@@ -115,6 +155,12 @@ public class AiOpts implements Serializable {
         this.refStarMaxElDrop = other.refStarMaxElDrop;
         this.refStarSwitchRateMax = other.refStarSwitchRateMax;
         this.refStarWindowEpochs = other.refStarWindowEpochs;
+        this.pppSolutionMinConfidence = other.pppSolutionMinConfidence;
+        this.pppRtkFixMinConfidence = other.pppRtkFixMinConfidence;
+        this.pppQrThreshold = other.pppQrThreshold;
+        this.pppVarianceScaleMax = other.pppVarianceScaleMax;
+        this.pppAiMaxInferenceMs = other.pppAiMaxInferenceMs;
+        this.pppAiMaxConsecutiveFailures = other.pppAiMaxConsecutiveFailures;
     }
 
     /**
@@ -147,6 +193,45 @@ public class AiOpts implements Serializable {
         refStarHoldEpochs = clampNonNegative(refStarHoldEpochs, "refStarHoldEpochs");
         refStarFallbackTopK = clampAtLeastOne(refStarFallbackTopK, "refStarFallbackTopK");
         refStarWindowEpochs = clampAtLeastOne(refStarWindowEpochs, "refStarWindowEpochs");
+
+        pppSolutionMinConfidence = clampUnit(
+                pppSolutionMinConfidence, DEFAULT_PPP_SOLUTION_MIN_CONFIDENCE,
+                "pppSolutionMinConfidence");
+
+        pppRtkFixMinConfidence = clampUnit(
+                pppRtkFixMinConfidence, DEFAULT_PPP_RTK_FIX_MIN_CONFIDENCE,
+                "pppRtkFixMinConfidence");
+
+        pppQrThreshold = clampQrThreshold(pppQrThreshold);
+
+        pppVarianceScaleMax = clampAtLeastOne(
+                pppVarianceScaleMax, DEFAULT_PPP_VARIANCE_SCALE_MAX, "pppVarianceScaleMax");
+
+        pppAiMaxConsecutiveFailures = clampAtLeastOne(
+                pppAiMaxConsecutiveFailures, "pppAiMaxConsecutiveFailures");
+
+        if (!Double.isFinite(pppAiMaxInferenceMs)) {
+            log.warn("AiOpts.pppAiMaxInferenceMs 非有限值({})，回退默认值 {}",
+                    pppAiMaxInferenceMs, DEFAULT_PPP_AI_MAX_INFERENCE_MS);
+            pppAiMaxInferenceMs = DEFAULT_PPP_AI_MAX_INFERENCE_MS;
+        } else if (pppAiMaxInferenceMs < 0.0) {
+            log.warn("AiOpts.pppAiMaxInferenceMs = {} 小于 0，钳到 0（不做预算度量）",
+                    pppAiMaxInferenceMs);
+            pppAiMaxInferenceMs = 0.0;
+        }
+    }
+
+    /**
+     * 确定性位置方差门限钳位：非有限或负数一律回退默认值（分支关闭）。
+     * <p>负数若钳到 0 会让每个历元都被降级，故按「更保守」方向回退默认。</p>
+     */
+    private static double clampQrThreshold(double v) {
+        if (!Double.isFinite(v) || v < 0.0) {
+            log.warn("AiOpts.pppQrThreshold = {} 非法，回退默认值 {}（分支关闭）",
+                    v, DEFAULT_PPP_QR_THRESHOLD);
+            return DEFAULT_PPP_QR_THRESHOLD;
+        }
+        return v;
     }
 
     private static int clampNonNegative(int v, String name) {

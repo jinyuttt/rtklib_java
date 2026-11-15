@@ -1,11 +1,15 @@
 package org.rtklib.java.ppprtk;
 
+import java.util.Locale;
+
+import org.rtklib.java.ai.spi.PppRtkFixContext;
 import org.rtklib.java.ambiguity.Lambda;
 import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.constants.Constants;
 import org.rtklib.java.data.*;
 import org.rtklib.java.kalman.KalmanFilter;
+import org.rtklib.java.ppp.PppAiInject;
 import org.rtklib.java.ppp.PppAmbFix;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,11 +35,24 @@ public final class PppRtkAmbFix {
 
     /**
      * IFLC模式AR：x[IB]存储IF组合模糊度（米），不是整数，不能直接LAMBDA。
-     * 必须用WL+NL两步固定（委托给PppAmbFix.pppAmbFixWlNl）。
+     * 必须用WL+NL两步固定（委托给PppAmbFix.pppAmbFixWlNlCandidate）。
      */
     private static void ppprtkAmbFixIf(Rtk rtk, Nav nav) {
         RtkConfig cfg = rtk.rtkConfig;
         int nx = rtk.nx;
+
+        PppAmbFix.WlNlFix cand = PppAmbFix.pppAmbFixWlNlCandidate(rtk, null, 0, 0, 0, nav);
+        if (cand == null) {
+            LOG.debug("PPP-RTK AR (IF): WL+NL fix failed");
+            return;
+        }
+
+        PppRtkFixContext ctx = fixContext(rtk, cand.ratioWl, cand.ratioNl,
+                cand.maxDevWl, cand.maxDevNl, cand.postResidualRms, cand.nFixed);
+        if (!PppAiInject.validateRtkFix(rtk, ctx)) {
+            LOG.debug("PPP-RTK AR (IF): rejected by AI validator, keep float solution");
+            return;
+        }
 
         double[] xa = rtk.xa;
         if (xa == null || xa.length != nx) {
@@ -43,18 +60,18 @@ public final class PppRtkAmbFix {
         }
         System.arraycopy(rtk.x, 0, xa, 0, nx);
 
-        int nFixed = PppAmbFix.pppAmbFixWlNl(rtk, null, xa, 0, 0, 0, nav);
-        if (nFixed <= 0) {
-            LOG.debug("PPP-RTK AR (IF): WL+NL fix failed");
-            return;
-        }
-
-        rtk.xa = xa;
         if (rtk.Pa == null || rtk.Pa.length != nx * nx) {
             rtk.Pa = new double[nx * nx];
         }
         System.arraycopy(rtk.P, 0, rtk.Pa, 0, nx * nx);
 
+        cand.applyTo(xa, rtk.Pa, nx);
+        cand.applyTo(rtk.x, rtk.P, nx);
+        for (int i = 0; i < cand.nFixed; i++) {
+            rtk.ssat[cand.sats[i] - 1].fix[cand.freqs[i]] = 1;
+        }
+
+        rtk.xa = xa;
         rtk.nfix++;
 
         if (cfg.pppRtk.enableFixHold && rtk.nfix >= cfg.pppRtk.fixHoldMinEpoch) {
@@ -65,7 +82,23 @@ public final class PppRtkAmbFix {
             rtk.sol.rr[i] = xa[i];
         }
         rtk.sol.stat = Constants.SOLQ_FIX;
-        LOG.debug("PPP-RTK AR (IF): fixed {} ambiguities via WL+NL cascade", nFixed);
+        LOG.debug("PPP-RTK AR (IF): fixed {} ambiguities via WL+NL cascade", cand.nFixed);
+    }
+
+    /** 接口 D 上下文装配：只读取候选与当前历元快照，不写任何状态。 */
+    private static PppRtkFixContext fixContext(Rtk rtk, double ratioWl, double ratioNl,
+                                               double maxDevWl, double maxDevNl,
+                                               double postResidualRms, int nFixed) {
+        double positionVar = 0.0;
+        if (rtk.sol.qr != null) {
+            for (int i = 0; i < 3 && i < rtk.sol.qr.length; i++) {
+                positionVar += rtk.sol.qr[i];
+            }
+        }
+        return new PppRtkFixContext(rtk.epoch, rtk.sol.ns, ratioWl, ratioNl,
+                maxDevWl, maxDevNl, postResidualRms, positionVar,
+                rtk.sol.pdop, rtk.sol.prev_ratio1, rtk.sol.prev_ratio2,
+                nFixed, 1, rtk.nfix, true);
     }
 
     /**
@@ -84,7 +117,7 @@ public final class PppRtkAmbFix {
 
         for (int sat = 1; sat <= Constants.MAXSAT; sat++) {
             if (rtk.ssat[sat - 1].vs == 0) continue;
-            if (rtk.ssat[sat - 1].azel[1] < opt.elmin) continue;
+            if (rtk.ssat[sat - 1].azel[1] < opt.elmaskar) continue;
 
             // [FIX-ALG-060] 系统白名单原为写死的 GPS|GAL，navsys 只配 BDS/QZS 时 UC 路径
             // 静默全跳过（与 FIX-ALG-058 同类缺陷）。改为动态继承 opt.navsys。
@@ -93,7 +126,7 @@ public final class PppRtkAmbFix {
 
             for (int f = 0; f < nf; f++) {
                 if (rtk.ssat[sat - 1].vsat[f] == 0) continue;
-                if (rtk.ssat[sat - 1].lock[f] < opt.minlock) continue;
+                if ((rtk.ssat[sat - 1].slip[f] & Constants.LLI_HALFC) != 0) continue;
 
                 int idx = PppRtkCore.IB(sat, f, opt);
                 if (idx >= nx) continue;
@@ -119,14 +152,21 @@ public final class PppRtkAmbFix {
 
         double[] a = new double[nb];
         double[] Q = new double[nb * nb];
+        double[] lamArr = new double[nb];
         for (int i = 0; i < nb; i++) {
-            int idx = idxList[i];
             double freq = SatUtils.sat2freq(satList[i], rtk.ssat[satList[i] - 1].code[freqList[i]][0], nav);
-            double lam = freq > 0 ? Constants.CLIGHT / freq : 0.0;
-            if (lam == 0.0) { a[i] = 0.0; continue; }
-            a[i] = rtk.x[idx] / lam;
+            lamArr[i] = freq > 0 ? Constants.CLIGHT / freq : 0.0;
+            a[i] = lamArr[i] > 0.0 ? rtk.x[idxList[i]] / lamArr[i] : 0.0;
+        }
+        // 米 → 周的单位变换是逐轴对角变换 D=diag(1/lam_i)，
+        // 因此协方差必须做完整的合同变换 Q_ij = P_ij/(lam_i*lam_j)。
+        // 若对 (i,j) 一律用 lam_i²（旧实现），矩阵不再对称，
+        // 对角元素不同频点混排时（如 B1I 0.1920 m 与 B3I 0.2364 m）
+        // 会失去正定性，LD 分解的首个对角元即可为负（factorLD 返回 -1）。
+        for (int i = 0; i < nb; i++) {
             for (int j = 0; j < nb; j++) {
-                Q[i * nb + j] = rtk.P[idx * nx + idxList[j]] / (lam * lam);
+                double d = lamArr[i] * lamArr[j];
+                Q[i * nb + j] = d > 0.0 ? rtk.P[idxList[i] * nx + idxList[j]] / d : 0.0;
             }
         }
 
@@ -134,13 +174,39 @@ public final class PppRtkAmbFix {
         double[] F = new double[nb * m];
         double[] s = new double[m];
 
-        int info = Lambda.lambda(nb, m, a, Q, F, s);
+        if (Lambda.debugAr()) {
+            StringBuilder ambSb = new StringBuilder();
+            int lamDistinct = 0;
+            double lamFirst = 0.0;
+            for (int i = 0; i < nb; i++) {
+                boolean seen = false;
+                for (int k = 0; k < i; k++) {
+                    if (Math.abs(lamArr[k] - lamArr[i]) < 1e-9) { seen = true; break; }
+                }
+                if (!seen) {
+                    lamDistinct++;
+                    if (lamDistinct == 1) lamFirst = lamArr[i];
+                }
+                if (i > 0) ambSb.append(", ");
+                ambSb.append(SatUtils.satno2id(satList[i])).append("/").append(freqList[i]).append("/").append(String.format(Locale.US, "%.4f", lamArr[i]));
+            }
+            LOG.info("[AR-AMB] UC nb={} lamDistinct={} lamFirst={} list=[{}]",
+                    nb, lamDistinct, String.format(Locale.US, "%.4f", lamFirst), ambSb);
+            LOG.info("[AR-Q] UC {}", Lambda.qDiagnostics(nb, Q));
+        }
+        int[] failInfo = new int[1];
+        int info = Lambda.lambda(nb, m, a, Q, F, s, failInfo);
         if (info != 0) {
+            if (failInfo[0] >= 0 && failInfo[0] < nb) {
+                int fi = failInfo[0];
+                LOG.info("[AR-Q-FAIL] UC {} failIdx={} sat={} freq={}",
+                        Lambda.qDiagnostics(nb, Q), fi, satList[fi], freqList[fi]);
+            }
             LOG.debug("PPP-RTK AR: LAMBDA failed info={}", info);
             return;
         }
 
-        double ratio = (s[1] > 0) ? s[0] / s[1] : 999.0;
+        double ratio = (s[0] > 0) ? Math.min(s[1] / s[0], 999.0) : 999.0;
         double arRatio = cfg.pppRtk.arRatio;
 
         LOG.debug("PPP-RTK AR: nb={} ratio={} threshold={}", nb, String.format("%.3f", ratio), String.format("%.3f", arRatio));
@@ -150,14 +216,13 @@ public final class PppRtkAmbFix {
             return;
         }
 
-        double[] xa = rtk.xa;
-        double[] Pa = rtk.Pa;
-        if (xa == null || xa.length != nx) {
-            xa = new double[nx];
-            Pa = new double[nx * nx];
-        }
-        System.arraycopy(rtk.x, 0, xa, 0, nx);
-        System.arraycopy(rtk.P, 0, Pa, 0, nx * nx);
+        double[] fixedAmb = new double[nb];
+        int[] keepIdx = new int[nb];
+        int[] keepSat = new int[nb];
+        int[] keepFrq = new int[nb];
+        int nKeep = 0;
+        double maxDev = 0.0;
+        double sumDevSq = 0.0;
 
         for (int i = 0; i < nb; i++) {
             int idx = idxList[i];
@@ -165,14 +230,50 @@ public final class PppRtkAmbFix {
             double lam = freq > 0 ? Constants.CLIGHT / freq : 0.0;
             if (lam == 0.0) continue;
 
-            xa[idx] = F[i * m] * lam;
+            double amb = F[i * m] * lam;
+            double dev = (amb - rtk.x[idx]) / lam;
+
+            keepIdx[nKeep] = idx;
+            keepSat[nKeep] = satList[i];
+            keepFrq[nKeep] = freqList[i];
+            fixedAmb[nKeep] = amb;
+            nKeep++;
+
+            sumDevSq += dev * dev;
+            if (Math.abs(dev) > maxDev) maxDev = Math.abs(dev);
+        }
+
+        if (nKeep <= 0) {
+            LOG.debug("PPP-RTK AR: no fixable ambiguity");
+            return;
+        }
+
+        PppRtkFixContext ctx = fixContext(rtk, Double.NaN, ratio, Double.NaN, maxDev,
+                Math.sqrt(sumDevSq / nKeep), nKeep);
+        if (!PppAiInject.validateRtkFix(rtk, ctx)) {
+            LOG.debug("PPP-RTK AR: rejected by AI validator, keep float solution");
+            return;
+        }
+
+        double[] xa = rtk.xa;
+        double[] Pa = rtk.Pa;
+        if (xa == null || xa.length != nx || Pa == null || Pa.length != nx * nx) {
+            xa = new double[nx];
+            Pa = new double[nx * nx];
+        }
+        System.arraycopy(rtk.x, 0, xa, 0, nx);
+        System.arraycopy(rtk.P, 0, Pa, 0, nx * nx);
+
+        for (int i = 0; i < nKeep; i++) {
+            int idx = keepIdx[i];
+            xa[idx] = fixedAmb[i];
             for (int j = 0; j < nx; j++) {
                 Pa[idx * nx + j] = 0.0;
                 Pa[j * nx + idx] = 0.0;
             }
             Pa[idx * nx + idx] = 0.0;
 
-            rtk.ssat[satList[i] - 1].fix[freqList[i]] = 1;
+            rtk.ssat[keepSat[i] - 1].fix[keepFrq[i]] = 1;
         }
 
         rtk.xa = xa;
@@ -180,7 +281,7 @@ public final class PppRtkAmbFix {
         rtk.nfix++;
 
         if (cfg.pppRtk.enableFixHold && rtk.nfix >= cfg.pppRtk.fixHoldMinEpoch) {
-            fixAndHold(rtk, nav, satList, freqList, idxList, nb);
+            fixAndHold(rtk, nav, keepSat, keepFrq, keepIdx, nKeep);
         }
 
         for (int i = 0; i < 3 && i < nx; i++) {

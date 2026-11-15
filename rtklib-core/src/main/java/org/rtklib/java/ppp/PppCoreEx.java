@@ -26,6 +26,53 @@ public class PppCoreEx {
 
     private static final Logger LOG = LoggerFactory.getLogger(PppCoreEx.class);
 
+    private static volatile double lastArCovMinDiag = Double.NaN;
+    private static volatile double lastArAmbMinDiag = Double.NaN;
+    private static volatile long arCovPsdViolations = 0;
+    private static volatile long arCovNegDiagEpochs = 0;
+    private static volatile double lastArCovMinEig = Double.NaN;
+    private static volatile double lastArCovMinPivot = Double.NaN;
+    private static volatile double lastArCovFullAmbMinPivot = Double.NaN;
+    private static final double AR_PSD_REL_TOL = 1e-10;
+
+    public static double lastArCovMinDiag() {
+        return lastArCovMinDiag;
+    }
+
+    public static double lastArAmbMinDiag() {
+        return lastArAmbMinDiag;
+    }
+
+    public static long arCovPsdViolations() {
+        return arCovPsdViolations;
+    }
+
+    public static long arCovNegDiagEpochs() {
+        return arCovNegDiagEpochs;
+    }
+
+    public static double lastArCovFullAmbMinPivot() {
+        return lastArCovFullAmbMinPivot;
+    }
+
+    public static double lastArCovMinEig() {
+        return lastArCovMinEig;
+    }
+
+    public static double lastArCovMinPivot() {
+        return lastArCovMinPivot;
+    }
+
+    public static void resetArCovPsdStats() {
+        lastArCovMinDiag = Double.NaN;
+        lastArAmbMinDiag = Double.NaN;
+        lastArCovMinEig = Double.NaN;
+        lastArCovMinPivot = Double.NaN;
+        lastArCovFullAmbMinPivot = Double.NaN;
+        arCovPsdViolations = 0;
+        arCovNegDiagEpochs = 0;
+    }
+
     public static void ppos(Rtk rtk, Obsd[] obs, int n, Nav nav, RtkConfig cfg) {
         LOG.info("PppCoreEx.ppos called: pppAR={}, bds3AR={}", cfg.pppAr.enableAR, cfg.pppAr.enableBds3AR);
 
@@ -117,9 +164,11 @@ public class PppCoreEx {
         }
 
         if (SsrCorrector.hasSsrData(nav.ssr)) {
-            SsrCorrector.applyOrbitCorrection(nav.ssr, rs, obs, n);
-            SsrCorrector.applyClockCorrection(nav.ssr, dts, obs, n);
-            SsrCorrector.applyHrClockCorrection(nav.ssr, dts, obs, n);
+            // [FIX-ALG-038] 严格对齐 RTKLIB satpos_ssr：龄期超限或改正数异常的卫星不施加 SSR 改正。
+            double ssrMaxAge = cfg != null ? cfg.ppp.ssrMaxAge : 60.0;
+            SsrCorrector.applyOrbitCorrection(nav.ssr, rs, obs, n, ssrMaxAge);
+            SsrCorrector.applyClockCorrection(nav.ssr, dts, obs, n, ssrMaxAge);
+            SsrCorrector.applyHrClockCorrection(nav.ssr, dts, obs, n, ssrMaxAge);
         }
 
         if (opt.posopt[3] != 0) {
@@ -210,7 +259,156 @@ public class PppCoreEx {
         }
     }
 
+    private static void checkCovariancePsdBeforeAr(Rtk rtk) {
+        int nx = rtk.nx;
+        if (rtk.P == null || nx <= 0) return;
+
+        double minDiag = Double.MAX_VALUE;
+        double minActiveDiag = Double.MAX_VALUE;
+        int negDiag = 0;
+        for (int i = 0; i < nx; i++) {
+            double dii = rtk.P[i * nx + i];
+            if (dii < 0.0) negDiag++;
+            if (dii < minDiag) minDiag = dii;
+            if (rtk.x != null && rtk.x[i] != 0.0 && dii > 0.0 && dii < minActiveDiag) minActiveDiag = dii;
+        }
+        lastArCovMinDiag = minDiag;
+        if (negDiag > 0) {
+            arCovNegDiagEpochs++;
+            LOG.warn("[KF-ARMOR] AR entry negative diagonal count={} epoch={} nx={} minDiag={}",
+                    negDiag, rtk.epoch, nx, minDiag);
+        }
+
+        int[] ambAll = ambiguityActiveIndices(rtk, false);
+        if (ambAll.length > 0) {
+            lastArCovFullAmbMinPivot = ldlMinPivot(subBlock(rtk.P, nx, ambAll), ambAll.length);
+        }
+
+        int[] amb = ambiguityActiveIndices(rtk, true);
+        int m = amb.length;
+        if (m == 0) return;
+
+        double[] Qb = subBlock(rtk.P, nx, amb);
+        double minAmbDiag = Double.MAX_VALUE;
+        double maxAmbDiag = 0.0;
+        for (int i = 0; i < m; i++) {
+            double dii = Qb[i * m + i];
+            if (dii < minAmbDiag) minAmbDiag = dii;
+            maxAmbDiag = Math.max(maxAmbDiag, Math.abs(dii));
+        }
+        lastArAmbMinDiag = minAmbDiag;
+        double tol = AR_PSD_REL_TOL * Math.max(maxAmbDiag, 1.0);
+
+        double minPivot = ldlMinPivot(Qb, m);
+        lastArCovMinPivot = minPivot;
+        if (!(minPivot >= -tol)) {
+            arCovPsdViolations++;
+            LOG.warn("[KF-ARMOR] AR ambiguity block indefinite: epoch={} nb={} minPivot={} tol={} minDiag={}",
+                    rtk.epoch, m, minPivot, tol, minAmbDiag);
+        }
+        if (rtk.epoch % 300 == 0) {
+            double minEig = minEigenValue(Qb, m);
+            lastArCovMinEig = minEig;
+            LOG.info("[KF-ARMOR] AR ambiguity block PSD audit: epoch={} nx={} nb={} nbAll={} minActiveDiag={} minAmbDiag={} minPivot={} minEig={} fullAmbMinPivot={}",
+                    rtk.epoch, nx, m, ambAll.length, minActiveDiag, minAmbDiag, minPivot, minEig,
+                    lastArCovFullAmbMinPivot);
+        }
+    }
+
+    /**
+     * 模糊度子块索引集合。
+     *
+     * @param onlyKfUpdated true 时仅保留本历元实际参与 KalmanFilter.update() 压缩更新的
+     *        状态（x[i]!=0 && P[i,i]>0 && H 列非全零），即正定化护甲在数学上保证 PSD 的
+     *        状态子集，也正是 AR 引擎构造 QbWl/QbNl 时使用的观测卫星集合；
+     *        false 时返回全部已初始化模糊度状态（含本历元无观测、未参与更新的状态）。
+     */
+    private static int[] ambiguityActiveIndices(Rtk rtk, boolean onlyKfUpdated) {
+        int nx = rtk.nx;
+        PrcOpt opt = rtk.opt;
+        int nr = PppCore.NR(opt);
+        int hi = Math.min(nr + PppCore.NB(opt), nx);
+        if (hi <= nr) return new int[0];
+
+        boolean[] updated = null;
+        if (onlyKfUpdated) {
+            updated = new boolean[nx];
+            int[] last = KalmanFilter.lastActiveIndices();
+            for (int k = 0; k < last.length; k++) {
+                int s = last[k];
+                if (s >= 0 && s < nx) updated[s] = true;
+            }
+        }
+
+        int[] tmp = new int[hi - nr];
+        int m = 0;
+        for (int i = nr; i < hi; i++) {
+            if (updated != null && !updated[i]) continue;
+            if (rtk.x == null || rtk.x[i] == 0.0) continue;
+            if (!(rtk.P[i * nx + i] > 0.0)) continue;
+            tmp[m++] = i;
+        }
+        int[] out = new int[m];
+        System.arraycopy(tmp, 0, out, 0, m);
+        return out;
+    }
+
+    private static double[] subBlock(double[] P, int nx, int[] idx) {
+        int m = idx.length;
+        double[] q = new double[m * m];
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < m; j++) q[i * m + j] = P[idx[i] * nx + idx[j]];
+        }
+        return q;
+    }
+
+    private static double ldlMinPivot(double[] P, int nx) {
+        int m = 0;
+        int[] idx = new int[nx];
+        for (int i = 0; i < nx; i++) {
+            if (P[i * nx + i] > 0.0) idx[m++] = i;
+        }
+        double maxAbs = 0.0;
+        for (int i = 0; i < nx; i++) maxAbs = Math.max(maxAbs, Math.abs(P[i * nx + i]));
+        double tol = AR_PSD_REL_TOL * Math.max(maxAbs, 1.0);
+        for (int i = 0; i < nx; i++) {
+            if (P[i * nx + i] > 0.0) continue;
+            for (int j = 0; j < nx; j++) {
+                if (Math.abs(P[i * nx + j]) > tol) return Double.NEGATIVE_INFINITY;
+            }
+        }
+        if (m == 0) return 0.0;
+        double[] l = new double[m * m];
+        double[] d = new double[m];
+        double minPivot = Double.MAX_VALUE;
+        for (int j = 0; j < m; j++) {
+            double djj = P[idx[j] * nx + idx[j]];
+            for (int k = 0; k < j; k++) djj -= l[j * m + k] * l[j * m + k] * d[k];
+            d[j] = djj;
+            if (djj < minPivot) minPivot = djj;
+            if (Math.abs(djj) < 1e-300) continue;
+            for (int i = j + 1; i < m; i++) {
+                double s = P[idx[i] * nx + idx[j]];
+                for (int k = 0; k < j; k++) s -= l[i * m + k] * l[j * m + k] * d[k];
+                l[i * m + j] = s / djj;
+            }
+        }
+        return minPivot;
+    }
+
+    private static double minEigenValue(double[] P, int nx) {
+        org.ejml.data.DMatrixRMaj a = new org.ejml.data.DMatrixRMaj(nx, nx);
+        for (int i = 0; i < nx; i++) for (int j = 0; j < nx; j++) a.set(i, j, P[i * nx + j]);
+        org.ejml.dense.row.decomposition.eig.SymmetricQRAlgorithmDecomposition_DDRM eig =
+                new org.ejml.dense.row.decomposition.eig.SymmetricQRAlgorithmDecomposition_DDRM(false);
+        if (!eig.decompose(a)) return Double.NaN;
+        double mn = Double.MAX_VALUE;
+        for (int i = 0; i < nx; i++) mn = Math.min(mn, eig.getEigenvalue(i).real);
+        return mn;
+    }
+
     private static void applyAmbiguityResolution(Rtk rtk, Nav nav, RtkConfig cfg) {
+        checkCovariancePsdBeforeAr(rtk);
         PppArConfig arCfg = PppArConfig.from(cfg);
         PppArEngine.applyAmbiguityResolution(rtk, nav, arCfg);
     }

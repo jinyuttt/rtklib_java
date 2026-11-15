@@ -1029,6 +1029,14 @@ public class PppProcessor {
             PppCore.pppos(rtk, obsData, n, nav);
         }
 
+        /* 确定性基线（非 AI）：位置方差门限降级（§3.2）。默认门限 Double.MAX_VALUE 即关闭，
+         * 关闭时不写任何状态，输出与未启用逐位一致（I-1）。 */
+        PppQrGate.apply(rtk);
+
+        /* 接口 A：PPP 解有效性判别。必须位于 AR 之后（AR 已写 FIX），且只降级 SOLQ_PPP、
+         * 绝不触碰 SOLQ_FIX / SOLQ_FLOAT（S4）。未注入时首行即返回。 */
+        PppAiInject.applySolutionValidator(rtk);
+
         /* 自适应引擎：解算后驱动（开关关闭时 adaptiveCtl 恒为 null，零干预） */
         if (adaptiveCtl == null) adaptiveCtl = AdaptiveController.startIfEnabled(opt, rtk);
         if (adaptiveCtl != null) adaptiveCtl.onObsEpoch(totalEpochs, obsData, n, rtk);

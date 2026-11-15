@@ -2,10 +2,12 @@ package org.rtklib.java.test;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -32,6 +34,7 @@ import org.rtklib.java.ppp.PppProcessor;
 import org.rtklib.java.rinex.RinexParser;
 import org.rtklib.java.rtcm.Rtcm;
 import org.rtklib.java.time.TimeSystem;
+import org.rtklib.java.ppprtk.SsrCorrector;
 
 public final class PppRtkSsrReplay {
 
@@ -39,10 +42,10 @@ public final class PppRtkSsrReplay {
     private static final String DEFAULT_SSR_DIR = "";
     private static final String DEFAULT_RINEX_ROOT = "";
     private static final String DEFAULT_STATION = "";
-    /** RINEX 小时文件按本地时（UTC+8）命名，SSR 按 UTC 小时命名，两者相差 8 小时。 */
+    /** 落盘路径按北京时间（UTC+8）命名，文件内容首历元是 UTC：UTC 小时 h 对应路径中的小时 h+8。 */
     private static final int LOCAL_HOUR_OFFSET = 8;
 
-    /** SSR 文件目录（UTC 小时命名的 HH.rtcm3）。 */
+    /** SSR 文件目录（文件名小时基准由 {@link #SSR_HOUR_BASIS} 决定）。 */
     private static String ssrDir = System.getProperty("rtk.ssrDir", DEFAULT_SSR_DIR);
     /** RINEX 根目录，含义随 {@link #rinexLayout} 变化。 */
     private static String rinexRoot = System.getProperty("rtk.rinexRoot", DEFAULT_RINEX_ROOT);
@@ -74,7 +77,7 @@ public final class PppRtkSsrReplay {
         station = resolveStation(args.length > 4 ? args[4] : null);
         if (ssrDir.isEmpty() || rinexRoot.isEmpty() || station.isEmpty()) {
             System.out.println("缺少必要输入：");
-            System.out.println("  -Drtk.ssrDir=<ssr-dir>       SSR 目录（UTC 小时命名的 HH.rtcm3）");
+            System.out.println("  -Drtk.ssrDir=<ssr-dir>       SSR 目录（文件名小时基准由 -Drtk.ssrHourBasis=local|utc 决定，默认 local）");
             System.out.println("  -Drtk.rinexRoot=<rinex-root> RINEX 根目录");
             System.out.println("  station                      第 5 个参数 / 环境变量 RTK_STATION / -Drtk.station=");
             return;
@@ -197,8 +200,44 @@ public final class PppRtkSsrReplay {
         return hourFilePath(utcHour, "nav");
     }
 
+    /**
+     * SSR 文件命名的时间基准：
+     * <ul>
+     *   <li>{@code local}（默认）：与 RINEX 落盘一致——文件按北京时间命名，但内容首历元是 UTC，
+     *       故 UTC 小时 h 对应文件名 (h+8)，跨日时末级日期目录加一天（UTC 16:00 = 北京次日 00:00）。</li>
+     *   <li>{@code utc}：旧数据仓库按 UTC 小时命名，文件名即 UTC 小时。</li>
+     * </ul>
+     * 未做 +8 偏移时，UTC 00:00 的观测会取到北京 00:00（即 UTC 16:00）的 SSR，
+     * 两者相差 8 小时，SSR 全部过期却被静默使用。
+     */
+    private static final String SSR_HOUR_BASIS = System.getProperty("rtk.ssrHourBasis", "local");
+
     private static String ssrPath(int utcHour) {
-        return String.format(Locale.US, "%s\\%02d.rtcm3", ssrDir, utcHour);
+        int hour = utcHour;
+        String dir = ssrDir;
+        if (!"utc".equalsIgnoreCase(SSR_HOUR_BASIS)) {
+            hour += LOCAL_HOUR_OFFSET;
+            if (hour >= 24) {
+                dir = shiftDirDate(dir, hour / 24);
+                hour %= 24;
+            }
+        }
+        return String.format(Locale.US, "%s\\%02d.rtcm3", dir, hour);
+    }
+
+    /** 把目录末级的日期名（yyyy-MM-dd）平移 days 天；末级非日期则原样返回。 */
+    private static String shiftDirDate(String dir, int days) {
+        if (days == 0 || dir.isEmpty()) return dir;
+        Path p = Paths.get(dir);
+        Path name = p.getFileName();
+        if (name == null) return dir;
+        try {
+            String shifted = LocalDate.parse(name.toString()).plusDays(days).toString();
+            Path parent = p.getParent();
+            return (parent == null ? Paths.get(shifted) : parent.resolve(shifted)).toString();
+        } catch (java.time.format.DateTimeParseException e) {
+            return dir;
+        }
     }
 
     private static GTime firstObsTime() {
@@ -291,11 +330,13 @@ public final class PppRtkSsrReplay {
         final int offset;
         final int length;
         final GTime time;
+        final int[] sats;
 
-        SsrFrame(int offset, int length, GTime time) {
+        SsrFrame(int offset, int length, GTime time, int[] sats) {
             this.offset = offset;
             this.length = length;
             this.time = time;
+            this.sats = sats;
         }
     }
 
@@ -309,11 +350,30 @@ public final class PppRtkSsrReplay {
         st.data = Files.readAllBytes(Paths.get(ssrPath(utcHour)));
         Rtcm scratch = new Rtcm();
         scratch.setReferenceTime(ref);
+        Ssr[] ssr = scratch.nav.ssr;
+        long[] state = new long[ssr.length];
+        for (int i = 0; i < ssr.length; i++) {
+            state[i] = ssrHash(ssr[i]);
+        }
         int pos = 0;
         while (pos < st.data.length) {
             int consumed = scratch.input(st.data, pos, st.data.length - pos);
             if (consumed > 0) {
-                st.frames.add(new SsrFrame(pos, consumed, new GTime(scratch.time)));
+                int[] touched = new int[0];
+                int[] range = ssrSatRange(ssrSysOfType(scratch.type));
+                if (range != null) {
+                    int[] buf = new int[range[1] - range[0] + 1];
+                    int nTouched = 0;
+                    for (int sat = range[0]; sat <= range[1]; sat++) {
+                        long h = ssrHash(ssr[sat - 1]);
+                        if (h != state[sat - 1]) {
+                            state[sat - 1] = h;
+                            buf[nTouched++] = sat;
+                        }
+                    }
+                    touched = Arrays.copyOf(buf, nTouched);
+                }
+                st.frames.add(new SsrFrame(pos, consumed, new GTime(scratch.time), touched));
                 pos += consumed;
             } else if (consumed == 0) {
                 break;
@@ -321,7 +381,94 @@ public final class PppRtkSsrReplay {
                 pos++;
             }
         }
+        String preSort = perSatRegressions(st.frames);
+        st.frames.sort(Comparator.comparingDouble(f -> f.time.time + f.time.sec));
+        String postSort = perSatRegressions(st.frames);
+        if (postSort.isEmpty()) {
+            System.out.println(String.format(Locale.US,
+                "ASSERT PASS hour=%02d perSatNonDecreasing preSortViolations=%s",
+                utcHour, preSort.isEmpty() ? "none" : preSort));
+        } else {
+            System.out.println(String.format(Locale.US,
+                "ASSERT FAIL hour=%02d perSatNonDecreasing postSortViolations=%s", utcHour, postSort));
+        }
         return st;
+    }
+
+    private static int ssrSysOfType(int type) {
+        if (type >= 1057 && type <= 1062) return Constants.SYS_GPS;
+        if (type >= 1063 && type <= 1068) return Constants.SYS_GLO;
+        if (type >= 1240 && type <= 1245) return Constants.SYS_GAL;
+        if (type >= 1246 && type <= 1251) return Constants.SYS_QZS;
+        if (type >= 1252 && type <= 1257) return Constants.SYS_SBS;
+        if (type >= 1258 && type <= 1263) return Constants.SYS_CMP;
+        if (type == 1265) return Constants.SYS_GPS;
+        if (type == 1266) return Constants.SYS_GLO;
+        if (type == 1267) return Constants.SYS_GAL;
+        if (type == 1268) return Constants.SYS_QZS;
+        if (type == 1269) return Constants.SYS_SBS;
+        if (type == 1270) return Constants.SYS_CMP;
+        return Constants.SYS_NONE;
+    }
+
+    private static int[] ssrSatRange(int sys) {
+        int min;
+        int max;
+        switch (sys) {
+            case Constants.SYS_GPS: min = Constants.MINPRNGPS; max = Constants.MAXPRNGPS; break;
+            case Constants.SYS_GLO: min = Constants.MINPRNGLO; max = Constants.MAXPRNGLO; break;
+            case Constants.SYS_GAL: min = Constants.MINPRNGAL; max = Constants.MAXPRNGAL; break;
+            case Constants.SYS_QZS: min = Constants.MINPRNQZS; max = Constants.MAXPRNQZS; break;
+            case Constants.SYS_CMP: min = Constants.MINPRNCMP; max = Constants.MAXPRNCMP; break;
+            case Constants.SYS_SBS: min = Constants.MINPRNSBS; max = Constants.MAXPRNSBS; break;
+            default: return null;
+        }
+        int lo = SatUtils.satno(sys, min);
+        int hi = SatUtils.satno(sys, max);
+        return lo > 0 && hi >= lo ? new int[]{lo, hi} : null;
+    }
+
+    private static long ssrHash(Ssr s) {
+        if (s == null) return 0L;
+        long h = 1125899906842597L;
+        h = h * 31 + s.update;
+        h = h * 31 + s.t0[0].time;
+        h = h * 31 + (long) (s.t0[0].sec * 1e6);
+        h = h * 31 + s.t0[1].time;
+        h = h * 31 + (long) (s.t0[1].sec * 1e6);
+        h = h * 31 + s.iod[0];
+        h = h * 31 + s.iod[1];
+        for (int i = 0; i < s.deph.length; i++) h = h * 31 + Double.hashCode(s.deph[i]);
+        for (int i = 0; i < s.dclk.length; i++) h = h * 31 + Double.hashCode(s.dclk[i]);
+        for (int i = 0; i < s.cbias.length; i++) h = h * 31 + Float.hashCode(s.cbias[i]);
+        for (int i = 0; i < s.pbias.length; i++) h = h * 31 + Double.hashCode(s.pbias[i]);
+        return h;
+    }
+
+    private static long frameKey(GTime t) {
+        return t.time * 1000000L + (long) (t.sec * 1e6);
+    }
+
+    private static String perSatRegressions(List<SsrFrame> frames) {
+        long[] lastKey = new long[Constants.MAXSAT + 1];
+        GTime[] lastTime = new GTime[Constants.MAXSAT + 1];
+        Arrays.fill(lastKey, Long.MIN_VALUE);
+        int bad = 0;
+        StringBuilder sb = new StringBuilder();
+        for (SsrFrame f : frames) {
+            long t = frameKey(f.time);
+            for (int sat : f.sats) {
+                if (lastKey[sat] > t) {
+                    bad++;
+                    if (bad <= 8) {
+                        sb.append(String.format(Locale.US, " [sat=%d %s->%s]", sat, lastTime[sat], f.time));
+                    }
+                }
+                lastKey[sat] = t;
+                lastTime[sat] = f.time;
+            }
+        }
+        return bad == 0 ? "" : "n=" + bad + sb;
     }
 
     private static List<List<Obsd>> groupEpochs(Obs obs) {
@@ -356,6 +503,10 @@ public final class PppRtkSsrReplay {
         cfg.pppRtk.enable = true;
         cfg.pppRtk.enableAR = true;
         cfg.pppAr.enableAR = true;
+        cfg.ppp.ssrMaxAge = Double.parseDouble(System.getProperty("rtk.ssrMaxAge", "60"));
+        System.out.println(String.format(Locale.US,
+            "SSR-PATH pppRtk.enable=%s pppRtk.enableAR=%s pppAr.enableAR=%s ssrMaxAge=%.0fs",
+            cfg.pppRtk.enable, cfg.pppRtk.enableAR, cfg.pppAr.enableAR, cfg.ppp.ssrMaxAge));
         if (ratioLimit > 0.0) {
             cfg.pppAr.arRatioWl = ratioLimit;
             cfg.pppAr.arRatioNl = ratioLimit;
@@ -395,9 +546,15 @@ public final class PppRtkSsrReplay {
         double maxDelta = 0.0;
         double sumDelta = 0.0;
         int nDelta = 0;
+        int nXaMissing = 0;
+        int paDiffMax = 0;
+        int nPaSamples = 0;
         int nsMax = 0;
         int nsSum = 0;
-
+        int ssrTrueEpochs = 0;
+        int freshEpochs = 0;
+        int freshMin = Integer.MAX_VALUE;
+        int freshMax = 0;
         for (int h = hourStart; h <= hourEnd; h++) {
             RinexParser parser = new RinexParser();
             if (!parser.parseObs(obsPath(h))) {
@@ -412,8 +569,8 @@ public final class PppRtkSsrReplay {
             String span = stream.frames.isEmpty() ? "none"
                     : stream.frames.get(0).time + " ~ " + stream.frames.get(stream.frames.size() - 1).time;
             System.out.println(String.format(Locale.US,
-                "HOUR utc=%02d obs=%d epochs=%d ssrFrames=%d ssrSpan=[%s]",
-                h, parser.obs.n, groups.size(), stream.frames.size(), span));
+                "HOUR utc=%02d obs=%d epochs=%d ssrFrames=%d ssrSpan=[%s] ssrFile=%s",
+                h, parser.obs.n, groups.size(), stream.frames.size(), span, ssrPath(h)));
 
             for (List<Obsd> g : groups) {
                 GTime t = g.get(0).time;
@@ -439,29 +596,52 @@ public final class PppRtkSsrReplay {
                 }
 
                 double[] xa = rtk.xa;
-                double delta = 0.0;
-                if (xa != null && rtk.nx > 0) {
+                boolean xaPopulated = xa != null && rtk.nx > 0
+                        && !(xa[0] == 0.0 && xa[1] == 0.0 && xa[2] == 0.0);
+                double delta = Double.NaN;
+                if (xaPopulated) {
+                    delta = 0.0;
                     for (int i = 0; i < 3; i++) {
                         delta = Math.max(delta, Math.abs(sol.rr[i] - xa[i]));
                     }
                 }
+                int paDiff = paPDivergence(rtk, opt);
                 if (sol.stat == Constants.SOLQ_FIX) {
-                    maxDelta = Math.max(maxDelta, delta);
-                    sumDelta += delta;
-                    nDelta++;
+                    paDiffMax = Math.max(paDiffMax, paDiff);
+                    nPaSamples++;
+                    if (xaPopulated) {
+                        maxDelta = Math.max(maxDelta, delta);
+                        sumDelta += delta;
+                        nDelta++;
+                    } else {
+                        nXaMissing++;
+                    }
                 }
+                String xaDeltaStr = Double.isNaN(delta) ? "n/a"
+                        : String.format(Locale.US, "%.6f", delta);
 
                 double resRms = residualRms(rtk, opt);
                 resRmsList.add(resRms);
 
                 int[] probe = ambiguityProbe(rtk, opt, proc.getNav(), arr, arr.length, totalEpochs,
                         totalEpochs <= 6 || (totalEpochs >= 88 && totalEpochs <= 100));
+                Nav navNow = proc.getNav();
+                boolean hasSsr = SsrCorrector.hasSsrData(navNow.ssr);
+                int fresh = 0;
+                for (int k = 0; k < arr.length; k++) {
+                    if (SsrCorrector.isSsrValid(navNow.ssr, arr[k].sat, arr[k].time, cfg.ppp.ssrMaxAge)) fresh++;
+                }
+                if (hasSsr) ssrTrueEpochs++;
+                if (fresh > 0) freshEpochs++;
+                if (fresh < freshMin) freshMin = fresh;
+                if (fresh > freshMax) freshMax = fresh;
+
                 double[] llh = new double[3];
                 CoordTransform.ecef2pos(sol.rr, llh);
                 System.out.println(String.format(Locale.US,
-                    "EPOCH t=%s ns=%d stat=%d ratio=%.2f rr=[%.4f %.4f %.4f] llh=[%.7f %.7f %.3f] xaDelta=%.6f resRms=%.4f nObs=%d ambAlive=%d ambDead=%d vsat0=%d diag=[noPair=%d bzero=%d b500=%d slip=%d]",
-                    t, sol.ns, sol.stat, sol.ratio, sol.rr[0], sol.rr[1], sol.rr[2],
-                    llh[0] * Constants.R2D, llh[1] * Constants.R2D, llh[2], delta, resRms,
+                    "EPOCH t=%s ns=%d stat=%d ratio=%.2f hasSsr=%s fresh=%d rr=[%.4f %.4f %.4f] llh=[%.7f %.7f %.3f] xaDelta=%s paDiff=%d resRms=%.4f nObs=%d ambAlive=%d ambDead=%d vsat0=%d diag=[noPair=%d bzero=%d b500=%d slip=%d]",
+                    t, sol.ns, sol.stat, sol.ratio, hasSsr, fresh, sol.rr[0], sol.rr[1], sol.rr[2],
+                    llh[0] * Constants.R2D, llh[1] * Constants.R2D, llh[2], xaDeltaStr, paDiff, resRms,
                     probe[0], probe[1], probe[2], probe[3], probe[4], probe[5], probe[6], probe[7]));
             }
         }
@@ -474,12 +654,27 @@ public final class PppRtkSsrReplay {
         System.out.println(String.format(Locale.US,
             "  visibleSats nsMax=%d nsAvg=%.2f", nsMax,
             totalEpochs > 0 ? (double) nsSum / totalEpochs : 0.0));
+        if (nDelta > 0) {
+            System.out.println(String.format(Locale.US,
+                "  updateStat xaDelta: fixSamples=%d mean=%.6f max=%.6f m"
+                    + " (FIX 历元 rr 直接取自 xa[0..2]，两者结构上恒等，该值不是精度指标)",
+                nDelta, sumDelta / nDelta, maxDelta));
+        } else {
+            System.out.println(String.format(Locale.US,
+                "  updateStat xaDelta: no FIX sample (fixEpochs=%d xaUnpopulated=%d)"
+                    + " —— 零样本不等于零偏差，xaDelta 无判据意义",
+                fixEpochs, nXaMissing));
+        }
         System.out.println(String.format(Locale.US,
-            "  updateStat clobber: n=%d meanDelta=%.6f maxDelta=%.6f m", nDelta,
-            nDelta > 0 ? sumDelta / nDelta : 0.0, maxDelta));
+            "  Pa/P divergence: fixSamples=%d paDiffMax=%d"
+                + " (Pa 模糊度行被 AR 零化而 P 未动：UC 路径 >0，IFLC 路径两处同步更新故恒 0)",
+            nPaSamples, paDiffMax));
         printFixQuality(fixPositions);
         printResidualStats(resRmsList);
-
+        System.out.println(String.format(Locale.US,
+            "  ssr hasSsrEpochs=%d/%d freshEpochs=%d freshMin=%d freshMax=%d maxAge=%.0fs",
+            ssrTrueEpochs, totalEpochs, freshEpochs,
+            freshMin == Integer.MAX_VALUE ? 0 : freshMin, freshMax, cfg.ppp.ssrMaxAge));
         AiHooks.clear();
         if (aiProvider != null) {
             aiProvider.close();
@@ -493,14 +688,45 @@ public final class PppRtkSsrReplay {
             return null;
         }
         OnnxAiProvider provider = new OnnxAiProvider(Paths.get(dir));
-        if (!provider.isObsCorrectorAvailable()) {
-            System.out.println("AI3 NOT available (模型加载失败，等价未注入): " + dir);
+        if (!provider.isAnyInterfaceAvailable()) {
+            System.out.println("AI NOT available (全部模型加载失败，等价未注入): " + dir);
             provider.close();
             return null;
         }
         AiHooks.install(provider);
-        System.out.println("AI3 installed: modelDir=" + dir);
+        System.out.println("AI installed: modelDir=" + dir
+                + " (fix=" + provider.isFixValidatorAvailable()
+                + ", obs=" + provider.isObsCorrectorAvailable()
+                + ", refstar=" + provider.isRefStarAvailable()
+                + ", A=" + provider.isPppSolutionAvailable()
+                + ", B=" + provider.isPppVarianceAvailable() + ")");
         return provider;
+    }
+
+    /**
+     * Pa 与 P 在「已固定模糊度」对角线上的分歧个数。
+     *
+     * <p>UC 路径只改 Pa（模糊度行零化）、P 保持浮点值，故分歧数等于固定个数；
+     * IFLC 路径 xa/Pa 与 x/P 同步更新，两处均为 0，分歧恒为 0。
+     * 位置行在两条路径上都与 P 相同，因此 rr/qr 不能作为「Pa 是否被写入」的证据。</p>
+     */
+    private static int paPDivergence(Rtk rtk, PrcOpt opt) {
+        double[] Pa = rtk.Pa;
+        double[] P = rtk.P;
+        int nx = rtk.nx;
+        if (Pa == null || P == null || nx <= 0) return 0;
+        if (Pa.length < nx * nx || P.length < nx * nx) return 0;
+        int nf = PppCore.NF(opt);
+        int diff = 0;
+        for (int sat = 1; sat <= Constants.MAXSAT; sat++) {
+            for (int f = 0; f < nf; f++) {
+                if (rtk.ssat[sat - 1].fix[f] == 0) continue;
+                int idx = PppCore.IB(sat, f, opt);
+                if (idx >= nx) continue;
+                if (Pa[idx * nx + idx] != P[idx * nx + idx]) diff++;
+            }
+        }
+        return diff;
     }
 
     private static void printFixQuality(List<double[]> fixPositions) {

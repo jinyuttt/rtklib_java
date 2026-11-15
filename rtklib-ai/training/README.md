@@ -313,3 +313,50 @@ station,lat,lon,hgt              # 大地坐标（度/度/米，WGS84）
 - **采集与组装已用真实 RINEX 验证（§6.7）**：整日线与小时线均已产出 Parquet，链路正确性已确认；小时线标签口径经真值文件交叉校验到 cm 级，可直接用于训练与评估。
 - **接口一的阈值永远在 core 侧**：模型只输出 `[0,1]` 置信度，`AiOpts.fixValidatorMinConfidence` 决定接受与否。训练脚本扫阈值只为给出「建议值」，不写进 ONNX。
 - **接口一的固定率代价必须显式约束**：训练脚本在验证集上以「固定率绝对下降 ≤ `--max-fix-drop-pp`（默认 1.0 pp）」为约束最大化错误固定剔除。若不设此约束，模型可通过「全部拒绝」拿到 0 错误固定率，但固定率会崩。
+
+## 8. PPP 接口 A / B 训练管线（v3.5.0 新增）
+
+接口 A（`PppSolutionValidator`，PPP 解有效性判别）与接口 B（`PppVarianceScaler`，观测方差单侧膨胀）的训练代码、Java 采集器与 core 注入点同批交付。设计依据见 `docs/PPP_AI_DEVELOPMENT_DESIGN.md` §4 / §12.2。
+
+| 交付物 | 路径 |
+|---|---|
+| 数据集格式与两层切分（A 10 维 / B 12 维） | `training/common/ppp_dataset.py` |
+| 组装（采集 CSV → Parquet） | `training/ppp_solution_validator/assemble.py`、`training/ppp_variance_scaler/assemble.py` |
+| 训练（含导出与契约自证） | `training/ppp_solution_validator/train.py`、`training/ppp_variance_scaler/train.py` |
+| 导出 / 契约校验实现 | `training/common/export_onnx.py` |
+| Java 采集器 | `PppCollectSession` + `RecordingPppSolutionValidator` / `RecordingPppVarianceScaler` |
+
+### 8.1 可复现四命令
+
+工作目录必须是 `rtklib-ai`：
+
+```powershell
+cd <repo-root>/rtklib-ai
+
+# 1) 环境自检（缺包/版本过低直接给出 pip 命令并以退出码 1 结束）
+python -m training.common.check_env
+
+# 2) 组装：采集 CSV → Parquet（--collect-dir 指向 PppCollectSession 的输出目录）
+python -m training.ppp_solution_validator.assemble --collect-dir data/ppp/collect --out data/ppp_solution_validator.parquet
+python -m training.ppp_variance_scaler.assemble  --collect-dir data/ppp/collect --out data/ppp_variance_scaler.parquet
+
+# 3) 训练 + 导出（onnx / norm.json / metrics.json 写入 --out-dir，默认 training/out）
+python -m training.ppp_solution_validator.train --dataset data/ppp_solution_validator.parquet --out-dir training/out
+python -m training.ppp_variance_scaler.train  --dataset data/ppp_variance_scaler.parquet  --out-dir training/out
+
+# 4) 契约自证复检（batch 探针 1/7/64 + 输出落在 core 钳位区间；训练内部已跑一次，此命令用于移交前独立复核）
+python -c "from pathlib import Path; from training.common import export_onnx; print(export_onnx.check_contract_confidence(Path('training/out/ppp_solution_validator.onnx'), dim=10))"
+python -c "from pathlib import Path; from training.common import export_onnx; print(export_onnx.check_contract_scale(Path('training/out/ppp_variance_scaler.onnx'), dim=12, scale_max=4.0))"
+```
+
+### 8.2 与 core 侧契约的三条硬约束
+
+1. **维数必须逐位对齐**：A 的 10 维对应 `org.rtklib.java.ai.feature.PppSolutionFeatures`，B 的 12 维对应 `PppVarianceFeatures`；改列序必须两边同改，否则标签与推理特征错位。
+2. **输出区间必须落在 core 钳位内**：B 的因子必须 `∈ [1, pppVarianceScaleMax]`（默认 4.0），A 的置信度必须 `∈ [0, 1]`。导出时的 `check_contract_*` 会把越界直接判失败——core 侧钳位只是兜底，不是让模型越界的许可。
+3. **归一化只拟合训练集**：`norm.json` 由训练集统计量写出、Java 侧原样加载；禁止按运行数据动态归一化。
+
+### 8.3 状态与缺口
+
+- 采集 / 组装 / 训练 / 导出四条链路**代码已落地**，但仓库内**不含预置权重**：`training/out/` 下的 `ppp_*.onnx` 需用真实数据训练后生成。
+- 收益结论**未产出**，按设计文档 §12.1 交由社区在真实数据上评估；本仓库只提供协议与工具。
+- 接口 A 的阈值永远在 core 侧（`AiOpts.pppSolutionMinConfidence`），模型只输出置信度；训练脚本给出的建议值不写进 ONNX。

@@ -93,6 +93,51 @@ public final class AiHooks {
         return p == null ? null : p.refStarValidator();
     }
 
+    /**
+     * 解析接口 A 实现（PPP 解有效性判别）。
+     *
+     * @param rtk 当前解算实例，可为 {@code null}
+     * @return 实例字段优先；否则取注入点；都为空返回 {@code null}（不干预）
+     */
+    public static PppSolutionValidator resolvePppSolutionValidator(Rtk rtk) {
+        if (rtk != null) {
+            validateAiOpts(rtk);
+            if (rtk.aiPppSolutionValidator != null) return rtk.aiPppSolutionValidator;
+        }
+        AiProvider p = TL.get();
+        return p == null ? null : p.pppSolutionValidator();
+    }
+
+    /**
+     * 解析接口 B 实现（PPP 观测方差缩放）。
+     *
+     * @param rtk 当前解算实例，可为 {@code null}
+     * @return 实例字段优先；否则取注入点；都为空返回 {@code null}（不干预）
+     */
+    public static PppVarianceScaler resolvePppVarianceScaler(Rtk rtk) {
+        if (rtk != null) {
+            validateAiOpts(rtk);
+            if (rtk.aiPppVarianceScaler != null) return rtk.aiPppVarianceScaler;
+        }
+        AiProvider p = TL.get();
+        return p == null ? null : p.pppVarianceScaler();
+    }
+
+    /**
+     * 解析接口 D 实现（PPP-RTK 固定校验）。
+     *
+     * @param rtk 当前解算实例，可为 {@code null}
+     * @return 实例字段优先；否则取注入点；都为空返回 {@code null}（不干预）
+     */
+    public static PppRtkFixValidator resolvePppRtkFixValidator(Rtk rtk) {
+        if (rtk != null) {
+            validateAiOpts(rtk);
+            if (rtk.aiPppRtkFixValidator != null) return rtk.aiPppRtkFixValidator;
+        }
+        AiProvider p = TL.get();
+        return p == null ? null : p.pppRtkFixValidator();
+    }
+
     private static void validateAiOpts(Rtk rtk) {
         if (rtk.rtkConfig != null && rtk.rtkConfig.ai != null) {
             rtk.rtkConfig.ai.validate();

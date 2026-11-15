@@ -6,17 +6,39 @@
 
 ---
 
-## [3.5.0] - 2026-11-12
+## [3.5.0] - 2026-11-15
 
-> 许可证合规重构版本：OTL 与 GPT3 模块按公开文献独立重写、第三方编译产物与 GPL 衍生代码从仓库与 Git 历史中彻底移除；同时落地接口三的激进模式实验配置（默认关闭）。无对外 API 破坏性变更。
+> 许可证合规重构 + PPP 体系 AI 接口全链路交付版本：OTL 与 GPT3 模块按公开文献独立重写、第三方编译产物与 GPL 衍生代码从仓库与 Git 历史中彻底移除；PPP 接口 A / B 的 SPI、注入点、失效安全框架、Java 采集器与 Python 训练工具链并入主线（D 只交契约、不注入）。无对外 API 破坏性变更。
 
 ### Fixed
+
+- **PPP-RTK UC 分支 ratio 方向反写**：非组合分支的 ratio 判据方向与组合分支相反，导致「ratio 越大越不敢固定」，NL 固定率被系统性压低（FIX-ALG-063）
+
+- **SSR 超龄 / 无改正处置口径不统一**：`SsrCorrector` 的「超龄剔除」与「无改正剔除」两种语义混在 provider 内，消费者无法按自身语义处置（单站解须剔除该星、VRS 网解可保留广播星历值）；改为 provider 中性（只给状态位）+ 消费者分治（FIX-ALG-065）
+
+- **周域模糊度协方差缩放未做合同变换**：`Lambda` 的 `factorLD` 直接对周域协方差缩放而未做合同变换，导致 LAMBDA 降相关失败率偏高（FIX-ALG-066）
+
+- **`PppRtkSsrReplay` 绕过 `SsrCorrectionProvider` 的时序语义**：回放入口自行拼装 SSR 状态，绕过了 provider 的超龄/有效性判定，回放结论与实时路径不可比（FIX-ALG-064）
 
 - **回滚 FIX-ALG-053（假陈述纠正）**：在 3.4.1 中，基于对 C 源码（`ppp.c`）的错误切片解读，将 `xp/Pp` 的拷贝移到了迭代循环外。经重新逐行核对 C 源码（`ppp.c:1217-1220` 确实在循环内），确认 3.4.1 的修改方向反了，制造了新的偏差。本版本已将 `xp/Pp` 拷贝移回循环内，并对齐了 C 版语义，同步修正了代码注释中的错误表述。
 
 ### Added
 
 - **接口三激进模式实验配置（默认关闭）**：`AiOpts` 新增 `enableAggressiveAi`（默认 `false`）与 `aggressiveMinScale`（默认 `0.1`）。开启后 `RtkCore` 把 `varianceScale` 的钳位下限由固定 `1.0` 放宽到 `aggressiveMinScale`，而 `bias` 上限与 `varianceScaleMax` 保持不变；训练侧新增 `--scale-min`，测试侧新增 `-Dpairing.aggressive` / `-Dpairing.min-scale`，契约校验区间随参数动态调整。**默认值行为与 3.4.2 逐位一致**，不改变任何现有解算结果；激进模式仅用于实验对照，不参与交付口径（详见 [AI 增强设计 §4.6](AI_ENHANCEMENT_DESIGN.md)）
+
+- **PPP 体系 AI 接口 A / B 全链路落地**：新增 `PppSolutionValidator`（A，PPP 解有效性判别，只改 `sol.stat`）与 `PppVarianceScaler`（B，观测方差单侧膨胀，只改 R 对角元）两个 SPI；A 的注入点位于 `PppCore.updateStat`，B 的注入点位于 `PppCore.pppRes` 的 R 装配完成之后（「先记行序、后施加」，不对半构造的 R 施加）；`OnnxAiProvider` 补齐 B 的常量、加载分支、`isPppVarianceAvailable()` 与 `close()` 分支，新增 `isAnyInterfaceAvailable()` 作为宿主侧唯一注入判定（修正「仅接口三可用」当总开关导致 A / B 被连坐关闭的缺陷）
+
+- **PPP AI 失效安全 S1–S6 框架**：`PppAiGuard` / `AiPppState` 实现 fail-open（`null` / `NaN` / 长度不符 / 抛 `Throwable` 一律不干预）、原子施加（先全量校验再一次性写入）、单调性（A 只降级不提升、B 只膨胀不收缩）、不推翻确定性结论（`SOLQ_FIX` 不被 A 改写）、预算度量 + 熔断 + 显式恢复（单次超 `pppAiMaxInferenceMs` 丢弃、连续降级达阈值熔断、重注入或新建 `Rtk` 恢复）、可观测不失败（`AI_DEGRADE` trace 计数）；熔断计数挂 `Rtk` transient，不落盘、不跨实例
+
+- **PPP AI 配置项**：`AiOpts` 新增 `pppQrThreshold`（确定性基线门限，默认关闭）、`pppSolutionMinConfidence`、`pppVarianceScaleMax`（默认 4.0）、`pppAiMaxInferenceMs`（默认 50 ms）、`pppAiMaxConsecutiveFailures`（默认 10 历元），全部带非法值惰性钳位
+
+- **PPP AI 采集器**：`PppCollectSession` + `PppPositionSource` + `RecordingPppSolutionValidator` / `RecordingPppVarianceScaler`，按现有 `CollectSession` 模式输出 CSV + trace，join key 为 `(run_id, epoch)`；`CollectConfig` 补 A / B 独立 CSV 路径与重复写入保护
+
+- **PPP AI 训练工具链**：`training/common/ppp_dataset.py`（A 10 维 / B 12 维特征、按站按天两层切分）、`training/ppp_solution_validator/` 与 `training/ppp_variance_scaler/`（`assemble.py` / `train.py`），复用 `common/export_onnx.py` 的 `check_contract_confidence` / `check_contract_scale` 做 batch 探针（1/7/64）与输出区间契约自证；产物为 `<name>.onnx` / `.norm.json` / `.metrics.json`（仓库不预置权重）
+
+- **PPP AI 契约测试**：`AiPppStage1Test` 19 条覆盖 T1–T11（未注入零回归、全 1.0 不干预、降级等价、施加原子性、熔断与恢复、单调性、上下文同源）；`PppRtkFixValidatorTest` 覆盖 D 的契约（不注入）
+
+- **`KalmanFilter` 协方差强制正定化**：`update()` 新增对称化 + 谱投影 + 对角钳位三层保护，覆盖浮点 / PPP-AR / PPP-RTK 三条链路；修复静态 PPP X 轴协方差负值被状态压缩永久锁死、后续历元无法修正的缺陷（设计文档 §7.1）
 
 ### Changed
 

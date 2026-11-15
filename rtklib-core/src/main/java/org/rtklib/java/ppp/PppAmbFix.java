@@ -35,7 +35,89 @@ public class PppAmbFix {
 
     private static final Logger LOG = LoggerFactory.getLogger(PppAmbFix.class);
 
+    /**
+     * WL+NL 级联固定的候选结果（「算」阶段产物）。
+     *
+     * <p>只承载候选模糊度与质量特征，<b>不含任何求解状态写入</b>：调用方必须显式调用
+     * {@link #applyWlNlFix(Rtk, double[], WlNlFix)} 才会改动 {@code rtk.x/P/xa/ssat.fix}，
+     * 从而满足施加原子性（S2）——校验方拒绝时可以整体丢弃候选而不留脏状态。</p>
+     */
+    public static final class WlNlFix {
+        /** 固定模糊度个数（{@code >0} 才可提交）。 */
+        public int nFixed;
+        /** 候选卫星号（PRN）。 */
+        public int[] sats = new int[0];
+        /** 候选频率索引。 */
+        public int[] freqs = new int[0];
+        /** 候选模糊度状态下标（{@code PppCore.IB(sat, f, opt)}）。 */
+        public int[] idxs = new int[0];
+        /** 候选固定模糊度（米）。 */
+        public double[] fixedAmb = new double[0];
+        /** 宽巷 ratio（IFLC 逐星取整路径无 ratio 语义，为 0）。 */
+        public double ratioWl;
+        /** 窄巷 ratio（IFLC 逐星取整路径无 ratio 语义，为 0）。 */
+        public double ratioNl;
+        /** 宽巷取整偏差最大值（周）。 */
+        public double maxDevWl;
+        /** 窄巷取整偏差最大值（周）。 */
+        public double maxDevNl;
+        /** 固定后验残差 RMS（窄巷周）。 */
+        public double postResidualRms;
+
+        /**
+         * 把候选写进调用方提供的求解数组（{@code x} 与 {@code P}），不触碰 {@code ssat.fix}。
+         *
+         * <p>供「三段式」的提交阶段使用：调用方先写入自己的临时数组，AI 校验通过后再
+         * 赋值给 {@code rtk.x/P} 并置 {@code ssat.fix}（S2）。</p>
+         */
+        public void applyTo(double[] x, double[] P, int nx) {
+            for (int i = 0; i < nFixed; i++) {
+                PppCore.initx(x, P, nx, fixedAmb[i], 0.0, idxs[i]);
+            }
+        }
+    }
+
+    /**
+     * 「算」阶段：只计算 WL+NL 固定候选，不写 {@code rtk.x/P/xa/ssat.fix}。
+     *
+     * <p>{@code rtk.sol.ratio} 仍在计算过程中写入——它是 LAMBDA 搜索的诊断量，
+     * 语义与 RTKLIB 一致（ratio 检验失败也保留），不属于固定状态。</p>
+     *
+     * @return 候选；无法固定时返回 {@code null}
+     */
+    public static WlNlFix pppAmbFixWlNlCandidate(Rtk rtk, double[] bias,
+                                     int gps, int glo, int sbs, Nav nav) {
+        WlNlFix fix = new WlNlFix();
+        int n = computeWlNlFix(rtk, bias, fix, gps, glo, sbs, nav);
+        return n > 0 ? fix : null;
+    }
+
+    /**
+     * 「提交」阶段：把候选一次性施加到 {@code rtk.x/P/xa/ssat.fix}。
+     *
+     * <p>写入集合与 v3.4.0 完全一致（{@code x/P} 的固定行零化、{@code xa} 同步、{@code ssat.fix = 1}），
+     * 且不含任何可抛点，保证施加原子性（S2）。</p>
+     */
+    public static void applyWlNlFix(Rtk rtk, double[] xa, WlNlFix fix) {
+        int nx = rtk.nx;
+        fix.applyTo(rtk.x, rtk.P, nx);
+        for (int i = 0; i < fix.nFixed; i++) {
+            if (xa != null) {
+                xa[fix.idxs[i]] = fix.fixedAmb[i];
+            }
+            rtk.ssat[fix.sats[i] - 1].fix[fix.freqs[i]] = 1;
+        }
+    }
+
     public static int pppAmbFixWlNl(Rtk rtk, double[] bias, double[] xa,
+                                     int gps, int glo, int sbs, Nav nav) {
+        WlNlFix fix = pppAmbFixWlNlCandidate(rtk, bias, gps, glo, sbs, nav);
+        if (fix == null) return -1;
+        applyWlNlFix(rtk, xa, fix);
+        return fix.nFixed;
+    }
+
+    private static int computeWlNlFix(Rtk rtk, double[] bias, WlNlFix fix,
                                      int gps, int glo, int sbs, Nav nav) {
         RtkConfig cfg = rtk.rtkConfig;
         if (!cfg.pppAr.enableAR) return -1;
@@ -57,7 +139,7 @@ public class PppAmbFix {
         for (int de : diagEpochs) { if (rtk.epoch == de) { detailedDiag = true; break; } }
         for (int sat = 1; sat <= Constants.MAXSAT; sat++) {
             if (rtk.ssat[sat - 1].vs == 0) { nSkipVs++; continue; }
-            if (rtk.ssat[sat - 1].azel[1] < opt.elmin) { nSkipVs++; continue; }
+            if (rtk.ssat[sat - 1].azel[1] < opt.elmaskar) { nSkipVs++; continue; }
 
             int sys = SatUtils.satsys(sat, null);
             /* [FIX-ALG-058] 白名单动态继承 opt.navsys：原写法硬编码 GPS|GAL|CMP，
@@ -66,6 +148,7 @@ public class PppAmbFix {
             if ((sys & opt.navsys) == 0) { nSkipSys++; continue; }
 
             int f = 0;
+            if ((rtk.ssat[sat - 1].slip[f] & Constants.LLI_HALFC) != 0) { nSkipVs++; continue; }
             int idx = PppCore.IB(sat, f, opt);
             if (idx >= nx) { nSkipIdx++; continue; }
 
@@ -308,24 +391,37 @@ public class PppAmbFix {
             dumpFrac("MAIN-WL", satList, nbWl, yWl, wlFixed, 0.0);
         } else {
             double[] QbWl = new double[nbWl * nbWl];
+            double[] lamWlArr = new double[nbWl];
             for (int i = 0; i < nbWl; i++) {
-                int sat = satList[i];
-                int idx = PppCore.IB(sat, 0, opt);
-                double[] fpair = PppCore.freqPair(sat, PppCore.ssatCodeArr(rtk.ssat[sat - 1]), nav);
-                double f1 = fpair[0], f2 = fpair[1];
-                double lamWl = Constants.CLIGHT / (f1 - f2);
+                double[] fpair = PppCore.freqPair(satList[i], PppCore.ssatCodeArr(rtk.ssat[satList[i] - 1]), nav);
+                lamWlArr[i] = Constants.CLIGHT / (fpair[0] - fpair[1]);
+            }
+            // 周域协方差须为米域协方差的完整合同变换 Q_ij=P_ij/(lam_i*lam_j)，
+            // 逐行用 lam_i² 会使多系统（WL 波长 0.862/1.025 m 混排）的 Q 失去对称性，
+            // LD 分解对角元转负导致 factorLD 失败。
+            for (int i = 0; i < nbWl; i++) {
+                int idx = PppCore.IB(satList[i], 0, opt);
                 for (int j = 0; j < nbWl; j++) {
-                    int satJ = satList[j];
-                    int idxJ = PppCore.IB(satJ, 0, opt);
-                    QbWl[i * nbWl + j] = rtk.P[idx * nx + idxJ] / (lamWl * lamWl);
+                    int idxJ = PppCore.IB(satList[j], 0, opt);
+                    double d = lamWlArr[i] * lamWlArr[j];
+                    QbWl[i * nbWl + j] = d > 0.0 ? rtk.P[idx * nx + idxJ] / d : 0.0;
                 }
             }
 
             double[] bWl = new double[nbWl * 2];
             double[] sWl = new double[2];
-            int info = Lambda.lambda(nbWl, 2, yWl, QbWl, bWl, sWl);
+            if (Lambda.debugAr()) {
+                LOG.info("[AR-Q] WL {}", Lambda.qDiagnostics(nbWl, QbWl));
+            }
+            int[] failInfoWl = new int[1];
+            int info = Lambda.lambda(nbWl, 2, yWl, QbWl, bWl, sWl, failInfoWl);
 
             if (info != 0) {
+                if (failInfoWl[0] >= 0 && failInfoWl[0] < nbWl) {
+                    int fi = failInfoWl[0];
+                    LOG.info("[AR-Q-FAIL] WL {} failIdx={} sat={}",
+                            Lambda.qDiagnostics(nbWl, QbWl), fi, satList[fi]);
+                }
                 LOG.info("PPP-AR: WL LAMBDA failed: info={}", info);
                 return -1;
             }
@@ -349,9 +445,17 @@ public class PppAmbFix {
                 nbWl, nWlFixed, nbWl > 0 ? 100.0 * nWlFixed / nbWl : 0, wlRatio));
         }
 
+        // 候选质量特征：宽巷取整偏差最大值（只读，不参与任何判定）
+        double maxDevWl = 0.0;
+        for (int i = 0; i < nbWl; i++) {
+            double wlDev = Math.abs(yWl[i] - wlFixed[i]);
+            if (wlDev > maxDevWl) maxDevWl = wlDev;
+        }
+
         int nbNl = 0;
         double[] yNl = new double[nbWl];
         double[] QbNl = new double[nbWl * nbWl];
+        double[] lamNlArr = new double[nbWl];
 
         for (int i = 0; i < nbWl; i++) {
             int sat = satList[i];
@@ -374,14 +478,19 @@ public class PppAmbFix {
 
             yNl[i] = nlFloat + (nav.fcbFromOsb ? -fcbNl : fcbNl);
 
-            if (opt.ionoopt != Constants.IONOOPT_IFLC) {
+            lamNlArr[i] = lamNl;
+            nbNl++;
+        }
+
+        if (opt.ionoopt != Constants.IONOOPT_IFLC) {
+            for (int i = 0; i < nbWl; i++) {
+                int idx = PppCore.IB(satList[i], 0, opt);
                 for (int j = 0; j < nbWl; j++) {
-                    int satJ = satList[j];
-                    int idxJ = PppCore.IB(satJ, 0, opt);
-                    QbNl[i * nbWl + j] = rtk.P[idx * nx + idxJ] / (lamNl * lamNl);
+                    int idxJ = PppCore.IB(satList[j], 0, opt);
+                    double d = lamNlArr[i] * lamNlArr[j];
+                    QbNl[i * nbWl + j] = d > 0.0 ? rtk.P[idx * nx + idxJ] / d : 0.0;
                 }
             }
-            nbNl++;
         }
 
         if (nbNl < 4) {
@@ -496,9 +605,18 @@ public class PppAmbFix {
         } else {
             double[] bNl = new double[nbNl * 2];
             double[] sNl = new double[2];
-            int info = Lambda.lambda(nbNl, 2, yNl, QbNl, bNl, sNl);
+            if (Lambda.debugAr()) {
+                LOG.info("[AR-Q] NL {}", Lambda.qDiagnostics(nbNl, QbNl));
+            }
+            int[] failInfoNl = new int[1];
+            int info = Lambda.lambda(nbNl, 2, yNl, QbNl, bNl, sNl, failInfoNl);
 
             if (info != 0) {
+                if (failInfoNl[0] >= 0 && failInfoNl[0] < nbNl) {
+                    int fi = failInfoNl[0];
+                    LOG.info("[AR-Q-FAIL] NL {} failIdx={} sat={}",
+                            Lambda.qDiagnostics(nbNl, QbNl), fi, satList[fi]);
+                }
                 LOG.info("PPP-AR: NL LAMBDA failed: info={}", info);
                 return -1;
             }
@@ -516,6 +634,13 @@ public class PppAmbFix {
                 nlFixed[i] = (int) Math.round(bNl[i * 2]);
             }
         }
+
+        int[] fixSats = new int[nbNl];
+        int[] fixFreqs = new int[nbNl];
+        int[] fixIdxs = new int[nbNl];
+        double[] fixAmb = new double[nbNl];
+        double maxDevNl = 0.0;
+        double sumDevSq = 0.0;
 
         for (int i = 0; i < nbNl; i++) {
             int sat = satList[i];
@@ -536,15 +661,26 @@ public class PppAmbFix {
             double lamNlNl = Constants.CLIGHT / (freq1Nl + freq2Nl);
             double fixedAmb = fixedNl * lamNlNl + wlFixed[i] * freq2Nl * lamWlNl / (freq1Nl + freq2Nl);
 
-            rtk.x[idx] = fixedAmb;
-            PppCore.initx(rtk.x, rtk.P, nx, fixedAmb, 0.0, idx);
+            fixSats[i] = sat;
+            fixFreqs[i] = f;
+            fixIdxs[i] = idx;
+            fixAmb[i] = fixedAmb;
 
-            if (xa != null) {
-                xa[idx] = fixedAmb;
-            }
-
-            rtk.ssat[sat - 1].fix[f] = 1;
+            double dev = (fixedAmb - rtk.x[idx]) / lamNlNl;
+            sumDevSq += dev * dev;
+            if (Math.abs(dev) > maxDevNl) maxDevNl = Math.abs(dev);
         }
+
+        fix.nFixed = nbNl;
+        fix.sats = fixSats;
+        fix.freqs = fixFreqs;
+        fix.idxs = fixIdxs;
+        fix.fixedAmb = fixAmb;
+        fix.ratioWl = wlRatio;
+        fix.ratioNl = nlRatio;
+        fix.maxDevWl = maxDevWl;
+        fix.maxDevNl = maxDevNl;
+        fix.postResidualRms = Math.sqrt(sumDevSq / nbNl);
 
         LOG.info("PPP-AR: fixed {} ambiguities (WL ratio={}, NL ratio={})",
                 nbNl, String.format("%.2f", wlRatio), String.format("%.2f", nlRatio));

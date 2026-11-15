@@ -11,7 +11,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 
 /**
- * 接口一数据采集配置（一次运行 = 一个站 × 一个观测日 × 一个 runId）。
+ * 采集配置（一次运行 = 一个站 × 一个观测日 × 一个 runId），接口一/三/四/A/B 共用。
  * <p>
  * 设计前提：单次运行产出的样本量远不足以训练，训练集由<b>多次运行累积</b>而成。
  * 因此：
@@ -97,6 +97,31 @@ public record CollectConfig(
         return outputDir.resolve(station + "_" + day + "_" + runId + ".refstar.csv");
     }
 
+    /**
+     * 接口 A 采集的 10 维特征落盘路径（一历元一行）。
+     * <p>
+     * 与接口一的 {@link #csvPath()} 必须分开：两者都是历元级，但标签来源完全不同
+     * （接口一标签是 {@code AR/FIX} 的固定真伪，接口 A 标签是解算位置与参考坐标的
+     * 3D 误差）。同一文件里混两套标签，组装阶段无法区分，且任一标签口径变更都会
+     * 让历史文件语义漂移。
+     * </p>
+     */
+    public Path pppCsvPath() {
+        return outputDir.resolve(station + "_" + day + "_" + runId + ".ppp.csv");
+    }
+
+    /**
+     * 接口 B 采集的 12 维特征落盘路径（一历元 × 一卫星 × 一频点一行）。
+     * <p>
+     * 主键 {@code (epoch, sat, frq)}，标签是归一化非差残差
+     * {@code resp / sigma}：与接口 A 的历元级标签、接口三的双差残差标签都不同，
+     * 三者不可合并、不可互换。
+     * </p>
+     */
+    public Path pppScaleCsvPath() {
+        return outputDir.resolve(station + "_" + day + "_" + runId + ".pppscale.csv");
+    }
+
     /** 跨运行累积的运行清单，记录每次运行的站/日/行数，供组装阶段过滤残缺运行。 */
     public Path manifestPath() {
         return outputDir.resolve("_runs.csv");
@@ -117,6 +142,13 @@ public record CollectConfig(
         }
         if (!overwrite && Files.exists(refStarCsvPath())) {
             throw new IOException("接口四采集文件已存在，拒绝覆盖（runId 必须唯一）: " + refStarCsvPath());
+        }
+        if (!overwrite && Files.exists(pppCsvPath())) {
+            throw new IOException("接口 A 采集文件已存在，拒绝覆盖（runId 必须唯一）: " + pppCsvPath());
+        }
+        if (!overwrite && Files.exists(pppScaleCsvPath())) {
+            throw new IOException("接口 B 采集文件已存在，拒绝覆盖（runId 必须唯一）: "
+                    + pppScaleCsvPath());
         }
     }
 

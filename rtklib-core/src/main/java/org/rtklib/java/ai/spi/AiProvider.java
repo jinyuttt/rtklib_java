@@ -25,4 +25,32 @@ public interface AiProvider {
     default RefStarValidator refStarValidator() {
         return null;
     }
+
+    /**
+     * 接口 A：PPP 解有效性判别（§3）。返回 {@code null} = 本 provider 不提供接口 A。
+     *
+     * 默认实现返回 {@code null}：未提供即「不干预」，core 侧行为与未注入逐位一致（I-1）。
+     */
+    default PppSolutionValidator pppSolutionValidator() {
+        return null;
+    }
+
+    /**
+     * 接口 B：PPP 观测方差缩放（§4）。返回 {@code null} = 本 provider 不提供接口 B。
+     *
+     * 默认实现返回 {@code null}：未提供即「不干预」，core 侧行为与未注入逐位一致（I-1）。
+     */
+    default PppVarianceScaler pppVarianceScaler() {
+        return null;
+    }
+
+    /**
+     * 接口 D：PPP-RTK 固定校验（§5）。返回 {@code null} = 本 provider 不提供接口 D。
+     *
+     * 默认实现返回 {@code null}：本版本 core 侧无 D 注入点（§5.2 施加原子性阻塞），
+     * 仅在训练侧与契约测试落地。
+     */
+    default PppRtkFixValidator pppRtkFixValidator() {
+        return null;
+    }
 }
