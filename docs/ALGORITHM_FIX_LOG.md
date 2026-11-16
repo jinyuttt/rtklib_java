@@ -1594,7 +1594,7 @@ rtcm.setReferenceTime(refTime);         // 锚定到当前周
 
 CPU time 与实时观测同周（只差几秒），adjweek ±3.5d 窗口绝对够用。后续若流中到达可解码星历消息（1019/1045/1046 等），Rtcm 内部会用星历自身 week 纠偏——这里的 setReferenceTime 只是兜底初始锚定，不影响正常的星历纠正路径。
 
-**验证**：编译通过（`mvn compile -pl rtklib-core`）。Day 299 BRDC 替换后，WUH20+SSRC01CAS0 实时流 60s 测试 **62/62 历元全部产出 PPP 解**，week=2442（正确），station pos ECEF 捕获成功（RTCM 1006）。解位置 ECEF 差 station ~(3, 7, 4)m，实时 PPP 初始解合理收敛。
+**验证**：编译通过（`mvn compile -pl rtklib-core`）。Day 299 BRDC 替换后，WUH20 + `SSR*01CAS0` 实时流 60s 测试 **62/62 历元全部产出 PPP 解**，week=2442（正确），station pos ECEF 捕获成功（RTCM 1006）。解位置 ECEF 差 station ~(3, 7, 4)m，实时 PPP 初始解合理收敛。
 
 **影响范围**：仅影响 `rtcm.time == 0` 且已调用 `loadNav()` 的实时流接入场景。离线回放场景（Rtcm.time 已由文件 timetag 初始化）不受影响。
 
@@ -1670,7 +1670,7 @@ s8  af1   ×2^-40  s/s    (clock drift)
 ### 验证
 
 - 编译通过
-- 回放 `obs_wuh20_20261026.rtcm3` + `ssr_ssrc01cas0_20261026.rtcm3`（120 s）：
+- 回放 `obs_wuh20_20261026.rtcm3` + `ssr_ssr*01cas0_20261026.rtcm3`（120 s）：
   - `ephTypes={1043=6, 1045=2}`（1043 全部被识别为星历帧）
   - `total=119 success=119 fail=0`（解算结果不变，SBAS 不影响 PPP）
   - VERDICT=OK
@@ -1765,7 +1765,7 @@ WUH20 流只发 1043、不发 1042 —— BDS 星历仍完全依赖 `loadNav()` 
 
 **验证**：
 - 编译通过
-- WUH20+SSRC01CAS0 实时流 120s：`ephTypes={1043=5, 1045=6}` ✅（同时 BDS 和 GAL 星历都被解码）
+- WUH20 + `SSR*01CAS0` 实时流 120s：`ephTypes={1043=5, 1045=6}` ✅（同时 BDS 和 GAL 星历都被解码）
 - 120/120 全 PPP 解 ✅
 - 额外安全措施：IODE 一致性检查——1043.iode 与 BRDM 预载 eph.iode 不匹配时，只更新时钟参数（f0/f1/f2/toc/iodc），不覆盖轨道参数（防止 BDS-2 GEO 卫星零轨道参数污染 BRDM 预载）
 
@@ -1799,12 +1799,12 @@ if (LOG.isTraceEnabled() && post == 0 && rtk.epoch <= 3
 
 报告 `[OBS]/[SSR]` 段新增 `recorded: N bytes -> 路径` 行。
 
-**录制产物（2026-10-26，WUH20 + SSRC01CAS0，120s）**：
+**录制产物（2026-10-26，WUH20 + `SSR*01CAS0`，120s）**：
 
 | 文件 | 大小 | 帧数 | 内容 |
 |------|------|------|------|
 | `test-data/gnss-validation/rtcm/obs_wuh20_20261026.rtcm3` | 269,731 B | 1008 | MSM7 观测 + 1006/1033 等 |
-| `test-data/gnss-validation/rtcm/ssr_ssrc01cas0_20261026.rtcm3` | 196,089 B | 396 | SSR 1057-1060/1240-1242/1258-1260/1265-1270 |
+| `test-data/gnss-validation/rtcm/ssr_ssr*01cas0_20261026.rtcm3` | 196,089 B | 396 | SSR 1057-1060/1240-1242/1258-1260/1265-1270 |
 
 **回放验证（`OBS_FILE` + `SSR_FILE` + `SSR_ALIGN=1`）**：
 - SSR 时间戳平移 153 个（94 颗卫星），delta = -118.0 s
@@ -1846,7 +1846,7 @@ WL 4 星全部固定，但 NL 只固定 3 星，低于 NL 最小固定数 4 的�
   - decode_ssr4（comb orbit+clk）同样 ni=10, nj=8（L1805-1840）
   - decode_ssr2/3/7 头部 **无 datum 位**（ssr2_head L1601-1631），ssr1/ssr4 头部有 datum（ssr1_head L1559-1597）
   - ssr_sig_bds[16]=0, ssr_sig_bds[17]=0（原版标注"不支持 B1I/B1Q"，L150-154）
-- **问题现象**：WUH20 实时流 CAS SSRC01CAS0 SSR 解码 nv=31→32（修复前）→ 40-44（修复后），epoch 62 起崩溃至 nv=0。崩溃前 BDS 卫星 phase bias 被存入 IRN 槽位，码偏差 mode16 全跳过。
+- **问题现象**：WUH20 实时流 CAS `SSR*01CAS0` SSR 解码 nv=31→32（修复前）→ 40-44（修复后），epoch 62 起崩溃至 nv=0。崩溃前 BDS 卫星 phase bias 被存入 IRN 槽位，码偏差 mode16 全跳过。
 - **根因**（7 个叠加缺陷）：
   1. **case 1264-1270 系统映射整体错移**：Java 把 1264-1270 映射为 GPS/GLO/GAL/QZS/SBS/CMP/IRN；RTKLIB 2.5.1 为 1264=VTEC、1265-1270=GPS/GLO/GAL/QZS/SBS/BDS。后果：CAS 流 1270（BDS 相位偏差）被写入 IRN 槽位→isSsrValid 剔除全部 BDS 卫星
   2. **decodeSsrHead 无条件跳 datum 位**：clock/codebias/ura/hrclock（ssr2_head）无 datum 位，Java 一律跳过→头部整体 1bit 错位，钟差改正全错
@@ -3873,7 +3873,7 @@ if (rtk.epoch <= INIT_PHASE_EPOCH) {
 - **日期**：2026-11-11
 - **类型**：结论归档（audit-only，**零代码改动**）+ 评估规范升级
 - **数据**：`obs_wuh20_20261026.rtcm3` 转换的 RINEX（119 历元，04:26:22 ~ 04:28:20，1 s 采样）
-  + `ssr_ssrc01cas0_20261026.rtcm3`（396 帧，时间跨度 04:26:25 ~ 04:28:06）
+  + `ssr_ssr*01cas0_20261026.rtcm3`（396 帧，时间跨度 04:26:25 ~ 04:28:06）
 - **回放脚手架**：`rtklib-test/.../PppRtkSsrReplay`（无旧版重跑，本条结论全部基于当前 HEAD 实测）
 - **配置**：`navsys=0x29`（GPS|GAL|BDS）、`nf=3`、`ionoopt=3`（IFLC）、`tropopt=3`（EST）、
   `elmin=15°`、`arRatioWl=2.0`、`arRatioNl=3.0`、`pppRtk.enableAR=true`
@@ -4075,7 +4075,7 @@ WUH20 段仅 6 个判定样本（`p50=1.452`、`max=3.234`），叠加 `factorLD
 
 - **日期**：2026-11-14
 - **类别**：rtklib-test / 回放器（`PppRtkSsrReplay.scanSsr`）——**架构偏差记录**，非算法改动
-- **触发**：03 小时（`SSRA01CAS0\20261031\03.rtcm3`）重跑时首历元 `freshSats=0/13`、`ns=0`，
+- **触发**：03 小时（`SSR*01CAS0\20261031\03.rtcm3`）重跑时首历元 `freshSats=0/13`、`ns=0`，
   而文件已确认加载成功（11715 帧、span=[03:00:20 ~ 04:00:16]、与观测历元 03:00:30 对齐）。
 
 ### 64.1 偏差
@@ -4142,7 +4142,7 @@ ASSERT PASS hour=03 perSatNonDecreasing preSortViolations=none
 乱序发生在**跨系统交错**（BDS 帧整体晚于 GPS 帧落盘），因此每星断言必然通过；
 该断言锁的是「排序不得把同星帧序搞反」，不是「排序应当消除违例」。
 
-### 64.5 验证（03 小时，`GS2025090006`，UTC 03:00）
+### 64.5 验证（03 小时，`006`，UTC 03:00）
 
 | 指标 | 修复前 | 修复后 |
 |---|---|---|
@@ -4296,9 +4296,9 @@ PPP_DEBUG_AR=1 mvn -o -pl rtklib-test exec:java -Dlogback.configurationFile=.tmp
 
 FIX-ALG-066 的根因（周域协方差缩放未做合同变换）已在真实数据上闭环；AR 固定率仍低的直接瓶颈已转移到「搜索溢出 `info=-2`（仅 WUH20 大维数）」与「`rtk.sol.ratio` 未写回 + 候选 ratio 整体低于门限」，需另立条目，不在本条范围内。
 
-#### 66.7.5 真实 SSR 数据集交叉验证：GS2025090006（2026-10-31 UTC 03 段）
+#### 66.7.5 真实 SSR 数据集交叉验证：006（2026-10-31 UTC 03 段）
 
-数据集：`D:\gnss-val-workspace\_tmp_rinex\GS2025090006`（`hour` 布局，239 历元 @15 s）+ `_tmp_ssr`（00~23 逐小时 RTCM3，含 1057/1058/1059、1240/1241/1242、1258/1259/1260 与相位偏差 1265/1267/1270，**这才是真 SSR**）。
+数据集：`D:\gnss-val-workspace\_tmp_rinex\006`（`hour` 布局，239 历元 @15 s）+ `_tmp_ssr`（00~23 逐小时 RTCM3，含 1057/1058/1059、1240/1241/1242、1258/1259/1260 与相位偏差 1265/1267/1270，**这才是真 SSR**）。
 
 **小时基准陷阱**：该目录的文件名按 **UTC** 小时命名（`03.rtcm3` 内部时间戳 03:00:20~04:00:16），而 `rtk.ssrHourBasis` 默认 `local`，取到 `11.rtcm3`（内部时间戳 11:xx），与 UTC 03 的观测相差 8 h。实测后果：`hasSsrEpochs=0/239`，退化为无 SSR 的浮点 PPP，却仍报 fixRate 78.7%（errFix 50.0%、phaseResRms p50 3.35 m）——再次复现 FIX-ALG-062 的「高固定率假象」。加 `-Drtk.ssrHourBasis=utc` 后 `hasSsrEpochs=239/239`、`fresh=8~9`。
 
@@ -4320,14 +4320,14 @@ UC 段细节：`[AR-AMB]` 的 `lamDistinct` 分布为 1(6) / 2(3) / **3(176)**�
 
 | 目录 | 内容 | 时间基准 |
 |---|---|---|
-| `_tmp_rinex` | 4 站 × 24 小时（`GS2025090006/0015/0017/0020`），每站 `00~23\<站>.obs/.nav` | **路径按北京时间、内容按 UTC** |
+| `_tmp_rinex` | 4 站 × 24 小时（`006/015/017/020`），每站 `00~23\<站>.obs/.nav` | **路径按北京时间、内容按 UTC** |
 | `_tmp_ssr` | `00~23.rtcm3` 逐小时 | **文件名按 UTC**（`03.rtcm3` 内部时间戳 03:00:20~04:00:16） |
-| `lake\ssr\SSRA01CAS0` | `YYYYMMDD\HH.rtcm3` 按日归档 | 日目录 + 小时文件 |
+| `lake\ssr\SSR*01CAS0` | `YYYYMMDD\HH.rtcm3` 按日归档 | 日目录 + 小时文件 |
 | `products` | `CLK`/`SP3`/`BIA`/`VMF3`/`ERP`/`ATX`，按 `YYYYMMDD` 日目录 | 精密产品，不在本条范围 |
 
 关键坑：`hourFilePath` 对 `hour` 布局取 `utcHour + 8` 作目录名，故 **UTC 03 的观测在 `_tmp_rinex\<站>\11`**（`11` 目录内容首历元 03:00:30 UTC）；`_tmp_ssr` 文件名就是 UTC 小时，因此必须 `-Drtk.ssrHourBasis=utc`，否则取到 `11.rtcm3`（UTC 11）错位 8 小时。
 
-`diag` 模式（`-Dexec.args=diag -1 3 3 GS2025090006` + `ssrHourBasis=utc`）输出：
+`diag` 模式（`-Dexec.args=diag -1 3 3 006` + `ssrHourBasis=utc`）输出：
 
 ```
 SSR message inventory: 1057=1032 1058=1005 1059=996
@@ -4342,10 +4342,10 @@ BDS 的轨道/钟差/码偏差/相位偏差电文齐全（无 GPS 相位偏差 1
 
 | 站 | epochs | fix | fixRate | nsAvg | phaseResRms p50 |
 |---|---|---|---|---|---|
-| GS2025090006 | 239 | 56 | 23.4% | 7.84 | 0.87 m |
-| GS2025090015 | 238 | 105 | 44.1% | 6.94 | 1.15 m |
-| GS2025090017 | 239 | 148 | 61.9% | 7.90 | 0.95 m |
-| GS2025090020 | 238 | 7 | 2.9% | 7.42 | 0.62 m |
+| 006 | 239 | 56 | 23.4% | 7.84 | 0.87 m |
+| 015 | 238 | 105 | 44.1% | 6.94 | 1.15 m |
+| 017 | 239 | 148 | 61.9% | 7.90 | 0.95 m |
+| 020 | 238 | 7 | 2.9% | 7.42 | 0.62 m |
 
 四站固定率离散（2.9%~61.9%）而残差同量级（0.6~1.2 m），说明问题**系统级而非单站级**；与 `ns` 只有 7~8（观测 13 星）、候选 `ratio` 贴 1.0 一起，指向 §64.5 已登记的独立成因，需另立条目，不在 FIX-ALG-066 范围。
 

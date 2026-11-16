@@ -253,7 +253,7 @@ if (arFixed && rtk.xa != null && rtk.Pa != null) {
 
 依据 [SSR_ACCESS_PLAYBOOK.md](SSR_ACCESS_PLAYBOOK.md)：
 
-- CAS `SSRA01CAS0` / `SSRC01CAS0` 已接入并完成录制/回放闭环验证，2026-11-05 实时复测 60 s 收到 42,802 字节 / 87 帧、92 颗星可用；
+- CAS `SSR*01CAS0` 已接入并完成录制/回放闭环验证，2026-11-05 实时复测 60 s 收到 42,802 字节 / 87 帧、92 颗星可用；
 - CAS0 含相位偏差（`1270` BDS），故**具备 AR 条件**；`CAS1` 是 4076 专有电文，core `Rtcm` 不识别，不可用（该文档 §七 已知坑 9）；
 - 账号密码不入库，走环境变量/本机配置（同文档 §三）。
 

@@ -495,15 +495,15 @@ rtklib-research 是**独立的研究沙盒模块**，与 rtklib-core 无代码�
 
 ### 8.8 SSR 数据源接入（✅ 已闭环，2026-10-28）
 
-> 状态：**已完成**。CAS `SSRA01CAS0` / `SSRC01CAS0` SSR 挂载点可用，已打通
+> 状态：**已完成**。CAS `SSR*01CAS0` SSR 挂载点可用，已打通
 > 「实时流录制 → 离线回放 → `nav.ssr[]` → `SsrCorrector` → `ppprtkos()`」闭环：
 > 30 s 录制 CRC 全通过，120 s 回放 `total=119 success=119 fail=0`（详见
 > [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) FIX-ALG-035/036）。
-> 落盘样本：`data/ssr_SSRA01CAS0.rtcm3`（201 帧，全部为 SSR 电文）。
+> 落盘样本：`data/ssr_SSR*01CAS0.rtcm3`（201 帧，全部为 SSR 电文）。
 
 | 来源 | 状态 | 说明 |
 |------|------|------|
-| CAS IGS `SSRA01CAS0` / `SSRC01CAS0` | ✅ 已接入并验证 | 含轨道/钟差/码偏差/相位偏差；录制回放闭环通过 |
+| CAS IGS `SSR*01CAS0` | ✅ 已接入并验证 | 含轨道/钟差/码偏差/相位偏差；录制回放闭环通过 |
 | Galileo HAS IDD | 待注册审批 | 无公开事后存档；`HasSsrDecoder` 已实现 COMPACT-SSR（MT1~MT9）解码，缺 IDD 帧同步与互联网接入 |
 | BDS PPP-B2b（BDSet） | 公开归档可用 | 无相位偏差，仅支撑浮点 PPP 验证 |
 | 北航 2025 全球区域 SSR | 待离线申请 | 元数据未明确含相位偏差/区域大气改正 |

@@ -170,7 +170,7 @@ A 的收益上限 = 「`qr` 阈值确定性方案能拦多少」的补集。评�
 | 数据集 | 内容 | 来源 / 许可 | 用途 | 是否在仓库内 |
 |---|---|---|---|---|
 | **D1 IGS ALGO 2024 DOY 060** | RINEX3 观测 + `WUM0MGXRAP_20240600000` SP3/CLK/BIA（GFZ/IGS） | IGS Data Policy，开源；`PppValidationTest` 可自动下载 | PPP 浮点、PPP-AR（IFLC / EST）验证 | 是（`test-data/gnss-validation/ppp/algo`、`.../product`） |
-| **D2 WUH20 + SSRC01CAS0 2026-10-26** | 观测流 `obs_wuh20_20261026.rtcm3` + SSR 流 `ssr_ssrc01cas0_20261026.rtcm3` | 公开 NTRIP 流（WUH20 观测 / CAS SSR），见 `SSR_ACCESS_PLAYBOOK.md` | PPP-RTK（IFLC）链路联调、SSR 解码 | 是（`test-data/gnss-validation/rtcm`） |
+| **D2 WUH20 + `SSR*01CAS0` 2026-10-26** | 观测流 `obs_wuh20_20261026.rtcm3` + SSR 流 `ssr_ssr*01cas0_20261026.rtcm3` | 公开 NTRIP 流（WUH20 观测 / CAS SSR），见 `SSR_ACCESS_PLAYBOOK.md` | PPP-RTK（IFLC）链路联调、SSR 解码 | 是（`test-data/gnss-validation/rtcm`） |
 | **D3 0015 / 0017 / 0020 / 0018** | 逐小时 RINEX + 同源 SSR | **外部抓取 + 实时落盘，非仓库内开源数据**（FIX-ALG-060 附自述「原 0015/0017/0020 使用的是外部抓取数据」） | PPP-RTK AR 固定率实测、FIX-ALG-054~060 排雷 | 否 |
 
 **因此：**
@@ -377,10 +377,10 @@ v1.0/v1.1 只写了「固定坐标不进输出」。完整归因是**三重**，
 | 步 | 动作 | 数据 | 产出 | 成本 |
 |---|---|---|---|---|
 | D-1 | D 的 SPI 契约测试（不需要真实数据，构造上下文） | 无 | 证明 D 的接口契约、降级语义、`ratioPassed` 归因字段可用 | 0.5 天 |
-| D-2 | **开源数据 UC 链路可用性复核**：把 D2（WUH20 + SSRC01CAS0）从 IFLC 切到 UC/EST（`nf=3`、`navsys` 放开），检查 `ns` / `vsat0` / `fix` | **D2（公开流数据）** | 判定 §5.2 的「可能 A / 可能 B」 | 0.5–1 天 |
+| D-2 | **开源数据 UC 链路可用性复核**：把 D2（WUH20 + `SSR*01CAS0`）从 IFLC 切到 UC/EST（`nf=3`、`navsys` 放开），检查 `ns` / `vsat0` / `fix` | **D2（公开流数据）** | 判定 §5.2 的「可能 A / 可能 B」 | 0.5–1 天 |
 | D-3 | 按 §5.3 判定表处理 D-2 结果 | D2 | 决定 D 是否重开 | 待 D-2 结果 |
 
-**为什么 D2 可用于 D-2**：D2 的两条流都是公开可获取的（WUH20 观测 / CAS `SSRC01CAS0` SSR），且已在仓库内，符合「开源数据」要求；D2 的既有结论（FIX-ALG-035）是「WL 100% 固定、NL 因可见星数未达 FIX」——即 **AR 链路在 D2 上是活的**（WL 有固定），与 D3 上的 `ns=1` 退化形成对照。这正是区分 A/B 所需要的对照。
+**为什么 D2 可用于 D-2**：D2 的两条流都是公开可获取的（WUH20 观测 / CAS `SSR*01CAS0` SSR），且已在仓库内，符合「开源数据」要求；D2 的既有结论（FIX-ALG-035）是「WL 100% 固定、NL 因可见星数未达 FIX」——即 **AR 链路在 D2 上是活的**（WL 有固定），与 D3 上的 `ns=1` 退化形成对照。这正是区分 A/B 所需要的对照。
 
 **已知限制**（须在 D-2 结论里写明）：WUH20 观测流不含 BDS B2a，`freqIdx=1` 恒空，UC/EST 下可用卫星数天然偏少（FIX-ALG-035 实测单历元 5–10 颗）；因此 D-2 若仍 `fix=0`，需先用「`ns` / `vsat0` 是否正常」区分「卫星不够」与「滤波器退化」，不能直接判为可能 A。
 **D-2 判定表**（`fix` 不是唯一指标——D2 上 FIX-ALG-035 实测 `fix=0` 同样成立，差别在「WL 是否在固定」）：
