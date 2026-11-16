@@ -1,6 +1,6 @@
 # IGS精密产品下载源与存储路径
 
-> 对齐PRIDE-PPPAR v3.2 pdp3.sh，最后更新：2026-09-24
+> 对齐PRIDE-PPPAR v3.2 pdp3.sh，最后更新：2026-11-16（按代码复核，见 §7 文档与代码差异记录）
 
 ## 1. 服务器地址
 
@@ -12,6 +12,19 @@
 | S4 | CODE-AIUB | FTP | `ftp://ftp.aiub.unibe.ch` | 瑞士伯尔尼大学(CODE分析中心) |
 | S5 | TU-Wien | HTTPS | `https://vmf.geo.tuwien.ac.at` | 维也纳理工大学(VMF3/GPT3) |
 | S6 | IGS-Files | HTTPS | `https://files.igs.org` | IGS官方文件服务器(ANTEX) |
+| S7 | CDDIS | HTTPS | `https://cddis.nasa.gov` | NASA CDDIS，需 Earthdata 凭据（见 §1.1），仅 OSB/DCB 候选 |
+
+### 1.1 CDDIS 凭据
+
+`CredentialManager` 按以下优先级查找 `credentials.properties`：
+
+1. 系统属性 `-Drtklib.credentials=/path/to/credentials.properties`
+2. 环境变量 `RTKLIB_CREDENTIALS`
+3. `~/.rtklib/credentials.properties`
+4. 当前目录 `./credentials.properties`
+
+文件格式：`cddis.username=...` / `cddis.password=...`。未配置时 CDDIS 源自动跳过（不报错）。
+该文件已在 `.gitignore` 中，禁止入库。
 
 ## 2. 本地缓存目录结构
 
@@ -26,11 +39,14 @@ product/
 ├── upd/        宽窄巷UPD(PPP-AR)
 ├── osb/        观测特定偏差(CAS)
 ├── dcb/        差分码偏差(CODE/CAS)
-├── vmf3/       VMF3映射函数系数
+├── vmf3/       VMF3映射函数系数 + 合并文件 vmf_YYYYDDD
 ├── gpt3/       GPT3网格数据
-├── blq/        海潮负荷(BLQ)
 └── table/      静态表(ANTEX/leap.sec/sat_parameters)
 ```
+
+> `blq/` 不在此目录树：`ProductType` 无 BLQ，海潮负荷由 rtklib-otl 生成，见
+> [docs/OTL_MODULE_REFERENCE.md](../docs/OTL_MODULE_REFERENCE.md)。
+> `table/` 也无对应 `ProductType`，由 `downloadTable()` / `downloadAntex()` 直接写入。
 
 ## 3. 各产品详细说明
 
@@ -39,7 +55,7 @@ product/
 | 项目 | 内容 |
 |------|------|
 | 本地目录 | `product/sp3/` |
-| 本地文件名 | `WUM0MGXRAP_YYYYDDD00000_01D_05M_ORB.SP3` |
+| 本地文件名 | `WUM0MGXRAP_YYYYDDD0000_01D_05M_ORB.SP3` |
 | 用途 | 精密卫星轨道，替代广播星历 |
 | 读取类 | `Sp3Reader` → `nav.peph` |
 
@@ -47,12 +63,12 @@ product/
 
 | 优先级 | URL模式 | 服务器 |
 |--------|---------|--------|
-| 1 | `ftps://bdspride.com/wum/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}00000_01D_05M_ORB.SP3.gz` | S1 |
-| 2 | `ftp://igs.ign.fr/pub/igs/products/mgex/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}00000_01D_05M_ORB.SP3.gz` | S2 |
-| 3 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/WUM0MGXRAP_{YYYY}{DDD}00000_01D_05M_ORB.SP3.gz` | S3 |
-| 4 | `ftps://bdspride.com/wcc/{WWWW}/WCC0OPSRAP_{YYYY}{DDD}00000_01D_05M_ORB.SP3.gz` | S1(WCC回退) |
-| 5 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/IGS2R03FIN_{YYYY}{DDD}00000_01D_05M_ORB.SP3.gz` | S3(IGS2最终) |
-| 6 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/WUM0MGXRTS_{YYYY}{DDD}00000_01D_05M_ORB.SP3.gz` | S3(RTS实时) |
+| 1 | `ftps://bdspride.com/wum/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}0000_01D_05M_ORB.SP3.gz` | S1 |
+| 2 | `ftp://igs.ign.fr/pub/igs/products/mgex/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}0000_01D_05M_ORB.SP3.gz` | S2 |
+| 3 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/WUM0MGXRAP_{YYYY}{DDD}0000_01D_05M_ORB.SP3.gz` | S3 |
+| 4 | `ftps://bdspride.com/wcc/{WWWW}/WCC0OPSRAP_{YYYY}{DDD}0000_01D_05M_ORB.SP3.gz` | S1(WCC回退) |
+| 5 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/IGS2R03FIN_{YYYY}{DDD}0000_01D_05M_ORB.SP3.gz` | S3(IGS2最终) |
+| 6 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/WUM0MGXRTS_{YYYY}{DDD}0000_01D_05M_ORB.SP3.gz` | S3(RTS实时) |
 
 > `{WWWW}` = GPS周，`{YYYY}` = 年，`{DDD}` = 年积日(DOY)
 
@@ -63,7 +79,7 @@ product/
 | 项目 | 内容 |
 |------|------|
 | 本地目录 | `product/clk/` |
-| 本地文件名 | `WUM0MGXRAP_YYYYDDD00000_01D_30S_CLK.CLK` |
+| 本地文件名 | `WUM0MGXRAP_YYYYDDD0000_01D_30S_CLK.CLK` |
 | 用途 | 精密卫星钟差，替代广播钟差 |
 | 读取类 | `ClkReader` → `nav.pclk` |
 
@@ -71,12 +87,12 @@ product/
 
 | 优先级 | URL模式 | 服务器 |
 |--------|---------|--------|
-| 1 | `ftps://bdspride.com/wum/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}00000_01D_30S_CLK.CLK.gz` | S1 |
-| 2 | `ftp://igs.ign.fr/pub/igs/products/mgex/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}00000_01D_30S_CLK.CLK.gz` | S2 |
-| 3 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/clock/WUM0MGXRAP_{YYYY}{DDD}00000_01D_30S_CLK.CLK.gz` | S3 |
-| 4 | `ftps://bdspride.com/wcc/{WWWW}/WCC0OPSRAP_{YYYY}{DDD}00000_01D_30S_CLK.CLK.gz` | S1(WCC回退) |
-| 5 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/clock/IGS2R03FIN_{YYYY}{DDD}00000_01D_30S_CLK.CLK.gz` | S3(IGS2最终) |
-| 6 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/clock/WUM0MGXRTS_{YYYY}{DDD}00000_01D_05S_CLK.CLK.gz` | S3(RTS实时) |
+| 1 | `ftps://bdspride.com/wum/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}0000_01D_30S_CLK.CLK.gz` | S1 |
+| 2 | `ftp://igs.ign.fr/pub/igs/products/mgex/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}0000_01D_30S_CLK.CLK.gz` | S2 |
+| 3 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/clock/WUM0MGXRAP_{YYYY}{DDD}0000_01D_30S_CLK.CLK.gz` | S3 |
+| 4 | `ftps://bdspride.com/wcc/{WWWW}/WCC0OPSRAP_{YYYY}{DDD}0000_01D_30S_CLK.CLK.gz` | S1(WCC回退) |
+| 5 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/clock/IGS2R03FIN_{YYYY}{DDD}0000_01D_30S_CLK.CLK.gz` | S3(IGS2最终) |
+| 6 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/clock/WUM0MGXRTS_{YYYY}{DDD}0000_01D_05S_CLK.CLK.gz` | S3(RTS实时) |
 
 ---
 
@@ -85,7 +101,7 @@ product/
 | 项目 | 内容 |
 |------|------|
 | 本地目录 | `product/erp/` |
-| 本地文件名 | `WUM0MGXRAP_YYYYDDD00000_01D_01D_ERP.ERP` |
+| 本地文件名 | `WUM0MGXRAP_YYYYDDD0000_01D_01D_ERP.ERP` |
 | 用途 | 极移(xp,yp)、UT1-UTC、LOD，供IERS2010潮汐改正使用 |
 | 读取类 | `ErpReader` → `nav.erp` |
 
@@ -93,12 +109,12 @@ product/
 
 | 优先级 | URL模式 | 服务器 |
 |--------|---------|--------|
-| 1 | `ftps://bdspride.com/wum/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}00000_01D_01D_ERP.ERP.gz` | S1 |
-| 2 | `ftp://igs.ign.fr/pub/igs/products/mgex/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}00000_01D_01D_ERP.ERP.gz` | S2 |
-| 3 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/WUM0MGXRAP_{YYYY}{DDD}00000_01D_01D_ERP.ERP.gz` | S3 |
-| 4 | `ftps://bdspride.com/wcc/{WWWW}/WCC0OPSRAP_{YYYY}{DDD}00000_01D_01D_ERP.ERP.gz` | S1(WCC回退) |
-| 5 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/COD0R03FIN_{YYYY}{DDD}00000_01D_01D_ERP.ERP.gz` | S3(CODE最终) |
-| 6 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/WUM0MGXRTS_{YYYY}{DDD}00000_01D_01D_ERP.ERP.gz` | S3(RTS实时) |
+| 1 | `ftps://bdspride.com/wum/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}0000_01D_01D_ERP.ERP.gz` | S1 |
+| 2 | `ftp://igs.ign.fr/pub/igs/products/mgex/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}0000_01D_01D_ERP.ERP.gz` | S2 |
+| 3 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/WUM0MGXRAP_{YYYY}{DDD}0000_01D_01D_ERP.ERP.gz` | S3 |
+| 4 | `ftps://bdspride.com/wcc/{WWWW}/WCC0OPSRAP_{YYYY}{DDD}0000_01D_01D_ERP.ERP.gz` | S1(WCC回退) |
+| 5 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/COD0R03FIN_{YYYY}{DDD}0000_01D_01D_ERP.ERP.gz` | S3(CODE最终) |
+| 6 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/WUM0MGXRTS_{YYYY}{DDD}0000_01D_01D_ERP.ERP.gz` | S3(RTS实时) |
 
 ---
 
@@ -107,7 +123,7 @@ product/
 | 项目 | 内容 |
 |------|------|
 | 本地目录 | `product/bia/` |
-| 本地文件名 | `WUM0MGXRAP_YYYYDDD00000_01D_01D_OSB.BIA` |
+| 本地文件名 | `WUM0MGXRAP_YYYYDDD0000_01D_01D_OSB.BIA` |
 | 用途 | OSB/DSB偏差，供伪距偏差改正和PPP-AR使用 |
 | 读取类 | `OsbReader` → `nav.fcbWl` + `nav.cbias` |
 
@@ -115,12 +131,12 @@ product/
 
 | 优先级 | URL模式 | 服务器 |
 |--------|---------|--------|
-| 1 | `ftps://bdspride.com/wum/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}00000_01D_01D_OSB.BIA.gz` | S1 |
-| 2 | `ftp://igs.ign.fr/pub/igs/products/mgex/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}00000_01D_01D_OSB.BIA.gz` | S2 |
-| 3 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/bias/WUM0MGXRAP_{YYYY}{DDD}00000_01D_01D_OSB.BIA.gz` | S3 |
-| 4 | `ftps://bdspride.com/wcc/{WWWW}/WCC0OPSRAP_{YYYY}{DDD}00000_01D_01D_OSB.BIA.gz` | S1(WCC回退) |
-| 5 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/bias/IGS2R03FIN_{YYYY}{DDD}00000_01D_01D_OSB.BIA.gz` | S3(IGS2最终) |
-| 6 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/bias/WUM0MGXRTS_{YYYY}{DDD}00000_01D_05M_OSB.BIA.gz` | S3(RTS实时) |
+| 1 | `ftps://bdspride.com/wum/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}0000_01D_01D_OSB.BIA.gz` | S1 |
+| 2 | `ftp://igs.ign.fr/pub/igs/products/mgex/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}0000_01D_01D_OSB.BIA.gz` | S2 |
+| 3 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/bias/WUM0MGXRAP_{YYYY}{DDD}0000_01D_01D_OSB.BIA.gz` | S3 |
+| 4 | `ftps://bdspride.com/wcc/{WWWW}/WCC0OPSRAP_{YYYY}{DDD}0000_01D_01D_OSB.BIA.gz` | S1(WCC回退) |
+| 5 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/bias/IGS2R03FIN_{YYYY}{DDD}0000_01D_01D_OSB.BIA.gz` | S3(IGS2最终) |
+| 6 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/bias/WUM0MGXRTS_{YYYY}{DDD}0000_01D_05M_OSB.BIA.gz` | S3(RTS实时) |
 
 ---
 
@@ -129,7 +145,7 @@ product/
 | 项目 | 内容 |
 |------|------|
 | 本地目录 | `product/obx/` |
-| 本地文件名 | `WUM0MGXRAP_YYYYDDD00000_01D_30S_ATT.OBX` |
+| 本地文件名 | `WUM0MGXRAP_YYYYDDD0000_01D_30S_ATT.OBX` |
 | 用途 | 卫星姿态(偏航姿态)，BDS-3卫星需要 |
 | 读取类 | — |
 
@@ -137,11 +153,11 @@ product/
 
 | 优先级 | URL模式 | 服务器 |
 |--------|---------|--------|
-| 1 | `ftps://bdspride.com/wum/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}00000_01D_30S_ATT.OBX.gz` | S1 |
-| 2 | `ftp://igs.ign.fr/pub/igs/products/mgex/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}00000_01D_30S_ATT.OBX.gz` | S2 |
-| 3 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/WUM0MGXRAP_{YYYY}{DDD}00000_01D_30S_ATT.OBX.gz` | S3 |
-| 4 | `ftps://bdspride.com/wcc/{WWWW}/WCC0OPSRAP_{YYYY}{DDD}00000_01D_30S_ATT.OBX.gz` | S1(WCC回退) |
-| 5 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/IGS2R03FIN_{YYYY}{DDD}00000_01D_30S_ATT.OBX.gz` | S3(IGS2最终) |
+| 1 | `ftps://bdspride.com/wum/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}0000_01D_30S_ATT.OBX.gz` | S1 |
+| 2 | `ftp://igs.ign.fr/pub/igs/products/mgex/{WWWW}/WUM0MGXRAP_{YYYY}{DDD}0000_01D_30S_ATT.OBX.gz` | S2 |
+| 3 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/WUM0MGXRAP_{YYYY}{DDD}0000_01D_30S_ATT.OBX.gz` | S3 |
+| 4 | `ftps://bdspride.com/wcc/{WWWW}/WCC0OPSRAP_{YYYY}{DDD}0000_01D_30S_ATT.OBX.gz` | S1(WCC回退) |
+| 5 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/orbit/IGS2R03FIN_{YYYY}{DDD}0000_01D_30S_ATT.OBX.gz` | S3(IGS2最终) |
 
 ---
 
@@ -157,14 +173,16 @@ product/
 
 | 优先级 | 文件名模式 | 说明 |
 |--------|-----------|------|
-| 1 | `WUM0MGXRTS_{YYYY}{DDD}00000_01D_05M_OSB.BIA` | WUM RTS OSB(Bias-SINEX，新版) |
-| 2 | `WUM0MGXRAP_{YYYY}{DDD}00000_01D_05M_OSB.BIA` | WUM RAP OSB(Bias-SINEX，新版) |
-| 3 | `CAS0MGXRTS_{YYYY}{DDD}00000_01D_05M_OSB.BIA` | CAS RTS OSB(Bias-SINEX，新版) |
-| 4 | `WUM0MGXRTS_{YYYY}{DDD}000_01D_05M_OSB.BIA` | WUM RTS OSB(9位日期格式) |
-| 5 | `WUM0MGXRAP_{YYYY}{DDD}000_01D_05M_OSB.BIA` | WUM RAP OSB(9位日期格式) |
-| 6 | `WUM0MGXRTS_{WWWW}0_01D_05M_FCB.FCB` | WUM FCB(旧版，GPS周命名) |
-| 7 | `CAS0MGXRTS_{WWWW}0_01D_05M_FCB.FCB` | CAS FCB(旧版，GPS周命名) |
-| 8 | `{YYYY}{DDD}0.FCB` | 简化命名FCB |
+| 1 | `WUM0MGXRTS_{YYYY}{DDD}0000_01D_05M_OSB.BIA` | WUM RTS OSB(Bias-SINEX，11位日期) |
+| 2 | `WUM0MGXRAP_{YYYY}{DDD}0000_01D_01D_OSB.BIA` | WUM RAP OSB(Bias-SINEX，11位日期，01D) |
+| 3 | `CAS0MGXRTS_{YYYY}{DDD}0000_01D_05M_OSB.BIA` | CAS RTS OSB(Bias-SINEX，11位日期) |
+| 4 | `WUM0MGXRTS_{YYYY}{DDD}00000_01D_05M_OSB.BIA` | WUM RTS OSB(12位日期) |
+| 5 | `WUM0MGXRAP_{YYYY}{DDD}00000_01D_01D_OSB.BIA` | WUM RAP OSB(12位日期，01D) |
+| 6 | `WUM0MGXRTS_{YYYY}{DDD}000_01D_05M_OSB.BIA` | WUM RTS OSB(10位日期) |
+| 7 | `WUM0MGXRAP_{YYYY}{DDD}000_01D_01D_OSB.BIA` | WUM RAP OSB(10位日期，01D) |
+| 8 | `WUM0MGXRTS_{WWWW}0_01D_05M_FCB.FCB` | WUM FCB(旧版，GPS周命名) |
+| 9 | `CAS0MGXRTS_{WWWW}0_01D_05M_FCB.FCB` | CAS FCB(旧版，GPS周命名) |
+| 10 | `{YYYY}{DDD}0.FCB` | 简化命名FCB |
 
 **候选URL（每个文件名尝试以下服务器）**：
 
@@ -196,7 +214,11 @@ product/
 | 优先级 | URL模式 | 服务器 |
 |--------|---------|--------|
 | 1 | `ftps://bdspride.com/wum/{WWWW}/{FILENAME}` | S1 |
-| 2 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/bias/{FILENAME}` | S3 |
+| 2 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/{BUCKET}/{FILENAME}` | S3(分桶目录，简化命名) |
+| 3 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/bias/{FILENAME}` | S3(WUM周命名回退) |
+
+> WHU 分桶目录：BUCKET = 年积日/50+1（整数除法），与代码 `doy/50+1` 一致；
+> 分桶路径用于简化命名 `{YYYY}{DDD}0.UPD`，`/bias/` 路径用于 WUM 周命名。
 
 ---
 
@@ -220,7 +242,9 @@ product/
 | 优先级 | URL模式 | 服务器 |
 |--------|---------|--------|
 | 1 | `ftp://igs.ign.fr/pub/igs/products/mgex/{WWWW}/{FILENAME}` | S2 |
-| 2 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/bias/{FILENAME}` | S3 |
+| 2 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/{BUCKET}/{FILENAME}` | S3(分桶目录) |
+
+> WHU 分桶目录：BUCKET = 年积日/50+16（整数除法），与代码 `doy/50+16` 一致。
 
 ---
 
@@ -353,14 +377,14 @@ product/
 | 文件名 | 用途 | 候选URL |
 |--------|------|---------|
 | `leap.sec` | 闰秒表 | S1→S3: `bdspride.com/table/` → `whu/.../table/` |
-| `sat_parameters.txt` | 卫星参数( Block/质量/面积等) | S1→S3 |
+| `sat_parameters` | 卫星参数( Block/质量/面积等) | S1→S3 |
 
 ## 4. 文件名格式说明
 
 ### IGS MGEX 文件名模板
 
 ```
-{AC}{TYPE}{PROD}_{YYYYDDDSSSSS_{INT1}D_{INT2}{S}_{TYPE2}.{EXT}
+{AC}{TYPE}{PROD}_{YYYYDDDSSSSS}_{INT1}D_{INT2}{S}_{TYPE2}.{EXT}
 ```
 
 | 字段 | 说明 | 示例 |

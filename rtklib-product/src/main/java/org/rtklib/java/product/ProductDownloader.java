@@ -85,7 +85,7 @@ public class ProductDownloader {
     public static final String URL_BDSPRIDE = "ftps://bdspride.com";
     public static final String URL_IGN = "ftp://igs.ign.fr";
     public static final String URL_WHU = "ftp://igs.gnsswhu.cn";
-    public static final String URL_VMF = "http://vmf.geo.tuwien.ac.at";
+    public static final String URL_VMF = "https://vmf.geo.tuwien.ac.at";
     public static final String URL_CDDIS = "https://cddis.nasa.gov";
 
     public enum ProductType {
@@ -219,8 +219,32 @@ public class ProductDownloader {
             types = ProductType.values();
         }
 
+        // GPT3 为静态格网文件（不随日期变化），整个日期范围只下载一次，避免逐日重复调用
+        List<ProductType> dailyTypes = new ArrayList<>();
+        boolean wantGpt3 = false;
+        for (ProductType t : types) {
+            if (t == ProductType.GPT3) {
+                wantGpt3 = true;
+            } else {
+                dailyTypes.add(t);
+            }
+        }
+        if (wantGpt3) {
+            try {
+                ProductFile pf = downloadProduct(startDate, ProductType.GPT3);
+                if (pf != null) {
+                    result.files.add(pf);
+                } else {
+                    result.errors.add("Failed to download GPT3");
+                }
+            } catch (Exception e) {
+                result.errors.add("Error downloading GPT3: " + e.getMessage());
+                log.error("Error downloading GPT3: {}", e.getMessage());
+            }
+        }
+
         for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
-            for (ProductType type : types) {
+            for (ProductType type : dailyTypes) {
                 try {
                     ProductFile pf = downloadProduct(date, type);
                     if (pf != null) {
@@ -238,6 +262,32 @@ public class ProductDownloader {
     }
 
     private ProductFile downloadProduct(LocalDate date, ProductType type) {
+        // 以下类型走各自专用下载方法（内部已处理缓存/离线/多候选名回退）
+        switch (type) {
+            case OSB: {
+                String p = downloadOsb(date);
+                return p != null ? new ProductFile(type, p, false) : null;
+            }
+            case DCB: {
+                String p = downloadDcb(date);
+                return p != null ? new ProductFile(type, p, false) : null;
+            }
+            case VMF3: {
+                String p = downloadVmf3Grid(date);
+                return p != null ? new ProductFile(type, p, false) : null;
+            }
+            case GPT3: {
+                String p = downloadGpt3Grid();
+                return p != null ? new ProductFile(type, p, false) : null;
+            }
+            case FCB: {
+                String p = downloadFcb(date);
+                return p != null ? new ProductFile(type, p, false) : null;
+            }
+            default:
+                break;
+        }
+
         List<String> urls = generateUrls(date, type);
 
         String uncompressedName = generateLocalFileName(date, type);
@@ -599,7 +649,7 @@ public class ProductDownloader {
                     String location = conn.getHeaderField("Location");
                     if (location != null) {
                         conn.disconnect();
-                        urlStr = location;
+                        urlStr = new URL(url, location).toString();
                         continue;
                     }
                 }
@@ -681,7 +731,7 @@ public class ProductDownloader {
      * @return 合并后的VMF3网格文件路径，失败返回null
      */
     public String downloadVmf3Grid(LocalDate date) {
-        Path vmfDir = cacheDir.resolve("vmf");
+        Path vmfDir = cacheDir.resolve("vmf3");
         try {
             Files.createDirectories(vmfDir);
         } catch (IOException e) {
@@ -1149,7 +1199,7 @@ public class ProductDownloader {
 
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.out.println("Usage: ProductDownloader [cache-dir] <yyyy-mm-dd> [yyyy-mm-dd] [SP3|CLK|ERP|BIA|OBX|TABLE|VMF3|ANTEX]...");
+            System.out.println("Usage: ProductDownloader [cache-dir] <yyyy-mm-dd> [yyyy-mm-dd] [SP3|CLK|ERP|BIA|OBX|FCB|UPD|OSB|DCB|VMF3|GPT3|TABLE|ANTEX]...");
             System.out.println("  cache-dir defaults to: " + DEFAULT_CACHE_DIR);
             System.out.println("  Example: ProductDownloader ./product 2024-01-15 2024-01-15 SP3 CLK ERP");
             System.out.println("  Example: ProductDownloader 2024-01-15 SP3 CLK");
@@ -1192,9 +1242,10 @@ public class ProductDownloader {
         }
 
         LocalDate startDate = LocalDate.parse(args[argIdx++], DateTimeFormatter.ISO_LOCAL_DATE);
-        LocalDate endDate = argIdx < args.length && !args[argIdx].startsWith("SP3") && !args[argIdx].startsWith("CLK") && !args[argIdx].startsWith("ERP") && !args[argIdx].startsWith("BIA") && !args[argIdx].startsWith("OBX") && !args[argIdx].startsWith("VMF3")
-                ? LocalDate.parse(args[argIdx++], DateTimeFormatter.ISO_LOCAL_DATE)
-                : startDate;
+        LocalDate endDate = startDate;
+        if (argIdx < args.length && args[argIdx].matches("\\d{4}-\\d{2}-\\d{2}")) {
+            endDate = LocalDate.parse(args[argIdx++], DateTimeFormatter.ISO_LOCAL_DATE);
+        }
 
         if (argIdx < args.length && "VMF3".equals(args[argIdx])) {
             System.out.println("=== Downloading VMF3 Grid for " + startDate + " ===");
