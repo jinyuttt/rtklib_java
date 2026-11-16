@@ -2,7 +2,7 @@
 
 本文件是 `docs/` 的唯一入口，用于回答三个问题：**某件事该看哪份文档**、**这份文档现在还算不算数**、**哪些地方文档已经和代码不一致**。
 
-- 盘点基准：2026-11-05（依据各文件实际内容与最后修改时间，非猜测）
+- 盘点基准：2026-11-05（依据各文件实际内容与最后修改时间，非猜测）；2026-11-16 局部复核：模块清单、ALGORITHM_FIX_LOG 编号范围、PROJECT_FINAL_SUMMARY 版本口径
 - 本文只做导航与状态标注，**不改写任何文档正文**
 
 ## 状态图例
@@ -30,7 +30,7 @@
 | 文档 | 定位 | 状态 | 最后更新 |
 |------|------|------|----------|
 | [CHANGELOG.md](CHANGELOG.md) | 面向用户的版本级变更摘要（当前至 3.5.0） | ✅ 活跃 | 2026-11-12 |
-| [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) | **定版核心档案**：每次改变数值行为的修改（C 依据/根因/验证），现存 FIX-ALG-001~062 | ✅ 活跃 | 2026-11-11 |
+| [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md) | **定版核心档案**：每次改变数值行为的修改（C 依据/根因/验证），现存 FIX-ALG-001~066 | ✅ 活跃 | 2026-11-16 |
 | [RTKLIB_Differences.md](RTKLIB_Differences.md) | 与 RTKLIB 2.5.0 C 版的长期差异声明（设计选择，非 Bug） | ✅ 活跃 | 2026-10-21 |
 
 ## 二、使用与测试
@@ -57,6 +57,7 @@
 | [ORBIT_MODULE_REFERENCE.md](ORBIT_MODULE_REFERENCE.md) | TLE 解析、SGP4/SDP4、六根数转换 | ✅ 活跃 | 2026-10-08 |
 | [OTL_MODULE_REFERENCE.md](OTL_MODULE_REFERENCE.md) | 海潮负荷：分潮、BLQ 提取、位移序列、命令行 | ✅ 活跃 | 2026-09-24 |
 | [PRODUCT_MODULE_REFERENCE.md](PRODUCT_MODULE_REFERENCE.md) | 精密产品下载：产品类型、镜像优先级、缓存、协议 | ✅ 活跃 | 2026-09-24 |
+| [../rtklib-product/PRODUCT_SOURCES.md](../rtklib-product/PRODUCT_SOURCES.md) | **IGS/MGEX 产品下载源与存储路径**：7 个服务器地址与优先级、CDDIS Earthdata 凭据、产品命名与目录树、文档与代码差异记录（§7） | ✅ 活跃（文件位于模块目录，未在 `docs/` 内） | 2026-11-16 |
 
 **外部标准原文**（`docs/reference/`，只读引用，**不得改写原文**）：
 
@@ -96,7 +97,7 @@
 | 文档 | 定位 | 状态 | 最后更新 |
 |------|------|------|----------|
 | [ROADMAP.md](ROADMAP.md) | 模块状态总览 + 未完成事项（按需激活/冻结/WONTFIX）+ 暂缓与恢复条件；历史梯队记录见 [archive/ROADMAP_v3.3.0.md](archive/ROADMAP_v3.3.0.md) | ✅ 活跃 | 2026-11-05 |
-| [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) | **终期技术摘要**：一句话定位 + 精度实测 + 001~029 闭环索引 + HAS/IMU/CLAS 扩展路线 | ✅ 活跃 | 2026-10-23 |
+| [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) | **v3.1.0 封存快照**：封存时点的精度实测 + 001~029 闭环索引 + HAS/IMU/CLAS 扩展路线；**非当前版本摘要**，当前版本见 CHANGELOG / ROADMAP | 📋 阶段性完成 | 2026-11-16 |
 | [TraceLog_V2_Design.md](TraceLog_V2_Design.md) | 追踪日志 V2 设计与实现（取代 archive 中的 V1 设计） | ✅ 活跃 | 2026-10-08 |
 | [RTKCONFIG_REFACTOR_DESIGN.md](RTKCONFIG_REFACTOR_DESIGN.md) | RtkConfig 组合模式重构：487 行扁平类按模式拆分子配置（Common/Rtk/Spp/Ppp）、向后兼容迁移路径 | 🟡 设计稿（v1.0 定稿，未执行；`RtkConfig` 仍为扁平类） | 2026-10-26 |
 | [SOL_AGGREGATOR_DESIGN.md](SOL_AGGREGATOR_DESIGN.md) | SolAggregator 历元聚合工具：鲁棒加权 / 卡尔曼 RTS 两模式、与 solstatic 及 PosFileRtsSmoother 的分工、协方差与降级策略 | 🟡 设计稿（v1.2 待评审；`aggregate` 包已实现，未接入主流程、无测试） | 2026-10-27 |

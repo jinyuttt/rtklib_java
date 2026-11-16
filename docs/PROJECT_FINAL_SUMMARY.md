@@ -1,7 +1,8 @@
-# 项目终期技术摘要
+# 项目技术摘要（v3.1.0 封存快照）
 
-> 版本：**v3.1.0（封存版）** · 日期：2026-10-23
-> 完整档案：[ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md)（FIX-ALG-001~029） · 版本变更：[CHANGELOG.md](CHANGELOG.md)
+> 本文记录 **v3.1.0 封存时点**（2026-10-23）的能力与实测，**不是当前版本摘要**。
+> 当前版本 **3.5.0**（2026-11-15）：版本变更见 [CHANGELOG.md](CHANGELOG.md)，模块现状与未完成事项见 [ROADMAP.md](ROADMAP.md)，v3.1.0 之后的修复见 [ALGORITHM_FIX_LOG.md](ALGORITHM_FIX_LOG.md)（现存 FIX-ALG-001~066）。
+> 表 1 / 表 2 的统计口径截止 v3.1.0，引用前请确认是否已被后续修复覆盖。
 
 ## 摘要
 
