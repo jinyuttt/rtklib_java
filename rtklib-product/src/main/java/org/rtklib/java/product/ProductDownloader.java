@@ -69,7 +69,7 @@ import java.util.zip.GZIPInputStream;
  *   dcb/     CAS0MGXRTS_YYYYDDD0_01D_01D_DCB.BSX
  *   vmf3/    VMF3_YYYYMMDD.HHH
  *   gpt3/    gpt3_5deg.dat
- *   table/   igs20_2317.atx / leap.sec / sat_parameters.txt
+ *   table/   igs20_2317.atx / leap.sec / sat_parameters
  * </pre>
  */
 public class ProductDownloader {

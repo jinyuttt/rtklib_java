@@ -41,7 +41,8 @@ product/
 ├── dcb/        差分码偏差(CODE/CAS)
 ├── vmf3/       VMF3映射函数系数 + 合并文件 vmf_YYYYDDD
 ├── gpt3/       GPT3网格数据
-└── table/      静态表(ANTEX/leap.sec/sat_parameters)
+├── table/      静态表(ANTEX/leap.sec/sat_parameters)
+└── common/     通用目录(getCommonDir()，当前仅测试使用)
 ```
 
 > `blq/` 不在此目录树：`ProductType` 无 BLQ，海潮负荷由 rtklib-otl 生成，见
@@ -49,6 +50,11 @@ product/
 > `table/` 也无对应 `ProductType`，由 `downloadTable()` / `downloadAntex()` 直接写入。
 
 ## 3. 各产品详细说明
+
+> **候选顺序中的两个开关**（详见 §7 7.1 / 7.2）：
+> - SP3/CLK/ERP/BIA 的第 6 候选（WUM RTS 实时产品）由构造参数 `useRts` 控制，默认 `true`；
+>   关闭后该候选不参与尝试。
+> - OSB/DCB 在配置 CDDIS 凭据（§1.1）时追加 CDDIS 候选，未配置时整段跳过。
 
 ### 3.1 SP3 精密星历
 
@@ -166,6 +172,7 @@ product/
 | 项目 | 内容 |
 |------|------|
 | 本地目录 | `product/fcb/` |
+| 本地文件名 | 与命中的远端文件名相同（去掉 `.gz`），不重命名 |
 | 用途 | WL/NL模糊度固定，PPP-AR核心产品 |
 | 读取类 | `OsbReader` → `nav.fcbWl` |
 
@@ -278,7 +285,8 @@ product/
 | 2 | `ftp://igs.ign.fr/pub/igs/products/mgex/{WWWW}/{FILENAME}.gz` | S2(mgex目录) |
 | 3 | `ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/bias/{FILENAME}.gz` | S3 |
 | 4 | `ftp://ftp.aiub.unibe.ch/CODE/{YYYY}/{FILENAME}.gz` | S4 |
-| 5 | 同上路径去掉`.gz`后缀 | 裸文件回退 |
+| 5 | 裸文件回退：S2 `products/bias`、S2 `products/mgex`、S3 `bias`（**不含** S4 AIUB 裸文件） | 去掉`.gz`后缀 |
+| 6 | 同上两条 CDDIS 路径（`/archive/gnss/products/bias/{YYYY}/`、`/archive/gnss/products/mgex/{WWWW}/`） | S7(仅裸文件，需凭据) |
 
 > 下载后统一重命名为 `CAS0MGXRTS_{YYYY}{DDD}0_01D_01D_DCB.BSX`，与用户指定路径一致
 
@@ -440,3 +448,23 @@ LocalDate obsDateUtc = obsDateBeijing.minusDays(1);         // 产品下载UTC�
 
 > 北京时间00:00~16:00对应UTC前日16:00~当日00:00，因此产品日期为北京时间日期减1天。
 > 对于跨日观测（北京时间16:00后），可能需要同时下载UTC当日和次日产品。
+
+## 7. 文档与代码差异记录
+
+> 复核基准：`ProductDownloader.java`（v3.5.0，2026-11-16，HEAD `adb0d4b`）。
+> 本节只记录**已核实**的文档与代码不一致项，编号 7.* 供后续引用。
+> "已修正"表示正文对应小节已按代码同步；"备案"表示代码未改，仅在此说明以免按文档误判。
+
+| 编号 | 位置 | 文档原表述 | 代码事实 | 处置 |
+|------|------|-----------|---------|------|
+| 7.1 | §3.1~3.4 | 第 6 优先级（WUM RTS）按无条件候选列出 | `generateUrls()` 中 SP3/CLK/ERP/BIA 的 RTS 候选包在 `if (useRts)`；默认构造传 `useRts=true` | 已修正：§3 开头补开关说明 |
+| 7.2 | §3.8 OSB | URL 表 2 条（S2 `/mgex/`、S3 分桶），未提 CDDIS | `downloadOsb()` 在有 CDDIS 凭据时追加第 3 条 `/archive/gnss/products/mgex/{WWWW}/{name}` | 已修正：§3 开头补注 |
+| 7.3 | §3.9 DCB | 裸文件回退写为"同上路径去掉 `.gz`"，含 S4 AIUB；未提 CDDIS | 裸文件实际 3 条（S2 bias、S2 mgex、S3 bias），**不含** AIUB 裸文件；有凭据时另有 CDDIS 2 条（`bias`、`mgex`） | 已修正：§3.9 拆为第 5/6 行 |
+| 7.4 | §3.6 FCB | 只列候选文件名，未写落盘名 | 命中后按远端原名去掉 `.gz` 保存，不重命名 | 已修正：§3.6 补"本地文件名"行 |
+| 7.5 | §3.7 UPD | 候选 URL 3 条（S1 `/wum/`、S3 分桶、S3 `/bias/`） | 运行路径 `downloadProduct()` 走 `generateUrls()`，与文档一致；另有公开方法 `downloadUpd()` 仅 2 条（缺 `/bias/` 回退），全仓库无调用方 | 文档不改；`downloadUpd()` 备案为未使用 API |
+| 7.6 | §3.6 / §3.8 / §3.9 / §3.10 | 落盘名以各小节"本地文件名/保存名"为准 | OSB/DCB/VMF3/FCB 走专用方法，不调用 `generateLocalFileName()`；该方法对应分支（OSB/DCB 为 `...{YYYY}{DDD}0000...`、VMF3 为 `VMF3_{YYYY}{DDD}.OP`、FCB 为 `..._05M_FCB.FCB`）与实际落盘不符，属遗留分支；`GPT3` 分支 `gpt3_5deg.dat` 与 `downloadGpt3Grid()` 落盘一致，不算遗留 | 文档以专用方法为准；遗留分支备案未改（改动牵动 `ProductDownloaderTest`） |
+| 7.7 | §2 目录树 | 只列 `sp3/`~`table/` 共 11 个目录 | `getCommonDir()` 会创建 `product/common/`，当前仅 `ProductDownloaderTest#testCacheDirStructure` 使用 | 已修正：§2 树补 `common/` |
+| 7.8 | §3.1~3.4（代码侧） | 代码 javadoc 称 RTS 为"近 3 天回退" | `generateUrls()` 无日期窗口判断，RTS 候选对所有日期都会尝试 | 备案：文档不采纳"近 3 天"表述，以此条为准 |
+| 7.9 | §3.14（代码侧） | class javadoc 目录树写 `sat_parameters.txt` | 实际表名 `sat_parameters`（无后缀），`downloadTable()` 按传入名直存 | 已修正：javadoc 去掉后缀 |
+
+> 7.5 / 7.6 / 7.8 属代码侧可改进项，本次仅备案不改动，避免在 3.x「仅接受 bugfix」阶段引入行为变化。
