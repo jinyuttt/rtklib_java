@@ -10,17 +10,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * FIX-ALG-061 回归测试：初始模糊度 sanity 门限的解析与判定。
  *
- * <p>覆盖三件事：</p>
- * <ol>
- *   <li>缺省（属性未设置）必须回退 500 m，保证与 FIX-ALG-044 默认路径逐位一致；</li>
- *   <li>非法属性（非数字、非正、NaN/Inf）必须回退 500 m 并告警，不允许把门限
- *       置成 0 或负值导致全星被判粗差；</li>
- *   <li>判定边界：{@code bias == 0} 表示无观测（不算粗差），恰好等于门限不算越界。</li>
- * </ol>
+ * 覆盖三件事：
  *
- * <p>门限只在类加载时解析一次（{@link PppCore#initBiasSanityLimit()}），故本测试
+ *   - 缺省（属性未设置）必须回退 500 m，保证与 FIX-ALG-044 默认路径逐位一致；
+ *   - 非法属性（非数字、非正、NaN/Inf）必须回退 500 m 并告警，不允许把门限
+ *       置成 0 或负值导致全星被判粗差；
+ *   - 判定边界：{@code bias == 0} 表示无观测（不算粗差），恰好等于门限不算越界。
+ *
+ * 门限只在类加载时解析一次（{@link PppCore#initBiasSanityLimit()}），故本测试
  * 只验证纯函数 {@code resolveInitBiasSanityLimit(String)} 与
- * {@code isInitBiasOutlier(double, double)}，不改动运行期静态值。</p>
+ * {@code isInitBiasOutlier(double, double)}，不改动运行期静态值。
  */
 public class PppInitBiasSanityTest {
 

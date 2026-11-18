@@ -7,8 +7,8 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 状态预测因子（移植自FE-GUT predict_factor.h）。
  *
- * <p>支持任意维度：连接相邻历元的两个同维变量节点。
- * 残差 = state1 - F_g * state0，约束状态转移关系。</p>
+ * 支持任意维度：连接相邻历元的两个同维变量节点。
+ * 残差 = state1 - F_g * state0，约束状态转移关系。
  */
 public class PredictFactor extends Factor {
 

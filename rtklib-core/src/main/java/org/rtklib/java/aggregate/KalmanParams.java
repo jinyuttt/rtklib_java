@@ -3,7 +3,7 @@ package org.rtklib.java.aggregate;
 /**
  * 卡尔曼平滑模式（{@link AggregationMode#KALMAN_SMOOTH}）参数。
  *
- * <p>采用常速度模型，过程噪声由单一参数 {@link #q}（加速度白噪声谱密度）控制。</p>
+ * 采用常速度模型，过程噪声由单一参数 {@link #q}（加速度白噪声谱密度）控制。
  */
 public class KalmanParams implements AggregationParams {
 

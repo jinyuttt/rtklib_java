@@ -5,7 +5,7 @@ import org.rtklib.java.constants.Constants;
 /**
  * 网络 RTK 配置（档 1：多站同步 + IDW；档 2：网解 + 误差分解 + FKP；档 3：MAC）。
  *
- * <p>字段均为 public，保持与 core 的 RtkConfig 风格一致。</p>
+ * 字段均为 public，保持与 core 的 RtkConfig 风格一致。
  */
 public class NetworkConfig {
 
@@ -70,20 +70,20 @@ public class NetworkConfig {
     /**
      * 窗口内周跳检测阈值（米），按卫星比较相邻历元「相位 − 几何 − 模型」的阶跃。
      *
-     * <p>单频 1 周失锁对应 IF 模糊度跳变 λ_if = c/(f1+f2) ≈ 0.107 m（GPS），
+     * 单频 1 周失锁对应 IF 模糊度跳变 λ_if = c/(f1+f2) ≈ 0.107 m（GPS），
      * 相邻历元噪声约 2 cm（相位 σ 的 √2 倍），故 5 cm 可稳定区分 1 周失锁与噪声。
-     * 超过阈值即在窗口内切分弧段，各弧段独立估计模糊度。</p>
+     * 超过阈值即在窗口内切分弧段，各弧段独立估计模糊度。
      */
     public double cycleSlipThresholdMeters = 0.05;
 
     /**
      * 同一弧段内允许的最大历元间隔（按采样间隔的倍数）。
      *
-     * <p>窗口内缺 1 个历元时相邻历元间隔变为 2 倍采样，若按 1.5 倍判定失锁，
+     * 窗口内缺 1 个历元时相邻历元间隔变为 2 倍采样，若按 1.5 倍判定失锁，
      * 会把连续的观测人为切成两段，短弧段的模糊度标准差迅速膨胀（实测可达 2~6 周），
      * 直接让 LAMBDA 的 ratio 塌到噪声底。缺测历元本身不代表相位失锁，
      * 因此把间隔放宽到 {@code 3.0} 倍采样（30 s 采样可容忍缺 2 个历元），
-     * 真正的周跳仍由 {@link #cycleSlipThresholdMeters} 的阶跃判据负责。</p>
+     * 真正的周跳仍由 {@link #cycleSlipThresholdMeters} 的阶跃判据负责。
      */
     public double maxArcGapFactor = 3.0;
 

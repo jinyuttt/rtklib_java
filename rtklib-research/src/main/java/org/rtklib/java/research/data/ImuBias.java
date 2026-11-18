@@ -5,8 +5,8 @@ import java.io.Serializable;
 /**
  * IMU 零偏状态。
  *
- * <p>包含加速度计零偏 (3维) 和陀螺仪零偏 (3维)，共 6 维。
- * 在预积分因子中作为变量节点连接相邻关键帧。</p>
+ * 包含加速度计零偏 (3维) 和陀螺仪零偏 (3维)，共 6 维。
+ * 在预积分因子中作为变量节点连接相邻关键帧。
  */
 public class ImuBias implements Serializable {
     private static final long serialVersionUID = 1L;

@@ -17,16 +17,15 @@ import java.util.List;
 /**
  * OSB（Observable-Specific Bias）产品读取器，支持IGS Bias-SINEX格式。
  *
- * <p>读取.BIA/.BSX文件中的OSB相位偏差，转化为FCB（WL/NL）数据供PPP-AR使用。
+ * 读取.BIA/.BSX文件中的OSB相位偏差，转化为FCB（WL/NL）数据供PPP-AR使用。
  * 同时读取伪距OSB偏差，存入nav.cbias供DCB改正使用。
  *
- * <p>文件格式：IGS Bias-SINEX v1.00
- * <pre>
+ * 文件格式：IGS Bias-SINEX v1.00
+ *
  *   OSB  SVN  PRN  OBS1  START  END  UNIT  VALUE  STDDEV
  *   DSB  SVN  PRN  OBS1  OBS2   START  END  UNIT  VALUE  STDDEV
- * </pre>
  *
- * <p>对应C版：RTKLIB的readdcb()中readbiaf()处理DSB，本模块扩展处理OSB
+ * 对应C版：RTKLIB的readdcb()中readbiaf()处理DSB，本模块扩展处理OSB
  */
 public final class OsbReader {
     private OsbReader() {}

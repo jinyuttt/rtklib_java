@@ -8,12 +8,12 @@ import org.rtklib.java.research.common.GnssConst;
 /**
  * 载波相位观测因子（FGO 核心因子之一）。
  *
- * <p>观测量：L_i * λ_i = ρ_i + c*(t_r - t_s^i) + λ_i*N_i + T_i - I_i + ε
+ * 观测量：L_i * λ_i = ρ_i + c*(t_r - t_s^i) + λ_i*N_i + T_i - I_i + ε
  *
- * <p>残差维度 = 卫星数，参数块：stateVar[11] + ambVar[nSat]</p>
+ * 残差维度 = 卫星数，参数块：stateVar[11] + ambVar[nSat]
  *
- * <p>策略 A：FGO 出浮点解 → LAMBDA 固定。此因子不强制整约束，
- * 浮点模糊度保存在 ambVar 中，优化后由 LambdaSolver 固定。</p>
+ * 策略 A：FGO 出浮点解 → LAMBDA 固定。此因子不强制整约束，
+ * 浮点模糊度保存在 ambVar 中，优化后由 LambdaSolver 固定。
  */
 public class PhaseFactor extends Factor {
 

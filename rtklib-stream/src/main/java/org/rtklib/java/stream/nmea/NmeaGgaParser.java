@@ -8,12 +8,12 @@ import java.util.Optional;
 /**
  * NMEA GGA 语句解析器。
  *
- * <p>面向流式输入设计：任何格式不合法的语句一律返回 {@link Optional#empty()}，
- * 不抛异常。上游数据流中混有坏行是常态，解析失败不应中断整条链路。</p>
+ * 面向流式输入设计：任何格式不合法的语句一律返回 {@link Optional#empty()}，
+ * 不抛异常。上游数据流中混有坏行是常态，解析失败不应中断整条链路。
  *
- * <p>支持的语句形态：任意 talker ID 的 GGA，如 {@code $GPGGA}、{@code $GNGGA}、
+ * 支持的语句形态：任意 talker ID 的 GGA，如 {@code $GPGGA}、{@code $GNGGA}、
  * {@code $GLGGA}、{@code $GBGGA}、{@code $BDGGA} 等。校验和默认必须匹配，
- * 无校验和的语句按不合规处理。</p>
+ * 无校验和的语句按不合规处理。
  *
  * @see NmeaGga
  */

@@ -22,16 +22,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * {@link SsrCorrectionProvider} 的 RTCM3 SSR 回放验证。
  *
- * <p>判据用外部真实录制流（CAS 播发的 SSR，1057~1068/1265~1270）：</p>
- * <ul>
- *   <li>能解码并建立逐卫星时间线，单历元可用改正星数达到可解算量级；</li>
- *   <li>改正量级落在合理范围（轨道 &lt; 30 m、钟差 &lt; 30 μs），排除单位/符号错误；</li>
- *   <li>注入 {@code nav.ssr[]} 后的记录时间戳等于查询历元，下游零阶项即当前改正；</li>
- *   <li>超出时效窗口后不再提供改正，避免过期数据静默参与解算。</li>
- * </ul>
+ * 判据用外部真实录制流（CAS 播发的 SSR，1057~1068/1265~1270）：
  *
- * <p>文件路径：{@code -Dnetwork.ssr.file=<路径>}，缺省取 {@code test-data/gnss-validation/rtcm}
- * 下的录制流；不存在时跳过。</p>
+ *   - 能解码并建立逐卫星时间线，单历元可用改正星数达到可解算量级；
+ *   - 改正量级落在合理范围（轨道 < 30 m、钟差 < 30 μs），排除单位/符号错误；
+ *   - 注入 {@code nav.ssr[]} 后的记录时间戳等于查询历元，下游零阶项即当前改正；
+ *   - 超出时效窗口后不再提供改正，避免过期数据静默参与解算。
+ *
+ * 文件路径：{@code -Dnetwork.ssr.file=<路径>}，缺省取 {@code test-data/gnss-validation/rtcm}
+ * 下的录制流；不存在时跳过。
  */
 class SsrCorrectionProviderTest {
 

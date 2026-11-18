@@ -20,10 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 接口 A（PPP 解有效性判别）组装自洽测试：模型 → 特征 → 推理 全链闭环。
- * <p>
+ *
  * 断言的是「组装正确性」，不是解算质量：dummy 模型的置信度没有物理意义，
  * 但必须与 Python 参考值一致，才能证明「特征顺序 + 归一化 + 推理」三段拼接没有错位。
- * </p>
  */
 @DisplayName("接口 A：PppSolutionValidatorImpl 组装自洽")
 class PppSolutionValidatorImplTest {

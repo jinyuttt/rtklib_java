@@ -6,12 +6,12 @@ import org.rtklib.java.research.common.MatrixOps;
 /**
  * LAMBDA/MLAMBDA 模糊度固定（research模块自有）。
  *
- * <p>实现 LAMBDA（Least-squares AMBiguity Decorrelation Adjustment）算法：
+ * 实现 LAMBDA（Least-squares AMBiguity Decorrelation Adjustment）算法：
  * 1. LDLᵀ 分解 + 整数高斯变换去相关
  * 2. MLAMBDA 树搜索（支持 n≥1 的全整数最小二乘搜索）
- * 3. Ratio 检验（ratio = 次优代价 / 最优代价，与 RTKLIB 口径一致，ratio &gt; 3.0 固定）</p>
+ * 3. Ratio 检验（ratio = 次优代价 / 最优代价，与 RTKLIB 口径一致，ratio > 3.0 固定）
  *
- * <p>去相关 → Zᵀ 变换 → 搜索 → Z⁻ᵀ 逆变换。</p>
+ * 去相关 → Zᵀ 变换 → 搜索 → Z⁻ᵀ 逆变换。
  */
 public final class LambdaSolver {
 
@@ -129,9 +129,9 @@ public final class LambdaSolver {
     /**
      * MLAMBDA 树搜索：在去相关空间中搜索整数最小二乘解。
      *
-     * <p>代价函数: F(z) = ∑_{i=0}^{n-1} dᵢ·(zᵢ - ẑᵢ + ∑_{j=i+1}^{n-1} lⱼᵢ·(zⱼ - ẑⱼ))²
+     * 代价函数: F(z) = ∑_{i=0}^{n-1} dᵢ·(zᵢ - ẑᵢ + ∑_{j=i+1}^{n-1} lⱼᵢ·(zⱼ - ẑⱼ))²
      *
-     * <p>从第 n-1 层向第 0 层递归搜索，收集 numCandidates 个候选。
+     * 从第 n-1 层向第 0 层递归搜索，收集 numCandidates 个候选。
      */
     private static SimpleMatrix mlambdaSearch(SimpleMatrix zFloat, SimpleMatrix L, SimpleMatrix D,
                                                int numCandidates, LambdaResult result) {
@@ -185,8 +185,8 @@ public final class LambdaSolver {
     /**
      * RTKLIB 口径的 ratio：次优代价 / 最优代价（越大越可信）。
      *
-     * <p>与 RTKLIB lambda.c 中 {@code ratio = s[1] / s[0]} 一致。
-     * 当最优代价为 0（浮点解恰为整数）或未搜索到次优解时，返回上限 {@link #RATIO_MAX}。</p>
+     * 与 RTKLIB lambda.c 中 {@code ratio = s[1] / s[0]} 一致。
+     * 当最优代价为 0（浮点解恰为整数）或未搜索到次优解时，返回上限 {@link #RATIO_MAX}。
      */
     private static double computeRatioFromSearch(SearchContext ctx) {
         double best = ctx.bestCost;
@@ -203,14 +203,13 @@ public final class LambdaSolver {
     /**
      * MLAMBDA 树搜索上下文。
      *
-     * <p>状态变量：
-     * <ul>
-     *   <li>zᵢ: 当前搜索的整数候选值（第 i 层）
-     *   <li>sᵢ: 从第 i 层到第 n-1 层的累计代价
-     *   <li>z̄ᵢ: 第 i 层的条件浮点值（给定上层已固定的整数后）
-     * </ul>
-     * 
-     * <p>搜索从 i=n-1 开始，逐层向下展开，利用 LᵀDL 对角结构剪枝。
+     * 状态变量：
+     *
+     *   - zᵢ: 当前搜索的整数候选值（第 i 层）
+     *   - sᵢ: 从第 i 层到第 n-1 层的累计代价
+     *   - z̄ᵢ: 第 i 层的条件浮点值（给定上层已固定的整数后）
+     *
+     * 搜索从 i=n-1 开始，逐层向下展开，利用 LᵀDL 对角结构剪枝。
      */
     private static class SearchContext {
         final int n;

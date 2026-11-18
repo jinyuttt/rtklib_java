@@ -5,8 +5,8 @@ import org.rtklib.java.data.SolData;
 /**
  * 单历元多基线容器。
  *
- * <p>存放同一历元下多条GNSS基线的SolData，仅保留FIX状态的基线。
- * 每条基线包含：基站标识、ECEF基线增量、基线自身协方差、Rover位置协方差。</p>
+ * 存放同一历元下多条GNSS基线的SolData，仅保留FIX状态的基线。
+ * 每条基线包含：基站标识、ECEF基线增量、基线自身协方差、Rover位置协方差。
  */
 public class BaselineEpoch {
 
@@ -36,9 +36,9 @@ public class BaselineEpoch {
         /**
          * 该基线独立解出的 Rover ECEF 位置 [X, Y, Z] (m)。
          *
-         * <p>注意是<b>绝对位置</b>而非「Rover − 基站」增量：本模块的观测模型
+         * 注意是绝对位置而非「Rover − 基站」增量：本模块的观测模型
          * （H = I，观测值即 Rover 坐标）依赖这一点。两两求差时与增量约定等价，
-         * 但不可用于需要真基线向量的场合（如 {@code NetworkAdjustment}）。</p>
+         * 但不可用于需要真基线向量的场合（如 {@code NetworkAdjustment}）。
          */
         public final double[] dXyz;
         /** 基线自身3x3协方差 (m^2)，行优先存储 */
@@ -72,8 +72,8 @@ public class BaselineEpoch {
         /**
          * [Java扩展] 根据SolData中的质量指标计算基线质量因子。
          *
-         * <p>综合ratio(模糊度固定可靠性)、numSat(卫星数)、age(差分龄期)、hdop(水平精度因子)，
-         * 对低质量FIX基线降权，使σ₀更稳健，减少假固定对平差结果的污染。</p>
+         * 综合ratio(模糊度固定可靠性)、numSat(卫星数)、age(差分龄期)、hdop(水平精度因子)，
+         * 对低质量FIX基线降权，使σ₀更稳健，减少假固定对平差结果的污染。
          *
          * @param solData 解算结果
          * @return 质量因子(0.01~1.0)，1.0=最优

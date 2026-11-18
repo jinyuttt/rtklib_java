@@ -29,17 +29,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Step 2 自测：确定性基线（§3.2 {@code pppQrThreshold}）在 D1 上的拦截率量测。
  *
- * <p>只产出自测数字，用于 Step 3 的 go / no-go 判断，<b>不是收益结论</b>：
- * D1 为单站单日、相邻历元强相关，任何拦截率差异都不具统计意义（设计文档 §12.1）。</p>
+ * 只产出自测数字，用于 Step 3 的 go / no-go 判断，不是收益结论：
+ * D1 为单站单日、相邻历元强相关，任何拦截率差异都不具统计意义（设计文档 §12.1）。
  *
- * <p>量测口径与 §3.2 判据一致：{@code posVar = qr[0] + qr[1] + qr[2]}，
+ * 量测口径与 §3.2 判据一致：{@code posVar = qr[0] + qr[1] + qr[2]}，
  * 在 {@link SolData#covEcef} 上即对角三元 {@code [0] + [4] + [8]}；
- * 只统计 {@code SOLQ_PPP} 历元，并跳过收敛段（前 1/3 历元）。</p>
+ * 只统计 {@code SOLQ_PPP} 历元，并跳过收敛段（前 1/3 历元）。
  *
- * <p>静态 PPP 与动态 PPP 各测一次：静态路径的 {@code qr[0]} 在本仓库会收敛到负值
+ * 静态 PPP 与动态 PPP 各测一次：静态路径的 {@code qr[0]} 在本仓库会收敛到负值
  * （见 {@code PppCore.udpos_ppp} 的 PMODE_PPP_STATIC 分支：只有过程噪声累加、
  * 没有 {@code P[0] <= 0} 重初始化守卫），因此 {@code posVar} 恒为负、门限恒不触发。
- * 该分支的拦截率因此不可量测，量测数字取自动态（PMODE_PPP_KINEMA）配置。</p>
+ * 该分支的拦截率因此不可量测，量测数字取自动态（PMODE_PPP_KINEMA）配置。
  */
 @DisplayName("Step 2 自测：qr 确定性基线拦截率（D1 ALGO 2024-060）")
 class PppQrBaselineMeasurementTest {

@@ -5,15 +5,14 @@ import java.io.Serializable;
 /**
  * 位置数据，3个分量 + 坐标系类型。
  *
- * <h3>CoordType 定义</h3>
- * <ul>
- *   <li>{@link CoordType#ECEF}：v1=x, v2=y, v3=z (m)</li>
- *   <li>{@link CoordType#LLH}：v1=lat, v2=lon, v3=height (deg, deg, m)</li>
- *   <li>{@link CoordType#ENU}：v1=e, v2=n, v3=u (m)，相对基站的基线向量</li>
- * </ul>
+ * CoordType 定义
  *
- * <p>与 {@link Sol} 内部始终 ECEF 不同，
- * 本类是输出封装，根据 {@link PrcOpt#posMask} 配置在构造时已完成坐标转换。</p>
+ *   - {@link CoordType#ECEF}：v1=x, v2=y, v3=z (m)
+ *   - {@link CoordType#LLH}：v1=lat, v2=lon, v3=height (deg, deg, m)
+ *   - {@link CoordType#ENU}：v1=e, v2=n, v3=u (m)，相对基站的基线向量
+ *
+ * 与 {@link Sol} 内部始终 ECEF 不同，
+ * 本类是输出封装，根据 {@link PrcOpt#posMask} 配置在构造时已完成坐标转换。
  */
 public class Position implements Serializable {
     private static final long serialVersionUID = 1L;

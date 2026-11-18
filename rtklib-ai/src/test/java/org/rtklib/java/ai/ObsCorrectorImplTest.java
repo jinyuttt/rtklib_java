@@ -19,10 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 接口三实现测试（设计文档 §4.3 / §5.3 / §6.1）。
- * <p>
+ *
  * 用桩后端替换 ONNX，覆盖与模型质量无关、但错一次就是静默错行/静默失效的部分：
  * 行序 {@code i*nf+frq}、短窗三条重置规则、成对输出契约、毒值兜底。
- * </p>
  */
 @DisplayName("ObsCorrectorImpl：行序、短窗与输出契约")
 class ObsCorrectorImplTest {

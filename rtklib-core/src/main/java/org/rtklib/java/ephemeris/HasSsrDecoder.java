@@ -10,23 +10,22 @@ import org.slf4j.LoggerFactory;
 /**
  * Galileo HAS (High Accuracy Service) 解码器。
  *
- * <p>解码Galileo HAS COMPACT-SSR消息，将改正数映射到Nav.ssr结构，
- * 复用现有SSR改正链（SsrCorrector、SsrIono）。</p>
+ * 解码Galileo HAS COMPACT-SSR消息，将改正数映射到Nav.ssr结构，
+ * 复用现有SSR改正链（SsrCorrector、SsrIono）。
  *
- * <p>HAS消息类型：
- * <ul>
- *   <li>MT1: HAS Header - 包含TOI、mask ID、 validity interval</li>
- *   <li>MT2: Satellite Mask - 定义参与的卫星</li>
- *   <li>MT3: Signal Mask - 定义参与的信号</li>
- *   <li>MT4: Orbit Correction - 轨道改正（径向/切向/法向）</li>
- *   <li>MT5: Clock Full Correction - 完整钟差改正</li>
- *   <li>MT6: Clock Delta Correction - 增量钟差改正</li>
- *   <li>MT7: Code Bias - 码偏差</li>
- *   <li>MT8: Phase Bias - 相位偏差</li>
- *   <li>MT9: URA - 用户测距精度</li>
- * </ul>
+ * HAS消息类型：
  *
- * <p>参考：Galileo OS SIS ICD, Issue 4.0 (2023)</p>
+ *   - MT1: HAS Header - 包含TOI、mask ID、 validity interval
+ *   - MT2: Satellite Mask - 定义参与的卫星
+ *   - MT3: Signal Mask - 定义参与的信号
+ *   - MT4: Orbit Correction - 轨道改正（径向/切向/法向）
+ *   - MT5: Clock Full Correction - 完整钟差改正
+ *   - MT6: Clock Delta Correction - 增量钟差改正
+ *   - MT7: Code Bias - 码偏差
+ *   - MT8: Phase Bias - 相位偏差
+ *   - MT9: URA - 用户测距精度
+ *
+ * 参考：Galileo OS SIS ICD, Issue 4.0 (2023)
  */
 public class HasSsrDecoder {
     private static final Logger LOG = LoggerFactory.getLogger(HasSsrDecoder.class);

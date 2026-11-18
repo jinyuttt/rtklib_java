@@ -9,14 +9,14 @@ import org.slf4j.LoggerFactory;
 /**
  * JUnit entry point for running JMH benchmarks via surefire.
  *
- * <p>Warmup=5 iterations, Measurement=5 iterations, Fork=3 per dimension pair.
- * GC profiling is enabled via {@code -prof gc} for allocation baseline.</p>
+ * Warmup=5 iterations, Measurement=5 iterations, Fork=3 per dimension pair.
+ * GC profiling is enabled via {@code -prof gc} for allocation baseline.
  *
- * <p>Run with:
- * <pre>mvn test -pl rtklib-core "-Dtest=JmhRunnerTest" -DfailIfNoTests=false</pre>
+ * Run with:
+ * mvn test -pl rtklib-core "-Dtest=JmhRunnerTest" -DfailIfNoTests=false
  *
- * <p>To run without GC profiler (faster):
- * <pre>mvn test -pl rtklib-core "-Dtest=JmhRunnerTest#runKalmanFilterBenchmark" -DfailIfNoTests=false</pre>
+ * To run without GC profiler (faster):
+ * mvn test -pl rtklib-core "-Dtest=JmhRunnerTest#runKalmanFilterBenchmark" -DfailIfNoTests=false
  */
 @DisplayName("JMH Benchmark Runner")
 @Tag("manual")

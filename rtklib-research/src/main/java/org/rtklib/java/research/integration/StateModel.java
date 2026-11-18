@@ -5,13 +5,12 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 状态转移模型：状态转移矩阵F、过程噪声Q、观测噪声R（移植自FE-GUT parameter.h/parameter.cc）。
  *
- * <p>核心方法：
- * <ul>
- *   <li>{@link #transitionMatrix(double, IntegrationState)} — 线性运动模型F矩阵（12×12）</li>
- *   <li>{@link #processNoiseCovariance(double)} — 分段白噪声Q矩阵（12×12）</li>
- *   <li>{@link #observationNoiseCovariance(int, int)} — 伪距/伪距率/UWB观测噪声</li>
- *   <li>{@link #propagateState(double, IntegrationState)} — 状态传播（恒速度模型）</li>
- * </ul>
+ * 核心方法：
+ *
+ *   - {@link #transitionMatrix(double, IntegrationState)} — 线性运动模型F矩阵（12×12）
+ *   - {@link #processNoiseCovariance(double)} — 分段白噪声Q矩阵（12×12）
+ *   - {@link #observationNoiseCovariance(int, int)} — 伪距/伪距率/UWB观测噪声
+ *   - {@link #propagateState(double, IntegrationState)} — 状态传播（恒速度模型）
  */
 public final class StateModel {
     private StateModel() {}

@@ -5,7 +5,7 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 矩阵运算封装（research模块自有）。
  *
- * <p>基于EJML SimpleMatrix，提供GNSS计算常用矩阵操作。</p>
+ * 基于EJML SimpleMatrix，提供GNSS计算常用矩阵操作。
  */
 public final class MatrixOps {
     private MatrixOps() {}

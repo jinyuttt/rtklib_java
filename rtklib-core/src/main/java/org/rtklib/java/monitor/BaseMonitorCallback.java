@@ -4,10 +4,9 @@ import org.rtklib.java.data.GTime;
 
 /**
  * 基站稳定性监测回调接口。
- * <p>
+ *
  * 全部为default方法，调用方按需实现。staid为基站标识（RTCM3站ID），
  * 用于多基站场景下区分告警来源。
- * </p>
  */
 public interface BaseMonitorCallback {
 

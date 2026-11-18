@@ -17,19 +17,16 @@ import ai.onnxruntime.TensorInfo;
 
 /**
  * ONNX Runtime 推理适配层（设计文档 §6.1）。
- * <p>
+ *
  * 职责单一：把 {@code float[rows][dim]} 送进模型、把输出压平成 {@code float[rows*outDim]}。
  * 不涉及特征构造、阈值判定、降级策略——那些属于 {@code feature} 与接口实现层，
  * 这样替换后端（ONNX / 纯 Java MLP / 远程服务）时本类可整体替换而不牵动业务语义。
- * </p>
- * <p>
- * 生命周期：{@link OrtEnvironment} 是进程级共享单例，{@link #close()} <b>不</b>关闭它，
+ *
+ * 生命周期：{@link OrtEnvironment} 是进程级共享单例，{@link #close()} 不关闭它，
  * 只释放本实例持有的 {@link OrtSession}，避免多实例互相干扰。
- * </p>
- * <p>
+ *
  * 线程安全：{@link OrtSession#run} 内部是线程安全的，本类无可变字段，
  * 可被多个历元/线程并发调用。
- * </p>
  */
 public final class OnnxInference implements BatchInference, AutoCloseable {
 

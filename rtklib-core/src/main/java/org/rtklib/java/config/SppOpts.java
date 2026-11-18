@@ -4,10 +4,9 @@ import java.io.Serializable;
 
 /**
  * SPP（伪距单点定位）参数。
- * <p>
+ *
  * 从 {@link RtkConfig} 拆分出的独立子配置，字段名去掉原 {@code spp} 前缀（已在命名空间内）。
  * 原 {@code enableSppEkf} → {@code enableEkf}，{@code sppEkfVarPos} → {@code ekfVarPos}，以此类推。
- * </p>
  */
 public class SppOpts implements Serializable {
     private static final long serialVersionUID = 1L;

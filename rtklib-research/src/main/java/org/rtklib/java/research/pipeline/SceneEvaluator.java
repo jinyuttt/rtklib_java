@@ -11,16 +11,14 @@ import org.rtklib.java.research.data.SolutionStatus;
 /**
  * 分场景评估切片器。
  *
- * <p>按高度角/卫星数将历元分为三类场景，独立统计精度，回答
- * "方法在哪种环境下有效"这一关键问题。</p>
+ * 按高度角/卫星数将历元分为三类场景，独立统计精度，回答
+ * "方法在哪种环境下有效"这一关键问题。
  *
- * <pre>
  *   OPEN_SKY:        avgEl > 30° 且 nSat > 8
  *   PARTIAL_BLOCKED: 15° ≤ avgEl ≤ 30° 或 5 ≤ nSat ≤ 8
  *   URBAN_CANYON:    avgEl < 15° 或 nSat < 5
- * </pre>
  *
- * <p>输出示例：
+ * 输出示例：
  * Scene            Epochs   FixRate   RMS_E(m)  RMS_N(m)  RMS_U(m)
  * ─────────────────────────────────────────────────────────────────
  * OPEN_SKY          1200     98.2%     0.021     0.018     0.035
@@ -28,7 +26,6 @@ import org.rtklib.java.research.data.SolutionStatus;
  * URBAN_CANYON       320     62.1%     0.890     0.760     1.450
  * ─────────────────────────────────────────────────────────────────
  * OVERALL           2200     89.0%     0.231     0.205     0.380
- * </pre>
  */
 public class SceneEvaluator {
 
@@ -89,8 +86,8 @@ public class SceneEvaluator {
     /**
      * 从观测历元实时分类场景（在线自适应检测）。
      *
-     * <p>仅使用卫星数做粗分类，适合快速在线判断。精确分类应使用
-     * {@link #classify(double, int)} 并传入平均高度角。</p>
+     * 仅使用卫星数做粗分类，适合快速在线判断。精确分类应使用
+     * {@link #classify(double, int)} 并传入平均高度角。
      *
      * @param nSat 有效卫星数
      * @return 场景类型
@@ -108,12 +105,11 @@ public class SceneEvaluator {
     /**
      * 生成场景自适应求解器配置。
      *
-     * <p>根据当前场景类型自动选择最优策略：
-     * <ul>
-     *   <li>OPEN_SKY: 不使用鲁棒损失和开关变量（保持最高精度）</li>
-     *   <li>PARTIAL_BLOCKED: 仅使用 Huber 鲁棒损失（标准方案）</li>
-     *   <li>URBAN_CANYON: 使用 SwitchVariable 开关变量（最强方案）</li>
-     * </ul>
+     * 根据当前场景类型自动选择最优策略：
+     *
+     *   - OPEN_SKY: 不使用鲁棒损失和开关变量（保持最高精度）
+     *   - PARTIAL_BLOCKED: 仅使用 Huber 鲁棒损失（标准方案）
+     *   - URBAN_CANYON: 使用 SwitchVariable 开关变量（最强方案）
      *
      * @param baseConfig 基础配置（会被复制，不修改原配置）
      * @param scene      当前场景

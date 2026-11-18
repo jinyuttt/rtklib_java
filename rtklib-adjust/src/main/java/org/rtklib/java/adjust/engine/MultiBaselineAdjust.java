@@ -14,7 +14,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * [JAVA-ONLY 原创] 多基线平差引擎：按历元累积多条基线，做交叉验证、协方差膨胀与可靠性分级，
  * 输出融合后的可靠坐标。
  *
- * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
+ * 归属声明：本项目原创实现，未移植任何外部开源项目代码。
  */
 public class MultiBaselineAdjust {
 
@@ -88,8 +88,8 @@ public class MultiBaselineAdjust {
     /**
      * 基站位移/一致性告警。
      *
-     * <p>由 {@link BaselineConsistencyChecker} 的基站间漂移与异步环闭合差触发，
-     * 与 {@link SuspectListener}（假固定嫌疑）是两个独立通道。</p>
+     * 由 {@link BaselineConsistencyChecker} 的基站间漂移与异步环闭合差触发，
+     * 与 {@link SuspectListener}（假固定嫌疑）是两个独立通道。
      */
     @FunctionalInterface
     public interface ConsistencyListener {
@@ -215,8 +215,8 @@ public class MultiBaselineAdjust {
     /**
      * 把一致性检核结果转成告警回调。
      *
-     * <p>只在某基站首次被判异常时触发一次；整网恢复一致后清除告警状态，
-     * 若再次异常会重新触发。</p>
+     * 只在某基站首次被判异常时触发一次；整网恢复一致后清除告警状态，
+     * 若再次异常会重新触发。
      */
     private void checkConsistency() {
         if (consistencyListeners.isEmpty()) return;
@@ -246,8 +246,8 @@ public class MultiBaselineAdjust {
     /**
      * 注册基站已知 ECEF 坐标，启用整时段网平差（自由网/约束平差）的观测累积。
      *
-     * <p>注册后，每次历元处理会把 {@code Rover − 基站} 的真基线向量连同协方差
-     * 累积起来，供 {@link #computeNetworkAdjustment(boolean)} 使用。</p>
+     * 注册后，每次历元处理会把 {@code Rover − 基站} 的真基线向量连同协方差
+     * 累积起来，供 {@link #computeNetworkAdjustment(boolean)} 使用。
      *
      * @param baseId 基站标识
      * @param ecef   基站 ECEF 坐标 [X, Y, Z] (m)
@@ -593,22 +593,22 @@ public class MultiBaselineAdjust {
     /**
      * 决定本历元哪些基线参与平差。
      *
-     * <p>FIX 优先：FIX 达到两条及以上时丢弃 FLOAT——双 FIX 交叉验证是最可靠的判据，
+     * FIX 优先：FIX 达到两条及以上时丢弃 FLOAT——双 FIX 交叉验证是最可靠的判据，
      * 掺入分米级的 FLOAT 只会把基线间较差推过 SUSPECT 阈值、错误剔除真 FIX。
      * FIX 不足两条时才由 FLOAT 补位，避免历元断档。{@code allowFloat=false}
-     * 时退化为"仅 FIX"，与历史行为一致。</p>
+     * 时退化为"仅 FIX"，与历史行为一致。
      *
-     * <p>仅 1 条 FIX 时，FLOAT 的准入取决于"FLOAT 与 FIX 的位置较差"：
-     * 超过 {@code floatAgreementThreshold} 的 FLOAT <b>不进入 WLS</b>。
+     * 仅 1 条 FIX 时，FLOAT 的准入取决于"FLOAT 与 FIX 的位置较差"：
+     * 超过 {@code floatAgreementThreshold} 的 FLOAT 不进入 WLS。
      * 这样"准入"与"等级"成为同一个单调映射——较差 ≤ 阈值 → 准入 →
-     * {@code SINGLE_VERIFIED}；较差 &gt; 阈值 → 拒绝 → {@code UNVERIFIED}，
-     * 消除了"FLOAT 既拉坐标、等级又说不可信"的矛盾中间态。</p>
+     * {@code SINGLE_VERIFIED}；较差 > 阈值 → 拒绝 → {@code UNVERIFIED}，
+     * 消除了"FLOAT 既拉坐标、等级又说不可信"的矛盾中间态。
      *
-     * <p>被拒绝的 FLOAT 必须通过 {@link Admission#rejected()} 带出去：它们已不在
-     * {@code admitted} 内，平差看不到，若不上报就变成"静默丢弃"。</p>
+     * 被拒绝的 FLOAT 必须通过 {@link Admission#rejected()} 带出去：它们已不在
+     * {@code admitted} 内，平差看不到，若不上报就变成"静默丢弃"。
      *
-     * <p>0 条 FIX 时没有参照物，规则不适用，FLOAT 仍按原样补位
-     * （此时无 FIX 可参照，其保护级由 {@code plKUnverified} 承担）。</p>
+     * 0 条 FIX 时没有参照物，规则不适用，FLOAT 仍按原样补位
+     * （此时无 FIX 可参照，其保护级由 {@code plKUnverified} 承担）。
      */
     private Admission selectAdmitted(List<BaselineEpoch.BaselineEntry> entries) {
         List<BaselineEpoch.BaselineEntry> fixEntries = new ArrayList<>();
@@ -656,7 +656,7 @@ public class MultiBaselineAdjust {
     /**
      * 准入结果：实际进入平差的基线 + 被准入规则拒绝的 FLOAT。
      *
-     * <p>两者互补，且 {@code admitted} 与 {@code rejected} 不重叠。</p>
+     * 两者互补，且 {@code admitted} 与 {@code rejected} 不重叠。
      */
     private record Admission(List<BaselineEpoch.BaselineEntry> admitted,
                              List<AdjustResult.RejectedFloat> rejected) {}
@@ -691,8 +691,8 @@ public class MultiBaselineAdjust {
     /**
      * 把基站坐标 1σ 不确定度按 {@code σ²·I₃} 加到观测协方差块上。
      *
-     * <p>core 逐基站独立解算，各基线的基站坐标误差互不相关，因此可直接加到
-     * 对应基线的对角块；配置为 0 时原样返回。</p>
+     * core 逐基站独立解算，各基线的基站坐标误差互不相关，因此可直接加到
+     * 对应基线的对角块；配置为 0 时原样返回。
      */
     private double[][] withBaseCoordinateSigma(double[][] cov) {
         double sigma = config.baseCoordinateSigma();

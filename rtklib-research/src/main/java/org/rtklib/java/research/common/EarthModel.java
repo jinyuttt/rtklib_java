@@ -5,8 +5,8 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * WGS84地球模型（移植自FE-GUT earth.h Earth类）。
  *
- * <p>提供重力、子午圈/卯酉圈半径、CNE旋转矩阵、BLH↔ECEF、
- * 局部坐标↔全局坐标等WGS84椭球计算。</p>
+ * 提供重力、子午圈/卯酉圈半径、CNE旋转矩阵、BLH↔ECEF、
+ * 局部坐标↔全局坐标等WGS84椭球计算。
  */
 public final class EarthModel {
     private EarthModel() {}

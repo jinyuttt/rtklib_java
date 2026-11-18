@@ -5,10 +5,10 @@ import java.util.List;
 /**
  * [JAVA-ONLY 原创] 改正量空间插值接口。
  *
- * <p>输入为各基准站在同一卫星上的改正量（标量），输出流动站位置的插值值。
- * 档 1 提供 {@link IdwInterpolator}；档 2 起可替换为 FKP/MAC 实现。</p>
+ * 输入为各基准站在同一卫星上的改正量（标量），输出流动站位置的插值值。
+ * 档 1 提供 {@link IdwInterpolator}；档 2 起可替换为 FKP/MAC 实现。
  *
- * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
+ * 归属声明：本项目原创实现，未移植任何外部开源项目代码。
  */
 @FunctionalInterface
 public interface CorrectionInterpolator {

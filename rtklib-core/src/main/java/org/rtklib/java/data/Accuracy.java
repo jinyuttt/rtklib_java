@@ -5,18 +5,17 @@ import java.io.Serializable;
 /**
  * 精度数据，3个对角标准差 + 3个互协方差 + 坐标系类型。
  *
- * <h3>CoordType 定义</h3>
- * <ul>
- *   <li>{@link CoordType#ECEF}：s1=σx, s2=σy, s3=σz, c12=σxy, c23=σyz, c31=σzx</li>
- *   <li>{@link CoordType#ENU}：s1=σe, s2=σn, s3=σu, c12=σen, c23=σeu, c31=σnu</li>
- * </ul>
+ * CoordType 定义
  *
- * <p>内部 {@link Sol#qr} 存储 ECEF 协方差（m²），本类存储的是标准差（m），
+ *   - {@link CoordType#ECEF}：s1=σx, s2=σy, s3=σz, c12=σxy, c23=σyz, c31=σzx
+ *   - {@link CoordType#ENU}：s1=σe, s2=σn, s3=σu, c12=σen, c23=σnu, c31=σeu
+ *
+ * 内部 {@link Sol#qr} 存储 ECEF 协方差（m²），本类存储的是标准差（m），
  * 即对协方差矩阵对角元素开方、非对角元素取绝对值开方。
- * 与 RTKLIB .pos 文件格式一致（sde/sdn/sdu/sdne/sdeu/sdun）。</p>
+ * 与 RTKLIB .pos 文件格式一致（sde/sdn/sdu/sdne/sdeu/sdun）。
  *
- * <p>注意：LLH 和 ENU 方向的精度表示完全相同（都是 ENU 方向），
- * 故统一用 {@link CoordType#ENU}，不再区分。</p>
+ * 注意：LLH 和 ENU 方向的精度表示完全相同（都是 ENU 方向），
+ * 故统一用 {@link CoordType#ENU}，不再区分。
  */
 public class Accuracy implements Serializable {
     private static final long serialVersionUID = 1L;

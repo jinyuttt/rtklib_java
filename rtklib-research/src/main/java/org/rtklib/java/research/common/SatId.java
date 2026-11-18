@@ -3,7 +3,7 @@ package org.rtklib.java.research.common;
 /**
  * 卫星编号工具（research模块自有）。
  *
- * <p>卫星号↔(系统,PRN)双向转换，逻辑对齐RTKLIB satno/satsys。</p>
+ * 卫星号↔(系统,PRN)双向转换，逻辑对齐RTKLIB satno/satsys。
  */
 public final class SatId {
     private SatId() {}

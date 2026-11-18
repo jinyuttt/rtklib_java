@@ -18,27 +18,22 @@ import org.slf4j.LoggerFactory;
 
 /**
  * 接口三实现（设计文档 §6.1）：{@code ns × nf} 行特征 → 一次批量推理 → 成对输出。
- * <p>
+ *
  * 三条硬边界（§4.3.1）在本类体现为「什么都不做」：不改 {@code obs}、不剔除卫星、
  * 只输出偏差与方差膨胀因子，由 core 侧施加。
- * </p>
- * <p>
- * <b>短窗状态住在本类</b>（§5.3）：core 只给当前历元快照，窗口按 {@code (sat, frq)}
+ *
+ * 短窗状态住在本类（§5.3）：core 只给当前历元快照，窗口按 {@code (sat, frq)}
  * 维护长度 {@value ObsCorrectionFeatures#WINDOW} 的环形缓冲。三条重置规则：
- * </p>
- * <ol>
- *   <li>{@code epoch} 间隔 &gt; {@code 1.5 * dt}（数据缺口），或 {@code epoch} 倒退
- *       （同一实例被跨会话复用）→ 清空全部窗口</li>
- *   <li>{@code slip[frq] != 0}（该频点周跳）→ 只清空该 {@code (sat, frq)} 的窗口</li>
- *   <li>本历元不再出现的 {@code sat} → 移除，避免无界增长</li>
- * </ol>
- * <p>
+ *
+ *   - {@code epoch} 间隔 > {@code 1.5 * dt}（数据缺口），或 {@code epoch} 倒退
+ *       （同一实例被跨会话复用）→ 清空全部窗口
+ *   - {@code slip[frq] != 0}（该频点周跳）→ 只清空该 {@code (sat, frq)} 的窗口
+ *   - 本历元不再出现的 {@code sat} → 移除，避免无界增长
+ *
  * {@code dt} 的唯一来源是 {@code ctx.dt()}；{@code dt <= 0} 或非有限时按「清空全部窗口」
  * 处理，该历元 {@code histLen} 退化为 {@code 0.2}（§5.3）。
- * </p>
- * <p>
- * 线程安全：窗口是实例状态，<b>不可</b>跨线程并发调用同一个实例。
- * </p>
+ *
+ * 线程安全：窗口是实例状态，不可跨线程并发调用同一个实例。
  */
 public final class ObsCorrectorImpl implements ObsCorrector {
 
@@ -47,7 +42,7 @@ public final class ObsCorrectorImpl implements ObsCorrector {
     /** 模型输出维：{@code [biasMeters, varianceScale]} 成对输出（§4.3.4 强制）。 */
     public static final int OUT_DIM = 2;
 
-    /** 数据缺口判据系数：间隔 &gt; {@code 1.5 * dt} 视为缺口（§5.3）。 */
+    /** 数据缺口判据系数：间隔 > {@code 1.5 * dt} 视为缺口（§5.3）。 */
     private static final double GAP_FACTOR = 1.5;
 
     private final BatchInference inference;
@@ -154,11 +149,10 @@ public final class ObsCorrectorImpl implements ObsCorrector {
 
     /**
      * 当前 {@code (sat, frq)} 的短窗聚合（测试与诊断用）。
-     * <p>
+     *
      * 必须在 {@link #correct(ObsCorrectionContext)} 之后调用才是「模型本历元真正看到的输入」：
      * 当前历元样本在推理前已入窗，故此处返回的 {@code n} 已含本历元。
      * 无样本（卫星首次出现或刚被周跳清空）返回 {@link ObsCorrectionFeatures.WindowAgg#EMPTY}。
-     * </p>
      */
     public ObsCorrectionFeatures.WindowAgg windowAggregate(int sat, int frq) {
         Window w = windows.get(key(sat, frq));

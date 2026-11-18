@@ -5,11 +5,11 @@ import java.util.Locale;
 /**
  * NTRIP 挂载点描述。
  *
- * <p>一个挂载点代表 Caster 对外提供的一路数据流，其字段与 Sourcetable 的
- * {@code STR} 记录一一对应，可直接序列化为对外播发的挂载点列表。</p>
+ * 一个挂载点代表 Caster 对外提供的一路数据流，其字段与 Sourcetable 的
+ * {@code STR} 记录一一对应，可直接序列化为对外播发的挂载点列表。
  *
- * <p>除 {@link #getName() 名称} 外所有字段均可配置，默认值对应一个
- * 播发 RTCM 3.2 网络解、支持 GPS/GLONASS/Galileo/BDS 的挂载点。</p>
+ * 除 {@link #getName() 名称} 外所有字段均可配置，默认值对应一个
+ * 播发 RTCM 3.2 网络解、支持 GPS/GLONASS/Galileo/BDS 的挂载点。
  *
  * @see NtripCasterConfig
  */

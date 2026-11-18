@@ -5,7 +5,7 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 旋转工具（移植自FE-GUT rotation.h Rotation类）。
  *
- * <p>提供欧拉角↔旋转矩阵↔四元数转换、反对称矩阵等。</p>
+ * 提供欧拉角↔旋转矩阵↔四元数转换、反对称矩阵等。
  */
 public final class Rotation {
     private Rotation() {}

@@ -6,8 +6,8 @@ import java.util.List;
 /**
  * IGS SSR（RTCM 专有消息号 4076）一条消息的公共头部解析结果。
  *
- * <p>本类承载头部信息、子类型识别，以及 IM201 的电离层球谐模型；
- * 卫星级改正数仍未解析。未解析的字段统一为 {@link #NO_FIELD}（或 {@link Double#NaN}）。</p>
+ * 本类承载头部信息、子类型识别，以及 IM201 的电离层球谐模型；
+ * 卫星级改正数仍未解析。未解析的字段统一为 {@link #NO_FIELD}（或 {@link Double#NaN}）。
  */
 public class IgsSsr4076Message {
 

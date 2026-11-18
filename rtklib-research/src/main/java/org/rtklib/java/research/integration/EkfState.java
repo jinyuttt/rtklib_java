@@ -5,14 +5,13 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * EKF 状态估计器（移植自FE-GUT ekfstate.cc/.h）。
  *
- * <p>执行 EKF 预测+量测更新循环：
- * <ol>
- *   <li>Predict: x = F·x, P = F·P·Fᵀ + Q</li>
- *   <li>GNSS Update: 伪距+伪距率观测 → 量测残差 → 卡尔曼增益 → 后验</li>
- *   <li>UWB Update: UWB测距 → 量测残差 → 卡尔曼增益 → 后验</li>
- * </ol>
+ * 执行 EKF 预测+量测更新循环：
  *
- * <p>状态向量(12维): [r(3), v(3), a(3), tu, fu, tdk]</p>
+ *   - Predict: x = F·x, P = F·P·Fᵀ + Q
+ *   - GNSS Update: 伪距+伪距率观测 → 量测残差 → 卡尔曼增益 → 后验
+ *   - UWB Update: UWB测距 → 量测残差 → 卡尔曼增益 → 后验
+ *
+ * 状态向量(12维): [r(3), v(3), a(3), tu, fu, tdk]
  */
 public class EkfState {
 

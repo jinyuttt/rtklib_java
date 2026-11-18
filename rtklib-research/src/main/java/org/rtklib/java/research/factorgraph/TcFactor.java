@@ -7,8 +7,8 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 紧耦合因子：GNSS伪距+伪距率+UWB联合观测因子（移植自FE-GUT tc_factor.h）。
  *
- * <p>残差维度 = 2*gnssNum + uwbNum（典型值16=12+4）。</p>
- * <p>参数块：state[11] = [r(3), v(3), a(3), tu, fu], tdk[1]</p>
+ * 残差维度 = 2*gnssNum + uwbNum（典型值16=12+4）。
+ * 参数块：state[11] = [r(3), v(3), a(3), tu, fu], tdk[1]
  */
 public class TcFactor extends Factor {
 

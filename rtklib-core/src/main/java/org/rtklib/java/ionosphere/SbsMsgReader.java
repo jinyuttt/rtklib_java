@@ -14,13 +14,13 @@ import java.util.List;
 /**
  * SBAS消息文件读取器。
  *
- * <p>支持RTKLIB .sbs格式文件，每行格式：</p>
- * <pre>week tow prn type : hex_data</pre>
- * <p>示例：</p>
- * <pre>2300 345600 129  2 : 1C800C3F0000...</pre>
+ * 支持RTKLIB .sbs格式文件，每行格式：
+ * week tow prn type : hex_data
+ * 示例：
+ * 2300 345600 129  2 : 1C800C3F0000...
  *
- * <p>读取后自动调用 {@link SbasCorrection#sbsupdatecorr(SbsMsg, Nav)}
- * 更新Nav中的SBAS改正量。</p>
+ * 读取后自动调用 {@link SbasCorrection#sbsupdatecorr(SbsMsg, Nav)}
+ * 更新Nav中的SBAS改正量。
  */
 public class SbsMsgReader {
 

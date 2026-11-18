@@ -33,14 +33,12 @@ import java.util.Locale;
 /**
  * Java RTK 与 C 原版 rnx2rtkp 同口径逐历元对照（只做诊断，不产出结论性断言）。
  *
- * <p>默认关闭。C 侧结果由 {@code rnx2rtkp -k confB.txt} 生成（与 {@link #createOpt()} 参数一一对应）：
+ * 默认关闭。C 侧结果由 {@code rnx2rtkp -k confB.txt} 生成（与 {@link #createOpt()} 参数一一对应）：
  * posmode=static, freq=l1+l2, elmask=15, iono=brdc, trop=est, navsys=GPS+GLO+GAL,
- * armode=fix-and-hold, gloarmode=autocal, arthres=3.0/0.9999, slipthres=0.15, postype=single。</p>
+ * armode=fix-and-hold, gloarmode=autocal, arthres=3.0/0.9999, slipthres=0.15, postype=single。
  *
- * <pre>
  * mvn test -pl rtklib-test -Dtest=CJavaEpochDiffTest -Dcjdiff=true
  * 可选 -Dcjdiff.cpos=... 指定 C 的 .pos 路径
- * </pre>
  */
 @DisplayName("Java vs C 逐历元对照诊断")
 class CJavaEpochDiffTest {

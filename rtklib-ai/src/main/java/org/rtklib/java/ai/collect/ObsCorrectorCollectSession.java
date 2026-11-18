@@ -19,30 +19,28 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
- * 接口三数据采集会话——<b>唯一稳定入口</b>。
- * <p>
+ * 接口三数据采集会话——唯一稳定入口。
+ *
  * 与接口一的 {@link CollectSession} 结构一致（注入 provider → 运行解算 → 还原注入），
  * 但落盘内容不同：接口一是「一历元一行」的 6 维特征，接口三是
- * 「一历元 × 一卫星 × 一频点一行」的 17 维特征。两者<b>互斥使用</b>：
+ * 「一历元 × 一卫星 × 一频点一行」的 17 维特征。两者互斥使用：
  * 同一个 {@code AiProvider} 只能返回其中一个采集器，否则两套采集器争同一份
  * {@code ThreadLocal} 槽位，只会有一个生效。
- * </p>
- * <p>
+ *
  * 标准用法：
- * </p>
- * <pre>{@code
+ *
+ * {@code
  * CollectConfig cfg = CollectConfig.of(Paths.get("out/collect-obs"), "HKWS", "2024-060");
  * try (ObsCorrectorCollectSession s = ObsCorrectorCollectSession.open(cfg)) {
  *     s.runWith(() -> solveOneFile(cfg));   // 注入 → 解算 → 还原，一步完成
  * }
  * // 退出时：.obs.csv 已 flush/close，_obs_runs.csv 已追加本次运行清单
- * }</pre>
- * <p>
- * 会话<b>不</b>负责开启 trace。接口三的标签来自 core 的 {@code AI3/DDRES} 行
+ * }
+ *
+ * 会话不负责开启 trace。接口三的标签来自 core 的 {@code AI3/DDRES} 行
  * （{@code before} 字段即未扣偏差的双差码残差），宿主须开启
  * {@code topics={"AI3"}} 并把 trace 输出到 {@link CollectConfig#tracePath()}，
  * 与特征 CSV 靠 {@code (runId, epoch, sat, frq)} 对齐。
- * </p>
  */
 public final class ObsCorrectorCollectSession implements AutoCloseable {
 
@@ -100,7 +98,7 @@ public final class ObsCorrectorCollectSession implements AutoCloseable {
     }
 
     /**
-     * 注入 → 执行 → <b>还原</b>，保证注入点一定恢复原状（即使 {@code body} 抛异常）。
+     * 注入 → 执行 → 还原，保证注入点一定恢复原状（即使 {@code body} 抛异常）。
      */
     public void runWith(Runnable body) {
         AiProvider previous = install();

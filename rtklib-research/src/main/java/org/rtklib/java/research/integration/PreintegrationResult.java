@@ -8,11 +8,11 @@ import org.rtklib.java.research.data.ImuBias;
 /**
  * IMU 预积分结果。
  *
- * <p>在时间区间 [t_k, t_{k+1}] 内对 IMU 测量进行预积分，
- * 得到 ΔR、Δv、Δp 及对应的 bias 雅可比和噪声协方差。</p>
+ * 在时间区间 [t_k, t_{k+1}] 内对 IMU 测量进行预积分，
+ * 得到 ΔR、Δv、Δp 及对应的 bias 雅可比和噪声协方差。
  *
- * <p>参考 Forster et al., "On-Manifold Preintegration for Real-Time
- * Visual-Inertial Odometry", IEEE TRO 2017。</p>
+ * 参考 Forster et al., "On-Manifold Preintegration for Real-Time
+ * Visual-Inertial Odometry", IEEE TRO 2017。
  */
 public class PreintegrationResult {
 
@@ -69,7 +69,7 @@ public class PreintegrationResult {
     /**
      * 预积分核心算法。
      *
-     * <p>对 IMU buffer 逐帧积分，累积 ΔR/Δv/Δp 及 bias 雅可比。</p>
+     * 对 IMU buffer 逐帧积分，累积 ΔR/Δv/Δp 及 bias 雅可比。
      *
      * @param imuBuffer IMU 数据列表（按时间排序）
      * @param bias      初始零偏估计

@@ -7,16 +7,15 @@ import static org.rtklib.java.orbit.Sgp4Math.mod;
 /**
  * [REF: python-sgp4] SGP4/SDP4 传播算法核心实现，逐行移植自 python-sgp4 的 propagation.py。
  *
- * <p>本类严格按 python-sgp4 (Brandon Rhodes) 的 propagation.py 顺序与变量名
- * 进行 Java 移植。所有公式与边界处理保持一致，仅在以下方面做必要适配：</p>
- * <ul>
- *   <li>Python 多返回值 → 内部静态类 XxxxResult 包装</li>
- *   <li>Python % 对负数取非负余数 → 调用 {@link Sgp4Math#mod}</li>
- *   <li>Python 'a'/'n' 字符串单字符 → Java char</li>
- *   <li>Python True/False/None → Java true/false/Double.NaN</li>
- * </ul>
+ * 本类严格按 python-sgp4 (Brandon Rhodes) 的 propagation.py 顺序与变量名
+ * 进行 Java 移植。所有公式与边界处理保持一致，仅在以下方面做必要适配：
  *
- * <p>单位：位置 km、速度 km/s、坐标系 WGS72 TEME。</p>
+ *   - Python 多返回值 → 内部静态类 XxxxResult 包装
+ *   - Python % 对负数取非负余数 → 调用 {@link Sgp4Math#mod}
+ *   - Python 'a'/'n' 字符串单字符 → Java char
+ *   - Python True/False/None → Java true/false/Double.NaN
+ *
+ * 单位：位置 km、速度 km/s、坐标系 WGS72 TEME。
  */
 public final class Sgp4Propagation {
 

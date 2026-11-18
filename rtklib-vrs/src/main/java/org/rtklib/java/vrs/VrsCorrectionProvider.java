@@ -5,10 +5,10 @@ import org.rtklib.java.data.GTime;
 /**
  * [JAVA-ONLY 原创] 外部改正量提供者：用网络插值等外部方法给出的改正量替代模型计算。
  *
- * <p>返回值语义与 {@link VrsCorrection} 一致，均为相对基准站的增量（米）：
+ * 返回值语义与 {@link VrsCorrection} 一致，均为相对基准站的增量（米）：
  * {@code [0]} 色散项（电离层，加到伪距、从载波中减去），
  * {@code [1]} 非色散项（对流层），{@code [2]} 轨道残差。
- * 返回 {@code null} 表示该卫星不使用外部改正，回退到 {@link VrsCorrection} 的模型路径。</p>
+ * 返回 {@code null} 表示该卫星不使用外部改正，回退到 {@link VrsCorrection} 的模型路径。
  */
 @FunctionalInterface
 public interface VrsCorrectionProvider {

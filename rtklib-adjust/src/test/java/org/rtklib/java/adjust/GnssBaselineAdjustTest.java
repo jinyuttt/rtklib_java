@@ -15,8 +15,8 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * GNSS多基线间接平差全链路测试，覆盖k=1/k=2/k=3三种场景。
  *
- * <p>构造模拟SolData：已知P01真值和基站坐标，反算基线增量，
- * 加小噪声，构造协方差，验证平差结果。</p>
+ * 构造模拟SolData：已知P01真值和基站坐标，反算基线增量，
+ * 加小噪声，构造协方差，验证平差结果。
  */
 public class GnssBaselineAdjustTest {
 

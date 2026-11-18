@@ -4,14 +4,12 @@ import org.rtklib.java.ai.spi.PppSolutionContext;
 
 /**
  * 接口 A 特征提取（设计文档 §3.3，10 维固定解质量类特征）。
- * <p>
+ *
  * 本类只做「上下文 → 原始特征」，不做归一化（见 {@link FeatureNorm}）：
  * 归一化参数必须来自训练集并固化到模型旁，推理侧不得按运行数据动态拟合。
- * </p>
- * <p>
+ *
  * 特征顺序定死，训练与推理必须逐位一致（列名 {@code f0..f9}）：
- * </p>
- * <pre>
+ *
  * f0 sig_x     ECEF X 位置标准差（sqrt(positionVar[0])，米）
  * f1 sig_y     ECEF Y 位置标准差（米）
  * f2 sig_z     ECEF Z 位置标准差（米）
@@ -22,17 +20,14 @@ import org.rtklib.java.ai.spi.PppSolutionContext;
  * f7 snr_mean  逐星 SNR 均值（dBHz）
  * f8 innov_rms 新息 RMS（米，滤波收敛度）
  * f9 bias_frac 已初始化偏差状态的卫星占比（biasState / ns）
- * </pre>
- * <p>
- * {@code deterministicDegraded} 刻意<b>不</b>作为特征：它是归因字段（§3.5），
+ *
+ * {@code deterministicDegraded} 刻意不作为特征：它是归因字段（§3.5），
  * 若进入特征会让 A2（仅 AI）与 A3（确定性 + AI）两组的输入分布漂移。
- * </p>
- * <p>
+ *
  * 退化处理：{@code positionVar} 缺失/长度不足按 0.0；方差为负按 0.0（钳位后再开方，
  * 避免 {@code NaN}）；残差/仰角/SNR 为空时均值类特征取 0.0；{@code ns <= 0} 时
  * {@code bias_frac = 0.0}，不得除零。一律用 {@code 0.0} 而非 {@code NaN}：
  * {@code NaN} 进入 ONNX 会污染整批输出。
- * </p>
  */
 public final class PppSolutionFeatures {
 

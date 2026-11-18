@@ -22,22 +22,21 @@ import java.util.TreeMap;
  * 使网解在 {@link Constants#EPHOPT_SSRAPC}/{@link Constants#EPHOPT_SSRCOM}
  * 下按「广播星历 + SSR 改正」计算卫星位置与钟差。
  *
- * <p><b>归属声明</b>：本项目原创实现（时间线管理与外推策略为自行设计），
- * 未移植任何外部开源项目代码；SSR 电文解码逻辑的归属见 {@code rtcm.Rtcm}。</p>
+ * 归属声明：本项目原创实现（时间线管理与外推策略为自行设计），
+ * 未移植任何外部开源项目代码；SSR 电文解码逻辑的归属见 {@code rtcm.Rtcm}。
  *
- * <p>两种来源：</p>
- * <ul>
- *   <li>{@link #live} —— 增量摄入 RTCM3 SSR 字节流（1057~1068/1240~1270），
+ * 两种来源：
+ *
+ *   - {@link #live} —— 增量摄入 RTCM3 SSR 字节流（1057~1068/1240~1270），
  *       按卫星建立时间线，逐历元取最近一条并线性外推到该历元。
  *       实时流（{@code NtripClient} 的 {@code onData}）与录制文件回放
- *       （{@link #fromRtcm}）都走这一条路径，解码与注入逻辑完全一致。</li>
- *   <li>{@link #fromPreciseProducts} —— 由已装载的 SP3/CLK 反算 SSR 轨道/钟差改正
+ *       （{@link #fromRtcm}）都走这一条路径，解码与注入逻辑完全一致。
+ *   - {@link #fromPreciseProducts} —— 由已装载的 SP3/CLK 反算 SSR 轨道/钟差改正
  *       （{@code deph = RAC(精密 - 广播)}，{@code dclk = 精密钟差 - 广播钟差}），
- *       用于在没有当日 SSR 流的条件下事后回放 SSR 链路。</li>
- * </ul>
+ *       用于在没有当日 SSR 流的条件下事后回放 SSR 链路。
  *
- * <p>注入后的记录已归算到当前历元（{@code t0} 等于该历元），因此下游
- * {@link org.rtklib.java.ppprtk.SsrCorrector} 的零阶项即为该时刻的改正值。</p>
+ * 注入后的记录已归算到当前历元（{@code t0} 等于该历元），因此下游
+ * {@link org.rtklib.java.ppprtk.SsrCorrector} 的零阶项即为该时刻的改正值。
  */
 public final class SsrCorrectionProvider {
 
@@ -75,8 +74,8 @@ public final class SsrCorrectionProvider {
     /**
      * 创建实时 SSR 摄入通道（按 GPS 周 0 基准解码）。
      *
-     * <p>仅用于相对时刻检查；需要绝对时刻时请用
-     * {@link #live(GTime, double)} 指定周基准。</p>
+     * 仅用于相对时刻检查；需要绝对时刻时请用
+     * {@link #live(GTime, double)} 指定周基准。
      *
      * @return 可增量摄入字节流的 SSR 改正提供者
      */
@@ -87,11 +86,11 @@ public final class SsrCorrectionProvider {
     /**
      * 创建实时 SSR 摄入通道。
      *
-     * <p>典型用法：把 {@code NtripClient} 的 {@code onData(byte[], offset, length)}
+     * 典型用法：把 {@code NtripClient} 的 {@code onData(byte[], offset, length)}
      * 回调直接转给 {@link #ingest(byte[], int, int)}，解算前调用
      * {@link #applyAt} 即可。RTCM SSR 电文只携带周内秒，解码器需要一周基准才能
      * 还原绝对时刻；{@code referenceTime} 取流起始附近的任意时刻即可
-     * （允许一周内的偏差）。</p>
+     * （允许一周内的偏差）。
      *
      * @param referenceTime 周基准参考时刻；为 {@code null} 时按 GPS 周 0 解码
      * @param maxAgeSec    改正最大时效（s），超过则视为无效改正
@@ -104,8 +103,8 @@ public final class SsrCorrectionProvider {
     /**
      * 回放录制的 RTCM3 SSR 流（按 GPS 周 0 基准解码）。
      *
-     * <p>仅用于相对时刻检查；需要绝对时刻时请用
-     * {@link #fromRtcm(Path, GTime, double)} 指定周基准。</p>
+     * 仅用于相对时刻检查；需要绝对时刻时请用
+     * {@link #fromRtcm(Path, GTime, double)} 指定周基准。
      *
      * @param file RTCM3 原始流文件
      * @return SSR 改正提供者
@@ -117,8 +116,8 @@ public final class SsrCorrectionProvider {
     /**
      * 回放录制的 RTCM3 SSR 流。
      *
-     * <p>RTCM SSR 电文只携带周内秒，解码器需要一周基准才能还原绝对时刻；
-     * {@code referenceTime} 取流起始附近的任意时刻即可（允许一周内的偏差）。</p>
+     * RTCM SSR 电文只携带周内秒，解码器需要一周基准才能还原绝对时刻；
+     * {@code referenceTime} 取流起始附近的任意时刻即可（允许一周内的偏差）。
      *
      * @param file          RTCM3 原始流文件
      * @param referenceTime 周基准参考时刻；为 {@code null} 时按 GPS 周 0 解码
@@ -144,9 +143,9 @@ public final class SsrCorrectionProvider {
     /**
      * 增量摄入一段 RTCM3 字节流（实时链路入口）。
      *
-     * <p>可被 {@code NtripClient} 的 {@code onData} 回调反复调用：不完整的尾部电文
+     * 可被 {@code NtripClient} 的 {@code onData} 回调反复调用：不完整的尾部电文
      * 会缓存在 {@link #pending} 中，与下一次调用的数据续接。非 SSR 电文（如 MSM 观测、
-     * 1005 站坐标）会被正常解码但不进入 SSR 时间线，因此同一路原始流可直接整段喂入。</p>
+     * 1005 站坐标）会被正常解码但不进入 SSR 时间线，因此同一路原始流可直接整段喂入。
      *
      * @param data 原始字节
      */
@@ -220,8 +219,8 @@ public final class SsrCorrectionProvider {
     /**
      * @return 时间线中最早的改正记录时刻；无数据返回 {@code null}
      *
-     * <p>回放录制流时用于对齐解算起点：{@link #applyAt} 在超过
-     * {@code maxAgeSec} 的历元上不会写入改正，因此解算窗口应从这个时刻之后开始。</p>
+     * 回放录制流时用于对齐解算起点：{@link #applyAt} 在超过
+     * {@code maxAgeSec} 的历元上不会写入改正，因此解算窗口应从这个时刻之后开始。
      */
     public synchronized GTime earliestTime() {
         long key = Long.MAX_VALUE;
@@ -249,9 +248,9 @@ public final class SsrCorrectionProvider {
     /**
      * 收集本帧电文更新过的卫星改正。
      *
-     * <p>一条 SSR 电文可携带多颗卫星（{@code nsat} 颗），因此不能只看
+     * 一条 SSR 电文可携带多颗卫星（{@code nsat} 颗），因此不能只看
      * {@link Rtcm#ephsat}；这里扫描 {@code nav.ssr[]}，把本帧刚解码的卫星
-     * 快照进按历元归并的记录表，并清除其 {@code update} 标记以便下一帧识别增量。</p>
+     * 快照进按历元归并的记录表，并清除其 {@code update} 标记以便下一帧识别增量。
      */
     private void captureDecoded(Rtcm rtcm) {
         for (int sat = 1; sat <= Constants.MAXSAT; sat++) {
@@ -273,8 +272,8 @@ public final class SsrCorrectionProvider {
     /**
      * 由已装载的 SP3/CLK 精密产品反算 SSR 改正（事后 SSR 回放）。
      *
-     * <p>{@link #applyAt} 每次调用时按当前历元实时计算「精密 - 广播」差值，
-     * 因此不依赖任何录制的 SSR 流；结果与 {@link Constants#EPHOPT_PREC} 等价。</p>
+     * {@link #applyAt} 每次调用时按当前历元实时计算「精密 - 广播」差值，
+     * 因此不依赖任何录制的 SSR 流；结果与 {@link Constants#EPHOPT_PREC} 等价。
      *
      * @return SSR 改正提供者
      */
@@ -362,9 +361,9 @@ public final class SsrCorrectionProvider {
     /**
      * 由精密产品反算单星 SSR 改正。
      *
-     * <p>轨道改正取 {@code RAC} 分量，并按 {@link org.rtklib.java.ppprtk.SsrCorrector}
+     * 轨道改正取 {@code RAC} 分量，并按 {@link org.rtklib.java.ppprtk.SsrCorrector}
      * 使用的非正交基（{@code eR}、{@code eA}、{@code eR×eA}）求解 Gram 系数，
-     * 保证下游回算后与精密轨道严格一致。</p>
+     * 保证下游回算后与精密轨道严格一致。
      */
     private static Ssr derive(Nav nav, int sat, GTime time) {
         double[] rs0 = new double[6];

@@ -16,20 +16,19 @@ import org.slf4j.LoggerFactory;
 /**
  * RTKLIB通用工具函数。
  *
- * <p>对应RTKLIB rtkcmn.c 中的通用函数。包含几何距离计算、
+ * 对应RTKLIB rtkcmn.c 中的通用函数。包含几何距离计算、
  * 方位角/高度角计算、卫星排除判断、DOP计算、SNR掩码测试、
- * 最小二乘估计等功能。</p>
+ * 最小二乘估计等功能。
  *
- * <h3>矩阵存储约定（行优先）</h3>
- * <p>所有矩阵均按<b>行优先（row-major）</b>存储，即 M[row * cols + col]。
- * 矩阵运算使用 EJML 库，通过 {@link MatrixUtil} 转换。</p>
+ * 矩阵存储约定（行优先）
+ * 所有矩阵均按行优先（row-major）存储，即 M[row * cols + col]。
+ * 矩阵运算使用 EJML 库，通过 {@link MatrixUtil} 转换。
  *
- * <h3>致命陷阱规避</h3>
- * <ul>
- *   <li>geodist() 包含 Sagnac 效应修正（地球自转），不可省略</li>
- *   <li>{@link SatUtils#sat2freq} 对 GLONASS 需要 FCN 频率号（-8偏移），不可忽略</li>
- *   <li>lsq() 使用 EJML 求解法方程，避免手撸数组导致的行列优先错误</li>
- * </ul>
+ * 致命陷阱规避
+ *
+ *   - geodist() 包含 Sagnac 效应修正（地球自转），不可省略
+ *   - {@link SatUtils#sat2freq} 对 GLONASS 需要 FCN 频率号（-8偏移），不可忽略
+ *   - lsq() 使用 EJML 求解法方程，避免手撸数组导致的行列优先错误
  */
 public final class RtklibCommon {
     private static final Logger LOG = LoggerFactory.getLogger(RtklibCommon.class);
@@ -40,11 +39,11 @@ public final class RtklibCommon {
     /**
      * 计算卫星与接收机之间的几何距离。
      *
-     * <p>对应RTKLIB geodist()。计算公式：</p>
-     * <pre>r = ||rs - rr|| + OMGE * (rs[0]*rr[1] - rs[1]*rr[0]) / CLIGHT</pre>
+     * 对应RTKLIB geodist()。计算公式：
+     * r = ||rs - rr|| + OMGE * (rs[0]*rr[1] - rs[1]*rr[0]) / CLIGHT
      *
-     * <p>第二项为<b>Sagnac效应修正</b>（信号传播期间的地球自转），
-     * 省略会导致东向偏差约50米。</p>
+     * 第二项为Sagnac效应修正（信号传播期间的地球自转），
+     * 省略会导致东向偏差约50米。
      *
      * @param rs 卫星ECEF坐标 [3]，单位：米
      * @param rr 接收机ECEF坐标 [3]，单位：米
@@ -68,8 +67,8 @@ public final class RtklibCommon {
     /**
      * 计算卫星的方位角和高度角。
      *
-     * <p>对应RTKLIB satazel()。将ECEF视线向量转为站心坐标系(ENU)，
-     * 然后计算方位角和高度角。</p>
+     * 对应RTKLIB satazel()。将ECEF视线向量转为站心坐标系(ENU)，
+     * 然后计算方位角和高度角。
      *
      * @param pos  接收机大地坐标 (纬度, 经度, 高度)，单位：弧度, 弧度, 米
      * @param e    视线向量 [3]
@@ -96,8 +95,8 @@ public final class RtklibCommon {
     /**
      * 判断卫星是否应被排除。
      *
-     * <p>对应RTKLIB satexclude()。根据卫星健康标志、方差、
-     * 处理选项中的排除列表和导航系统选择判断是否排除。</p>
+     * 对应RTKLIB satexclude()。根据卫星健康标志、方差、
+     * 处理选项中的排除列表和导航系统选择判断是否排除。
      *
      * @param sat 卫星号
      * @param var 卫星位置方差（平方米）
@@ -132,7 +131,7 @@ public final class RtklibCommon {
     /**
      * 计算精度因子(DOP)。
      *
-     * <p>对应RTKLIB dops()。计算GDOP、PDOP、HDOP、VDOP。</p>
+     * 对应RTKLIB dops()。计算GDOP、PDOP、HDOP、VDOP。
      *
      * @param ns    卫星数
      * @param azel  方位角/高度角数组 [ns*2]
@@ -173,8 +172,8 @@ public final class RtklibCommon {
     /**
      * SNR掩码测试。
      *
-     * <p>对应RTKLIB testsnr()。根据高度角和SNR掩码判断
-     * 观测值信噪比是否满足要求。</p>
+     * 对应RTKLIB testsnr()。根据高度角和SNR掩码判断
+     * 观测值信噪比是否满足要求。
      *
      * @param base 0=流动站 1=基准站
      * @param idx  频率索引 (0:L1, 1:L2, ...)
@@ -238,7 +237,7 @@ public final class RtklibCommon {
     /**
      * 选择电离层无关组合(IFLC)的第二频率索引。
      *
-     * <p>对应RTKLIB seliflc()。</p>
+     * 对应RTKLIB seliflc()。
      *
      * @param nf  频率数
      * @param sys 卫星系统
@@ -251,14 +250,13 @@ public final class RtklibCommon {
     /**
      * 最小二乘估计。
      *
-     * <p>对应RTKLIB lsq()。求解法方程：</p>
-     * <pre>
+     * 对应RTKLIB lsq()。求解法方程：
+     *
      * x = (H^T * H)^-1 * H^T * v
      * Q = (H^T * H)^-1
-     * </pre>
      *
-     * <p><b>行优先存储</b>：H[m*n] 按行优先存储，H[obs*n + state]。
-     * 使用 EJML 库求解法方程，避免手撸数组导致的行列优先错误。</p>
+     * 行优先存储：H[m*n] 按行优先存储，H[obs*n + state]。
+     * 使用 EJML 库求解法方程，避免手撸数组导致的行列优先错误。
      *
      * @param H 设计矩阵 [m*n]，行优先，m个观测，n个未知数
      * @param v 观测向量 [m]
@@ -319,17 +317,17 @@ public final class RtklibCommon {
      * so that valid observations are stored contiguously at positions 0..nf-1,
      * sorted by frequency index.
      *
-     * <p><b>WARNING: must NOT be applied in rtkpos()/RTK processing.</b>
+     * WARNING: must NOT be applied in rtkpos()/RTK processing.
      * This behavior does not exist in RTKLIB C (rinex.c set_index()/decode_obsdata
      * never reorder slots; obsd slot f always holds frequency index f). Compacting
      * per-satellite gaps moves e.g. BDS B2a (C5P, slot 2) into slot 1 when B2b
      * (C7I) is missing, while the other receiver may keep B2b (C7D/C7I) at slot 1
      * &mdash; the IFLC/DD then mixes two different carrier frequencies and produces
      * garbage phase biases (~1e6 m). C skips such sat-epochs instead
-     * (cp==0 / freq==0 checks in udbias()/ddres()).</p>
+     * (cp==0 / freq==0 checks in udbias()/ddres()).
      *
-     * <p>Kept only for explicit diagnostic/PPP-test use where the caller owns
-     * the consequence.</p>
+     * Kept only for explicit diagnostic/PPP-test use where the caller owns
+     * the consequence.
      *
      * @param obs observation array
      * @param n   number of observations
@@ -405,12 +403,12 @@ public final class RtklibCommon {
      * SSR carrier-phase bias correction.
      * Aligned with RTKLIB postpos.c corr_phase_bias_ssr() and rtksvr.c corr_phase_bias().
      *
-     * <p>Corrects carrier-phase observations by subtracting SSR phase biases.
+     * Corrects carrier-phase observations by subtracting SSR phase biases.
      * Formula: obs[i].L[j] -= nav.ssr[sat-1].pbias[code-1] * freq / CLIGHT
-     * (converts phase bias from meters to cycles and subtracts from carrier phase)</p>
+     * (converts phase bias from meters to cycles and subtracts from carrier phase)
      *
-     * <p>Called before rtkpos()/pppos() in both real-time and batch processing.
-     * Skipped if pppopt contains "-ENA_FCB" or "-DIS_FCB" (FCB estimation mode).</p>
+     * Called before rtkpos()/pppos() in both real-time and batch processing.
+     * Skipped if pppopt contains "-ENA_FCB" or "-DIS_FCB" (FCB estimation mode).
      *
      * @param obs observation array
      * @param n number of observations

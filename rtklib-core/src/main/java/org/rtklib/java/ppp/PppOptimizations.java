@@ -209,10 +209,10 @@ public class PppOptimizations {
     }
 
     /**
-     * VMF3 映射函数（Landskron &amp; Böhm 2018, VMF3/GPT3, Eq. 4）：
-     * <pre>
+     * VMF3 映射函数（Landskron & Böhm 2018, VMF3/GPT3, Eq. 4）：
+     *
      * m(e) = (1 + a/(1 + b/(1 + c))) / (sin(e) + a/(sin(e) + b/(sin(e) + c)))
-     * </pre>
+     *
      * c 系数按 VMF3 论文取年/半年谐波：
      * ch = c0h + c11h*cos(t) + c10h*cos(2t)，c0h=0.062, c11h=0.001, c10h=0.005；
      * cw = 0.001（c11w=c10w=0），t = 2π(doy-28)/365.25。
@@ -242,7 +242,7 @@ public class PppOptimizations {
         return result;
     }
 
-    /** VMF3 bw 纬度分段（Landskron &amp; Böhm 2018, Table 1）：|lat|<=15° 取 0.00108，
+    /** VMF3 bw 纬度分段（Landskron & Böhm 2018, Table 1）：|lat|<=15° 取 0.00108，
      *  15°~75° 线性插值至 0.00225，>75° 取 0.00225。 */
     private static double vmf3Bw(double lat) {
         double absLat = Math.abs(lat);

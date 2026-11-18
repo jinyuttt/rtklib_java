@@ -28,12 +28,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 接口 D（PPP-RTK 固定校验）契约测试。
  *
- * <p>核心用例是 T9 施加原子性：AI 拒绝固定时，{@code rtk.xa}/{@code rtk.Pa} 的数组指针、
+ * 核心用例是 T9 施加原子性：AI 拒绝固定时，{@code rtk.xa}/{@code rtk.Pa} 的数组指针、
  * {@code rtk.x}/{@code rtk.P} 的数值与 {@code ssat.fix} 必须与拒绝前逐位一致——即注入点
- * 严格遵循「算-验-提交」三段式，拒绝时整体丢弃候选而不留脏状态（S2）。</p>
+ * 严格遵循「算-验-提交」三段式，拒绝时整体丢弃候选而不留脏状态（S2）。
  *
- * <p>其余用例覆盖 T1（未注入零回归，I-1）、T2/T3（门限与非法输出不干预）、
- * T10（熔断与显式恢复）。</p>
+ * 其余用例覆盖 T1（未注入零回归，I-1）、T2/T3（门限与非法输出不干预）、
+ * T10（熔断与显式恢复）。
  */
 @DisplayName("接口 D：PPP-RTK 固定校验契约与失效安全（T1/T2/T3/T9/T10）")
 class PppRtkFixValidatorTest {

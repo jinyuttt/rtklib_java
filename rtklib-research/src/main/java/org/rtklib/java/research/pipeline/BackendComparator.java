@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * 多后端对比运行器（research模块自有）。
  *
- * <p>同一组数据依次跑多个后端，收集统计信息用于对比。</p>
+ * 同一组数据依次跑多个后端，收集统计信息用于对比。
  */
 public class BackendComparator {
     private final List<SolverBackend> backends;

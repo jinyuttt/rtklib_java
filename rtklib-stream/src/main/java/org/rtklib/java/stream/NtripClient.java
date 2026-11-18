@@ -18,20 +18,19 @@ import javax.net.ssl.SSLSocket;
 
 /**
  * NTRIP客户端，实现NTRIP v2.0协议的数据流连接。
- * <p>
+ *
  * NTRIP (Networked Transport of RTCM via Internet Protocol) 是GNSS差分数据传输的事实标准协议。
  * 本客户端支持：
- * <ul>
- *   <li>连接NTRIP Caster获取指定挂载点的实时数据流（RTCM3观测值、SSR改正数等）</li>
- *   <li>获取Sourcetable（可用挂载点列表）</li>
- *   <li>HTTP Basic认证</li>
- *   <li>断线自动重连（可配置重连间隔和最大次数）</li>
- *   <li>向NTRIP Caster发送数据（如NMEA GGA位置报告）</li>
- *   <li>SSL/TLS加密连接（支持自签名证书和双向TLS认证）</li>
- * </ul>
  *
- * <p>典型使用流程：
- * <pre>
+ *   - 连接NTRIP Caster获取指定挂载点的实时数据流（RTCM3观测值、SSR改正数等）
+ *   - 获取Sourcetable（可用挂载点列表）
+ *   - HTTP Basic认证
+ *   - 断线自动重连（可配置重连间隔和最大次数）
+ *   - 向NTRIP Caster发送数据（如NMEA GGA位置报告）
+ *   - SSL/TLS加密连接（支持自签名证书和双向TLS认证）
+ *
+ * 典型使用流程：
+ *
  *   // 1. 创建配置
  *   NtripClientConfig cfg = new NtripClientConfig();
  *   cfg.setHost("igs.bdsmart.cn");
@@ -54,14 +53,12 @@ import javax.net.ssl.SSLSocket;
  *
  *   // 4. 使用完毕后关闭
  *   client.stop();
- * </pre>
  *
- * <p>线程模型：
- * <ul>
- *   <li>connect()/getSourcetable() 在调用线程中执行，阻塞直到连接建立或失败</li>
- *   <li>start() 启动守护线程 "NTRIP-Reader" 持续读取数据并通过 StreamListener 回调</li>
- *   <li>若启用自动重连，额外启动守护线程 "NTRIP-Reconnect" 监测连接状态并重连</li>
- * </ul>
+ * 线程模型：
+ *
+ *   - connect()/getSourcetable() 在调用线程中执行，阻塞直到连接建立或失败
+ *   - start() 启动守护线程 "NTRIP-Reader" 持续读取数据并通过 StreamListener 回调
+ *   - 若启用自动重连，额外启动守护线程 "NTRIP-Reconnect" 监测连接状态并重连
  *
  * @see NtripClientConfig
  * @see StreamListener
@@ -126,10 +123,9 @@ public class NtripClient {
 
     /**
      * 连接NTRIP Caster并订阅指定挂载点的数据流。
-     * <p>
+     *
      * 本方法阻塞执行，完成TCP连接、发送HTTP GET请求、读取服务端响应头。
      * 连接成功后可调用 {@link #start()} 启动异步数据读取。
-     * </p>
      *
      * @throws IOException          连接失败、服务端返回非200状态、或I/O错误
      * @throws IllegalArgumentException 挂载点为空或null
@@ -144,15 +140,13 @@ public class NtripClient {
 
     /**
      * 获取NTRIP Caster的Sourcetable（可用挂载点列表）。
-     * <p>
+     *
      * 发送 GET / 请求，读取完整Sourcetable后关闭连接。
      * 本方法独立于 {@link #connect()}，不需要预先连接。
-     * </p>
-     * <p>
+     *
      * 兼容 NTRIP 1.0（SOURCETABLE 200 OK）与 2.0（HTTP/1.1 200 OK）响应，
      * 并按响应头处理 {@code Transfer-Encoding: chunked} 与
      * {@code Content-Encoding: gzip}：先解块再解压（HTTP 编码施加顺序的逆序）。
-     * </p>
      *
      * @return Sourcetable原始文本
      * @throws IOException 连接或读取失败
@@ -201,11 +195,10 @@ public class NtripClient {
 
     /**
      * 启动异步数据读取线程。
-     * <p>
+     *
      * 调用前必须先成功调用 {@link #connect()}。
      * 启动后，收到的数据通过 {@link StreamListener#onData} 回调推送。
      * 若配置了自动重连，同时启动重连守护线程。
-     * </p>
      *
      * @throws IllegalStateException 尚未连接时调用
      */
@@ -227,9 +220,8 @@ public class NtripClient {
 
     /**
      * 停止数据读取并关闭连接。
-     * <p>
+     *
      * 关闭Socket、等待读取线程和重连线程结束，最后回调 {@link StreamListener#onClosed()}。
-     * </p>
      */
     public void stop() {
         running.set(false);
@@ -244,10 +236,9 @@ public class NtripClient {
 
     /**
      * 向NTRIP Caster发送数据。
-     * <p>
+     *
      * 用于向Caster发送NMEA GGA位置报告等上行数据。
      * 仅在连接已建立且处于运行状态时有效。
-     * </p>
      *
      * @param data 待发送的数据
      * @throws IOException 写入失败
@@ -315,10 +306,9 @@ public class NtripClient {
 
     /**
      * 数据读取循环，在守护线程中运行。
-     * <p>
+     *
      * 持续从Socket读取数据并通过 {@link StreamListener#onData} 回调。
      * 读取到EOF或发生I/O错误时退出循环。
-     * </p>
      */
     private void readLoop() {
         try {
@@ -388,11 +378,10 @@ public class NtripClient {
 
     /**
      * 自动重连循环，在守护线程中运行。
-     * <p>
+     *
      * 按配置的重连间隔定期检测连接状态，若已断开则尝试重新连接。
      * 重连成功后重置计数器并启动新的读取线程。
      * 超过最大重连次数后停止尝试。
-     * </p>
      */
     private void reconnectLoop() {
         while (!Thread.currentThread().isInterrupted()) {
@@ -426,11 +415,10 @@ public class NtripClient {
 
     /**
      * 根据SSL配置创建Socket。
-     * <p>
+     *
      * 若 {@code config.isSsl()} 为true，创建SSLSocket并完成TLS握手；
      * 否则创建普通明文Socket。
      * SSLContext来源优先级：config.getSslContext() > JDK默认。
-     * </p>
      *
      * @return 已创建但尚未连接的Socket
      * @throws IOException 创建SSLSocket失败（如SSLContext未初始化）
@@ -507,11 +495,10 @@ public class NtripClient {
 
     /**
      * HTTP/1.1 分块传输编码解码流（RFC 7230 §4.1）。
-     * <p>
+     *
      * 仅向调用方暴露块内有效载荷：隐藏块长行、块扩展（{@code ;} 之后）与
      * 块尾 CRLF，并把 0 长度块视为流结束。用于 Sourcetable 这类需要按行
      * 读取、而 Caster 又可能启用 chunked 的响应。
-     * </p>
      */
     private static final class ChunkedInputStream extends InputStream {
         private final InputStream src;
@@ -579,11 +566,10 @@ public class NtripClient {
 
     /**
      * 解析NTRIP Sourcetable文本，提取挂载点信息。
-     * <p>
+     *
      * Sourcetable中以 "STR;" 开头的行描述挂载点，格式为：
-     * <pre>STR;mountpoint;...;description;format;...;network;...</pre>
+     * STR;mountpoint;...;description;format;...;network;...
      * 本方法提取挂载点名称、描述、格式和网络信息。
-     * </p>
      *
      * @param table Sourcetable原始文本
      * @return 挂载点名称到描述信息的映射（保持原始顺序），描述格式为 "描述 | fmt=格式 | net=网络"

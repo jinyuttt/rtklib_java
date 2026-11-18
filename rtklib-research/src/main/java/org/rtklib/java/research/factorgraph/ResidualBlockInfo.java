@@ -7,8 +7,8 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 残差块信息（移植自FE-GUT residual_block_info.h）。
  *
- * <p>封装一个因子（CostFunction）的残差和雅可比，支持鲁棒损失函数。
- * 边缘化时调用 {@link #evaluate()} 计算出 J 和 r，后续用于构造 Hessian。</p>
+ * 封装一个因子（CostFunction）的残差和雅可比，支持鲁棒损失函数。
+ * 边缘化时调用 {@link #evaluate()} 计算出 J 和 r，后续用于构造 Hessian。
  */
 public class ResidualBlockInfo {
 

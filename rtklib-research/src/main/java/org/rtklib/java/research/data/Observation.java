@@ -6,13 +6,12 @@ import org.rtklib.java.research.common.GTime;
 /**
  * 单颗卫星单个历元的观测数据（research模块自有）。
  *
- * <h3>观测值单位</h3>
- * <ul>
- *   <li>载波相位 carrierPhase：周（cycle），需乘波长λ转为米</li>
- *   <li>伪距 pseudorange：米</li>
- *   <li>多普勒 doppler：Hz</li>
- *   <li>SNR：dBHz</li>
- * </ul>
+ * 观测值单位
+ *
+ *   - 载波相位 carrierPhase：周（cycle），需乘波长λ转为米
+ *   - 伪距 pseudorange：米
+ *   - 多普勒 doppler：Hz
+ *   - SNR：dBHz
  */
 public class Observation implements Serializable {
     private static final long serialVersionUID = 1L;

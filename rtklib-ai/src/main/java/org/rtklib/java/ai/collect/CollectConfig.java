@@ -12,21 +12,18 @@ import java.util.regex.Pattern;
 
 /**
  * 采集配置（一次运行 = 一个站 × 一个观测日 × 一个 runId），接口一/三/四/A/B 共用。
- * <p>
- * 设计前提：单次运行产出的样本量远不足以训练，训练集由<b>多次运行累积</b>而成。
+ *
+ * 设计前提：单次运行产出的样本量远不足以训练，训练集由多次运行累积而成。
  * 因此：
- * </p>
- * <ul>
- *   <li>{@code runId} 是必填项（缺省自动生成），它同时写入 CSV 每一行与 trace 文件名；
- *       {@code epoch} 只是进程内计数器，跨运行会从 0 重来，故主键是 {@code (runId, epoch)}；</li>
- *   <li>{@code station}/{@code day} 是两层切分的依据，构造期固定，不提供 setter；</li>
- *   <li>文件名由 {@code station + day + runId} 派生，天然不碰撞，无需人工命名。</li>
- * </ul>
- * <p>
+ *
+ *   - {@code runId} 是必填项（缺省自动生成），它同时写入 CSV 每一行与 trace 文件名；
+ *       {@code epoch} 只是进程内计数器，跨运行会从 0 重来，故主键是 {@code (runId, epoch)}；
+ *   - {@code station}/{@code day} 是两层切分的依据，构造期固定，不提供 setter；
+ *   - 文件名由 {@code station + day + runId} 派生，天然不碰撞，无需人工命名。
+ *
  * 所有标识符只允许 {@code [A-Za-z0-9._-]}：拒绝空白、逗号、路径分隔符，
- * 从源头消除 CSV 破损与路径穿越。校验失败<b>抛异常</b>而非钳位——
+ * 从源头消除 CSV 破损与路径穿越。校验失败抛异常而非钳位——
  * 钳位在推理侧无害，在采集侧会静默产出标签错位的数据，污染不可逆。
- * </p>
  */
 public record CollectConfig(
         Path outputDir,
@@ -65,10 +62,9 @@ public record CollectConfig(
 
     /**
      * 单次运行应配套使用的 trace 路径。
-     * <p>
+     *
      * 本类只提供文件名约定，不负责开启 trace：{@code epoch} 无绝对时间，
      * 标签 join 依赖 {@code AR/FIX} trace 的 {@code gpst}，故宿主须把 trace 输出到这里。
-     * </p>
      */
     public Path tracePath() {
         return outputDir.resolve(station + "_" + day + "_" + runId + ".trace");
@@ -76,11 +72,10 @@ public record CollectConfig(
 
     /**
      * 接口三采集的 17 维特征落盘路径。
-     * <p>
-     * 与接口一的 {@link #csvPath()} <b>必须分开</b>：接口一是「一历元一行」（6 维），
+     *
+     * 与接口一的 {@link #csvPath()} 必须分开：接口一是「一历元一行」（6 维），
      * 接口三是「一历元 × 一卫星 × 一频点一行」（17 维），行数与主键都不同，
      * 混在一个文件里无法 join，也无法按行回溯。
-     * </p>
      */
     public Path obsCsvPath() {
         return outputDir.resolve(station + "_" + day + "_" + runId + ".obs.csv");
@@ -88,10 +83,9 @@ public record CollectConfig(
 
     /**
      * 接口四采集的 15 维特征落盘路径。
-     * <p>
+     *
      * 与接口三同样必须分开：接口四主键是 {@code (epoch, sat, frq)}，但标签来自
      * {@code AI4/IS_REF}（当历元真实参考星），与接口三的码残差标签是两套东西。
-     * </p>
      */
     public Path refStarCsvPath() {
         return outputDir.resolve(station + "_" + day + "_" + runId + ".refstar.csv");
@@ -99,12 +93,11 @@ public record CollectConfig(
 
     /**
      * 接口 A 采集的 10 维特征落盘路径（一历元一行）。
-     * <p>
+     *
      * 与接口一的 {@link #csvPath()} 必须分开：两者都是历元级，但标签来源完全不同
      * （接口一标签是 {@code AR/FIX} 的固定真伪，接口 A 标签是解算位置与参考坐标的
      * 3D 误差）。同一文件里混两套标签，组装阶段无法区分，且任一标签口径变更都会
      * 让历史文件语义漂移。
-     * </p>
      */
     public Path pppCsvPath() {
         return outputDir.resolve(station + "_" + day + "_" + runId + ".ppp.csv");
@@ -112,11 +105,10 @@ public record CollectConfig(
 
     /**
      * 接口 B 采集的 12 维特征落盘路径（一历元 × 一卫星 × 一频点一行）。
-     * <p>
+     *
      * 主键 {@code (epoch, sat, frq)}，标签是归一化非差残差
      * {@code resp / sigma}：与接口 A 的历元级标签、接口三的双差残差标签都不同，
      * 三者不可合并、不可互换。
-     * </p>
      */
     public Path pppScaleCsvPath() {
         return outputDir.resolve(station + "_" + day + "_" + runId + ".pppscale.csv");

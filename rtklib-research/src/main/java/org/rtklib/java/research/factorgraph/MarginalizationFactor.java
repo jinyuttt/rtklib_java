@@ -7,8 +7,8 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 边缘化因子（移植自FE-GUT marginalization_factor.h）。
  *
- * <p>将边缘化后的先验信息作为因子加入图优化中。
- * 残差 = e0 + J0·(x - x0)，雅可比 = J0。</p>
+ * 将边缘化后的先验信息作为因子加入图优化中。
+ * 残差 = e0 + J0·(x - x0)，雅可比 = J0。
  */
 public class MarginalizationFactor extends Factor {
 

@@ -3,13 +3,12 @@ package org.rtklib.java.research.factorgraph;
 /**
  * 鲁棒损失函数（research模块因子图框架）。
  *
- * <p>用于抑制非高斯噪声（多径、NLOS等），替代标准最小二乘。
+ * 用于抑制非高斯噪声（多径、NLOS等），替代标准最小二乘。
  * 支持 Ceres 风格的 Evaluate(s, rho) 三值输出：
- * <ul>
- *   <li>rho[0] = ρ(s)</li>
- *   <li>rho[1] = ρ'(s)</li>
- *   <li>rho[2] = ρ''(s)</li>
- * </ul>
+ *
+ *   - rho[0] = ρ(s)
+ *   - rho[1] = ρ'(s)
+ *   - rho[2] = ρ''(s)
  */
 public class RobustLoss {
 

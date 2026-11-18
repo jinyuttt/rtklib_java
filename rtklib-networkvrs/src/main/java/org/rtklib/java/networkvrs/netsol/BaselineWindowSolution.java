@@ -44,16 +44,15 @@ public record BaselineWindowSolution(
     /**
      * 窗口归因诊断量，用于把窄巷固定失败区分成三类根因。
      *
-     * <p>三类根因各有一组可判读的量：</p>
-     * <ul>
-     *   <li>弧段误切：{@code jumpCuts}/{@code gapCuts} 与 {@code dominantArcEpochs}。
-     *       若切弧频繁且主导弧段短于窗口，则失败源于弧段被切碎而非窗口长度；</li>
-     *   <li>几何不足：{@code satellites}/{@code fixedPdop}/{@code ambiguityCondition}。
+     * 三类根因各有一组可判读的量：
+     *
+     *   - 弧段误切：{@code jumpCuts}/{@code gapCuts} 与 {@code dominantArcEpochs}。
+     *       若切弧频繁且主导弧段短于窗口，则失败源于弧段被切碎而非窗口长度；
+     *   - 几何不足：{@code satellites}/{@code fixedPdop}/{@code ambiguityCondition}。
      *       几何判读只看 {@code fixedPdop}（模糊度已知时的位置精度），
-     *       {@code floatPdop} 含模糊度不确定性，会随弧段数增加而虚高，不能当几何判据；</li>
-     *   <li>宽巷未稳：{@code wlFixed}/{@code satellites}。若宽巷固定率本身就低，
-     *       窄巷分级固定无从谈起；若宽巷已高而 {@code firstRatio} 偏低，才是窄巷瓶颈。</li>
-     * </ul>
+     *       {@code floatPdop} 含模糊度不确定性，会随弧段数增加而虚高，不能当几何判据；
+     *   - 宽巷未稳：{@code wlFixed}/{@code satellites}。若宽巷固定率本身就低，
+     *       窄巷分级固定无从谈起；若宽巷已高而 {@code firstRatio} 偏低，才是窄巷瓶颈。
      *
      * @param epochs             参与解算的历元数（参考星集合一致且通过筛选的历元）
      * @param satellites         公共卫星数（双差对）

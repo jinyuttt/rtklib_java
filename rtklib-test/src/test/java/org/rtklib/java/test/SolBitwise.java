@@ -13,10 +13,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 解算结果逐位比对工具（I-1 零回归断言用）。
- * <p>
+ *
  * 用 {@link Double#compare} 而非容差比较：AI 接线在「不干预」路径上不允许引入
  * 任何浮点扰动，否则同一份数据两次运行结果不同，零回归即不成立。
- * </p>
  */
 final class SolBitwise {
 

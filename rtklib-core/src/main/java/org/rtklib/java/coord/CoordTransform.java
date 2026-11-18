@@ -7,28 +7,27 @@ import org.rtklib.java.constants.Constants;
 /**
  * 坐标转换工具类。
  *
- * <p>对应RTKLIB rtkcmn.c 中的坐标转换函数。内部使用 WGS84 椭球参数。</p>
+ * 对应RTKLIB rtkcmn.c 中的坐标转换函数。内部使用 WGS84 椭球参数。
  *
- * <h3>矩阵存储约定（行优先）</h3>
- * <p>所有矩阵均按<b>行优先（row-major）</b>存储，即 M[row * cols + col]。
+ * 矩阵存储约定（行优先）
+ * 所有矩阵均按行优先（row-major）存储，即 M[row * cols + col]。
  * 与 RTKLIB C 版本的列优先存储不同，Java 版本统一行优先，
- * 通过 {@link MatrixUtil} 转为 EJML SimpleMatrix 进行运算。</p>
+ * 通过 {@link MatrixUtil} 转为 EJML SimpleMatrix 进行运算。
  *
- * <h3>ENU变换矩阵</h3>
- * <p>xyz2enu 输出的 3x3 变换矩阵 E 按行优先存储：</p>
- * <pre>
- * E = [-sinl,      cosl,       0   ]   &lt;- 东(E)方向单位向量
- *     [-sinp*cosl, -sinp*sinl, cosp]   &lt;- 北(N)方向单位向量
- *     [ cosp*cosl,  cosp*sinl, sinp]   &lt;- 天(U)方向单位向量
- * </pre>
- * <p>其中 sinp=sin(lat), cosp=cos(lat), sinl=sin(lon), cosl=cos(lon)。</p>
+ * ENU变换矩阵
+ * xyz2enu 输出的 3x3 变换矩阵 E 按行优先存储：
  *
- * <h3>与RTKLIB C版本的差异</h3>
- * <ul>
- *   <li>C版本 xyz2enu 输出列优先：E[0..2]=第0列, E[3..5]=第1列, E[6..8]=第2列</li>
- *   <li>Java版本输出行优先：E[0..2]=第0行, E[3..5]=第1行, E[6..8]=第2行</li>
- *   <li>矩阵乘法使用 EJML SimpleMatrix，不直接手撸数组运算</li>
- * </ul>
+ * E = [-sinl,      cosl,       0   ]   <- 东(E)方向单位向量
+ *     [-sinp*cosl, -sinp*sinl, cosp]   <- 北(N)方向单位向量
+ *     [ cosp*cosl,  cosp*sinl, sinp]   <- 天(U)方向单位向量
+ *
+ * 其中 sinp=sin(lat), cosp=cos(lat), sinl=sin(lon), cosl=cos(lon)。
+ *
+ * 与RTKLIB C版本的差异
+ *
+ *   - C版本 xyz2enu 输出列优先：E[0..2]=第0列, E[3..5]=第1列, E[6..8]=第2列
+ *   - Java版本输出行优先：E[0..2]=第0行, E[3..5]=第1行, E[6..8]=第2行
+ *   - 矩阵乘法使用 EJML SimpleMatrix，不直接手撸数组运算
  */
 public final class CoordTransform {
     private CoordTransform() {
@@ -37,7 +36,7 @@ public final class CoordTransform {
     /**
      * ECEF坐标转大地坐标（纬度、经度、高度）。
      *
-     * <p>对应RTKLIB ecef2pos()。使用 WGS84 椭球参数迭代求解纬度。</p>
+     * 对应RTKLIB ecef2pos()。使用 WGS84 椭球参数迭代求解纬度。
      *
      * @param r   ECEF坐标 (x, y, z)，单位：米
      * @param pos 输出：大地坐标 (纬度, 经度, 高度)，单位：弧度, 弧度, 米
@@ -63,7 +62,7 @@ public final class CoordTransform {
     /**
      * 大地坐标转ECEF坐标。
      *
-     * <p>对应RTKLIB pos2ecef()。</p>
+     * 对应RTKLIB pos2ecef()。
      *
      * @param pos 大地坐标 (纬度, 经度, 高度)，单位：弧度, 弧度, 米
      * @param r   输出：ECEF坐标 (x, y, z)，单位：米
@@ -84,15 +83,14 @@ public final class CoordTransform {
     /**
      * 计算ECEF到站心(ENU)的变换矩阵。
      *
-     * <p>对应RTKLIB xyz2enu()。输出3x3变换矩阵E，满足：</p>
-     * <pre>[e, n, u]^T = E * [dx, dy, dz]^T</pre>
+     * 对应RTKLIB xyz2enu()。输出3x3变换矩阵E，满足：
+     * [e, n, u]^T = E * [dx, dy, dz]^T
      *
-     * <p><b>行优先存储</b>（与C版本列优先不同）：</p>
-     * <ul>
-     *   <li>E[0..2] = 第0行（东方向单位向量）</li>
-     *   <li>E[3..5] = 第1行（北方向单位向量）</li>
-     *   <li>E[6..8] = 第2行（天方向单位向量）</li>
-     * </ul>
+     * 行优先存储（与C版本列优先不同）：
+     *
+     *   - E[0..2] = 第0行（东方向单位向量）
+     *   - E[3..5] = 第1行（北方向单位向量）
+     *   - E[6..8] = 第2行（天方向单位向量）
      *
      * @param pos 大地坐标 (纬度, 经度)，单位：弧度
      * @param E   输出：3x3变换矩阵，行优先存储 [9]
@@ -111,7 +109,7 @@ public final class CoordTransform {
     /**
      * ECEF向量转站心(ENU)向量。
      *
-     * <p>对应RTKLIB ecef2enu()。计算公式：[e,n,u]^T = E * r</p>
+     * 对应RTKLIB ecef2enu()。计算公式：[e,n,u]^T = E * r
      *
      * @param pos 大地参考坐标 (纬度, 经度)，单位：弧度
      * @param r   输入：ECEF向量 [3]
@@ -126,7 +124,7 @@ public final class CoordTransform {
     /**
      * 站心(ENU)向量转ECEF向量。
      *
-     * <p>对应RTKLIB enu2ecef()。计算公式：r = E^T * [e,n,u]^T</p>
+     * 对应RTKLIB enu2ecef()。计算公式：r = E^T * [e,n,u]^T
      *
      * @param pos 大地参考坐标 (纬度, 经度)，单位：弧度
      * @param e   输入：ENU向量 [3]
@@ -141,9 +139,9 @@ public final class CoordTransform {
     /**
      * ECEF协方差转站心(ENU)协方差。
      *
-     * <p>对应RTKLIB covenu()。计算公式：Q = E * P * E^T</p>
+     * 对应RTKLIB covenu()。计算公式：Q = E * P * E^T
      *
-     * <p><b>行优先存储</b>：输入P和输出Q均按行优先存储。</p>
+     * 行优先存储：输入P和输出Q均按行优先存储。
      *
      * @param pos 大地坐标 (纬度, 经度)，单位：弧度
      * @param P   输入：3x3 ECEF协方差矩阵，行优先 [9]
@@ -178,7 +176,7 @@ public final class CoordTransform {
     /**
      * 矩阵与向量乘法（行优先存储）。
      *
-     * <p>计算 c = op(A) * b，其中 A 是 3x3 矩阵，b 是 3x1 向量。</p>
+     * 计算 c = op(A) * b，其中 A 是 3x3 矩阵，b 是 3x1 向量。
      *
      * @param A    3x3矩阵，行优先 [9]
      * @param b    3x1向量 [3]

@@ -9,8 +9,8 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * 验证B1 OSB等价映射修复。
  *
- * <p>问题：OSB文件提供L1X，但观测数据使用L1I，导致getOsb()返回0，WL FCB计算错误。</p>
- * <p>修复：添加BDS_B1_EQUIV映射，允许L1I/L1X/L1P互相替代。</p>
+ * 问题：OSB文件提供L1X，但观测数据使用L1I，导致getOsb()返回0，WL FCB计算错误。
+ * 修复：添加BDS_B1_EQUIV映射，允许L1I/L1X/L1P互相替代。
  */
 public class B1OsbEquivalenceTest {
 

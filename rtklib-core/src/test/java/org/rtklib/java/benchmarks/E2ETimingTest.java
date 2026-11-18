@@ -18,25 +18,24 @@ import org.slf4j.LoggerFactory;
 /**
  * End-to-end timing test for SPP/RTK processing pipelines.
  *
- * <p>Measures whole-program epoch throughput, complementing JMH micro-benchmarks
- * for Tier 0 baseline establishment. Uses existing test-data RINEX 3.x files.</p>
+ * Measures whole-program epoch throughput, complementing JMH micro-benchmarks
+ * for Tier 0 baseline establishment. Uses existing test-data RINEX 3.x files.
  *
- * <p><b>Important: Kalman implementation varies by processing mode:</b></p>
- * <table>
- *   <tr><th>Mode</th><th>Kalman Backend</th><th>Typical State Dim (nx)</th></tr>
- *   <tr><td>SPP</td><td>SppCore internal LSQ (not KalmanFilter.update)</td><td>~4-5 (pos + clock)</td></tr>
- *   <tr><td>RTK</td><td>KalmanFilter.update()</td><td>~5-15 (GPS L1+L2), ~50-200 (multi-GNSS)</td></tr>
- *   <tr><td>PPP</td><td>KalmanFilter.update()</td><td>~50-300</td></tr>
- *   <tr><td>PPP-RTK</td><td>KalmanFilter.update()</td><td>~150-300</td></tr>
- * </table>
+ * Important: Kalman implementation varies by processing mode:
  *
- * <p>JMH KalmanFilter.update() results map to RTK/PPP/PPP-RTK modes, NOT SPP.</p>
+ *    Mode | Kalman Backend | Typical State Dim (nx)
+ *    SPP | SppCore internal LSQ (not KalmanFilter.update) | ~4-5 (pos + clock)
+ *    RTK | KalmanFilter.update() | ~5-15 (GPS L1+L2), ~50-200 (multi-GNSS)
+ *    PPP | KalmanFilter.update() | ~50-300
+ *    PPP-RTK | KalmanFilter.update() | ~150-300
  *
- * <p>Run with:
- * <pre>mvn test -pl rtklib-core "-Dtest=E2ETimingTest#testSppTiming+testRtkTiming" -DfailIfNoTests=false</pre>
+ * JMH KalmanFilter.update() results map to RTK/PPP/PPP-RTK modes, NOT SPP.
  *
- * <p>GC data is captured programmatically via GarbageCollectorMXBean snapshots,
- * providing the Tier 0 end-to-end GC baseline and Tier 1 3B acceptance criteria.</p>
+ * Run with:
+ * mvn test -pl rtklib-core "-Dtest=E2ETimingTest#testSppTiming+testRtkTiming" -DfailIfNoTests=false
+ *
+ * GC data is captured programmatically via GarbageCollectorMXBean snapshots,
+ * providing the Tier 0 end-to-end GC baseline and Tier 1 3B acceptance criteria.
  */
 @DisplayName("E2E Timing Baseline")
 public class E2ETimingTest {

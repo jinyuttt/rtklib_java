@@ -9,9 +9,9 @@ import java.util.List;
 /**
  * Lightweight GC monitoring utility for E2E timing tests.
  *
- * <p>Takes GC snapshots before/after a timed section and computes deltas:
+ * Takes GC snapshots before/after a timed section and computes deltas:
  * Young GC count, Full GC count, total GC time, and approximate heap usage delta.
- * Used as the Tier 0 end-to-end GC baseline and Tier 1 3B acceptance criteria.</p>
+ * Used as the Tier 0 end-to-end GC baseline and Tier 1 3B acceptance criteria.
  */
 public final class GCMonitor {
 

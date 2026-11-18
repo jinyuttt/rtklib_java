@@ -6,26 +6,24 @@ import org.rtklib.java.constants.Constants;
 /**
  * 单颗卫星单个历元的观测数据。
  *
- * <p>对应RTKLIB obsd_t。包含载波相位、伪距、多普勒、SNR等观测值，
- * 以及卫星号、接收机ID、码类型等标识信息。</p>
+ * 对应RTKLIB obsd_t。包含载波相位、伪距、多普勒、SNR等观测值，
+ * 以及卫星号、接收机ID、码类型等标识信息。
  *
- * <h3>观测值单位</h3>
- * <ul>
- *   <li>载波相位 L[]：单位为<b>周（cycle）</b>，需乘波长λ转为米：L * λ</li>
- *   <li>伪距 P[]：单位为<b>米</b></li>
- *   <li>多普勒 D[]：单位为<b>Hz</b></li>
- *   <li>SNR[]：单位为<b>dBHz</b></li>
- * </ul>
+ * 观测值单位
  *
- * <h3>致命陷阱</h3>
- * <p>载波相位 L 的单位是<b>周</b>，不是米！计算残差时必须乘波长：
- * y = L * λ - r，不可省略波长转换。</p>
+ *   - 载波相位 L[]：单位为周（cycle），需乘波长λ转为米：L * λ
+ *   - 伪距 P[]：单位为米
+ *   - 多普勒 D[]：单位为Hz
+ *   - SNR[]：单位为dBHz
  *
- * <h3>接收机ID (rcv)</h3>
- * <ul>
- *   <li>rcv=1：流动站观测</li>
- *   <li>rcv=2：基准站观测</li>
- * </ul>
+ * 致命陷阱
+ * 载波相位 L 的单位是周，不是米！计算残差时必须乘波长：
+ * y = L * λ - r，不可省略波长转换。
+ *
+ * 接收机ID (rcv)
+ *
+ *   - rcv=1：流动站观测
+ *   - rcv=2：基准站观测
  */
 public class Obsd implements Serializable {
     private static final long serialVersionUID = 1L;

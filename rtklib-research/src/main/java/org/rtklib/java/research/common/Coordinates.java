@@ -3,7 +3,7 @@ package org.rtklib.java.research.common;
 /**
  * 坐标转换工具（research模块自有）。
  *
- * <p>ECEF↔LLH、ECEF↔ENU变换，WGS84椭球。</p>
+ * ECEF↔LLH、ECEF↔ENU变换，WGS84椭球。
  */
 public final class Coordinates {
     private Coordinates() {}

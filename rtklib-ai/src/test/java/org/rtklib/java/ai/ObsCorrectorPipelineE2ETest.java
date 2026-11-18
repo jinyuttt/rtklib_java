@@ -41,16 +41,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 接口三全链路验证：公开 RINEX 数据 + {@link OnnxAiProvider} + 真实 ONNX Runtime 推理。
- * <p>
+ *
  * 与 core 侧 {@code AiObsCorrectorE2ETest} 的分工：那边用桩验证「core 怎么用」，
  * 这边验证「rtklib-ai 怎么给」——特征提取、短窗维护、归一化、ONNX 批量推理、
  * 输出成对拆分、provider 组装与独立降级，全部走真实代码路径。
- * </p>
- * <p>
+ *
  * 模型为仓库内置的确定性 dummy（{@code bias = 0.1 * tanh(x @ W_b)}，
  * {@code scale = 1 + 0.5 * sigmoid(x @ W_s)}），输出天然满足接口三契约
  * （{@code bias} 有界、{@code scale ∈ [1, 1.5]}），用于验证流程而非精度。
- * </p>
  */
 @DisplayName("接口三全链路：公开 RINEX + 真实 ONNX 推理")
 @Tag("manual")
@@ -449,11 +447,10 @@ class ObsCorrectorPipelineE2ETest {
 
     /**
      * 用**现有** POSITION trace 采集逐历元 (Q, ns, ECEF)。
-     * <p>
+     *
      * 为什么复用 trace 而不改 {@code RtkResult}：{@code RtkResult.solutions} 只保存成功历元，
      * 失败历元的 ns/Q 不在其中，而 A2-4 的「success −1/−2 归因」恰恰需要失败历元的 ns。
      * POSITION 在 rtkpos 尾部无条件 emit（含 stat=NONE 的历元），是现成的逐历元输出。
-     * </p>
      */
     private static Map<String, EpochRec> runWithTrace(AiProvider provider) {
         List<String> lines = new java.util.ArrayList<>();
@@ -624,11 +621,10 @@ class ObsCorrectorPipelineE2ETest {
 
     /**
      * 按**历元时刻**配对比较两次解算。
-     * <p>
+     *
      * 不能按 list 下标配对：{@code RtkResult.solutions} 只保存成功历元，
      * 两次运行的失败历元不同（哪怕只差 1 个）就会让后续所有下标错位，
      * 于是「变化量」变成两个不相同时刻的差，量级完全失真。
-     * </p>
      */
     private static DiffStats diffStats(RtkProcessor.RtkResult a, RtkProcessor.RtkResult b) {
         java.util.Map<String, Position> ref = new java.util.HashMap<>();

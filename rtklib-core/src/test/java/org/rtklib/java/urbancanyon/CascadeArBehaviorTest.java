@@ -28,9 +28,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * [JAVA-ONLY] Cascade AR 真逐级实现行为验证（FIX-ALG-007 验收）。
  *
- * <p>在非 IFLC（EST 电离层）多频 DD 模式下对比级联开/关：
+ * 在非 IFLC（EST 电离层）多频 DD 模式下对比级联开/关：
  * 验收要点为无假 Fix（固定解相对参考轨迹 RMSE 合理）、Fix 率与 RMSE 不显著劣化。
- * 旧伪实现因 IFLC 守卫从未在数据集测试中激活，本测试确保新实现在真实路径上被验证。</p>
+ * 旧伪实现因 IFLC 守卫从未在数据集测试中激活，本测试确保新实现在真实路径上被验证。
  */
 @DisplayName("CascadeAR 行为验证 - EST模式 A/B 对比")
 @Tag("manual")

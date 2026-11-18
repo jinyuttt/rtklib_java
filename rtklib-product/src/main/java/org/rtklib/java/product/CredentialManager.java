@@ -11,26 +11,23 @@ import java.util.Properties;
 /**
  * 凭据管理器，从本地配置文件读取敏感信息（如CDDIS用户名密码）。
  * 
- * <p>配置文件位置（按优先级）：
- * <ol>
- *   <li>系统属性：-Drtklib.credentials=/path/to/credentials.properties</li>
- *   <li>环境变量：RTKLIB_CREDENTIALS=/path/to/credentials.properties</li>
- *   <li>用户目录：~/.rtklib/credentials.properties</li>
- *   <li>当前目录：./credentials.properties</li>
- * </ol>
- * 
- * <p>配置文件格式（Java Properties）：
- * <pre>
+ * 配置文件位置（按优先级）：
+ *
+ *   - 系统属性：-Drtklib.credentials=/path/to/credentials.properties
+ *   - 环境变量：RTKLIB_CREDENTIALS=/path/to/credentials.properties
+ *   - 用户目录：~/.rtklib/credentials.properties
+ *   - 当前目录：./credentials.properties
+ *
+ * 配置文件格式（Java Properties）：
+ *
  * cddis.username=your_username
  * cddis.password=your_password
- * </pre>
- * 
- * <p>安全提示：
- * <ul>
- *   <li>此文件已在.gitignore中，不会提交到Git</li>
- *   <li>建议设置文件权限为600（仅所有者可读写）</li>
- *   <li>不要在其他地方硬编码凭据</li>
- * </ul>
+ *
+ * 安全提示：
+ *
+ *   - 此文件已在.gitignore中，不会提交到Git
+ *   - 建议设置文件权限为600（仅所有者可读写）
+ *   - 不要在其他地方硬编码凭据
  */
 public final class CredentialManager {
     private static final Logger LOG = LoggerFactory.getLogger(CredentialManager.class);

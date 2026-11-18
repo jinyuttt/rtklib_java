@@ -8,14 +8,13 @@ import java.time.LocalDateTime;
 /**
  * GPS时间结构体（research模块自有）。
  *
- * <p>内部统一以GPST存储，由整秒部分time和小数秒部分sec组成。</p>
+ * 内部统一以GPST存储，由整秒部分time和小数秒部分sec组成。
  *
- * <h3>时间系统</h3>
- * <ul>
- *   <li>GPST：GPS时间，起算历元 1980-01-06 00:00:00</li>
- *   <li>BDT：北斗时间，BDT = GPST - 14s</li>
- *   <li>UTC：协调世界时，UTC = GPST - 闰秒数（当前18秒）</li>
- * </ul>
+ * 时间系统
+ *
+ *   - GPST：GPS时间，起算历元 1980-01-06 00:00:00
+ *   - BDT：北斗时间，BDT = GPST - 14s
+ *   - UTC：协调世界时，UTC = GPST - 闰秒数（当前18秒）
  */
 public class GTime implements Serializable, Comparable<GTime> {
     private static final long serialVersionUID = 1L;

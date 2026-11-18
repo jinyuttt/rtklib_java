@@ -331,8 +331,8 @@ public class AdaptiveController {
     /**
      * 处理器接线辅助：仅当 {@code cfg.adaptive.enableScene=true} 时构造并激活控制器，
      * 否则返回 null（默认关闭时零干预、零对象开销，调用方按 null 跳过即可）。
-     * <p>控制器直接绑定传入的 opt/cfg 引用，场景切换通过覆盖-恢复机制就地修改，
-     * 解算链路下一历元即读到新参数；{@link #deactivate()} 恢复全部原始值。</p>
+     * 控制器直接绑定传入的 opt/cfg 引用，场景切换通过覆盖-恢复机制就地修改，
+     * 解算链路下一历元即读到新参数；{@link #deactivate()} 恢复全部原始值。
      *
      * @param opt 解算实际使用的 PrcOpt（通常挂在 Rtk 上的那份）
      * @param rtk 解算状态对象，其 rtkConfig 为开关与配置来源；可为 null（返回 null）
@@ -355,8 +355,8 @@ public class AdaptiveController {
 
     /**
      * 处理器接线辅助：从观测历元数组提取特征（nSat/avgSnr）并驱动 {@link #onEpoch}。
-     * <p>特征口径与验证 harness 一致：nSat=非基准站(rcv!=2)观测条数，
-     * avgSnr=这些观测首频点 SNR&gt;0 的均值（无有效 SNR 时为 0）。</p>
+     * 特征口径与验证 harness 一致：nSat=非基准站(rcv!=2)观测条数，
+     * avgSnr=这些观测首频点 SNR>0 的均值（无有效 SNR 时为 0）。
      *
      * @param epoch 历元序号（从 1 起，调用方维护）
      * @param obs   当前历元观测数组（可含基准站 rcv==2，内部自动剔除）

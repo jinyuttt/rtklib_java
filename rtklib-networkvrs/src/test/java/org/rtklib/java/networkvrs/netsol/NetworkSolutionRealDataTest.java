@@ -34,9 +34,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 真实三站 RINEX + BRDC 广播星历的档 2 集成测试（V2 统计口径）。
  *
- * <p>数据不入库：需 {@code -Dnetwork.data.dir=<目录>}，目录内有三站 30 s RINEX；
+ * 数据不入库：需 {@code -Dnetwork.data.dir=<目录>}，目录内有三站 30 s RINEX；
  * 星历可用 {@code -Dnetwork.nav.file=<BRDC .rnx>}，未指定时在数据目录内自动找 {@code BRDC*.rnx}。
- * 默认只取前 120 个历元（1 h），可用 {@code -Dnetwork.max.epochs} 调整。缺失数据自动跳过。</p>
+ * 默认只取前 120 个历元（1 h），可用 {@code -Dnetwork.max.epochs} 调整。缺失数据自动跳过。
  */
 class NetworkSolutionRealDataTest {
 

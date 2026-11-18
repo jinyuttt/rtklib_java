@@ -3,10 +3,10 @@ package org.rtklib.java.ext.igs;
 /**
  * IGS SSR IM201 电离层 VTEC 球谐模型中的单个薄层。
  *
- * <p>球谐展开为 {@code VTEC = Σ Σ (C_nm cos(mλ_S) + S_nm sin(mλ_S)) P_nm(sin φ_PP)}，
- * 系数已换算为 TECU（原始 int16 × 0.005）。</p>
+ * 球谐展开为 {@code VTEC = Σ Σ (C_nm cos(mλ_S) + S_nm sin(mλ_S)) P_nm(sin φ_PP)}，
+ * 系数已换算为 TECU（原始 int16 × 0.005）。
  *
- * <p>系数数组按度 n、次 m 索引，未参与展开的项保持 0；C 覆盖 m=0..M，S 覆盖 m=1..M。</p>
+ * 系数数组按度 n、次 m 索引，未参与展开的项保持 0；C 覆盖 m=0..M，S 覆盖 m=1..M。
  */
 public class IgsSsrVtecLayer {
 

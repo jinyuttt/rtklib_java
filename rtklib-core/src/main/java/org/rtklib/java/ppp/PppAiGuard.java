@@ -13,10 +13,9 @@ import org.slf4j.LoggerFactory;
 
 /**
  * PPP 体系 AI 三接口的失效安全运行时（§1.4 S1–S6）。
- * <p>
+ *
  * 只做四件事：解析（含熔断短路）、预算度量、降级/成功记账、trace。
  * 所有降级路径统一回落到「不干预」，绝不 fail-closed（S1）。
- * </p>
  */
 final class PppAiGuard {
 
@@ -53,10 +52,9 @@ final class PppAiGuard {
 
     /**
      * 熔断短路 + 重注入识别。
-     * <p>
+     *
      * 熔断期间 provider 不再被调用（等价未注入）；仅当解析到的实例与熔断时刻的实例
      * 不同（显式重注入）才解除熔断（S5）。
-     * </p>
      */
     private static Object guard(Rtk rtk, int iface, Object provider) {
         if (provider == null) {

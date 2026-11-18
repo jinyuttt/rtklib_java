@@ -16,12 +16,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 阶段 2 首日最小验证（设计文档 §8「阶段 2 的关键风险」）：
  * {@code 6→16→1} dummy MLP 的加载与推理，与 Python 侧前向传播数值对账。
- * <p>
+ *
  * 参考值由 {@code src/test/python/gen_dummy_onnx.py} 用 numpy 双精度前向同一份 float32 权重产出；
  * Java 侧走 ONNX Runtime float32 路径，故用 {@code 1e-6} 容差而非逐位相等——
  * 两条路径的算子实现（GEMM 累加顺序、Sigmoid 实现）不同，逐位相等不是可验证契约，
  * 数值一致才是。
- * </p>
  */
 @DisplayName("阶段2最小验证：ONNX 加载 + 推理对账")
 class OnnxInferenceTest {

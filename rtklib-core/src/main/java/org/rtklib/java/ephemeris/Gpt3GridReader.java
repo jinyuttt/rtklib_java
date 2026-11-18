@@ -15,9 +15,9 @@ import java.io.IOException;
  * 温度直减率、大地水准面差距与 VMF3 映射函数系数（ah, aw）的年变化先验值，
  * 供 VMF3 对流层延迟模型使用。
  *
- * 模型与公式依据：Landskron, D. &amp; Böhm, J. (2018), "VMF3/GPT3: refined
+ * 模型与公式依据：Landskron, D. & Böhm, J. (2018), "VMF3/GPT3: refined
  * discrete and empirical troposphere mapping functions", Journal of Geodesy
- * 92(4), 349-366；水汽压的高程归约依据 Askne, J. &amp; Nordius, H. (1987),
+ * 92(4), 349-366；水汽压的高程归约依据 Askne, J. & Nordius, H. (1987),
  * "Estimation of tropospheric delay for microwaves from surface weather data",
  * Radio Science 22(3), 379-386。本类按上述公开文献的模型定义独立实现，
  * 不复制任何外部程序源码。

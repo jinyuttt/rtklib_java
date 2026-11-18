@@ -38,13 +38,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 真实 RTCM3 三站集成测试。
  *
- * <p>数据不在仓库内，通过属性指定并自动跳过：</p>
- * <ul>
- *   <li>{@code -Dnetwork.rtcm.dir=<根目录>}：目录结构为 {@code <deviceId>/<yyyy-MM-dd>/<hour>.rtcm3}</li>
- *   <li>{@code -Dnetwork.station.ids=<id1,id2,id3>}：参与网形的设备 ID</li>
- * </ul>
+ * 数据不在仓库内，通过属性指定并自动跳过：
  *
- * <p>测试取三站共有日期里最早的 2 个小时文件，验证 RTCM 解码、历元对齐与流程贯通。</p>
+ *   - {@code -Dnetwork.rtcm.dir=<根目录>}：目录结构为 {@code <deviceId>/<yyyy-MM-dd>/<hour>.rtcm3}
+ *   - {@code -Dnetwork.station.ids=<id1,id2,id3>}：参与网形的设备 ID
+ *
+ * 测试取三站共有日期里最早的 2 个小时文件，验证 RTCM 解码、历元对齐与流程贯通。
  */
 class RtcmStationLoaderTest {
 

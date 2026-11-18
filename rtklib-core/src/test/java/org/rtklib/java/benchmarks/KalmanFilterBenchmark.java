@@ -15,11 +15,11 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 /**
  * JMH micro-benchmark for KalmanFilter.update() hot path.
  *
- * <p>Measures single-invocation throughput across typical RTK/PPP state dimensions.
- * Results feed into Tier 0 baseline and Tier 2 (3A) Kalman optimization decision.</p>
+ * Measures single-invocation throughput across typical RTK/PPP state dimensions.
+ * Results feed into Tier 0 baseline and Tier 2 (3A) Kalman optimization decision.
  *
- * <p>Run with:
- * <pre>mvn test -pl rtklib-core -Dtest=KalmanFilterBenchmark -DfailIfNoTests=false</pre>
+ * Run with:
+ * mvn test -pl rtklib-core -Dtest=KalmanFilterBenchmark -DfailIfNoTests=false
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)

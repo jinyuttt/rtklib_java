@@ -4,10 +4,9 @@ import java.io.Serializable;
 
 /**
  * PPP-RTK 参数。
- * <p>
+ *
  * 从 {@link RtkConfig} 拆分出的独立子配置，字段名去掉原 {@code pppRtk} 前缀
  * （模式总开关 {@code enablePppRtk} → {@code enable}）。
- * </p>
  */
 public class PppRtkOpts implements Serializable {
     private static final long serialVersionUID = 1L;

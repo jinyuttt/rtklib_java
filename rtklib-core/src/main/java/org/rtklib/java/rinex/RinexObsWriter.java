@@ -23,8 +23,8 @@ import java.util.Set;
  * Supports RINEX 3.05/3.06 format only.
  * Aligned with RTKLIB rnxout.c / convrnx.c.
  *
- * <p>Observation type output is controlled by {@link #obstype} bitmask.
- * Default is {@link #OBSTYPE_ALL} (CLDS), aligned with RTKLIB rtkconv GUI default.</p>
+ * Observation type output is controlled by {@link #obstype} bitmask.
+ * Default is {@link #OBSTYPE_ALL} (CLDS), aligned with RTKLIB rtkconv GUI default.
  */
 public class RinexObsWriter {
     private static final Logger log = LoggerFactory.getLogger(RinexObsWriter.class);
@@ -85,10 +85,9 @@ public class RinexObsWriter {
      * Controls which observation types (C/L/D/S) are included in the output.
      * Default is {@link #OBSTYPE_ALL} (CLDS).
      *
-     * <p>Example: output only pseudorange and carrier phase (aligned with convbin CLI default):</p>
-     * <pre>
+     * Example: output only pseudorange and carrier phase (aligned with convbin CLI default):
+     *
      *   writer.setObstype(RinexObsWriter.OBSTYPE_PR | RinexObsWriter.OBSTYPE_CP);
-     * </pre>
      *
      * @param obstype bitmask of OBSTYPE_PR, OBSTYPE_CP, OBSTYPE_DOP, OBSTYPE_SNR
      */

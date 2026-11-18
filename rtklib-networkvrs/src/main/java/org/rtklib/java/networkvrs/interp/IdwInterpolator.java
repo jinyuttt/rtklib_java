@@ -7,11 +7,11 @@ import java.util.List;
 /**
  * [JAVA-ONLY 原创] 反距离加权（IDW）插值：w = 1 / d^p，d 为流动站在各站局部水平面内的距离。
  *
- * <p>流动站与某站水平距离小于 {@code exactDistance} 时直接取该站值；
+ * 流动站与某站水平距离小于 {@code exactDistance} 时直接取该站值；
  * 否则按归一化权重加权平均。仅用水平距离，不做高程外推（与 RTKLIB 网络 RTK 的做法一致，
- * 此处仅为方法约定参考，非代码移植）。</p>
+ * 此处仅为方法约定参考，非代码移植）。
  *
- * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
+ * 归属声明：本项目原创实现，未移植任何外部开源项目代码。
  */
 public class IdwInterpolator implements CorrectionInterpolator {
 

@@ -11,10 +11,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@link BaseStabilityMonitor} 的合成残差测试：Phase B（降权）与 Phase D（剔除）的
  * 「可归因性」与「存在健康参照」两条前置约束。
  *
- * <p>现场数据只有 2 台基站（k=2），按设计 Phase B/D 在该配置下不执行，故 k>=3 的
+ * 现场数据只有 2 台基站（k=2），按设计 Phase B/D 在该配置下不执行，故 k>=3 的
  * 归因、降权、剔除路径在真实数据上无法覆盖。这里用几何一致的合成残差
  * （{@code v_j = (e_j - e_ref)^T · (δrr - δb)}，即 DD 残差对 rover 先验位置误差与
- * 基站位移的几何系数完全相同这一事实）验证状态机与权重计算。</p>
+ * 基站位移的几何系数完全相同这一事实）验证状态机与权重计算。
  */
 public class BaseStabilityMonitorSyntheticTest {
 

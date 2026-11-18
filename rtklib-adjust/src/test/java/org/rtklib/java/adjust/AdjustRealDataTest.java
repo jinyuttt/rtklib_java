@@ -38,16 +38,15 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * rtklib-adjust 实测数据测试：2基站1测站多基线间接平差。
  *
- * <p>数据配置：src/test/resources/test-data.properties（不提交到仓库）</p>
- * <p>模板文件：test-data.properties.template</p>
+ * 数据配置：src/test/resources/test-data.properties（不提交到仓库）
+ * 模板文件：test-data.properties.template
  *
- * <p>流程：</p>
- * <ol>
- *   <li>对每条基线（A→测站, B→测站）独立RTK解算，得到逐历元SolData</li>
- *   <li>按历元时间对齐两条基线的SolData</li>
- *   <li>构建BaselineEpoch，执行GnssBaselineAdjust.adjust()</li>
- *   <li>输出平差结果统计：FIX比例、σ₀分布、Baarda T、平差坐标</li>
- * </ol>
+ * 流程：
+ *
+ *   - 对每条基线（A→测站, B→测站）独立RTK解算，得到逐历元SolData
+ *   - 按历元时间对齐两条基线的SolData
+ *   - 构建BaselineEpoch，执行GnssBaselineAdjust.adjust()
+ *   - 输出平差结果统计：FIX比例、σ₀分布、Baarda T、平差坐标
  */
 public class AdjustRealDataTest {
 

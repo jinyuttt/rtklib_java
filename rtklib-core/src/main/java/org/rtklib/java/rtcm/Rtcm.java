@@ -19,16 +19,15 @@ import java.util.List;
  * Aligned with RTKLIB rtcm3.c structure.
  * Supports the main observation (legacy + MSM), ephemeris, station, and SSR messages.
  *
- * <p><b>归属说明</b>：主体结构与 RTKLIB C 版 {@code rtcm3.c} 对齐。以下解码逻辑另参考了外部项目：</p>
- * <ul>
- *   <li><b>[REF: cssrlib]</b> 1043 SBAS 星历布局（{@code decode_sbs_eph}，作者 Rui Hirokawa）——
- *       RTKLIB 2.5.0 未实现 1043，字段表取自 cssrlib；</li>
- *   <li><b>[REF: RTKLIB 2.5.1]</b> 部分 SSR 电文的后续补丁语义（如 1252~1270 的 PRN 偏移约定
- *       {@code offp}，QZS=192 / SBS=120）。</li>
- * </ul>
+ * 归属说明：主体结构与 RTKLIB C 版 {@code rtcm3.c} 对齐。以下解码逻辑另参考了外部项目：
  *
- * <p>其余电文（1071~1127 MSM、1019~1046 星历、1005/1006/1033 测站等）按 RTCM 3.x 公开协议
- * 与 RTKLIB C 版实现，不涉及其他外部项目。</p>
+ *   - [REF: cssrlib] 1043 SBAS 星历布局（{@code decode_sbs_eph}，作者 Rui Hirokawa）——
+ *       RTKLIB 2.5.0 未实现 1043，字段表取自 cssrlib；
+ *   - [REF: RTKLIB 2.5.1] 部分 SSR 电文的后续补丁语义（如 1252~1270 的 PRN 偏移约定
+ *       {@code offp}，QZS=192 / SBS=120）。
+ *
+ * 其余电文（1071~1127 MSM、1019~1046 星历、1005/1006/1033 测站等）按 RTCM 3.x 公开协议
+ * 与 RTKLIB C 版实现，不涉及其他外部项目。
  */
 public class Rtcm implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -973,18 +972,18 @@ public class Rtcm implements Serializable {
     /**
      * [REF: cssrlib] RTCM 1043 — SBAS 卫星星历（非 BDS-3 B-CNAV1！）
      *
-     * <p>布局依据 cssrlib/rtcm.py 的 {@code decode_sbs_eph}（RTCM 3.x 标准字段表），
-     * 218 bit 单帧完整星历。RTKLIB 2.5.0/2.5.1/EX 均未实现此类型。</p>
+     * 布局依据 cssrlib/rtcm.py 的 {@code decode_sbs_eph}（RTCM 3.x 标准字段表），
+     * 218 bit 单帧完整星历。RTKLIB 2.5.0/2.5.1/EX 均未实现此类型。
      *
-     * <p>字段：u6 svid | u8 iodn | u13 toc(×16s) | u4 ura |
+     * 字段：u6 svid | u8 iodn | u13 toc(×16s) | u4 ura
      *         s30 x(×0.08m) | s30 y(×0.08m) | s25 z(×0.4m) |
      *         s17 vx(×0.000625m/s) | s17 vy(×0.000625m/s) | s18 vz(×0.004m/s) |
      *         s10 ax(×1.25e-5m/s²) | s10 ay(×1.25e-5m/s²) | s10 az(×6.25e-5m/s²) |
-     *         s12 af0(×2^-31s) | s8 af1(×2^-40s/s)</p>
+     *         s12 af0(×2^-31s) | s8 af1(×2^-40s/s)
      *
-     * <p>实际验证：WUH20 流 2026-10-26 抓到 6 帧 1043，按此布局解出
+     * 实际验证：WUH20 流 2026-10-26 抓到 6 帧 1043，按此布局解出
      * PRN=121/128/131/136（SBAS 标准号段），xyz 量级 4.2 万 km（GEO 轨道典型），
-     * af0 ≈ 5.6e-9 s，与 SBAS 广播星历特征完全一致。</p>
+     * af0 ≈ 5.6e-9 s，与 SBAS 广播星历特征完全一致。
      */
     private boolean decodeType1043() {
         int i = 24 + 12;
@@ -1155,9 +1154,9 @@ public class Rtcm implements Serializable {
     /**
      * 1033 Receiver and Antenna Descriptors。
      *
-     * <p>字段顺序：站 ID(12) → 天线描述(8+8n) → 天线设置 ID(8) → 天线序列号(8+8n)
+     * 字段顺序：站 ID(12) → 天线描述(8+8n) → 天线设置 ID(8) → 天线序列号(8+8n)
      * → 接收机类型(8+8n) → 接收机固件版本(8+8n) → 接收机序列号(8+8n)，
-     * 全部为变长字符串，无保留位/扩展字段。</p>
+     * 全部为变长字符串，无保留位/扩展字段。
      */
     private boolean decodeType1033() {
         int i = 24 + 12;
@@ -1424,9 +1423,9 @@ public class Rtcm implements Serializable {
     /**
      * 解码 SSR 历元时间（对齐 RTKLIB C {@code decode_ssr_epoch}）并写入 {@link #time}。
      *
-     * <p>RTCM SSR 报文在 12 位电文号之后紧跟历元字段：GLONASS 为 17 位日内秒，
+     * RTCM SSR 报文在 12 位电文号之后紧跟历元字段：GLONASS 为 17 位日内秒，
      * 其余系统为 20 位周内秒。该字段此前被整体漏读，导致 {@code nav.ssr[].t0}
-     * 全部为 0、SSR 改正因超龄被全部拒绝。</p>
+     * 全部为 0、SSR 改正因超龄被全部拒绝。
      *
      * @return 历元字段结束后的位位置
      */

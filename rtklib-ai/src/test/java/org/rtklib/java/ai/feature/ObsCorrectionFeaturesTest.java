@@ -9,11 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 接口三特征提取自洽测试（设计文档 §5.3）。
- * <p>
- * 与接口一同类风险：<b>列序错位</b>（训练列名与推理顺序对不上，模型再好也是静默错行）
- * 与<b>毒值入模</b>（{@code NaN} 会污染整批 {@code ns×nf} 行输出）。
+ *
+ * 与接口一同类风险：列序错位（训练列名与推理顺序对不上，模型再好也是静默错行）
+ * 与毒值入模（{@code NaN} 会污染整批 {@code ns×nf} 行输出）。
  * 另外验证 {@code sysId} 必须是尾随零而非位掩码原值。
- * </p>
  */
 @DisplayName("接口三特征提取：17 维列序与退化兜底")
 class ObsCorrectionFeaturesTest {

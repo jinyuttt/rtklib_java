@@ -11,15 +11,15 @@ import org.slf4j.LoggerFactory;
 /**
  * BDS-3 PPP-AR模糊度固定（B1C/B2a频率）。
  *
- * <p>BDS-3新信号B1C(1575.42MHz)和B2a(1176.45MHz)的模糊度固定，
+ * BDS-3新信号B1C(1575.42MHz)和B2a(1176.45MHz)的模糊度固定，
  * 仅针对PRN 19~46的BDS-3 MEO/IGSO卫星。
  *
- * <p>固定策略：与GPS/GAL的WL+NL策略一致
+ * 固定策略：与GPS/GAL的WL+NL策略一致
  * 1. 宽巷(WL)模糊度：λ_WL = c/(f_B2a - f_B1C)，用LAMBDA搜索+比率检验
  * 2. 窄巷(NL)模糊度：从浮点模糊度扣除宽巷固定值，用LAMBDA搜索+比率检验
  * 3. 固定后更新状态向量和协方差
  *
- * <p>对应C版：RTKLIB未实现BDS-3 PPP-AR，本模块为v2.3.0新增
+ * 对应C版：RTKLIB未实现BDS-3 PPP-AR，本模块为v2.3.0新增
  */
 public final class PppAmbFixBds3 {
     private PppAmbFixBds3() {}

@@ -21,26 +21,24 @@ import java.util.zip.GZIPInputStream;
 /**
  * IGS精密产品自动下载器，下载规则完全对齐PRIDE-PPPAR v3.2 pdp3.sh。
  *
- * <p>URL优先级（wcc_use=0，默认WUM产品）：
- * <ol>
- *   <li>ftps://bdspride.com/wum/{GPSW}/  （PRIDE主源，FTPS匿名）</li>
- *   <li>ftp://igs.ign.fr/pub/igs/products/mgex/{GPSW}/  （IGS官方）</li>
- *   <li>ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/{sub}/  （WHU镜像）</li>
- *   <li>ftps://bdspride.com/wcc/{GPSW}/  （WCC产品，回退）</li>
- *   <li>ftp://igs.gnsswhu.cn/.../IGS2R03FIN_...  （IGS2最终产品，回退）</li>
- *   <li>ftp://igs.gnsswhu.cn/.../WUM0MGXRTS_...  （RTS实时产品，近3天回退）</li>
- * </ol>
+ * URL优先级（wcc_use=0，默认WUM产品）：
  *
- * <p>所有日期/时间均基于UTC：
- * <ul>
- *   <li>输入的LocalDate视为UTC日期</li>
- *   <li>DOY（年积日）按UTC日计算</li>
- *   <li>GPS周从1980-01-06(UTC)起算</li>
- *   <li>IGS产品文件名中的YYYYDDD均为UTC日期</li>
- * </ul>
+ *   - ftps://bdspride.com/wum/{GPSW}/  （PRIDE主源，FTPS匿名）
+ *   - ftp://igs.ign.fr/pub/igs/products/mgex/{GPSW}/  （IGS官方）
+ *   - ftp://igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/{sub}/  （WHU镜像）
+ *   - ftps://bdspride.com/wcc/{GPSW}/  （WCC产品，回退）
+ *   - ftp://igs.gnsswhu.cn/.../IGS2R03FIN_...  （IGS2最终产品，回退）
+ *   - ftp://igs.gnsswhu.cn/.../WUM0MGXRTS_...  （RTS实时产品，近3天回退）
  *
- * <p>缓存目录结构（每类数据一个子文件夹，v2.2.2+）：
- * <pre>
+ * 所有日期/时间均基于UTC：
+ *
+ *   - 输入的LocalDate视为UTC日期
+ *   - DOY（年积日）按UTC日计算
+ *   - GPS周从1980-01-06(UTC)起算
+ *   - IGS产品文件名中的YYYYDDD均为UTC日期
+ *
+ * 缓存目录结构（每类数据一个子文件夹，v2.2.2+）：
+ *
  *   product/
  *   ├── sp3/        精密星历（.SP3）
  *   ├── clk/        精密钟差（.CLK）
@@ -54,10 +52,9 @@ import java.util.zip.GZIPInputStream;
  *   ├── vmf3/       VMF3映射函数系数（.OP，6h间隔）
  *   ├── gpt3/       GPT3网格数据（gpt3_5deg.dat，~5MB）
  *   └── table/      静态表文件（ANTEX + leap.sec + sat_parameters）
- * </pre>
  *
- * <p>各目录文件命名规则：
- * <pre>
+ * 各目录文件命名规则：
+ *
  *   sp3/     WUM0MGXRAP_YYYYDDD0000_01D_05M_ORB.SP3
  *   clk/     WUM0MGXRAP_YYYYDDD0000_01D_30S_CLK.CLK
  *   erp/     WUM0MGXRAP_YYYYDDD0000_01D_01D_ERP.ERP
@@ -70,7 +67,6 @@ import java.util.zip.GZIPInputStream;
  *   vmf3/    VMF3_YYYYMMDD.HHH
  *   gpt3/    gpt3_5deg.dat
  *   table/   igs20_2317.atx / leap.sec / sat_parameters
- * </pre>
  */
 public class ProductDownloader {
 
@@ -330,15 +326,14 @@ public class ProductDownloader {
     /**
      * 根据日期和产品类型生成候选URL列表，完全对齐PRIDE-PPPAR pdp3.sh PrepareProducts()。
      *
-     * <p>URL优先级（wcc_use=0）：
-     * <ol>
-     *   <li>bdspride.com/wum/{GPSW}/WUM0MGXRAP_... （首选）</li>
-     *   <li>igs.ign.fr/pub/igs/products/mgex/{GPSW}/WUM0MGXRAP_...</li>
-     *   <li>igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/{sub}/WUM0MGXRAP_...</li>
-     *   <li>bdspride.com/wcc/{GPSW}/WCC0OPSRAP_... （WCC回退）</li>
-     *   <li>igs.gnsswhu.cn/.../IGS2R03FIN_... / COD0R03FIN_... （最终产品回退）</li>
-     *   <li>igs.gnsswhu.cn/.../WUM0MGXRTS_... （RTS实时产品，近3天回退）</li>
-     * </ol>
+     * URL优先级（wcc_use=0）：
+     *
+     *   - bdspride.com/wum/{GPSW}/WUM0MGXRAP_... （首选）
+     *   - igs.ign.fr/pub/igs/products/mgex/{GPSW}/WUM0MGXRAP_...
+     *   - igs.gnsswhu.cn/pub/whu/phasebias/{YYYY}/{sub}/WUM0MGXRAP_...
+     *   - bdspride.com/wcc/{GPSW}/WCC0OPSRAP_... （WCC回退）
+     *   - igs.gnsswhu.cn/.../IGS2R03FIN_... / COD0R03FIN_... （最终产品回退）
+     *   - igs.gnsswhu.cn/.../WUM0MGXRTS_... （RTS实时产品，近3天回退）
      */
     public List<String> generateUrls(LocalDate date, ProductType type) {
         List<String> urls = new ArrayList<>();
@@ -725,7 +720,7 @@ public class ProductDownloader {
     /**
      * 下载VMF3对流层网格文件（Vienna TU）。
      *
-     * <p>对齐PRIDE-PPPAR pdp3.sh：下载前一天H18、当天H00/H06/H12/H18、次日H00。
+     * 对齐PRIDE-PPPAR pdp3.sh：下载前一天H18、当天H00/H06/H12/H18、次日H00。
      *
      * @param date UTC日期
      * @return 合并后的VMF3网格文件路径，失败返回null
@@ -815,7 +810,7 @@ public class ProductDownloader {
     /**
      * 下载静态表文件（leap.sec、sat_parameters等）。
      *
-     * <p>对齐PRIDE-PPPAR pdp3.sh：首选bdspride.com/table/，回退igs.gnsswhu.cn。
+     * 对齐PRIDE-PPPAR pdp3.sh：首选bdspride.com/table/，回退igs.gnsswhu.cn。
      *
      * @param tableName 表文件名（如"leap.sec"、"sat_parameters"）
      * @return 本地文件路径，失败返回null

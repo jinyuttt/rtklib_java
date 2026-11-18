@@ -2,10 +2,9 @@ package org.rtklib.java.ai.spi;
 
 /**
  * 接口一 SPI：固定质量校验。
- * <p>
+ *
  * 只输出连续置信度，不输出布尔判定；阈值判定永远在 core 侧由
  * {@code AiOpts.fixValidatorMinConfidence} 完成（D9），调阈值不需要换模型。
- * </p>
  */
 public interface FixValidator {
 

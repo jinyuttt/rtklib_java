@@ -2,11 +2,10 @@ package org.rtklib.java.ai.spi;
 
 /**
  * 接口 B 输入（历元级批量快照）。
- * <p>
+ *
  * {@code sats} 长度等于 {@code ns}，顺序即 {@link PppVarianceScaler} 输出的
  * {@code ns × nf} 行主序（{@code idx = satIndex * nf + frq}）。core 侧再把该行序
  * 映射到 {@code pppRes} 的「被接受观测递增顺序」（§4.4）。
- * </p>
  *
  * @param epoch 历元号
  * @param ns    上下文中的卫星数

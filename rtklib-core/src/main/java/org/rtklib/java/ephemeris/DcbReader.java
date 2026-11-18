@@ -17,17 +17,17 @@ import java.util.Arrays;
 /**
  * [REF: RTKLIB 2.5.0 C] DCB 码偏差文件读取。
  *
- * <p>明确移植来源：RTKLIB 2.5.0（demo5）C 版 {@code preceph.c} 的 {@code readdcb()} →
- * {@code readdcbf()}（传统 DCB）/ {@code readbiaf()}（BIA/BSX）。行号引用见下。</p>
+ * 明确移植来源：RTKLIB 2.5.0（demo5）C 版 {@code preceph.c} 的 {@code readdcb()} →
+ * {@code readdcbf()}（传统 DCB）/ {@code readbiaf()}（BIA/BSX）。行号引用见下。
  * 支持三种格式：
- * <ul>
- *   <li>传统 DCB（.DCB）：P1-C1/P2-C2 差分码偏差，卫星 + 接收机（C readdcbf，L378-417）</li>
- *   <li>BIA（.BIA）：Bias-SINEX OSB/DSB 记录，仅卫星码偏差（C readbiaf，L449-502）</li>
- *   <li>BSX（.BSX）：Bias-SINEX OSB/DSB 记录，仅卫星码偏差（C readbiaf）</li>
- * </ul>
+ *
+ *   - 传统 DCB（.DCB）：P1-C1/P2-C2 差分码偏差，卫星 + 接收机（C readdcbf，L378-417）
+ *   - BIA（.BIA）：Bias-SINEX OSB/DSB 记录，仅卫星码偏差（C readbiaf，L449-502）
+ *   - BSX（.BSX）：Bias-SINEX OSB/DSB 记录，仅卫星码偏差（C readbiaf）
+ *
  * 所有偏差值单位 ns，加载时统一 ×1E-9×CLIGHT 转为 m（C 语义）。
  *
- * <p>与 C 的差异：C postpos.c 先把 cbias 置 -1（FIXME），readdcb 失败时 corr_meas
+ * 与 C 的差异：C postpos.c 先把 cbias 置 -1（FIXME），readdcb 失败时 corr_meas
  * 会应用 -1 m 的错误偏移；Java 失败时保持 0（无偏移），不复制该缺陷。
  */
 public final class DcbReader {

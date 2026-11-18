@@ -9,14 +9,13 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 边缘化信息（移植自FE-GUT marginalization_info.h）。
  *
- * <p>滑动窗口边缘化的Schur消元：
- * <ol>
- *   <li>收集窗口内残差块</li>
- *   <li>构建 Hessian: H = JᵀWJ</li>
- *   <li>分块: 待边缘化参数(m) / 保留参数(r)</li>
- *   <li>Schur: H_new = H_rr - H_rm·H_mm⁻¹·H_mr</li>
- *   <li>特征分解: H_new = V·S·Vᵀ, J0 = S^{1/2}·Vᵀ</li>
- * </ol>
+ * 滑动窗口边缘化的Schur消元：
+ *
+ *   - 收集窗口内残差块
+ *   - 构建 Hessian: H = JᵀWJ
+ *   - 分块: 待边缘化参数(m) / 保留参数(r)
+ *   - Schur: H_new = H_rr - H_rm·H_mm⁻¹·H_mr
+ *   - 特征分解: H_new = V·S·Vᵀ, J0 = S^{1/2}·Vᵀ
  */
 public class MarginalizationInfo {
 

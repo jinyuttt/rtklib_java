@@ -30,30 +30,28 @@ import java.util.Optional;
  * 不进入本路径，与标准 LAMBDA 路径逐值一致。
  *
  * 与旧实现（伪级联）的差异：
- * <ol>
- *   <li>每级构建独立的组合观测向量与协方差（z=C·y、Qz=C·Q·Cᵀ），独立执行 LAMBDA
- *       与独立 ratio 门限；旧实现三级共用同一 y/Qb，为冗余验证。</li>
- *   <li>级间通过条件更新传递约束：K=Q·Cᵀ·Qz⁻¹，y←y−K(z−b)、Q←Q−K·C·Q
- *       （与 GREAT 虚拟观测注入数学等价）。</li>
- *   <li>整数反推恢复每频率 DD 整数：N1=b_NL、N2=N1−b_WL、N5=N2−b_EWL（周单位），
- *       不可成链的行降级为 float（fix=1），保证 restamb 语义一致。</li>
- *   <li>NL 级门限对齐标准路径动态调整（C rtkpos.c ar_poly_coeffs 多项式），
- *       并以 cfg.rtk.cascadeArRatioNl 作为下限，修复旧实现固定阈值缺陷。</li>
- *   <li>成功路径完整复刻标准路径：条件更新 rtk.xa/rtk.Pa + restamb 恢复单差模糊度，
- *       修复旧实现缺失 restamb 导致 xa 恒零（输出基站坐标）的假 Fix 问题。</li>
- * </ol>
  *
- * <h3>组合定义（周单位，DD 作用于同一卫星对）</h3>
- * <ul>
- *   <li>EWL（nf≥3）：N_EWL = N_f2 − N_f5（GPS L2−L5 / GAL E5a−E5b / BDS B2I−B3I）</li>
- *   <li>WL：N_WL = N_f1 − N_f2</li>
- *   <li>NL：N_NL = N_f1</li>
- *   <li>反推：N_f1 = b_NL；N_f2 = b_NL − b_WL；N_f5 = N_f2 − b_EWL</li>
- * </ul>
+ *   - 每级构建独立的组合观测向量与协方差（z=C·y、Qz=C·Q·Cᵀ），独立执行 LAMBDA
+ *       与独立 ratio 门限；旧实现三级共用同一 y/Qb，为冗余验证。
+ *   - 级间通过条件更新传递约束：K=Q·Cᵀ·Qz⁻¹，y←y−K(z−b)、Q←Q−K·C·Q
+ *       （与 GREAT 虚拟观测注入数学等价）。
+ *   - 整数反推恢复每频率 DD 整数：N1=b_NL、N2=N1−b_WL、N5=N2−b_EWL（周单位），
+ *       不可成链的行降级为 float（fix=1），保证 restamb 语义一致。
+ *   - NL 级门限对齐标准路径动态调整（C rtkpos.c ar_poly_coeffs 多项式），
+ *       并以 cfg.rtk.cascadeArRatioNl 作为下限，修复旧实现固定阈值缺陷。
+ *   - 成功路径完整复刻标准路径：条件更新 rtk.xa/rtk.Pa + restamb 恢复单差模糊度，
+ *       修复旧实现缺失 restamb 导致 xa 恒零（输出基站坐标）的假 Fix 问题。
  *
- * <p>组合均在周（cycle）域进行，LAMBDA 直接作用于无量纲周值，与系统频率无关；
+ * 组合定义（周单位，DD 作用于同一卫星对）
+ *
+ *   - EWL（nf≥3）：N_EWL = N_f2 − N_f5（GPS L2−L5 / GAL E5a−E5b / BDS B2I−B3I）
+ *   - WL：N_WL = N_f1 − N_f2
+ *   - NL：N_NL = N_f1
+ *   - 反推：N_f1 = b_NL；N_f2 = b_NL − b_WL；N_f5 = N_f2 − b_EWL
+ *
+ * 组合均在周（cycle）域进行，LAMBDA 直接作用于无量纲周值，与系统频率无关；
  * 波长辅助函数仅用于诊断。参考星按（系统,频率）独立选取，故跨频率组合按
- * 精确卫星对（参考星+流动星）配对构建。</p>
+ * 精确卫星对（参考星+流动星）配对构建。
  */
 public final class RtkOptimizationsCascadeAR {
     private static final Logger LOG = LoggerFactory.getLogger(RtkOptimizationsCascadeAR.class);

@@ -16,9 +16,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 真实 RINEX 三站集成测试。
  *
- * <p>数据不在仓库内：通过 {@code -Dnetwork.data.dir=<目录>} 指定，
+ * 数据不在仓库内：通过 {@code -Dnetwork.data.dir=<目录>} 指定，
  * 目录内需存在 {@code CIMO00ITA_R_..._MO.rnx}、{@code PRAT00ITA_...}、{@code VIRG00ITA_...}。
- * 未指定或文件缺失时自动跳过。</p>
+ * 未指定或文件缺失时自动跳过。
  */
 class RinexStationLoaderTest {
 

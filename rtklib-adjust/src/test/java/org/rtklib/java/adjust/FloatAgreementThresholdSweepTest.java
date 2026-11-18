@@ -48,15 +48,14 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * 准入门限 floatAgreementThreshold 的受控扫描测试。
  *
- * <p>真实数据中"1 FIX + FLOAT"的历元极稀少，无法回答"0.20 m 阈值会不会
+ * 真实数据中"1 FIX + FLOAT"的历元极稀少，无法回答"0.20 m 阈值会不会
  * 误杀有效补位"。本测试用合成的 1FIX+FLOAT 历元，让 FLOAT 与 FIX 的位置较差
- * 逐档跨过阈值，直接检验四件事：</p>
- * <ol>
- *   <li>准入与等级是否为同一单调映射（无"准入但 UNVERIFIED"的中间态）；</li>
- *   <li>被拒 FLOAT 是否显式带出到 {@link AdjustResult#rejectedFloats}；</li>
- *   <li>拒绝后 {@code crossValidationDist} 是否为 NaN 而非 0.0；</li>
- *   <li>门限生效时保护级 PL 的实际变化幅度（参与基线 2 → 1）。</li>
- * </ol>
+ * 逐档跨过阈值，直接检验四件事：
+ *
+ *   - 准入与等级是否为同一单调映射（无"准入但 UNVERIFIED"的中间态）；
+ *   - 被拒 FLOAT 是否显式带出到 {@link AdjustResult#rejectedFloats}；
+ *   - 拒绝后 {@code crossValidationDist} 是否为 NaN 而非 0.0；
+ *   - 门限生效时保护级 PL 的实际变化幅度（参与基线 2 → 1）。
  */
 class FloatAgreementThresholdSweepTest {
 

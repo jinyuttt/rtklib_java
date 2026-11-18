@@ -11,8 +11,8 @@ import java.nio.file.Path;
  * 事后精密产品装载：把 SP3 精密轨道与 CLK 精密钟差装入 {@link Nav}，
  * 使网解可以 {@code EPHOPT_PREC} 计算卫星位置/钟差。
  *
- * <p>装载后 {@code nav.eph}（广播星历）保持不变，两种星历共存；
- * 是否使用精密星历由 {@link org.rtklib.java.networkvrs.config.NetworkConfig#ephemerisOption} 决定。</p>
+ * 装载后 {@code nav.eph}（广播星历）保持不变，两种星历共存；
+ * 是否使用精密星历由 {@link org.rtklib.java.networkvrs.config.NetworkConfig#ephemerisOption} 决定。
  */
 public final class PreciseEphemerisLoader {
 

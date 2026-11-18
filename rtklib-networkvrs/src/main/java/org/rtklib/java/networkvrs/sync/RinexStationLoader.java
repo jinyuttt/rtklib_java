@@ -10,8 +10,8 @@ import java.util.List;
 /**
  * [JAVA-ONLY 原创] 从 RINEX 3 观测文件构建 {@link StationObservation}。
  *
- * <p>坐标使用头文件 APPROX POSITION XYZ（未做天线 PCO 改正），
- * 精度足够用于网络 RTK 的几何与插值；相位中心改正留待后续阶段。</p>
+ * 坐标使用头文件 APPROX POSITION XYZ（未做天线 PCO 改正），
+ * 精度足够用于网络 RTK 的几何与插值；相位中心改正留待后续阶段。
  */
 public final class RinexStationLoader {
 

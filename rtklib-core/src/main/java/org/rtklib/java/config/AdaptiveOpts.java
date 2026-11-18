@@ -7,10 +7,9 @@ import org.rtklib.java.adaptive.AdaptiveListener;
 
 /**
  * 自适应场景参数。
- * <p>
+ *
  * 从 {@link RtkConfig} 拆分出的独立子配置，归属自适应场景引擎（AdaptiveController /
  * AdaptiveAuditLogger）。字段名去掉原 {@code adaptive} 前缀（已在命名空间内）。
- * </p>
  */
 public class AdaptiveOpts implements Serializable {
     private static final long serialVersionUID = 1L;

@@ -12,7 +12,6 @@ import org.rtklib.java.ai.spi.SatFeature;
  *
  * 列名 {@code f0..f14} 与 §5.1 逐位对应，训练与推理必须完全一致：
  *
- * <pre>
  * f0  el         高度角（弧度转度）
  * f1  az         方位角（度）
  * f2  snrRover   流动站 SNR（dBHz）
@@ -24,18 +23,17 @@ import org.rtklib.java.ai.spi.SatFeature;
  * f8  vsat       该频点是否有效（0/1）
  * f9  fix        模糊度状态 0/1/2/3
  * f10 sysId      星座标识 = numberOfTrailingZeros(sys 位掩码)，不做 one-hot
- * f11 wasRef     近 W 历元内是否当过参考星（refCount &gt; 0 归一为 0/1）
+ * f11 wasRef     近 W 历元内是否当过参考星（refCount > 0 归一为 0/1）
  * f12 snrWinMean 主频点流动站 SNR 近 W 历元均值（dBHz）
  * f13 snrWinStd  主频点流动站 SNR 近 W 历元标准差（dBHz）
  * f14 refCount   近 W 历元内被选为参考星的次数 / W，取值 [0, 1]
- * </pre>
  *
- * <b>{@code resp}/{@code resc} 被结构性禁用（H1）</b>：参考星的残差恒 0 由构造决定，
+ * {@code resp}/{@code resc} 被结构性禁用（H1）：参考星的残差恒 0 由构造决定，
  * 一旦入特征，模型只需学「残差 == 0 ⇒ 高风险」就能拿到接近 1 的 AUC。core 已在
- * {@code RefStarContext} 构造时把这两维强制置 0，本类<b>不提供</b>对应列，
+ * {@code RefStarContext} 构造时把这两维强制置 0，本类不提供对应列，
  * 使泄漏在特征层就无法发生（而不是靠训练时自觉剔除）。
  *
- * {@code wasRef} 的口径说明：训练集里正负例<b>都</b>是参考星（§5.2 要求负例必须显式
+ * {@code wasRef} 的口径说明：训练集里正负例都是参考星（§5.2 要求负例必须显式
  * 断言为参考星），故「当历元是否参考星」在样本内是常量、无信息量；真正可用的是
  * 「近 W 历元的参考星历史」，因此 {@code wasRef} 取 {@code refCount > 0}，
  * 与 {@code refCount} 构成「二值 + 连续」两档，均不含当历元标签。

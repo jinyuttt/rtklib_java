@@ -3,7 +3,7 @@ package org.rtklib.java.research.common;
 /**
  * GNSS物理常数与系统参数（research模块自有）。
  *
- * <p>与rtklib-core的Constants完全独立，数值对齐RTKLIB 2.5.0。</p>
+ * 与rtklib-core的Constants完全独立，数值对齐RTKLIB 2.5.0。
  */
 public final class GnssConst {
     private GnssConst() {}

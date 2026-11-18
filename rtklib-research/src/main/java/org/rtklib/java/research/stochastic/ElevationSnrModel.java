@@ -7,10 +7,10 @@ import org.rtklib.java.research.common.SatId;
 /**
  * 高度角/C-N0加权随机模型（research模块基线模型）。
  *
- * <p>观测噪声（对角）：
+ * 观测噪声（对角）：
  *   σ² = (sigmaCode · efact / sin(el))² · scaleFactor
  *
- * <p>过程噪声：
+ * 过程噪声：
  *   12 维状态 → 分段白噪声（position/velocity/acceleration/clock/uwb）
  *   其他维度 → 恒等缩放
  */

@@ -14,11 +14,11 @@ import java.util.List;
 /**
  * UPD（Uncalibrated Phase Delay）产品读取器，用于PPP-AR窄巷模糊度固定。
  *
- * <p>UPD与FCB功能类似，提供宽巷和窄巷的相位偏差改正。
+ * UPD与FCB功能类似，提供宽巷和窄巷的相位偏差改正。
  * UPD是WHU/PRIDE的命名方式，FCB是CNES的命名方式，两者数学上等价。
  *
- * <p>支持两种文件格式：
- * <pre>
+ * 支持两种文件格式：
+ *
  *   格式1（WHU/PRIDE标准）：段标记 + time sat upd
  *     WIDELANE / WL        ← 宽巷段开始
  *     time  sat  upd_wl
@@ -30,9 +30,8 @@ import java.util.List;
  *     G02  0.461  0.008  162        ← WL: sat upd sigma nsat
  *     EPOCH-TIME  60249  0.0       ← NL时间行
  *     G02  0.532  0.016  31        ← NL: sat upd sigma nsat
- * </pre>
  *
- * <p>文件来源：WHU(WUM) / PRIDE / GREAT-PVT
+ * 文件来源：WHU(WUM) / PRIDE / GREAT-PVT
  */
 public final class UpdReader {
     private UpdReader() {}

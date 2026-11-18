@@ -9,8 +9,8 @@ import java.util.List;
 /**
  * 统一求解器后端接口（research模块核心接口）。
  *
- * <p>所有估计后端（EKF、FGO、学习型加权、紧融合）都实现此接口，
- * 使同一管线可以切换不同后端进行对比实验。</p>
+ * 所有估计后端（EKF、FGO、学习型加权、紧融合）都实现此接口，
+ * 使同一管线可以切换不同后端进行对比实验。
  */
 public interface SolverBackend {
 

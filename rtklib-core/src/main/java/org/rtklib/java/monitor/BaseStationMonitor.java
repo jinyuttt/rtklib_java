@@ -18,22 +18,18 @@ import java.util.List;
 
 /**
  * 基站稳定性监测器（独立于RtkProcessor）。
- * <p>
+ *
  * 通过对基站观测做SPP定位，按时间窗口聚合中位数，检测基站坐标突变和漂移。
  * 完全独立，不绑定RtkProcessor，由调用方创建和管理生命周期。
  * 1个基站1个实例，多基线共享同一基站时不会重复存储。
- * </p>
- * <p>
- * 支持三种数据输入方式：
- * <ul>
- *   <li>{@link #onBaseObs} - 直接传入Obsd观测数组（最底层，调用方自行解码）</li>
- *   <li>{@link #onRtcmData} - 传入RTCM3原始字节，内部解码</li>
- *   <li>{@link #onRtcmFile} - 传入RTCM3文件路径，内部读取解码</li>
- *   <li>{@link #onRinexFile} - 传入RINEX观测文件路径，内部读取</li>
- * </ul>
- * </p>
  *
- * <pre>
+ * 支持三种数据输入方式：
+ *
+ *   - {@link #onBaseObs} - 直接传入Obsd观测数组（最底层，调用方自行解码）
+ *   - {@link #onRtcmData} - 传入RTCM3原始字节，内部解码
+ *   - {@link #onRtcmFile} - 传入RTCM3文件路径，内部读取解码
+ *   - {@link #onRinexFile} - 传入RINEX观测文件路径，内部读取
+ *
  * // 使用示例1：RTCM实时数据流
  * BaseStationMonitor monitor = new BaseStationMonitor(214120, config, callback);
  * monitor.onRtcmData(rtcmBytes, 0, rtcmBytes.length);
@@ -43,7 +39,6 @@ import java.util.List;
  *
  * // 使用示例3：RINEX文件
  * monitor.onRinexFile("base.obs", "base.nav");
- * </pre>
  */
 public class BaseStationMonitor {
 

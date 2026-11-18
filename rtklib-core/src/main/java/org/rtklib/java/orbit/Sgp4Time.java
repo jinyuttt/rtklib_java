@@ -3,13 +3,12 @@ package org.rtklib.java.orbit;
 /**
  * [REF: python-sgp4] 时间与日期转换工具，逐行移植自 python-sgp4 的 ext.py / functions.py / propagation.py。
  *
- * <p>包含：</p>
- * <ul>
- *   <li>{@link #jday} - 公历日期 → 儒略日（与 sgp4.ext.jday 一致，返回单个 double）</li>
- *   <li>{@link #days2mdhms} - 年内天数 → 月、日、时、分、秒（与 sgp4.functions.days2mdhms 一致）</li>
- *   <li>{@link #invjday} - 儒略日 → 公历日期（与 sgp4.ext.invjday 一致）</li>
- *   <li>{@link #gstime} - 儒略日 → 格林尼治恒星时（与 sgp4.propagation.gstime 一致）</li>
- * </ul>
+ * 包含：
+ *
+ *   - {@link #jday} - 公历日期 → 儒略日（与 sgp4.ext.jday 一致，返回单个 double）
+ *   - {@link #days2mdhms} - 年内天数 → 月、日、时、分、秒（与 sgp4.functions.days2mdhms 一致）
+ *   - {@link #invjday} - 儒略日 → 公历日期（与 sgp4.ext.invjday 一致）
+ *   - {@link #gstime} - 儒略日 → 格林尼治恒星时（与 sgp4.propagation.gstime 一致）
  */
 public final class Sgp4Time {
 
@@ -148,14 +147,12 @@ public final class Sgp4Time {
     /**
      * 实现 functions.py 中 _day_of_year_to_month_day 的核心逻辑。
      *
-     * <pre>
      * february_bump = (2 - is_leap) * (day_of_year >= 60 + is_leap)
      * august = day_of_year >= 215
      * month, day = divmod(2 * (day_of_year - 1 + 30 * august + february_bump), 61)
      * month += 1 - august
      * day //= 2
      * day += 1
-     * </pre>
      */
     private static int[] dayOfYearToMonthDay(int dayOfYear, boolean isLeap) {
         int isLeapInt = isLeap ? 1 : 0;

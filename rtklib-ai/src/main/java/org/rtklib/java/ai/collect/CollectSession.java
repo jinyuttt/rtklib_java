@@ -19,32 +19,29 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
- * 接口一数据采集会话——<b>唯一稳定入口</b>。
- * <p>
+ * 接口一数据采集会话——唯一稳定入口。
+ *
  * 采集需要三件事同时正确：注入 provider、运行解算、清理 {@code ThreadLocal}。
  * 三者分散写容易漏（尤其 {@code AiHooks.clear()}），故收敛为一个会话对象，
  * 用 try-with-resources 保证收尾。标准用法：
- * </p>
- * <pre>{@code
+ *
+ * {@code
  * CollectConfig cfg = CollectConfig.of(Paths.get("out/collect"), "GEJ3034", "2021-304");
  * try (CollectSession s = CollectSession.open(cfg)) {
  *     s.runWith(() -> solveOneFile(cfg));       // 注入 → 解算 → 清理，一步完成
  * }
  * // 退出时：CSV 已 flush/close，_runs.csv 已追加本次运行清单
- * }</pre>
- * <p>
+ * }
+ *
  * 一次会话只对应一次运行（一个站 × 一个日 × 一个 runId）。多次运行就多次
  * {@code open()}，结果累积在同一目录下，靠 {@code run_id} 区分。
- * </p>
- * <p>
- * 会话<b>不</b>负责开启 trace：标签 join 需要 {@code AR/FIX} 里的绝对时间，
+ *
+ * 会话不负责开启 trace：标签 join 需要 {@code AR/FIX} 里的绝对时间，
  * 而 {@code FixQualityContext} 只带进程内 {@code epoch}。宿主须把 trace 输出到
  * {@link CollectConfig#tracePath()}，两者靠 {@code (runId, epoch)} 对齐。
- * </p>
- * <p>
+ *
  * 另有一个必须遵守的前置条件：{@code ionoopt == IONOOPT_IFLC} 时 core 直接跳过
  * 接口一，采集器根本不会被调用，跑完会得到空数据集。采集须用非 IFLC 配置。
- * </p>
  */
 public final class CollectSession implements AutoCloseable {
 
@@ -99,10 +96,9 @@ public final class CollectSession implements AutoCloseable {
     }
 
     /**
-     * 注入 → 执行 → <b>还原</b>，保证注入点一定恢复原状（即使 {@code body} 抛异常）。
-     * <p>
+     * 注入 → 执行 → 还原，保证注入点一定恢复原状（即使 {@code body} 抛异常）。
+     *
      * 还原而非清空：宿主可能已有自己的 provider，直接 {@code AiHooks.clear()} 会把它一并抹掉。
-     * </p>
      *
      * @param body 解算动作
      */
@@ -117,10 +113,9 @@ public final class CollectSession implements AutoCloseable {
 
     /**
      * 同 {@link #runWith(Runnable)}，但保留返回值。
-     * <p>
+     *
      * 与 {@code runWith} 分开命名而非重载：{@code () -> solve(cfg)} 同时兼容
      * {@code Runnable} 与 {@code Supplier}，重载会产生歧义。
-     * </p>
      *
      * @param body 解算动作
      * @param <T>  返回值类型

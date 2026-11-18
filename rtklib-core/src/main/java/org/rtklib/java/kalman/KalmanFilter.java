@@ -9,17 +9,17 @@ import org.slf4j.LoggerFactory;
 /**
  * Kalman filter measurement update.
  *
- * <p>Corresponds to RTKLIB filter() in rtkcmn.c.
+ * Corresponds to RTKLIB filter() in rtkcmn.c.
  * Implements state compression like C version: only non-zero states (x[i]!=0 && P[i+i*nx]>0)
  * participate in the Kalman update, significantly improving numerical stability and
- * matching C version behavior.</p>
+ * matching C version behavior.
  *
- * <p>Covariance update uses the Joseph form: P = (I-KH)*P*(I-KH)^T + K*R*K^T,
+ * Covariance update uses the Joseph form: P = (I-KH)*P*(I-KH)^T + K*R*K^T,
  * which structurally guarantees symmetry and positive semi-definiteness.
  * Mathematically equivalent to the standard form P = (I-KH)*P used in C version
  * (RTKLIB rtkcmn.c filter_), but with superior numerical stability under
  * finite-precision arithmetic (measured asymmetry ~1e-10 vs ~1e-9 for standard form
- * in RTK scenarios). Performance difference is negligible with EJML for k~18.</p>
+ * in RTK scenarios). Performance difference is negligible with EJML for k~18.
  */
 public final class KalmanFilter {
 

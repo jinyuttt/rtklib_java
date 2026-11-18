@@ -5,14 +5,13 @@ import java.util.List;
 /**
  * IGS SSR IM201 电离层 VTEC 球谐模型的合成与单层映射（IGS SSR v1.00 §4.5.1）。
  *
- * <p>约定：</p>
- * <ul>
- *   <li>球面地球模型，半径 {@link #EARTH_RADIUS_KM} km；纬度、经度、方位角、高度角均为该模型下的量（弧度）；</li>
- *   <li>完全归一化连带勒让德函数 P_nm 采用 Heiskanen &amp; Moritz 定义
- *       （P_00=1、P_10=√3·sinφ、P_11=√3·cosφ），与 IGS SSR 的 “fully normalized” 一致；</li>
- *   <li>负 VTEC 按标准置 0；</li>
- *   <li>STEC = VTEC / sin(E + ψ_PP)，逐层求和。</li>
- * </ul>
+ * 约定：
+ *
+ *   - 球面地球模型，半径 {@link #EARTH_RADIUS_KM} km；纬度、经度、方位角、高度角均为该模型下的量（弧度）；
+ *   - 完全归一化连带勒让德函数 P_nm 采用 Heiskanen & Moritz 定义
+ *       （P_00=1、P_10=√3·sinφ、P_11=√3·cosφ），与 IGS SSR 的 “fully normalized” 一致；
+ *   - 负 VTEC 按标准置 0；
+ *   - STEC = VTEC / sin(E + ψ_PP)，逐层求和。
  */
 public final class IgsSsrVtec {
 
@@ -44,7 +43,7 @@ public final class IgsSsrVtec {
     /**
      * 单层 VTEC 合成（TECU）。
      *
-     * <p>{@code VTEC = Σ_n Σ_m (C_nm cos(mλ_S) + S_nm sin(mλ_S))·P_nm(sin φ_PP)}。</p>
+     * {@code VTEC = Σ_n Σ_m (C_nm cos(mλ_S) + S_nm sin(mλ_S))·P_nm(sin φ_PP)}。
      *
      * @param layer 层模型
      * @param pierceLatRad 穿刺点地心纬度 φ_PP（弧度）
@@ -67,7 +66,7 @@ public final class IgsSsrVtec {
     /**
      * 太阳固定系经度 λ_S（弧度，[0, 2π)）。
      *
-     * <p>λ_S = (λ_PP + (t − 50400)·π/43200) mod 2π，t 为 SSR 历元（秒，模 86400）。</p>
+     * λ_S = (λ_PP + (t − 50400)·π/43200) mod 2π，t 为 SSR 历元（秒，模 86400）。
      *
      * @param pierceLonRad 穿刺点经度 λ_PP（弧度）
      * @param epochTimeSec SSR 历元时间（秒）
@@ -85,7 +84,7 @@ public final class IgsSsrVtec {
     /**
      * 穿刺点地心角 ψ_PP（弧度）。
      *
-     * <p>ψ_PP = π/2 − E − arcsin((R_e+h_R)/(R_e+h_I)·cos E)。</p>
+     * ψ_PP = π/2 − E − arcsin((R_e+h_R)/(R_e+h_I)·cos E)。
      *
      * @param roverHeightKm 测站高 h_R（km）
      * @param layerHeightKm 电离层高 h_I（km）
@@ -100,7 +99,7 @@ public final class IgsSsrVtec {
     /**
      * 穿刺点纬度 φ_PP（弧度）。
      *
-     * <p>φ_PP = arcsin(sin φ_R·cos ψ_PP + cos φ_R·sin ψ_PP·cos A)。</p>
+     * φ_PP = arcsin(sin φ_R·cos ψ_PP + cos φ_R·sin ψ_PP·cos A)。
      *
      * @param roverLatRad 测站地心纬度 φ_R（弧度）
      * @param centralAngleRad ψ_PP（弧度）
@@ -115,9 +114,9 @@ public final class IgsSsrVtec {
     /**
      * 穿刺点经度 λ_PP（弧度，未归一化到 [0, 2π)）。
      *
-     * <p>当 φ_R ≥ 0 且 tan ψ_PP·cos A &gt; tan(π/2 − φ_R)，或
-     * φ_R &lt; 0 且 −tan ψ_PP·cos A &gt; tan(π/2 + φ_R) 时，取 λ_R + π − arcsin(...)；
-     * 其余情况取 λ_R + arcsin(...)。</p>
+     * 当 φ_R ≥ 0 且 tan ψ_PP·cos A > tan(π/2 − φ_R)，或
+     * φ_R < 0 且 −tan ψ_PP·cos A > tan(π/2 + φ_R) 时，取 λ_R + π − arcsin(...)；
+     * 其余情况取 λ_R + arcsin(...)。
      *
      * @param roverLatRad 测站地心纬度 φ_R（弧度）
      * @param roverLonRad 测站经度 λ_R（弧度）
@@ -139,7 +138,7 @@ public final class IgsSsrVtec {
     /**
      * 单层 STEC（TECU）。
      *
-     * <p>STEC_i = VTEC_i / sin(E + ψ_PP)；VTEC 为负时先置 0。</p>
+     * STEC_i = VTEC_i / sin(E + ψ_PP)；VTEC 为负时先置 0。
      *
      * @param layer 层模型
      * @param roverLatRad 测站地心纬度（弧度）
@@ -195,7 +194,7 @@ public final class IgsSsrVtec {
     }
 
     /**
-     * 完全归一化连带勒让德函数 P_nm(sin φ)（Heiskanen &amp; Moritz 定义）。
+     * 完全归一化连带勒让德函数 P_nm(sin φ)（Heiskanen & Moritz 定义）。
      *
      * @param degree 最大阶 N
      * @param x sin φ

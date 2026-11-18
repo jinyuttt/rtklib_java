@@ -16,11 +16,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * NTRIP 实时流接收冒烟测试。
- * <p>
+ *
  * 凭据通过环境变量注入，不写入仓库：
  * NTRIP_USER / NTRIP_PASS 必填；NTRIP_HOST / NTRIP_PORT / NTRIP_MOUNT /
  * NTRIP_OUT / NTRIP_SECONDS 可选。
- * </p>
  */
 class NtripLiveRecordTest {
 
@@ -107,10 +106,9 @@ class NtripLiveRecordTest {
      * SSR 流落盘 + 解码校验：拉取 SSR 挂载点，落盘 .rtcm3，同时用 core 的 Rtcm
      * 逐帧解码并统计 SSR 消息类型（1057-1068 轨道/钟差/偏差、1240-1263 Galileo/BDS SSR、
      * 1265-1270 相位偏差）。
-     * <p>
+     *
      * 默认挂载点 SSRA01CAS0（CAS IGS 实时服务，含相位偏差）。
      * 凭据经环境变量注入，不落仓库。
-     * </p>
      */
     @Test
     void recordSsrWithDecodeCheck() throws Exception {

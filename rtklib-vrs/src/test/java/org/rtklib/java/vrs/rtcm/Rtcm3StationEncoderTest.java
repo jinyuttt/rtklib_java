@@ -17,9 +17,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * 1032 / 1033 站点消息编码验证。
  *
- * <p>1033 的判据是外部真实录制流：从 {@code record_wuh20.msm.rtcm3} 取真实 1033 帧，
+ * 1033 的判据是外部真实录制流：从 {@code record_wuh20.msm.rtcm3} 取真实 1033 帧，
  * 用 {@link Rtcm} 解码出字段后重编码，与原帧逐字节比对。自研解码器在这里只作为
- * 字段提取的脚手架，最终判据是字节相等。</p>
+ * 字段提取的脚手架，最终判据是字节相等。
  */
 public class Rtcm3StationEncoderTest {
 

@@ -7,16 +7,15 @@ import java.util.List;
 /**
  * 因子图因子节点（research模块因子图框架）。
  *
- * <p>代表一个约束/观测模型，连接若干变量节点。</p>
+ * 代表一个约束/观测模型，连接若干变量节点。
  *
- * <h3>数学形式</h3>
- * <pre>
+ * 数学形式
+ *
  *   z = h(x) + v,  v ~ N(0, R)
  *   残差 r = z - h(x)
  *   雅可比 J = dh/dx
  *   信息矩阵 Λ = J^T R^{-1} J
  *   信息向量 η = J^T R^{-1} r
- * </pre>
  */
 public abstract class Factor {
     public final String name;

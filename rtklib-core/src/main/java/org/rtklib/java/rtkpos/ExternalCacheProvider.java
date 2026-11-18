@@ -6,10 +6,9 @@ import java.util.List;
 
 /**
  * 外部缓存提供者接口，用于对接Redis/数据库/文件等外部存储。
- * <p>
+ *
  * 由应用层实现此接口，{@link ExternalEpochCache} 通过此接口存取历元数据。
  * 序列化/反序列化由实现方负责。
- * </p>
  */
 public interface ExternalCacheProvider {
 

@@ -11,17 +11,16 @@ import java.util.Map;
 /**
  * [JAVA-ONLY 原创] 网平差：自由网平差、约束平差、坐标系统转换。
  *
- * <p>与前端的逐历元 {@link GnssBaselineAdjust} 不同，本类面向<b>整时段</b>批处理：
+ * 与前端的逐历元 {@link GnssBaselineAdjust} 不同，本类面向整时段批处理：
  * 把一次观测时段内的全部基线向量一次性联合解算，用于输出最终坐标成果。
  *
- * <p><b>观察方程</b>：每条基线观测给出 Rover 与基站的坐标差
- * <pre>
+ * 观察方程：每条基线观测给出 Rover 与基站的坐标差
+ *
  *   R − B_i = dXyz_i
- * </pre>
  *
- * <p><b>约束平差</b>：基站坐标视为已知（RTCM 播发值），只解 Rover 三维坐标。
+ * 约束平差：基站坐标视为已知（RTCM 播发值），只解 Rover 三维坐标。
  *
- * <p><b>自由网平差</b>：全部点坐标都作为未知数，仅附加重心基准
+ * 自由网平差：全部点坐标都作为未知数，仅附加重心基准
  * （Σ δ = 0）作为最小约束。解算结果给出各基站相对播发坐标的偏移量，
  * 可直接用于判断基站是否发生位移；绝对位置失去意义，但网内部几何最自洽。
  */
@@ -33,7 +32,7 @@ public class NetworkAdjustment {
      * @param baseId   基站标识
      * @param epochTag 历元标识
      * @param baseXyz  基站 ECEF 坐标（用于建立"基站位移"未知数）
-     * @param dXyz     <b>真基线向量</b> {@code Rover − 基站} (m)。
+     * @param dXyz     真基线向量 {@code Rover − 基站} (m)。
      *                 注意与 {@code BaselineEpoch.BaselineEntry#dXyz} 不同，后者是 Rover 绝对位置，
      *                 二者不可直接互换。
      * @param gpsTime  观测历元 GPS 周内秒；0 表示未知（不参与时间窗淘汰）
@@ -151,7 +150,7 @@ public class NetworkAdjustment {
     /**
      * 自由网平差：Rover 与各基站坐标全部作为未知数，附加重心基准最小约束。
      *
-     * <p>结果中的 {@code baseDelta} 为各基站相对播发坐标的偏移（米），
+     * 结果中的 {@code baseDelta} 为各基站相对播发坐标的偏移（米），
      * 可直接用于基站位移判别。该值只有在观测跨越多历元时才有冗余度。
      *
      * @param obs 基线观测（应覆盖多个历元）
@@ -339,7 +338,7 @@ public class NetworkAdjustment {
     /**
      * 七参数（Bursa-Wolf 小角度模型）最小二乘拟合。
      *
-     * <p>内部先对两组坐标去中心化再解算，避免 ECEF 量级坐标（10⁶ m）与平移量（1 m）
+     * 内部先对两组坐标去中心化再解算，避免 ECEF 量级坐标（10⁶ m）与平移量（1 m）
      * 混在同一法方程中导致条件数爆炸；解出旋转与尺度后按中心点回代平移量。
      *
      * @return {tX, tY, tZ, rX, rY, rZ, scale}，旋转单位弧度，尺度为无量纲比例（1e-6 级）

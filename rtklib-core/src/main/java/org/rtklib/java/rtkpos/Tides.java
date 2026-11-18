@@ -8,15 +8,14 @@ import org.rtklib.java.time.TimeSystem;
 /**
  * 固体潮位移修正。
  *
- * <p>移植自 RTKLIB tides.c 中的 dehanttideinel() 及 rtkcmn.c 中的
- * sunmoonpos() / eci2ecef() / sunpos_eci() / moonpos_eci() 函数。</p>
+ * 移植自 RTKLIB tides.c 中的 dehanttideinel() 及 rtkcmn.c 中的
+ * sunmoonpos() / eci2ecef() / sunpos_eci() / moonpos_eci() 函数。
  *
- * <p>参考：</p>
- * <ul>
- *   <li>IERS Conventions 2003, 2010</li>
- *   <li>D.A.Vallado, Fundamentals of Astrodynamics and Applications 2nd ed</li>
- *   <li>J.Kouba, A Guide to using International GNSS Service (IGS) products</li>
- * </ul>
+ * 参考：
+ *
+ *   - IERS Conventions 2003, 2010
+ *   - D.A.Vallado, Fundamentals of Astrodynamics and Applications 2nd ed
+ *   - J.Kouba, A Guide to using International GNSS Service (IGS) products
  */
 public class Tides {
 

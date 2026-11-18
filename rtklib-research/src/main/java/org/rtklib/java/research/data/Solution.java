@@ -7,7 +7,7 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 定位解（research模块自有）。
  *
- * <p>包含位置、速度、协方差、状态等信息。</p>
+ * 包含位置、速度、协方差、状态等信息。
  */
 public class Solution implements Serializable {
     private static final long serialVersionUID = 1L;

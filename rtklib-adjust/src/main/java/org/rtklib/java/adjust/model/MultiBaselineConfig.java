@@ -11,32 +11,32 @@ public record MultiBaselineConfig(
         /**
          * 基站坐标的 1σ 不确定度 (m)，按各轴独立计。默认 0 表示不建模。
          *
-         * <p>RTCM 播发的基站坐标通常有 1~2 cm 的偏差，且该偏差是<b>系统性</b>的：
+         * RTCM 播发的基站坐标通常有 1~2 cm 的偏差，且该偏差是系统性的：
          * 会整体平移到 Rover 解。由于 core 逐基站独立解算，各基线的基站坐标误差
          * 互不相关，因此可按 {@code σ_base²·I₃} 加到每条基线观测的协方差块上
-         * （见 {@code MultiBaselineAdjust}）。</p>
+         * （见 {@code MultiBaselineAdjust}）。
          *
-         * <p>注意：同一基站在不同历元的坐标偏差是相关的，本模型按历元独立处理，
-         * 会略微低估整时段平均值的相关性。</p>
+         * 注意：同一基站在不同历元的坐标偏差是相关的，本模型按历元独立处理，
+         * 会略微低估整时段平均值的相关性。
          */
         double baseCoordinateSigma,
         /**
          * 网平差观测累积时间窗（秒），默认 3600（1 小时）。
          *
-         * <p>整时段网平差只使用最近该时长内的基线观测：基站位移监测关心的是
+         * 整时段网平差只使用最近该时长内的基线观测：基站位移监测关心的是
          * 近期状态，超长时段的单次大平差既无必要也浪费内存。观测按 GPS 时间
-         * 从队列头部淘汰。设为 {@code <= 0} 关闭时间窗（仅受观测条数上限约束）。</p>
+         * 从队列头部淘汰。设为 {@code <= 0} 关闭时间窗（仅受观测条数上限约束）。
          */
         double networkWindowSeconds,
         /**
          * 解状态准入策略：只吃 FIX，还是允许 FLOAT 补位。
          *
-         * <p>开阔短基线下 FIX 率接近 100%，网平差本身收益有限；真正需要网平差的是
+         * 开阔短基线下 FIX 率接近 100%，网平差本身收益有限；真正需要网平差的是
          * 长基线、遮挡、城市峡谷这类 FIX 率低的场景，而恰恰在这些场景里，
-         * "仅 FIX" 会把整段历元全部丢掉——平差在它最该发挥作用的场合反而没数据可用。</p>
+         * "仅 FIX" 会把整段历元全部丢掉——平差在它最该发挥作用的场合反而没数据可用。
          *
-         * <p>因此准入策略做成配置项：{@code allowFloat=false} 为历史行为（仅 FIX），
-         * {@code allowFloat=true} 时 FIX 优先、FLOAT 补位。默认关闭，保持既有语义不变。</p>
+         * 因此准入策略做成配置项：{@code allowFloat=false} 为历史行为（仅 FIX），
+         * {@code allowFloat=true} 时 FIX 优先、FLOAT 补位。默认关闭，保持既有语义不变。
          */
         SolutionAdmissionConfig solutionAdmission
 ) {
@@ -54,7 +54,7 @@ public record MultiBaselineConfig(
      *                               方差比约 100~10000，默认 1000（即 1σ 放大 31.6 倍），
      *                               使 FLOAT 在 WLS 中只占极小权重，融合位置基本由 FIX 决定。
      * @param floatAgreementThreshold FLOAT 与 FIX 位置较差的一致性判定阈值 (m)，
-     *                               是<b>准入前置条件</b>而非事后判级：仅 1 条 FIX 时，
+     *                               是准入前置条件而非事后判级：仅 1 条 FIX 时，
      *                               超过该值的 FLOAT 不进入 WLS 并被记入
      *                               {@code AdjustResult.rejectedFloats}；准入的历元判
      *                               {@code SINGLE_VERIFIED}，被拒的历元只剩 1 条 FIX、

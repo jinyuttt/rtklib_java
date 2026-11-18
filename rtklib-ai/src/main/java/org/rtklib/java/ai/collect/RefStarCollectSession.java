@@ -24,24 +24,24 @@ import java.util.function.Supplier;
  *
  * 与接口三的 {@link ObsCorrectorCollectSession} 结构逐行一致（注入 provider → 运行解算 → 还原注入），
  * 只是落盘内容换成接口四的 15 维特征，运行清单落到 {@code _refstar_runs.csv}。
- * 三个采集会话<b>互斥使用</b>：同一个 {@link AiProvider} 只能返回其中一个采集器，
+ * 三个采集会话互斥使用：同一个 {@link AiProvider} 只能返回其中一个采集器，
  * 否则多个采集器争同一份 {@code ThreadLocal} 槽位，只有一个生效。
  *
  * 标准用法：
- * <pre>{@code
+ * {@code
  * CollectConfig cfg = CollectConfig.of(Paths.get("out/collect-refstar"), "HKWS", "2024-060");
  * try (RefStarCollectSession s = RefStarCollectSession.open(cfg)) {
  *     s.runWith(() -> solveOneFile(cfg));
  * }
- * }</pre>
+ * }
  *
- * <b>会话不负责开启 trace，也不负责重跑。</b>接口四的标签来自 {@code AI4/IS_REF}
+ * 会话不负责开启 trace，也不负责重跑。接口四的标签来自 {@code AI4/IS_REF}
  * （当历元真实参考星，与接口四是否注入无关），故采集分两步走：
- * <ol>
- *   <li>步骤 0：先在<b>未注入</b>状态下跑一遍，只开 {@code topics={"AI4"}} 产出
- *       {@code IS_REF} 行（= 原生参考星轨迹）；</li>
- *   <li>步骤 1：用本会话在<b>同一配置</b>下再跑一遍，产出特征 CSV。</li>
- * </ol>
+ *
+ *   - 步骤 0：先在未注入状态下跑一遍，只开 {@code topics={"AI4"}} 产出
+ *       {@code IS_REF} 行（= 原生参考星轨迹）；
+ *   - 步骤 1：用本会话在同一配置下再跑一遍，产出特征 CSV。
+ *
  * 没有步骤 0 的 {@code IS_REF} trace，标签不存在，训练产物无效。
  */
 public final class RefStarCollectSession implements AutoCloseable {
@@ -100,7 +100,7 @@ public final class RefStarCollectSession implements AutoCloseable {
     }
 
     /**
-     * 注入 → 执行 → <b>还原</b>，保证注入点一定恢复原状（即使 {@code body} 抛异常）。
+     * 注入 → 执行 → 还原，保证注入点一定恢复原状（即使 {@code body} 抛异常）。
      */
     public void runWith(Runnable body) {
         AiProvider previous = install();

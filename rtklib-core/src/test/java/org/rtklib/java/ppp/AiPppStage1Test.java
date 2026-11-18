@@ -27,8 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * AI 阶段1 PPP 三接口契约测试。
  *
- * <p>覆盖清单中的 T1（I-1 零回归）、T2/T3（输出契约与非法输出不干预）、
- * T9（施加原子性）、T10（熔断与显式恢复）、T11（单调性与不推翻确定性结论）。</p>
+ * 覆盖清单中的 T1（I-1 零回归）、T2/T3（输出契约与非法输出不干预）、
+ * T9（施加原子性）、T10（熔断与显式恢复）、T11（单调性与不推翻确定性结论）。
  */
 @DisplayName("AI 阶段1：PPP 三接口契约与失效安全（T1/T2/T3/T9/T10/T11）")
 class AiPppStage1Test {

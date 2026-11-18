@@ -5,8 +5,8 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * SO(3) 旋转矩阵工具（用于 IMU 预积分）。
  *
- * <p>提供 Rodrigues 指数映射和对数映射，支持预积分中的
- * ΔR 计算和 bias 雅可比推导。</p>
+ * 提供 Rodrigues 指数映射和对数映射，支持预积分中的
+ * ΔR 计算和 bias 雅可比推导。
  */
 public final class RotationUtils {
 
@@ -14,11 +14,10 @@ public final class RotationUtils {
 
     /**
      * 从 3 维向量构造反对称矩阵。
-     * <pre>
+     *
      *   [  0  -v3   v2 ]
      *   [  v3   0  -v1 ]
      *   [ -v2  v1   0  ]
-     * </pre>
      */
     public static SimpleMatrix skew(double v1, double v2, double v3) {
         SimpleMatrix S = new SimpleMatrix(3, 3);
@@ -97,9 +96,8 @@ public final class RotationUtils {
 
     /**
      * 右雅可比 (right Jacobian of SO(3))。
-     * <pre>
+     *
      *   Jr(ω) = I - (1-cosθ)/θ²·ω^ + (θ-sinθ)/θ³·ω^²
-     * </pre>
      */
     public static SimpleMatrix rightJacobian(double[] omega) {
         double theta = Math.sqrt(omega[0] * omega[0] + omega[1] * omega[1] + omega[2] * omega[2]);
@@ -134,9 +132,8 @@ public final class RotationUtils {
 
     /**
      * 右雅可比的逆。
-     * <pre>
+     *
      *   Jr⁻¹(ω) = I + 0.5·ω^ + (1/θ² - (1+cosθ)/(2θ·sinθ))·ω^²
-     * </pre>
      */
     public static SimpleMatrix rightJacobianInverse(double[] omega) {
         double theta = Math.sqrt(omega[0] * omega[0] + omega[1] * omega[1] + omega[2] * omega[2]);

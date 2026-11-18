@@ -8,23 +8,21 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 串口流客户端，基于jSerialComm实现跨平台串口读写。
- * <p>
+ *
  * 串口是GNSS接收机最常用的实时数据接入方式。
  * 接收机通过串口（USB转串口或原生串口）输出RTCM3、UBX、NovAtel等格式的原始观测数据，
  * 本类负责打开串口、异步读取数据并通过 {@link StreamListener} 回调推送。
- * </p>
  *
- * <p>支持特性：
- * <ul>
- *   <li>跨平台串口访问（Windows COM口、Linux /dev/ttyUSB*、macOS /dev/cu.*）</li>
- *   <li>可配置波特率、数据位、停止位、校验位、流控</li>
- *   <li>异步数据读取，数据到达时通过监听器回调</li>
- *   <li>同步/异步写入（向接收机发送命令）</li>
- *   <li>列举系统可用串口</li>
- * </ul>
+ * 支持特性：
  *
- * <p>典型使用流程：
- * <pre>
+ *   - 跨平台串口访问（Windows COM口、Linux /dev/ttyUSB*、macOS /dev/cu.*）
+ *   - 可配置波特率、数据位、停止位、校验位、流控
+ *   - 异步数据读取，数据到达时通过监听器回调
+ *   - 同步/异步写入（向接收机发送命令）
+ *   - 列举系统可用串口
+ *
+ * 典型使用流程：
+ *
  *   // 1. 创建配置
  *   SerialPortConfig cfg = new SerialPortConfig();
  *   cfg.setPortName("COM3");
@@ -46,7 +44,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   // 4. 使用完毕后关闭
  *   port.stop();
  *   port.close();
- * </pre>
  *
  * @see SerialPortConfig
  * @see StreamListener
@@ -90,10 +87,9 @@ public class SerialPort {
 
     /**
      * 打开串口并应用配置参数。
-     * <p>
+     *
      * 设置波特率、数据位、停止位、校验位、流控模式和超时。
      * 打开成功后可调用 {@link #start()} 启动异步数据读取。
-     * </p>
      *
      * @throws IllegalStateException 串口不存在或已被占用
      */
@@ -120,10 +116,9 @@ public class SerialPort {
 
     /**
      * 启动异步数据读取。
-     * <p>
+     *
      * 调用前必须先成功调用 {@link #open()}。
      * 使用jSerialComm的事件驱动模式，数据到达时通过 {@link StreamListener#onData} 回调。
-     * </p>
      *
      * @throws IllegalStateException 串口未打开时调用
      */
@@ -157,9 +152,8 @@ public class SerialPort {
 
     /**
      * 停止异步数据读取。
-     * <p>
+     *
      * 移除数据监听器，停止回调推送。串口保持打开状态，可再次调用 {@link #start()}。
-     * </p>
      */
     public void stop() {
         running.set(false);
@@ -171,10 +165,9 @@ public class SerialPort {
 
     /**
      * 关闭串口并释放资源。
-     * <p>
+     *
      * 关闭后回调 {@link StreamListener#onClosed()}。
      * 关闭后不可再调用 {@link #start()}，需重新 {@link #open()}。
-     * </p>
      */
     public void close() {
         running.set(false);
@@ -191,9 +184,8 @@ public class SerialPort {
 
     /**
      * 向串口写入数据（同步阻塞）。
-     * <p>
+     *
      * 用于向GNSS接收机发送配置命令或NMEA请求。
-     * </p>
      *
      * @param data 待写入的数据
      * @return 实际写入的字节数，-1表示失败
@@ -207,9 +199,8 @@ public class SerialPort {
 
     /**
      * 向串口写入字符串（UTF-8编码，同步阻塞）。
-     * <p>
+     *
      * 便捷方法，常用于发送NMEA或接收机配置命令。
-     * </p>
      *
      * @param text 待写入的文本
      * @return 实际写入的字节数，-1表示失败

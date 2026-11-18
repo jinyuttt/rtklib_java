@@ -2,10 +2,9 @@ package org.rtklib.java.ai.spi;
 
 /**
  * 接口三 SPI：伪距偏差改正。
- * <p>
+ *
  * 每历元只允许一次批量调用，覆盖 {@code ns * nf} 个「卫星-频点」组合；
  * 禁止逐卫星回调（§3.3 性能硬约束）。
- * </p>
  */
 public interface ObsCorrector {
 

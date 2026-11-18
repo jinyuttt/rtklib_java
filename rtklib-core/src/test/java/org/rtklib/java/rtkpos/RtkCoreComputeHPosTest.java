@@ -11,11 +11,11 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * [Java扩展] computeHPos 回归测试。
  *
- * <p>覆盖历史缺陷：内层循环上界误写为 nv（应为 3），导致
- * HposT_W[k*nv+j] 与 NInv[i*3+k] 越界，异常被吞后 hPos 恒为 null。</p>
+ * 覆盖历史缺陷：内层循环上界误写为 nv（应为 3），导致
+ * HposT_W[k*nv+j] 与 NInv[i*3+k] 越界，异常被吞后 hPos 恒为 null。
  *
- * <p>同时钉死输出维度为 3×nv（而非 3×3），因为 hPos 的数学定义是
- * N⁻¹H_posᵀW，列数必须等于观测数 nv。</p>
+ * 同时钉死输出维度为 3×nv（而非 3×3），因为 hPos 的数学定义是
+ * N⁻¹H_posᵀW，列数必须等于观测数 nv。
  */
 class RtkCoreComputeHPosTest {
 
@@ -87,9 +87,9 @@ class RtkCoreComputeHPosTest {
     /**
      * 校验 hPos·H_pos = I₃。
      *
-     * <p>这是 hPos = (H_posᵀWH_pos)⁻¹H_posᵀW 的直接推论，不依赖 HposT_W 的
+     * 这是 hPos = (H_posᵀWH_pos)⁻¹H_posᵀW 的直接推论，不依赖 HposT_W 的
      * 任何存储约定，因此能独立验证 hPos 的 3×nv 布局是否正确：
-     * 若行列为 nv×3 写反，结果会显著偏离单位阵。</p>
+     * 若行列为 nv×3 写反，结果会显著偏离单位阵。
      */
     private static void assertEquivalentDesignMatrix(double[] H, double[] hPos,
                                                      int nv, int nx) {

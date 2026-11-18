@@ -9,19 +9,19 @@ import org.slf4j.LoggerFactory;
 /**
  * IGS SSR 4076 骨架解码器。
  *
- * <p>4076 是 RTCM 分配给 IGS 的专有消息号，不是 RTCM 通用标准 SSR。
- * 本类解析公共头部、子类型识别与 IM201 的电离层球谐模型：</p>
- * <ul>
- *   <li>卫星级子类型（IM21~IM27、IM41~…、IM101~、IM121~）：历元、更新间隔、
- *       IOD、提供者/解算 ID，以及轨道类的 CRS 指示、相位偏差类的一致性指示、卫星数；</li>
- *   <li>IM201（电离层 VTEC 球谐）：公共头部、VTEC 质量指示、分层数，以及逐层的
- *       层高/阶 N/次 M 与 C/S 球谐系数；</li>
- *   <li>IM202：与 IM201 共用头部，但标准未定义其后续系数布局，只解析公共头。</li>
- * </ul>
- * <p><b>不解析</b>卫星级改正数（后续迭代再做）。</p>
+ * 4076 是 RTCM 分配给 IGS 的专有消息号，不是 RTCM 通用标准 SSR。
+ * 本类解析公共头部、子类型识别与 IM201 的电离层球谐模型：
  *
- * <p>版本字段：IGS SSR v1.00 规定为 1，但实测 CAS 的 *CAS1 流为 0，
- * 因此 0 和 1 都接受。</p>
+ *   - 卫星级子类型（IM21~IM27、IM41~…、IM101~、IM121~）：历元、更新间隔、
+ *       IOD、提供者/解算 ID，以及轨道类的 CRS 指示、相位偏差类的一致性指示、卫星数；
+ *   - IM201（电离层 VTEC 球谐）：公共头部、VTEC 质量指示、分层数，以及逐层的
+ *       层高/阶 N/次 M 与 C/S 球谐系数；
+ *   - IM202：与 IM201 共用头部，但标准未定义其后续系数布局，只解析公共头。
+ *
+ * 不解析卫星级改正数（后续迭代再做）。
+ *
+ * 版本字段：IGS SSR v1.00 规定为 1，但实测 CAS 的 *CAS1 流为 0，
+ * 因此 0 和 1 都接受。
  */
 public class IgsSsr4076Decoder implements CustomMessageDecoder {
 
@@ -128,7 +128,7 @@ public class IgsSsr4076Decoder implements CustomMessageDecoder {
 
     /**
      * 解析 IM201/IM202 头部（IM202 按 IGS SSR v1 与 IM201 共用头部）。
-     * <p>IM201 继续解析逐层的层头与 C/S 球谐系数；IM202 只到公共头。</p>
+     * IM201 继续解析逐层的层头与 C/S 球谐系数；IM202 只到公共头。
      * @return true 解析成功
      */
     private boolean parseVtecHeader(byte[] buff, int bitLen, IgsSsr4076Message msg) {
@@ -150,7 +150,7 @@ public class IgsSsr4076Decoder implements CustomMessageDecoder {
 
     /**
      * 解析 IM201 的逐层模型：层头（16 bit）+ 余弦系数（NC 个）+ 正弦系数（NS 个）。
-     * <p>系数排列为先把 C 全部读完再读 S，各自按 m 外层、n 内层递增。</p>
+     * 系数排列为先把 C 全部读完再读 S，各自按 m 外层、n 内层递增。
      * @return true 解析成功
      */
     private boolean parseVtecLayers(byte[] buff, int bitLen, int pos, int layerCount,

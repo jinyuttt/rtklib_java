@@ -7,25 +7,23 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 开关变量先验因子 — 约束开关变量 s 倾向于 1.0。
  *
- * <p>与 SwitchWrapperFactor 配对使用：
+ * 与 SwitchWrapperFactor 配对使用：
  * SwitchWrapperFactor 让优化器可以根据观测质量自动调整开关，
- * SwitchPriorFactor 则提供先验约束防止开关无理由偏离 1.0。</p>
+ * SwitchPriorFactor 则提供先验约束防止开关无理由偏离 1.0。
  *
- * <h3>数学形式</h3>
- * <pre>
+ * 数学形式
+ *
  *   残差: r = (s - 1.0) / σ
  *   雅可比: J = 1/σ
  *   噪声协方差: R = 1×1 = 1.0（信息矩阵 W = 1/σ²）
  *
  *   σ 越小 → 先验越强 → 开关越难偏离 1.0 → 只有非常差的观测才被关闭
- * </pre>
  *
- * <h3>推荐 σ 取值</h3>
- * <pre>
+ * 推荐 σ 取值
+ *
  *   σ=0.1  强先验（默认）：只有残差 > 3σ_maha 的观测才被关闭
  *   σ=0.3  中等先验：适用于已知有中等多径的环境
  *   σ=0.5  弱先验：允许较多观测被关闭，适用于重度城市峡谷
- * </pre>
  */
 public class SwitchPriorFactor extends Factor {
 

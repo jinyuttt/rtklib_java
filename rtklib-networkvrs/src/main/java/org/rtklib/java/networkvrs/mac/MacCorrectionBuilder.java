@@ -26,12 +26,11 @@ import java.util.Set;
  * [JAVA-ONLY 原创] MAC 改正合成：把网解产出的「各站相对主站改正量」整理成可播发的
  * {@link MacCorrectionSet}。
  *
- * <p>三条硬约束（对应设计文档 §5.3.5 / §5.3.6）：</p>
- * <ol>
- *   <li>辅站按到主站的距离升序排列（RTCM 1014 要求）；</li>
- *   <li>改正差必须带广播星历 IODE / GLONASS IOD，选不到星历的卫星剔除并计数；</li>
- *   <li>只播发 {@link NetworkConfig#macBroadcastSystems} 内的系统（默认仅 GPS）。</li>
- * </ol>
+ * 三条硬约束（对应设计文档 §5.3.5 / §5.3.6）：
+ *
+ *   - 辅站按到主站的距离升序排列（RTCM 1014 要求）；
+ *   - 改正差必须带广播星历 IODE / GLONASS IOD，选不到星历的卫星剔除并计数；
+ *   - 只播发 {@link NetworkConfig#macBroadcastSystems} 内的系统（默认仅 GPS）。
  */
 public final class MacCorrectionBuilder {
 

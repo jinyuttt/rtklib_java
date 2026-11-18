@@ -8,16 +8,15 @@ import org.rtklib.java.data.Nav;
 /**
  * PPP OSB（Observable-Specific Bias）偏差改正模型。
  *
- * <p>OSB模型为每个观测值类型提供独立偏差改正，取代传统DCB。
+ * OSB模型为每个观测值类型提供独立偏差改正，取代传统DCB。
  * 在IF（无电离层）组合观测值中，OSB改正按频率加权组合：
- * <pre>
+ *
  *   osb_IF = α * osb_f1 + β * osb_f2
  *   其中 α = f1²/(f1²-f2²), β = -f2²/(f1²-f2²)
- * </pre>
  *
- * <p>OSB数据由OsbReader读取Bias-SINEX格式文件，相位OSB存入nav.fcbWl，伪距OSB存入nav.cbias。
+ * OSB数据由OsbReader读取Bias-SINEX格式文件，相位OSB存入nav.fcbWl，伪距OSB存入nav.cbias。
  *
- * <p>对应C版：RTKLIB使用DCB改正，本模块为v2.3.0新增OSB模型
+ * 对应C版：RTKLIB使用DCB改正，本模块为v2.3.0新增OSB模型
  */
 public final class PppOsbModel {
     private PppOsbModel() {}

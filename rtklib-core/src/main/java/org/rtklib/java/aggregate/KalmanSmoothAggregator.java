@@ -14,9 +14,9 @@ import java.util.List;
 /**
  * 卡尔曼平滑聚合（前向 KF + 反向 RTS）。
  *
- * <p>适合跟踪窗口内真实位移。常速度模型，状态 x = [pos(3), vel(3)]。
+ * 适合跟踪窗口内真实位移。常速度模型，状态 x = [pos(3), vel(3)]。
  * 将 RTK 输出的 SolData 当作伪观测，存在"滤波之滤波"过度平滑风险，
- * 静态缓变场景可用，动态场景慎用。</p>
+ * 静态缓变场景可用，动态场景慎用。
  */
 final class KalmanSmoothAggregator {
 

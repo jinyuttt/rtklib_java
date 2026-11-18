@@ -20,15 +20,15 @@ import java.util.Map;
 /**
  * [JAVA-ONLY 原创] 单历元基线平差：多基线交叉验证、协方差膨胀、可靠性分级与保护级计算。
  *
- * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
+ * 归属声明：本项目原创实现，未移植任何外部开源项目代码。
  */
 public class GnssBaselineAdjust {
 
     /**
      * 交叉验证与保护级策略。
      *
-     * <p>所有阈值与系数均来自 {@link MultiBaselineConfig.CrossValidationConfig}，
-     * 不再硬编码，使配置项真正生效。</p>
+     * 所有阈值与系数均来自 {@link MultiBaselineConfig.CrossValidationConfig}，
+     * 不再硬编码，使配置项真正生效。
      *
      * @param verifiedThreshold        基线间较差低于此值判为一致 (m)
      * @param crossCheckedThreshold    低于此值判为可交叉验证 (m)
@@ -115,10 +115,10 @@ public class GnssBaselineAdjust {
     /**
      * 平差，并附带"准入阶段被拒绝的 FLOAT 基线"。
      *
-     * <p>被拒绝的 FLOAT 已不在 {@code epoch} 内，平差本身看不到它们，
+     * 被拒绝的 FLOAT 已不在 {@code epoch} 内，平差本身看不到它们，
      * 因此 FIX/FLOAT 较差无法由 {@link #adjustWithFloat} 产生。若不在结果上
-     * 显式携带，粗差 FLOAT 会被<b>静默丢弃</b>——比"报 0.0 较差"更糟。
-     * 本重载把该信息透传到 {@link AdjustResult#rejectedFloats}。</p>
+     * 显式携带，粗差 FLOAT 会被静默丢弃——比"报 0.0 较差"更糟。
+     * 本重载把该信息透传到 {@link AdjustResult#rejectedFloats}。
      *
      * @param rejected 准入阶段被拒绝的 FLOAT；null 或空表示无拒绝
      */
@@ -213,19 +213,18 @@ public class GnssBaselineAdjust {
     /**
      * 含 FLOAT 基线历元的平差。
      *
-     * <p>FLOAT 基线的协方差已在装配阶段按 {@code floatCovInflate} 膨胀，
-     * 因此在 WLS 中只占极小权重，融合位置基本由 FIX 决定，不会把坐标明显拉偏。</p>
+     * FLOAT 基线的协方差已在装配阶段按 {@code floatCovInflate} 膨胀，
+     * 因此在 WLS 中只占极小权重，融合位置基本由 FIX 决定，不会把坐标明显拉偏。
      *
-     * <p>等级判定：</p>
-     * <ul>
-     *   <li>恰好 1 条 FIX + FLOAT，且 FLOAT 与 FIX 位置较差 ≤ {@code floatAgreementThreshold}
-     *       → {@link ReliabilityGrade#SINGLE_VERIFIED}（FLOAT 作佐证）；</li>
-     *   <li>其余含 FLOAT 的情形 → {@link ReliabilityGrade#UNVERIFIED}：
-     *       FLOAT 只能补位，不能自证。</li>
-     * </ul>
+     * 等级判定：
      *
-     * <p>这里不做 FIX/FLOAT 之间的交叉验证：两者精度量级差一个数量级，
-     * 用同一阈值必然判 SUSPECT，反而会错误剔除真 FIX。</p>
+     *   - 恰好 1 条 FIX + FLOAT，且 FLOAT 与 FIX 位置较差 ≤ {@code floatAgreementThreshold}
+     *       → {@link ReliabilityGrade#SINGLE_VERIFIED}（FLOAT 作佐证）；
+     *   - 其余含 FLOAT 的情形 → {@link ReliabilityGrade#UNVERIFIED}：
+     *       FLOAT 只能补位，不能自证。
+     *
+     * 这里不做 FIX/FLOAT 之间的交叉验证：两者精度量级差一个数量级，
+     * 用同一阈值必然判 SUSPECT，反而会错误剔除真 FIX。
      */
     private static AdjustResult adjustWithFloat(BaselineEpoch epoch, boolean qualityWeight, Policy p) {
         AdjustResult base = adjustSingle(epoch, qualityWeight, p);
@@ -248,15 +247,15 @@ public class GnssBaselineAdjust {
     }
 
     /**
-     * 每条 FLOAT 基线相对<b>唯一</b> FIX 基线的位置较差 (m)，按 {@code baseId} 索引。
+     * 每条 FLOAT 基线相对唯一 FIX 基线的位置较差 (m)，按 {@code baseId} 索引。
      *
-     * <p>这是 FLOAT 与 FIX 位置一致性的<b>唯一</b>口径：准入判定
+     * 这是 FLOAT 与 FIX 位置一致性的唯一口径：准入判定
      * （{@code MultiBaselineAdjust.selectAdmitted}）与事后判级
-     * （{@link #adjustWithFloat}）都调用本方法，避免同一口径出现两份实现。</p>
+     * （{@link #adjustWithFloat}）都调用本方法，避免同一口径出现两份实现。
      *
-     * <p>返回空 Map 表示不存在参照物——FIX 条数不为 1（0 条无参照、≥2 条
+     * 返回空 Map 表示不存在参照物——FIX 条数不为 1（0 条无参照、≥2 条
      * 应以 FIX 间交叉验证为准）或 FLOAT 无 ECEF 位置。调用方须把"空"读作
-     * "无法判定"，不能读作"较差为 0"。</p>
+     * "无法判定"，不能读作"较差为 0"。
      *
      * @param entries 候选基线条目（含 FIX 与 FLOAT）
      * @return baseId → 相对唯一 FIX 的距离 (m)；无参照物时为空 Map
@@ -482,9 +481,9 @@ public class GnssBaselineAdjust {
     }
 
     /**
-     * 在两条差异最大的基线中挑出<b>假固定</b>嫌疑者：取 {@code ratio × numSat} 较小者。
+     * 在两条差异最大的基线中挑出假固定嫌疑者：取 {@code ratio × numSat} 较小者。
      *
-     * <p>注意这只是"哪条基线更可能是假固定"的启发式，不能用来判定基站位移。</p>
+     * 注意这只是"哪条基线更可能是假固定"的启发式，不能用来判定基站位移。
      */
     private static String identifySuspect(BaselineEpoch epoch, int i, int j) {
         double ratioI = epoch.baselines[i].solData.ratio;

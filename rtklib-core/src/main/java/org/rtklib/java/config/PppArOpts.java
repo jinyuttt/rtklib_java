@@ -4,10 +4,9 @@ import java.io.Serializable;
 
 /**
  * PPP-AR（整周模糊度固定）参数。
- * <p>
+ *
  * 从 {@link RtkConfig} 拆分出的独立子配置，字段名去掉原 {@code ppp} 前缀
  * （{@code enablePppAR} → {@code enableAR}，{@code pppArRatioWl} → {@code arRatioWl}）。
- * </p>
  */
 public class PppArOpts implements Serializable {
     private static final long serialVersionUID = 1L;

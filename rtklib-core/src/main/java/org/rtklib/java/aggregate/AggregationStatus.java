@@ -3,8 +3,8 @@ package org.rtklib.java.aggregate;
 /**
  * 历元聚合结果状态码。
  *
- * <p>{@link AggregatedSol} 对象永不为 null，失败时通过本枚举区分原因，
- * {@code posEcef}/{@code covEcef} 为 null。</p>
+ * {@link AggregatedSol} 对象永不为 null，失败时通过本枚举区分原因，
+ * {@code posEcef}/{@code covEcef} 为 null。
  */
 public enum AggregationStatus {
     /** 成功 */

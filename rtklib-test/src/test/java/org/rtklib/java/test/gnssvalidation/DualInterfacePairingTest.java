@@ -40,22 +40,18 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * 双接口协同四跑配对：<b>A（不注入）/ B（仅接口一）/ C（仅接口三）/ D（接口一+接口三）</b>。
+ * 双接口协同四跑配对：A（不注入）/ B（仅接口一）/ C（仅接口三）/ D（接口一+接口三）。
  *
- * <p>
- * 四组对<b>同一批输入</b>各跑一遍，唯一差异是 {@link AiHooks#install} 注入的
+ * 四组对同一批输入各跑一遍，唯一差异是 {@link AiHooks#install} 注入的
  * {@link AiProvider} 内容：
- * </p>
- * <ul>
- *   <li><b>A</b>：不注入，原生基线；同时是参考坐标的唯一来源；</li>
- *   <li><b>B</b>：只提供 {@link FixValidator}（{@code fix_validator.onnx}），
- *       接口三返回 {@code null}；</li>
- *   <li><b>C</b>：只提供 {@link ObsCorrector}（{@code obs_corrector_e2e.onnx}），
- *       接口一返回 {@code null}；</li>
- *   <li><b>D</b>：两个接口同时提供。</li>
- * </ul>
  *
- * <p>
+ *   - A：不注入，原生基线；同时是参考坐标的唯一来源；
+ *   - B：只提供 {@link FixValidator}（{@code fix_validator.onnx}），
+ *       接口三返回 {@code null}；
+ *   - C：只提供 {@link ObsCorrector}（{@code obs_corrector_e2e.onnx}），
+ *       接口一返回 {@code null}；
+ *   - D：两个接口同时提供。
+ *
  * 站/日/小时/基站/星历/AR 配置/天线改正全部复用
  * {@link FixValidatorHourlyCollectTest#createOpt()}，不在此处复制解算参数。
  * 接口一置信度阈值由 {@code pairing.fix-threshold} 传入（默认取运行时
@@ -64,37 +60,29 @@ import java.util.Set;
  * 默认关闭（下限 1.0，单侧膨胀）；开启后下限取 {@code pairing.min-scale}
  * （默认 {@link AiOpts#DEFAULT_AGGRESSIVE_MIN_SCALE}），仅供实验，需配套使用
  * 训练侧 {@code --scale-min} 相同取值的模型。
- * </p>
  *
- * <p>
  * 产物（{@code pairing.out} 下，默认 {@code data/fix-validator/pairing-dual}，已被 .gitignore 忽略）：
- * </p>
- * <ul>
- *   <li>{@code pairing.{A,B,C,D}.sol.csv}：逐历元解（stat/ns/ECEF/ratio）；</li>
- *   <li>{@code pairing.rejects.csv}：B/D 组的 {@code AI_REJECT} 逐历元记录
- *       （nb/ratio/confidence/threshold）；</li>
- *   <li>{@code _pairing_runs.csv}：每次运行四组的行数与拦截数，供断点续跑与覆盖率核对
- *       （四组原子完成，{@code status=ok} 即四组都已落盘）。</li>
- * </ul>
  *
- * <p>
+ *   - {@code pairing.{A,B,C,D}.sol.csv}：逐历元解（stat/ns/ECEF/ratio）；
+ *   - {@code pairing.rejects.csv}：B/D 组的 {@code AI_REJECT} 逐历元记录
+ *       （nb/ratio/confidence/threshold）；
+ *   - {@code _pairing_runs.csv}：每次运行四组的行数与拦截数，供断点续跑与覆盖率核对
+ *       （四组原子完成，{@code status=ok} 即四组都已落盘）。
+ *
  * 指标与归因由 {@code training/obs_corrector/dual_interface_pairing.py} 读取上述 CSV 完成，
  * 本类只负责「跑」与「落原始配对数据」，不在 Java 侧重复统计口径。
- * </p>
  *
- * <pre>
  * mvn test -pl rtklib-test -Dtest=DualInterfacePairingTest \
  *   -Dpairing.enable=true \
  *   -Dpairing.out=data/fix-validator/pairing-dual \
  *   -Dpairing.fix-threshold=0.08 \
- *   -Dhourlyrtk.rinex-root=&lt;rinex-root&gt; -Dhourlyrtk.base=XXXX \
+ *   -Dhourlyrtk.rinex-root=<rinex-root> -Dhourlyrtk.base=XXXX \
  *   -Dhourlyrtk.rovers=X1,X2 -Dhourlyrtk.days=2026-06-06
  *
  * 激进模式（实验，需配套 --scale-min 0.5 训练的模型）：
  *   -Dpairing.aggressive=true -Dpairing.min-scale=0.5 \
  *   -Dpairing.obs-model=rtklib-ai/training/out/aggressive/obs_corrector.onnx \
  *   -Dpairing.obs-norm=rtklib-ai/training/out/aggressive/obs_corrector.norm.json
- * </pre>
  */
 @DisplayName("双接口协同四跑配对：A（原生）/ B（仅接口一）/ C（仅接口三）/ D（双接口）")
 class DualInterfacePairingTest {
@@ -416,10 +404,9 @@ class DualInterfacePairingTest {
 
     /**
      * {@code AR/AI_REJECT} 的行级收集（仅接口一拒收时 emit）。
-     * <p>
+     *
      * 与 {@code Ai3Collector} 同样「先缓存后落盘」：trace 回调异常会被
      * {@code Trace.emit} 静默吞掉，直接在回调里写文件会丢行且无报错。
-     * </p>
      */
     private static final class RejectCollector {
         private final String station;

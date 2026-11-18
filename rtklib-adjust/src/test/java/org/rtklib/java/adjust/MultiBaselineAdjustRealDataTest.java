@@ -39,8 +39,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * adjust 真实数据测试：与 rtklib-joint 的 JointRtkRealDataTest 使用同一批数据
  * （2 基站 + 1 测站 RTCM3 录制流），验证 SBS（core 逐基线独立解算）+ 平差的完整链路。
  *
- * <p>数据路径见 {@code mb-adjust-real-data.properties}（本地文件，不入库）。
- * 数据缺失时按跳过处理，不判定失败。</p>
+ * 数据路径见 {@code mb-adjust-real-data.properties}（本地文件，不入库）。
+ * 数据缺失时按跳过处理，不判定失败。
  */
 @DisplayName("MultiBaselineAdjust 真实数据测试（2基站1测站）")
 public class MultiBaselineAdjustRealDataTest {
@@ -584,12 +584,11 @@ public class MultiBaselineAdjustRealDataTest {
     /**
      * FLOAT 补位 A/B 对照：同一批真实数据分别喂给"仅 FIX"与"FIX+FLOAT"两条管线。
      *
-     * <p>验证三点：</p>
-     * <ol>
-     *   <li>收益：FIX 不足两条的历元由 FLOAT 补位后自由度增加、不再降级为 k=1；</li>
-     *   <li>代价：FLOAT 降权后融合坐标相对"仅 FIX"结果的偏移量（应远小于 FLOAT-FIX 较差）；</li>
-     *   <li>隔离：网平差观测数、一致性检核、约束平差结果与"仅 FIX"完全一致。</li>
-     * </ol>
+     * 验证三点：
+     *
+     *   - 收益：FIX 不足两条的历元由 FLOAT 补位后自由度增加、不再降级为 k=1；
+     *   - 代价：FLOAT 降权后融合坐标相对"仅 FIX"结果的偏移量（应远小于 FLOAT-FIX 较差）；
+     *   - 隔离：网平差观测数、一致性检核、约束平差结果与"仅 FIX"完全一致。
      */
     @Test
     @DisplayName("FLOAT补位 A/B 对照：仅FIX vs FIX+FLOAT")
@@ -905,12 +904,11 @@ public class MultiBaselineAdjustRealDataTest {
      * 路线A A/B 对照：同一批真实数据分别用 Kalman 后验 Pa（{@code sol.qr}）与
      * 单历元归约法方程 {@code Q_pos}（{@code sol.qPos}）作为协方差来源。
      *
-     * <p>验证三点：</p>
-     * <ol>
-     *   <li>开关只改协方差，<b>不改变</b>解算坐标与历元数；</li>
-     *   <li>Q_pos 相对 Pa 的量级变化（Pa 含跨历元相关性，通常偏小）；</li>
-     *   <li>该变化确实传导到 adjust 的 Dx 与保护级 PL。</li>
-     * </ol>
+     * 验证三点：
+     *
+     *   - 开关只改协方差，不改变解算坐标与历元数；
+     *   - Q_pos 相对 Pa 的量级变化（Pa 含跨历元相关性，通常偏小）；
+     *   - 该变化确实传导到 adjust 的 Dx 与保护级 PL。
      */
     @Test
     @DisplayName("路线A A/B 对照：Kalman后验Pa vs 单历元归约Q_pos")

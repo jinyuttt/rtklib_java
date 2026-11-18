@@ -25,21 +25,20 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * 跨模塊PPP集成測試：ProductDownloader + PppProcessor。
  *
- * <h3>時間系統說明</h3>
- * <ul>
- *   <li>RTCM文件夾日期 = 北京時間日期（UTC+8）</li>
- *   <li>RTCM文件名 H.rtcm3 = 北京時間第H小時</li>
- *   <li>RTCM內部觀測時間 = UTC時間</li>
- *   <li>IGS精密產品按UTC日期命名</li>
- * </ul>
+ * 時間系統說明
  *
- * <h3>北京時間→UTC日期映射</h3>
- * <pre>
+ *   - RTCM文件夾日期 = 北京時間日期（UTC+8）
+ *   - RTCM文件名 H.rtcm3 = 北京時間第H小時
+ *   - RTCM內部觀測時間 = UTC時間
+ *   - IGS精密產品按UTC日期命名
+ *
+ * 北京時間→UTC日期映射
+ *
  *   北京文件夾 2026-07-01:
  *     0~7.rtcm3  → UTC 2026-06-30 16:00~23:59  → 需UTC 06-30的產品
  *     8~23.rtcm3 → UTC 2026-07-01 00:00~15:59  → 需UTC 07-01的產品
- * </pre>
- * 因此一個北京日期的文件夾需要下載<strong>兩個UTC日期</strong>的精密產品：
+ *
+ * 因此一個北京日期的文件夾需要下載兩個UTC日期的精密產品：
  * folderDate - 1天 和 folderDate。
  */
 @DisplayName("PPP Integration Test with ProductDownloader + PppProcessor")

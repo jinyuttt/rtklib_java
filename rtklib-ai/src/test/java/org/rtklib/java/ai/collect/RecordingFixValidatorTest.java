@@ -19,9 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 采集链路测试：验证「恒返回 1.0 + 列序对齐 + 多 run 累积 + 注入清理」。
- * <p>
- * 重点不是采集器内部实现，而是它<b>不会破坏解算</b>：任何异常路径都必须返回 1.0。
- * </p>
+ *
+ * 重点不是采集器内部实现，而是它不会破坏解算：任何异常路径都必须返回 1.0。
  */
 class RecordingFixValidatorTest {
 

@@ -2,14 +2,12 @@ package org.rtklib.java.ai.inference;
 
 /**
  * 批量推理抽象（设计文档 §6.1）。
- * <p>
- * 存在的唯一理由：让接口三实现可以在<b>不依赖真实 ONNX 会话</b>的前提下被单测
+ *
+ * 存在的唯一理由：让接口三实现可以在不依赖真实 ONNX 会话的前提下被单测
  * （窗口重置、行序、成对输出校验等逻辑与后端无关）。
  * 生产路径上由 {@link OnnxInference} 实现，等价于原样调用。
- * </p>
- * <p>
+ *
  * 契约：输入 {@code float[rows * inputDim]}（行优先压平），输出 {@code float[rows * outputDim]}。
- * </p>
  */
 public interface BatchInference {
 

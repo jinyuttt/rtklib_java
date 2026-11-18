@@ -11,22 +11,19 @@ import org.slf4j.LoggerFactory;
 
 /**
  * 接口 B 实现（设计文档 §4）：{@code ns × nf} 行特征 → 一次批量推理 → 逐行方差膨胀因子。
- * <p>
- * 只做「特征 + 推理」，<b>不做钳位</b>：{@code scale} 的 {@code [1.0, pppVarianceScaleMax]}
+ *
+ * 只做「特征 + 推理」，不做钳位：{@code scale} 的 {@code [1.0, pppVarianceScaleMax]}
  * 区间由 core 侧 {@code PppAiGuard.clampScale} 统一施加，换上限不需要换模型（§4.6）。
  * 同理只输出因子、不输出偏差——PPP 的码偏差会被 {@code IB(sat, frq)} 状态吸收，
  * 写偏差进状态会污染 AR 输入（§4.4）。
- * </p>
- * <p>
+ *
  * 无跨历元状态：接口 B 的 12 维特征全部来自当前历元快照（{@code resp/resc} 已是验后残差，
  * 不像接口三那样需要短窗聚合），故本类可跨历元复用、也可跨线程复用（后端
  * {@link BatchInference} 自身线程安全）。
- * </p>
- * <p>
- * 推理异常<b>不</b>在本类吞掉：由 core 侧 {@code PppAiInject} 统一捕获并按不干预处理（S1）。
+ *
+ * 推理异常不在本类吞掉：由 core 侧 {@code PppAiInject} 统一捕获并按不干预处理（S1）。
  * 上下文非法（{@code ns <= 0}、{@code sats} 长度不符）返回 {@code null}——core 把
  * {@code null} 与「长度不符」视为同一条降级路径。
- * </p>
  */
 public final class PppVarianceScalerImpl implements PppVarianceScaler {
 

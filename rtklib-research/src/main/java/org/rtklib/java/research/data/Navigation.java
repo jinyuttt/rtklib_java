@@ -8,7 +8,7 @@ import org.rtklib.java.research.common.GTime;
 /**
  * 导航数据容器（research模块自有）。
  *
- * <p>存储所有卫星的广播星历，支持按卫星号快速查找。</p>
+ * 存储所有卫星的广播星历，支持按卫星号快速查找。
  */
 public class Navigation implements Serializable {
     private static final long serialVersionUID = 1L;

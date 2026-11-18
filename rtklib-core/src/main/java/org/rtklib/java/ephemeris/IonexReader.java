@@ -15,10 +15,10 @@ import java.util.List;
 /**
  * IONEX电离层网格产品读取器。
  *
- * <p>读取IGS IONEX格式的全球电离层图(GIM)产品，用于单频PPP电离层约束或区域增强。
+ * 读取IGS IONEX格式的全球电离层图(GIM)产品，用于单频PPP电离层约束或区域增强。
  *
- * <p>文件格式：IGS IONEX v1.0/v2.0
- * <pre>
+ * 文件格式：IGS IONEX v1.0/v2.0
+ *
  *     1.0            IONEX VERSION / TYPE
  *     ...            EPOCH OF FIRST MAP
  *     ...            EPOCH OF LAST MAP
@@ -29,10 +29,9 @@ import java.util.List;
  *     ...            EPOCH OF CURRENT MAP
  *     ...            TEC grid values
  *     ...            END OF TEC MAP
- * </pre>
  *
- * <p>TEC单位：TECU (1 TECU = 10^16 electrons/m²)
- * <p>对应C版：RTKLIB的readtec()，本模块为新增功能
+ * TEC单位：TECU (1 TECU = 10^16 electrons/m²)
+ * 对应C版：RTKLIB的readtec()，本模块为新增功能
  */
 public final class IonexReader {
     private IonexReader() {}

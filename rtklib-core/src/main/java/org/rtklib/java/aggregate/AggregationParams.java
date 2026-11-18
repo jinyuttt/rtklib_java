@@ -3,8 +3,8 @@ package org.rtklib.java.aggregate;
 /**
  * 聚合参数公共接口。
  *
- * <p>{@link RobustParams} 与 {@link KalmanParams} 分别实现，
- * 调用方传参时模式与参数类型必须匹配。</p>
+ * {@link RobustParams} 与 {@link KalmanParams} 分别实现，
+ * 调用方传参时模式与参数类型必须匹配。
  */
 public interface AggregationParams {
     /** 最少 FIX 历元数，低于此值返回 {@link AggregationStatus#INSUFFICIENT_FIX}。 */

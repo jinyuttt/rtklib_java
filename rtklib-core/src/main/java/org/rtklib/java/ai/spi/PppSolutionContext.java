@@ -2,15 +2,13 @@ package org.rtklib.java.ai.spi;
 
 /**
  * 接口 A（PPP 解有效性判别）输入（当前历元快照）。
- * <p>
+ *
  * 所有数组由 core 侧分配并填充，impl 只读；禁止在 impl 内写回任何数组或
  * {@code Rtk} / {@code Ssat} 状态（§3.3）。
- * </p>
- * <p>
+ *
  * {@code deterministicDegraded} 是**归因字段**，不改变注入点行为：core 侧无论确定性基线
  * 分支是否启用，都按 {@code posVar > pppQrThreshold} 计算该标志（§3.5），
  * 供评估区分「确定性拦的」与「AI 独立拦的」。
- * </p>
  *
  * @param epoch                历元号
  * @param ns                   参与解算的卫星数（{@code elevation} / {@code snr} 的长度）

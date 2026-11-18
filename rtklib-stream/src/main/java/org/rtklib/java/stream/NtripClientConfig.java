@@ -4,23 +4,21 @@ import javax.net.ssl.SSLContext;
 
 /**
  * NTRIP客户端配置。
- * <p>
+ *
  * 封装NTRIP连接所需的全部参数，包括服务器地址、认证信息、超时设置和自动重连策略。
  * 所有参数均有默认值，可直接使用或按需调整。
- * </p>
  *
- * <p>默认值一览：
- * <ul>
- *   <li>port: 2101（NTRIP标准端口）</li>
- *   <li>ssl: false（明文连接；启用后使用TLS/SSL，默认端口自动切换为443）</li>
- *   <li>userAgent: "NTRIP rtklib-java/2.1"</li>
- *   <li>ntripVersion: "Ntrip/2.0"</li>
- *   <li>connectTimeoutMs: 15000</li>
- *   <li>readTimeoutMs: 10000</li>
- *   <li>autoReconnect: false</li>
- *   <li>reconnectIntervalMs: 5000</li>
- *   <li>maxReconnectAttempts: 10</li>
- * </ul>
+ * 默认值一览：
+ *
+ *   - port: 2101（NTRIP标准端口）
+ *   - ssl: false（明文连接；启用后使用TLS/SSL，默认端口自动切换为443）
+ *   - userAgent: "NTRIP rtklib-java/2.1"
+ *   - ntripVersion: "Ntrip/2.0"
+ *   - connectTimeoutMs: 15000
+ *   - readTimeoutMs: 10000
+ *   - autoReconnect: false
+ *   - reconnectIntervalMs: 5000
+ *   - maxReconnectAttempts: 10
  *
  * @see NtripClient
  */
@@ -108,10 +106,9 @@ public class NtripClientConfig {
 
     /**
      * 获取自定义SSLContext。为null时使用JDK默认SSLContext（信任标准CA证书）。
-     * <p>
+     *
      * 设置自定义SSLContext可用于：信任自签名证书、双向TLS认证（客户端证书）、
      * 或自定义TLS协议版本限制。
-     * </p>
      */
     public SSLContext getSslContext() { return sslContext; }
     /** 设置自定义SSLContext。传null恢复使用JDK默认SSLContext。 */

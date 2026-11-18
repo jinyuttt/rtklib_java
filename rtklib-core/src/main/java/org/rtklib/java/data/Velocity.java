@@ -5,14 +5,13 @@ import java.io.Serializable;
 /**
  * 速度数据，3个分量 + 坐标系类型。
  *
- * <h3>CoordType 定义</h3>
- * <ul>
- *   <li>{@link CoordType#ECEF}：v1=vx, v2=vy, v3=vz (m/s)</li>
- *   <li>{@link CoordType#ENU}：v1=ve, v2=vn, v3=vu (m/s)</li>
- * </ul>
+ * CoordType 定义
  *
- * <p>注意：LLH 和 ENU 对速度的表示相同（都是 ENU 方向 {ve,vn,vu}），
- * 因为速度不存在"经纬度"表示。故 LLH 和 ENU 统一用 {@link CoordType#ENU}。</p>
+ *   - {@link CoordType#ECEF}：v1=vx, v2=vy, v3=vz (m/s)
+ *   - {@link CoordType#ENU}：v1=ve, v2=vn, v3=vu (m/s)
+ *
+ * 注意：LLH 和 ENU 对速度的表示相同（都是 ENU 方向 {ve,vn,vu}），
+ * 因为速度不存在"经纬度"表示。故 LLH 和 ENU 统一用 {@link CoordType#ENU}。
  */
 public class Velocity implements Serializable {
     private static final long serialVersionUID = 1L;

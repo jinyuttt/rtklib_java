@@ -3,10 +3,10 @@ package org.rtklib.java.orbit;
 /**
  * SGP4 重力常数与基本数学常数。
  *
- * <p>逐行移植自 python-sgp4 的 propagation.py 中的 getgravconst() 函数。
+ * 逐行移植自 python-sgp4 的 propagation.py 中的 getgravconst() 函数。
  * 注意：项目中 org.rtklib.java.orbit.OrbitConstants.J4 取值 (-0.00000162097)
  * 与 python-sgp4 WGS72 的 J4 (-0.00000165597) 不一致，因此本类独立定义
- * WGS72/WGS72OLD/WGS84 三套常数，不复用 OrbitConstants，以避免移植误差。</p>
+ * WGS72/WGS72OLD/WGS84 三套常数，不复用 OrbitConstants，以避免移植误差。
  */
 public final class Sgp4Constants {
 

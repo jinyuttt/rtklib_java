@@ -6,18 +6,17 @@ import java.util.Map;
 /**
  * NTRIP Caster 配置。
  *
- * <p>封装监听地址、挂载点列表与鉴权凭据。所有参数均有默认值，
- * 只需注册挂载点即可启动一个可用的 Caster。</p>
+ * 封装监听地址、挂载点列表与鉴权凭据。所有参数均有默认值，
+ * 只需注册挂载点即可启动一个可用的 Caster。
  *
- * <p>默认值一览：
- * <ul>
- *   <li>host: "0.0.0.0"（监听全部网卡）</li>
- *   <li>port: 2101（NTRIP 标准端口，0 表示由系统分配空闲端口）</li>
- *   <li>backlog: 50</li>
- *   <li>casterId: "rtklib-java NTRIP Caster"</li>
- *   <li>readTimeoutMs: 0（不因上行空闲而断开）</li>
- *   <li>writeQueueSize: 256（每会话待发帧上限）</li>
- * </ul>
+ * 默认值一览：
+ *
+ *   - host: "0.0.0.0"（监听全部网卡）
+ *   - port: 2101（NTRIP 标准端口，0 表示由系统分配空闲端口）
+ *   - backlog: 50
+ *   - casterId: "rtklib-java NTRIP Caster"
+ *   - readTimeoutMs: 0（不因上行空闲而断开）
+ *   - writeQueueSize: 256（每会话待发帧上限）
  *
  * @see NtripCaster
  */
@@ -84,8 +83,8 @@ public class NtripCasterConfig {
     /**
      * 添加 Basic 鉴权用户。
      *
-     * <p>未添加任何用户时允许匿名访问；一旦添加用户，订阅挂载点必须携带
-     * 匹配的凭据，而获取 Sourcetable 仍保持匿名可用。</p>
+     * 未添加任何用户时允许匿名访问；一旦添加用户，订阅挂载点必须携带
+     * 匹配的凭据，而获取 Sourcetable 仍保持匿名可用。
      *
      * @param username 用户名
      * @param password 密码

@@ -16,18 +16,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * IFLC 频率对协商单元测试 [JAVA-ONLY v2.3.0]。
  *
- * <p>验证 RtkCore.negotiateIflcPairs / selectIflcPair / iflcSlots 的核心语义：</p>
- * <ul>
- *   <li>公共频段槽位对协商（槽位=code2idx固定频段映射，首槽位恒为0）；</li>
- *   <li>sticky 策略：已有配对结构可用则保持，不因更高优先级对出现而抖动；</li>
- *   <li>配对失效重选并置 iflcPairSwitch（udbias 按周跳处理重置模糊度）；</li>
- *   <li>无公共对清零回退固定槽位 {0, seliflc()}；</li>
- *   <li>开关关闭 / 非RTK双站模式完全 no-op。</li>
- * </ul>
+ * 验证 RtkCore.negotiateIflcPairs / selectIflcPair / iflcSlots 的核心语义：
  *
- * <p>典型场景取自 PPC-Dataset Tokyo run1：流动站 Septentrio BDS-3 仅跟踪
+ *   - 公共频段槽位对协商（槽位=code2idx固定频段映射，首槽位恒为0）；
+ *   - sticky 策略：已有配对结构可用则保持，不因更高优先级对出现而抖动；
+ *   - 配对失效重选并置 iflcPairSwitch（udbias 按周跳处理重置模糊度）；
+ *   - 无公共对清零回退固定槽位 {0, seliflc()}；
+ *   - 开关关闭 / 非RTK双站模式完全 no-op。
+ *
+ * 典型场景取自 PPC-Dataset Tokyo run1：流动站 Septentrio BDS-3 仅跟踪
  * B1I(slot0)+B2a(slot2)，基准站 Trimble 有 B1I+B2(slot1)+B2a，固定槽位配对
- * {0,1} 因流动站 slot1 缺失导致整星剔除，协商后可用 {0,2}。</p>
+ * {0,1} 因流动站 slot1 缺失导致整星剔除，协商后可用 {0,2}。
  */
 @DisplayName("IFLC 频率对协商（逐卫星 sticky 策略）")
 public class IflcPairNegotiationTest {

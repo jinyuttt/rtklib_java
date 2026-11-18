@@ -7,12 +7,11 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * [Java扩展] DIAG_QPOS 协方差数据源切换测试。
  *
- * <p>钉死两条不变量：</p>
- * <ul>
- *   <li>开关关闭（{@code sol.qPos == null}）时，{@code covEcef} 与改造前逐位一致
- *       （仍由 {@code sol.qr} 展开）；</li>
- *   <li>{@link Accuracy} 始终读 {@code sol.qr}，不随 {@code covEcef} 的数据源切换而变。</li>
- * </ul>
+ * 钉死两条不变量：
+ *
+ *   - 开关关闭（{@code sol.qPos == null}）时，{@code covEcef} 与改造前逐位一致
+ *       （仍由 {@code sol.qr} 展开）；
+ *   - {@link Accuracy} 始终读 {@code sol.qr}，不随 {@code covEcef} 的数据源切换而变。
  */
 class SolDataCovSourceTest {
 

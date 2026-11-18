@@ -24,12 +24,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * WUH20 NTRIP 录制流（RTCM3 MSM7）离线解码 + SPP 测试。
- * <p>
+ *
  * 数据：test-data/gnss-validation/rtcm/record_wuh20.msm.rtcm3
  * （2026-10-23 01:45:16 UTC 起 24 s，207 帧，含 1077/1087/1097/1107/1117/1127/1137
  * 共 7 系统 MSM7，以及 1006/1007/1008/1033 站点信息；流内不含广播星历）。
- * </p>
- * <p>
+ *
  * 第一部分只验证离线解码：MSM7 的伪距/载波/多普勒/信噪比是否被正确填充。
  * 第二部分做 SPP：广播星历必须来自外部 BRDC（当天文件），路径按以下顺序解析：
  * 环境变量 WUH20_BRDC → test-data/gnss-validation/brdc/ 下含 "296" 的 RINEX nav
@@ -37,7 +36,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 当前 brdc/ 下为 WHU FTP（ftp://igs.gnsswhu.cn/pub/gps/data/hourly/2026/296/）
  * 的 hour2960.26n（2026-10-23 00/02 时段的 GPS 广播星历），仅含 GPS，
  * 因此 SPP 只使用 GPS 卫星解算。
- * </p>
  */
 @DisplayName("WUH20 MSM7 离线解码 + SPP")
 class Wuh20MsmSppTest {

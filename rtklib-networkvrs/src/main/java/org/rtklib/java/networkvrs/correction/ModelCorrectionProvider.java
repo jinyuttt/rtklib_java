@@ -18,16 +18,14 @@ import java.util.Map;
 /**
  * [JAVA-ONLY 原创] 档 1 改正量提供者：观测直接估计的色散项 + 模型计算的非色散项。
  *
- * <ul>
- *   <li>电离层：双频码几何无关组合 {@code P1-P2}（固定 B1I/B3I），用载波相位变化做 Hatch 平滑；
- *       输出为第一频点的斜延迟（米）。载波相位缺失时退化为单历元码组合。</li>
- *   <li>对流层：Saastamoinen 模型，按卫星高度角映射为斜延迟（米），
- *       温湿度取固定值（293.15 K / 70%）。</li>
- *   <li>轨道残差：暂记为 0，档 2 网解分离后再替换。</li>
- * </ul>
+ *   - 电离层：双频码几何无关组合 {@code P1-P2}（固定 B1I/B3I），用载波相位变化做 Hatch 平滑；
+ *       输出为第一频点的斜延迟（米）。载波相位缺失时退化为单历元码组合。
+ *   - 对流层：Saastamoinen 模型，按卫星高度角映射为斜延迟（米），
+ *       温湿度取固定值（293.15 K / 70%）。
+ *   - 轨道残差：暂记为 0，档 2 网解分离后再替换。
  *
- * <p>限制：GLONASS 需要频率号（未接入）直接返回 null；平滑与高度角都依赖本站钟面时间，
- * 跨历元调用需按时间升序（{@link NetworkVrsProcessor} 已保证）。</p>
+ * 限制：GLONASS 需要频率号（未接入）直接返回 null；平滑与高度角都依赖本站钟面时间，
+ * 跨历元调用需按时间升序（{@link NetworkVrsProcessor} 已保证）。
  */
 public class ModelCorrectionProvider implements NetworkVrsProcessor.CorrectionProvider {
 

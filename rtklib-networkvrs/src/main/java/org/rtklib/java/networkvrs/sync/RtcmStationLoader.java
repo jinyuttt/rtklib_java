@@ -25,12 +25,12 @@ import java.util.TreeMap;
 /**
  * 从 RTCM3 文件构建 {@link StationObservation}。
  *
- * <p>坐标取自 RTCM 1005/1006（天线参考点 ECEF），缺失时可用 {@code ecefOverride} 显式给定，
+ * 坐标取自 RTCM 1005/1006（天线参考点 ECEF），缺失时可用 {@code ecefOverride} 显式给定，
  * 二者都没有则报错。观测按绝对时间合并：同一历元被拆成多条 MSM 消息（BDS 常见 10+3 帧甚至空帧）
- * 时按卫星合并到一条 {@link Obsd}。</p>
+ * 时按卫星合并到一条 {@link Obsd}。
  *
- * <p>文件路径符合 {@code <yyyy-MM-dd>/<hour>.rtcm3} 时自动按该小时推断时间基准，
- * 避免不含星历的流被解码到 GPS 周 0，导致与其他站时间基准不一致。</p>
+ * 文件路径符合 {@code <yyyy-MM-dd>/<hour>.rtcm3} 时自动按该小时推断时间基准，
+ * 避免不含星历的流被解码到 GPS 周 0，导致与其他站时间基准不一致。
  */
 public final class RtcmStationLoader {
 
@@ -100,7 +100,7 @@ public final class RtcmStationLoader {
     /**
      * 按 {@code <yyyy-MM-dd>/<hour>.rtcm3} 路径推断时间基准。
      *
-     * <p>空纪元取该小时的整点（按 UTC 解析，时区误差仅几小时，不影响周内 tow 对齐）。</p>
+     * 空纪元取该小时的整点（按 UTC 解析，时区误差仅几小时，不影响周内 tow 对齐）。
      *
      * @return 参考时间（GPST）；路径不符合约定返回 null
      */

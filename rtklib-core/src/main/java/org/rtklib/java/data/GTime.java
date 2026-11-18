@@ -5,18 +5,17 @@ import java.io.Serializable;
 /**
  * GPS时间结构体。
  *
- * <p>对应RTKLIB gtime_t。存储GPS时间（GPST），
- * 由整秒部分 time 和小数秒部分 sec 组成。</p>
+ * 对应RTKLIB gtime_t。存储GPS时间（GPST），
+ * 由整秒部分 time 和小数秒部分 sec 组成。
  *
- * <h3>时间系统说明</h3>
- * <ul>
- *   <li>GPST：GPS时间，起算历元 1980-01-06 00:00:00</li>
- *   <li>BDT：北斗时间，BDT = GPST - 14s（14秒偏移）</li>
- *   <li>UTC：协调世界时，UTC = GPST - 闰秒数（当前18秒）</li>
- * </ul>
+ * 时间系统说明
  *
- * <p><b>注意</b>：GTime 内部统一以 GPST 存储，
- * 不同时间系统的转换由 {@link org.rtklib.java.time.TimeSystem} 处理。</p>
+ *   - GPST：GPS时间，起算历元 1980-01-06 00:00:00
+ *   - BDT：北斗时间，BDT = GPST - 14s（14秒偏移）
+ *   - UTC：协调世界时，UTC = GPST - 闰秒数（当前18秒）
+ *
+ * 注意：GTime 内部统一以 GPST 存储，
+ * 不同时间系统的转换由 {@link org.rtklib.java.time.TimeSystem} 处理。
  */
 public class GTime implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -69,7 +68,7 @@ public class GTime implements Serializable {
      * 比较两个GTime的大小。
      *
      * @param other 另一个GTime
-     * @return -1: this&lt;other, 0:相等, 1: this&gt;other
+     * @return -1: this<other, 0:相等, 1: this>other
      */
     public int compareTo(GTime other) {
         if (this.time < other.time) return -1;

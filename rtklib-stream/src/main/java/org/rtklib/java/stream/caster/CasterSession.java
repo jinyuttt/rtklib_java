@@ -12,12 +12,12 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Caster 侧的客户端会话。
  *
- * <p>一个会话对应一条已订阅挂载点的下行连接。下行数据通过 {@link #send(byte[])}
+ * 一个会话对应一条已订阅挂载点的下行连接。下行数据通过 {@link #send(byte[])}
  * 投递到会话队列，由独立写线程异步发出，避免慢客户端阻塞 {@link NtripCaster#publish}
- * 的调用方。</p>
+ * 的调用方。
  *
- * <p>队列满时丢弃最旧帧并计入 {@link #getDroppedFrames()}：实时改正数的时效性
- * 优先于完整性，积压数据对客户端已无价值。</p>
+ * 队列满时丢弃最旧帧并计入 {@link #getDroppedFrames()}：实时改正数的时效性
+ * 优先于完整性，积压数据对客户端已无价值。
  *
  * @see NtripCaster
  * @see NtripCasterListener
@@ -80,7 +80,7 @@ public class CasterSession implements AutoCloseable {
     /**
      * 向本会话投递一帧数据。
      *
-     * <p>方法不阻塞、不抛异常；数据在会话关闭后被静默忽略。</p>
+     * 方法不阻塞、不抛异常；数据在会话关闭后被静默忽略。
      *
      * @param data 待发送的完整数据帧，调用方可复用缓冲区，本方法内部持有引用不复制
      */

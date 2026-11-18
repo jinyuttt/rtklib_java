@@ -30,21 +30,19 @@ import java.util.Locale;
 /**
  * PPP 核心（RTKLIB C 版 {@code ppp.c} 中 {@code pppos} / {@code ppp_res} 的 Java 对齐实现）。
  *
- * <p><b>对齐基准</b>：主体逻辑逐行对齐 RTKLIB 2.5.0（demo5）C 版 {@code ppp.c}。
- * 任何与 C 版不一致之处必须在此或方法内显式注明，否则按回归处理。</p>
+ * 对齐基准：主体逻辑逐行对齐 RTKLIB 2.5.0（demo5）C 版 {@code ppp.c}。
+ * 任何与 C 版不一致之处必须在此或方法内显式注明，否则按回归处理。
  *
- * <p><b>[JAVA-ONLY 原创] 扩展</b>（C 版无对应实现，归属本项目）：
- * <ul>
- *   <li>FIX-ALG-037：IFLC 频率对协商，按卫星搜索可用频率对并选最大频差（噪声最小）；</li>
- *   <li>FIX-ALG-044/061：初始模糊度 sanity 熔断——{@code |Lc-Pc|} 越界即跳过 initx，
- *       避免伪距损坏卫星每历元重复初始化形成死循环；</li>
- *   <li>NL 弧段周跳时的 MW/GF 检测历史清理与 bias 状态重置（状态清理扩展）；</li>
- *   <li>{@code enablePppIsbClockInit}、{@code enableIonoEstRobust} 等可选扩展，默认关闭。</li>
- * </ul>
- * </p>
+ * [JAVA-ONLY 原创] 扩展（C 版无对应实现，归属本项目）：
  *
- * <p><b>勘误（回滚对齐 C）</b>：FIX-ALG-053 曾把 {@code xp}/{@code Pp} 拷贝移到迭代循环外，
- * 属于对 {@code ppp.c:1217-1220} 的错误切片解读；3.4.2 已回滚为循环内拷贝，与 C 版语义一致。</p>
+ *   - FIX-ALG-037：IFLC 频率对协商，按卫星搜索可用频率对并选最大频差（噪声最小）；
+ *   - FIX-ALG-044/061：初始模糊度 sanity 熔断——{@code |Lc-Pc|} 越界即跳过 initx，
+ *       避免伪距损坏卫星每历元重复初始化形成死循环；
+ *   - NL 弧段周跳时的 MW/GF 检测历史清理与 bias 状态重置（状态清理扩展）；
+ *   - {@code enablePppIsbClockInit}、{@code enableIonoEstRobust} 等可选扩展，默认关闭。
+ *
+ * 勘误（回滚对齐 C）：FIX-ALG-053 曾把 {@code xp}/{@code Pp} 拷贝移到迭代循环外，
+ * 属于对 {@code ppp.c:1217-1220} 的错误切片解读；3.4.2 已回滚为循环内拷贝，与 C 版语义一致。
  */
 public class PppCore {
     private static final Logger LOG = LoggerFactory.getLogger(PppCore.class);
@@ -56,8 +54,8 @@ public class PppCore {
 
     /**
      * FIX-ALG-044 初始模糊度 sanity 门限（米）。
-     * <p>实测正常卫星初始 {@code |Lc-Pc|} 为 5 m 量级（见 FIX-ALG-061），
-     * 超过本门限的观测视为伪距损坏，直接跳过初始化。</p>
+     * 实测正常卫星初始 {@code |Lc-Pc|} 为 5 m 量级（见 FIX-ALG-061），
+     * 超过本门限的观测视为伪距损坏，直接跳过初始化。
      */
     public static final double INIT_BIAS_SANITY_DEFAULT = 500.0;
     /** FIX-ALG-061 候选门限（米）：实测不误杀后取代 {@link #INIT_BIAS_SANITY_DEFAULT}。 */
@@ -108,9 +106,9 @@ public class PppCore {
     /**
      * FIX-ALG-061：解析初始模糊度 sanity 门限。
      *
-     * <p>缺省（属性未设置）返回 {@link #INIT_BIAS_SANITY_DEFAULT}，保证默认路径
+     * 缺省（属性未设置）返回 {@link #INIT_BIAS_SANITY_DEFAULT}，保证默认路径
      * 与 FIX-ALG-044 逐位一致；属性非法（非数字、非正、NaN/Inf）同样回退并告警，
-     * 不允许把滤波器置于「所有卫星都被判为粗差」的状态。</p>
+     * 不允许把滤波器置于「所有卫星都被判为粗差」的状态。
      *
      * @param raw 属性原始值，可为 {@code null}
      * @return 生效门限（米）
@@ -146,7 +144,7 @@ public class PppCore {
     /**
      * FIX-ALG-061：按指定门限判定初始模糊度是否越界。
      *
-     * <p>{@code bias == 0} 表示该频点无可用观测（构造时置零），不算粗差。</p>
+     * {@code bias == 0} 表示该频点无可用观测（构造时置零），不算粗差。
      */
     public static boolean isInitBiasOutlier(double bias, double limit) {
         return bias != 0.0 && Math.abs(bias) > limit;
@@ -1871,9 +1869,8 @@ public class PppCore {
 
     /**
      * 取（必要时惰性创建）接口 B 的行序映射缓冲。
-     * <p>
+     *
      * 仅在 provider 已注入时调用，未注入时工作缓冲维持原状，不额外分配（I-1）。
-     * </p>
      */
     private static PppWorkBuffer aiWorkBuffer(Rtk rtk, int maxnv) {
         PppWorkBuffer wb;

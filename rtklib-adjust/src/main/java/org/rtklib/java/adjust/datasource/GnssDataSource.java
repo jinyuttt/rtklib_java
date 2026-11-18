@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * [JAVA-ONLY 原创] 平差数据源抽象：统一 RINEX 文件 / RTCM 文件 / 内存流三种输入。
  *
- * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
+ * 归属声明：本项目原创实现，未移植任何外部开源项目代码。
  */
 public interface GnssDataSource {
 

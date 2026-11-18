@@ -11,19 +11,18 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 整数模糊度聚类估计器（IACE）。
  *
- * <p>用 DBSCAN 聚类替代方差映射，解决遮挡/多径场景下固定解连续性差的问题。
- * 每颗卫星独立维护浮点模糊度样本缓冲区，满足最小样本数后触发 1D DBSCAN。</p>
+ * 用 DBSCAN 聚类替代方差映射，解决遮挡/多径场景下固定解连续性差的问题。
+ * 每颗卫星独立维护浮点模糊度样本缓冲区，满足最小样本数后触发 1D DBSCAN。
  *
- * <h3>算法流程</h3>
- * <ol>
- *   <li>每历元 addSample(satId, floatAmb) → 卫星独立环形缓冲区</li>
- *   <li>estimate(satIds) → 对每颗卫星运行 1D-DBSCAN</li>
- *   <li>自适应 eps = clamp(2σ_buf, 0.10, 0.50) cycles</li>
- *   <li>簇评分 = ratioSize / (1 + σ_cluster)</li>
- *   <li>跨卫星一致性投票：>50% 卫星评分达标 → fix</li>
- * </ol>
+ * 算法流程
  *
- * <p>距离：欧氏距离（wavelength 归一化后为 cycle 单位）。</p>
+ *   - 每历元 addSample(satId, floatAmb) → 卫星独立环形缓冲区
+ *   - estimate(satIds) → 对每颗卫星运行 1D-DBSCAN
+ *   - 自适应 eps = clamp(2σ_buf, 0.10, 0.50) cycles
+ *   - 簇评分 = ratioSize / (1 + σ_cluster)
+ *   - 跨卫星一致性投票：>50% 卫星评分达标 → fix
+ *
+ * 距离：欧氏距离（wavelength 归一化后为 cycle 单位）。
  */
 public class IaceEstimator {
 

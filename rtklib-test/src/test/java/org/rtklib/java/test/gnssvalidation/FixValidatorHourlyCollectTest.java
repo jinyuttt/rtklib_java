@@ -33,34 +33,30 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * 接口一采集：<b>按小时切片</b>的「基准站 + 多流动站」双站数据。
- * <p>
+ * 接口一采集：按小时切片的「基准站 + 多流动站」双站数据。
+ *
  * 与 {@link FixValidatorCollectTest} 的区别只有三点，其余口径完全一致：
- * </p>
- * <ol>
- *   <li>输入不是单日整文件，而是 {@code <rinex-root>/<station>/<yyyy-MM-dd>/<hour>.obs|.nav}。
+ *
+ *   - 输入不是单日整文件，而是 {@code <rinex-root>/<station>/<yyyy-MM-dd>/<hour>.obs|.nav}。
  *       每个小时文件独立成一次运行（滤波器逐小时重启），因此 runId 用 {@code h07} 这类小时号，
- *       与既有 {@code _h7_*.pos} 的切片口径一一对应。</li>
- *   <li>不写 {@code truth.csv}。本数据集为现场设备，RINEX 头 {@code APPROX POSITION XYZ}
+ *       与既有 {@code _h7_*.pos} 的切片口径一一对应。
+ *   - 不写 {@code truth.csv}。本数据集为现场设备，RINEX 头 {@code APPROX POSITION XYZ}
  *       与实测固定解相差数十米（未扣天线高/粗解），不能当真值。真值改由
- *       {@code assemble.py --truth auto} 从多日固定解紧致聚类估计，误差在厘米级。</li>
- *   <li>输出目录独立（{@code collect-hourly}），避免与香港 SatRef 数据集的 CSV 混在一起。</li>
- * </ol>
- * <p>
- * <b>保密约束</b>：本类不含任何站号、坐标、站址常量，全部由系统属性传入；
+ *       {@code assemble.py --truth auto} 从多日固定解紧致聚类估计，误差在厘米级。
+ *   - 输出目录独立（{@code collect-hourly}），避免与香港 SatRef 数据集的 CSV 混在一起。
+ *
+ * 保密约束：本类不含任何站号、坐标、站址常量，全部由系统属性传入；
  * 采集产物落在 {@code data/} 下（已被 .gitignore 忽略），不入库。
- * </p>
- * <pre>
+ *
  * mvn test -pl rtklib-test -Dtest=FixValidatorHourlyCollectTest \
  *   -Dhourlyrtk.enable=true \
  *   -Dhourlyrtk.rinex-root=<rinex-root> \
  *   -Dhourlyrtk.base=XXXX -Dhourlyrtk.rovers=X1,X2 -Dhourlyrtk.days=2026-06-18 \
  *   -Dhourlyrtk.hours=7
- * </pre>
+ *
  * 可用属性见类内 {@code PROP_*} 常量；缺省值均为「不跑任何东西」的安全值。
- * <p>
+ *
  * 幂等：某 (站, 日, 小时) 的 CSV 与 trace 均已存在时跳过，可断点续采。
- * </p>
  */
 @DisplayName("接口一采集：按小时切片的双站数据")
 class FixValidatorHourlyCollectTest {
@@ -144,11 +140,10 @@ class FixValidatorHourlyCollectTest {
 
     /**
      * 两种采集共用的遍历骨架。
-     * <p>
+     *
      * 站/日/小时/基站的配对规则、缺文件跳过、幂等跳过必须逐位一致：接口三的 A2 判据是
-     * 「C 组 vs A 组<b>同历元配对</b>」，两组若连输入集合都不同，配对统计就失去意义。
+     * 「C 组 vs A 组同历元配对」，两组若连输入集合都不同，配对统计就失去意义。
      * 故此处只用 {@code obsMode} 一处分叉，差异仅限采集器与 trace 主题，不复制遍历逻辑。
-     * </p>
      */
     private void collectAll(Path rinexRoot, String base, List<String> rovers, List<String> days,
                             String hoursProp, Path collectDir, String atxPath, boolean obsMode)
@@ -246,16 +241,14 @@ class FixValidatorHourlyCollectTest {
 
     /**
      * 接口三单次运行采集：17 维特征落 {@code .obs.csv}，标签落 trace 的 {@code AI3/DDRES}。
-     * <p>
+     *
      * 与 {@link #collectOne} 的差异只有两处，其余（{@link #createOpt()}、站/日/基站配对、
      * RINEX 输入、{@link RtkConfig}）逐位相同——这是 A2 配对验收的前提：
      * 两组解算若有一处口径分叉，配对出的指标就不再是同源对照。
-     * </p>
-     * <ul>
-     *   <li>采集器换成 {@link ObsCorrectorCollectSession}：一历元 × 一卫星 × 一频点一行；</li>
-     *   <li>trace 主题加 {@code AI3}：标签是未扣偏差的双差码残差（{@code before}），
-     *       {@code AR} 仍保留，供组装阶段写入 {@code solution_stat}。</li>
-     * </ul>
+     *
+     *   - 采集器换成 {@link ObsCorrectorCollectSession}：一历元 × 一卫星 × 一频点一行；
+     *   - trace 主题加 {@code AI3}：标签是未扣偏差的双差码残差（{@code before}），
+     *       {@code AR} 仍保留，供组装阶段写入 {@code solution_stat}。
      */
     private void collectObsOne(CollectConfig cfg, String roverObs, String baseObs,
                                String navFile, String atxPath, String baseStation)
@@ -361,11 +354,10 @@ class FixValidatorHourlyCollectTest {
 
     /**
      * 逐小时解算配置（包级可见，供 {@link ObsCorrectorPairingTest} 复用）。
-     * <p>
-     * <b>不得复制</b>：A2 配对要求 A/C 两组解算口径逐位一致，只允许「是否注入 AI」一处不同。
+     *
+     * 不得复制：A2 配对要求 A/C 两组解算口径逐位一致，只允许「是否注入 AI」一处不同。
      * 一旦这里分叉（例如某组换了 {@code armode} 或 {@code thresar}），配对出的固定率差
      * 就不再是同源对照，而是两组不同解算器的差。
-     * </p>
      */
     static PrcOpt createOpt() {
         PrcOpt opt = new PrcOpt();

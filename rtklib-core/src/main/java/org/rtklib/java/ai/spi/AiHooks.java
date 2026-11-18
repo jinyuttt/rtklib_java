@@ -6,13 +6,11 @@ import org.slf4j.LoggerFactory;
 
 /**
  * AI 接口注入点（{@link ThreadLocal} 持有 {@link AiProvider}）。
- * <p>
+ *
  * 使用 {@link ThreadLocal} 而非裸 static：保住测试隔离与并行 A/B 能力；
  * 裸 static 会让 I-1 零回归验证退化为「测试顺序相关」。
- * </p>
- * <p>
- * 解析优先级：实例字段（{@link Rtk}）&gt; 注入点；两者都为 {@code null} 即关闭。
- * </p>
+ *
+ * 解析优先级：实例字段（{@link Rtk}）> 注入点；两者都为 {@code null} 即关闭。
  */
 public final class AiHooks {
 

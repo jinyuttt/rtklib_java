@@ -39,18 +39,17 @@ import org.rtklib.java.research.pipeline.SceneEvaluator.Scene;
 /**
  * FGO 后端实现（实现 SolverBackend 接口，内部使用 FactorGraph 滑动窗口优化）。
  *
- * <p>移植自 FE-GUT gnss_uwb.cc 主循环的 FGO 分支 + tc_factor.h + predict_factor.h
- * + marginalization_info.h + marginalization_factor.h。</p>
+ * 移植自 FE-GUT gnss_uwb.cc 主循环的 FGO 分支 + tc_factor.h + predict_factor.h
+ * + marginalization_info.h + marginalization_factor.h。
  *
- * <p>数据流：
- * <ol>
- *   <li>新历元到来 → 创建状态变量节点（11维）+ tdk + amb 变量节点</li>
- *   <li>构建 TcFactor → 伪距+伪距率+UWB紧耦合因子</li>
- *   <li>构建 PhaseFactor → 载波相位+模糊度因子</li>
- *   <li>构建 PredictFactor → 连接前后历元状态/模糊度</li>
- *   <li>窗口满时 → 边缘化最老状态+模糊度 → 生成 MarginalizationFactor</li>
- *   <li>LM 优化 → 提取最新状态 → 输出 Solution (FLOAT)</li>
- * </ol>
+ * 数据流：
+ *
+ *   - 新历元到来 → 创建状态变量节点（11维）+ tdk + amb 变量节点
+ *   - 构建 TcFactor → 伪距+伪距率+UWB紧耦合因子
+ *   - 构建 PhaseFactor → 载波相位+模糊度因子
+ *   - 构建 PredictFactor → 连接前后历元状态/模糊度
+ *   - 窗口满时 → 边缘化最老状态+模糊度 → 生成 MarginalizationFactor
+ *   - LM 优化 → 提取最新状态 → 输出 Solution (FLOAT)
  */
 public class FgoBackend implements SolverBackend {
 

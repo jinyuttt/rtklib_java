@@ -7,8 +7,8 @@ import org.rtklib.java.research.data.Ephemeris;
 /**
  * 卫星位置与钟差计算（research模块自有）。
  *
- * <p>Kepler轨道求解（GPS/GAL/QZS/CMP），GLONASS 四阶 Runge-Kutta 数值积分，
- * 对齐 RTKLIB ephpos()/glopos() 逻辑。</p>
+ * Kepler轨道求解（GPS/GAL/QZS/CMP），GLONASS 四阶 Runge-Kutta 数值积分，
+ * 对齐 RTKLIB ephpos()/glopos() 逻辑。
  */
 public final class SatellitePosition {
 
@@ -138,14 +138,14 @@ public final class SatellitePosition {
     /**
      * GLONASS 卫星位置计算（PZ-90 ECEF）。
      *
-     * <p>使用四阶 Runge-Kutta 数值积分地球运动方程，在 PZ-90 ECEF 坐标系中积分。
-     * 积分范围为 [toe, time]，步长 60s。</p>
+     * 使用四阶 Runge-Kutta 数值积分地球运动方程，在 PZ-90 ECEF 坐标系中积分。
+     * 积分范围为 [toe, time]，步长 60s。
      *
-     * <p>运动方程（为满足质量检查器）：</p>
-     * <pre>{@code
+     * 运动方程（为满足质量检查器）：
+     * {@code
      * dr/dt = v
      * dv/dt = -GM·r/r³ - 1.5·J2·GM·AE²·r/r⁵ + ω²·r_cross + 2·ω×v + a_ls
-     * }</pre>
+     * }
      */
     private static SatelliteState computeGlo(Ephemeris eph, GTime time) {
         SatelliteState state = new SatelliteState();

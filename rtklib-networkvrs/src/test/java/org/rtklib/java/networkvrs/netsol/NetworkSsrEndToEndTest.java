@@ -34,20 +34,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 多站 RTCM3 观测 + 同日录制 SSR 流的端到端验证。
  *
- * <p>数据不在仓库内（私有数据集），全部通过属性指定，缺任一项自动跳过：</p>
- * <ul>
- *   <li>{@code -Dnetwork.rtcm.dir}：观测根目录，结构 {@code <deviceId>/<yyyy-MM-dd>/<hour>.rtcm3}</li>
- *   <li>{@code -Dnetwork.station.ids}：参与网形的设备 ID（逗号分隔，至少 3 个）</li>
- *   <li>{@code -Dnetwork.master.id}：主站设备 ID，须在 {@code network.station.ids} 内</li>
- *   <li>{@code -Dnetwork.date}：观测日期目录（北京时间命名）</li>
- *   <li>{@code -Dnetwork.hours}：观测小时文件（北京时间，逗号分隔）</li>
- *   <li>{@code -Dnetwork.ssr.dir}：录制 SSR 流目录（UTC 日期命名，按小时分文件）</li>
- *   <li>{@code -Dnetwork.max.epochs}：参与网解的最大历元数（默认 240）</li>
- *   <li>{@code -Dnetwork.window.epochs}：批处理窗口历元数（默认 20）</li>
- * </ul>
+ * 数据不在仓库内（私有数据集），全部通过属性指定，缺任一项自动跳过：
  *
- * <p>观测流内 TOW 为 UTC、目录/文件名是北京时间（UTC+8），SSR 录制目录按 UTC 命名，
- * 因此 SSR 小时文件由观测首历元换算出的 UTC 小时自动定位，不依赖手工指定。</p>
+ *   - {@code -Dnetwork.rtcm.dir}：观测根目录，结构 {@code <deviceId>/<yyyy-MM-dd>/<hour>.rtcm3}
+ *   - {@code -Dnetwork.station.ids}：参与网形的设备 ID（逗号分隔，至少 3 个）
+ *   - {@code -Dnetwork.master.id}：主站设备 ID，须在 {@code network.station.ids} 内
+ *   - {@code -Dnetwork.date}：观测日期目录（北京时间命名）
+ *   - {@code -Dnetwork.hours}：观测小时文件（北京时间，逗号分隔）
+ *   - {@code -Dnetwork.ssr.dir}：录制 SSR 流目录（UTC 日期命名，按小时分文件）
+ *   - {@code -Dnetwork.max.epochs}：参与网解的最大历元数（默认 240）
+ *   - {@code -Dnetwork.window.epochs}：批处理窗口历元数（默认 20）
+ *
+ * 观测流内 TOW 为 UTC、目录/文件名是北京时间（UTC+8），SSR 录制目录按 UTC 命名，
+ * 因此 SSR 小时文件由观测首历元换算出的 UTC 小时自动定位，不依赖手工指定。
  */
 class NetworkSsrEndToEndTest {
 

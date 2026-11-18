@@ -3,12 +3,12 @@ package org.rtklib.java.otl;
 /**
  * [JAVA-ONLY 原创] 单个分潮在指定历元的交点潮调制量：振幅因子 f、相位改正 u、相位偏置。
  *
- * <p><b>来源说明</b>：f、u 的级数系数是 Schureman (1958) 潮汐调和分析中的经典结果，
+ * 来源说明：f、u 的级数系数是 Schureman (1958) 潮汐调和分析中的经典结果，
  * 并在 IERS Conventions (2010) 第 7 章（海洋潮汐负荷）中重述；相位偏置对应
  * 同一章中的正弦/余弦分潮约定。均为公开发表的物理公式，本类按公式独立实现，
- * 未沿用任何特定软件源码的结构或命名。</p>
+ * 未沿用任何特定软件源码的结构或命名。
  *
- * <p>本类是不可变值对象。</p>
+ * 本类是不可变值对象。
  */
 public final class NodalCorrection {
 
@@ -32,8 +32,8 @@ public final class NodalCorrection {
     /**
      * 计算给定分潮的交点潮调制量。
      *
-     * <p>短周期分潮（半日、全日）受月球升交点 N 的 18.61 年周期调制；
-     * 长周期分潮（Mf、Mm、Ssa）在本模块的 BLQ 输出中不施加调制。</p>
+     * 短周期分潮（半日、全日）受月球升交点 N 的 18.61 年周期调制；
+     * 长周期分潮（Mf、Mm、Ssa）在本模块的 BLQ 输出中不施加调制。
      */
     public static NodalCorrection of(TidalConstituent constituent, AstronomicalArgument argument) {
         double nodeDeg = argument.ascendingNodeDegrees();

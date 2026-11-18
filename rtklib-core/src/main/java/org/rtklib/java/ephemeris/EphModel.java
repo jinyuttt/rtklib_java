@@ -333,7 +333,7 @@ public final class EphModel {
 
     /**
      * Search ephemeris for GPS/GAL/QZS/CMP/IRN satellite.
-     * <p>
+     *
      * tmax 按系统分档，复用 Constants.MAXDTOE_*，与 RTKLIB ephemeris.c seleph() 一致。
      */
     private static Eph searchEphemeris(Nav nav, int sat, GTime time) {
@@ -362,7 +362,7 @@ public final class EphModel {
 
     /**
      * 星历最大年龄（s），对齐 RTKLIB ephemeris.c seleph()/selgeph()。
-     * <p>
+     *
      * seleph() 中 GPS/QZS/CMP/IRN/default 用 MAXDTOE_*+1.0，GAL 单独不加 1.0；
      * selgeph() 用 MAXDTOE_GLO；SBS 不走 seleph，由 MAXDTOE_SBS 单独处理。
      */
@@ -493,9 +493,9 @@ public final class EphModel {
      * No broadcast fallback: pephpos/pephclk failure drops the satellite
      * (C satpos EPHOPT_PREC branch: *svh=-1, return 0).
      *
-     * <p>公开入口：供只做单星位置计算（如网解双差构造）的调用方使用，
+     * 公开入口：供只做单星位置计算（如网解双差构造）的调用方使用，
      * 需先由 {@code Sp3Reader.readsp3} / {@code ClkReader.readclk} 装载
-     * {@code nav.peph} 与 {@code nav.pclk}。</p>
+     * {@code nav.peph} 与 {@code nav.pclk}。
      *
      * @param time 卫星信号发射时刻（gpst）
      * @param sat  卫星号

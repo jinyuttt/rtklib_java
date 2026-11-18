@@ -34,19 +34,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 接口三（伪距偏差改正）端到端注入验证：真实公开 RINEX 数据 + 真实 relpos 解算。
- * <p>
+ *
  * 本类只使用 core 侧 SPI 与桩实现，不依赖 {@code rtklib-ai}，用于独立验证三件事：
- * <ol>
- *   <li><b>I-1 零回归</b>：注入 provider 但接口三返回 {@code null} 时，解算结果与完全不注入逐位一致；</li>
- *   <li><b>改正确实生效</b>：注入确定性偏差后，解算位置发生可观测变化；</li>
- *   <li><b>降级绝不 fail-closed</b>：抛异常、越界、非法长度、方差 {@code < 1.0} 时全部回退到「不干预」。</li>
- * </ol>
+ *
+ *   - I-1 零回归：注入 provider 但接口三返回 {@code null} 时，解算结果与完全不注入逐位一致；
+ *   - 改正确实生效：注入确定性偏差后，解算位置发生可观测变化；
+ *   - 降级绝不 fail-closed：抛异常、越界、非法长度、方差 {@code < 1.0} 时全部回退到「不干预」。
+ *
  * 另外验证 IFLC 模式下 core 侧统一门禁：接口三一次都不应被调用。
- * </p>
- * <p>
+ *
  * 数据源：Net_Diff 公开短基线（199m，G+E+J+C，rover 单频 L1）与 cssrlib 公开中基线
  * （5.3km，G+E+J 双频），均为仓库 {@code test-data/} 内置的公开数据集。
- * </p>
  */
 @DisplayName("接口三端到端：公开 RINEX 数据注入验证")
 @Tag("manual")

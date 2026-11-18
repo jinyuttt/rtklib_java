@@ -15,18 +15,18 @@ import java.util.List;
 /**
  * VMF3 OP（Output Parameter）文件读取与插值。
  *
- * <p>VMF3（Vienna Mapping Function 3）是当前最精确的经验对流层映射函数，
+ * VMF3（Vienna Mapping Function 3）是当前最精确的经验对流层映射函数，
  * 优于GMF/GPT2等简化模型。OP文件提供测站位置的VMF3映射函数系数（ah, aw, bH, bW），
  * 通常按6小时间隔提供（00:00, 06:00, 12:00, 18:00 UTC）。
  *
- * <p>VMF3映射函数计算：
+ * VMF3映射函数计算：
  *   mf(e) = (1 + a/(1 + b/(1 + c))) / (sin(e) + a/(sin(e) + b/(sin(e) + c)))
  *   其中 a = ah或aw（干/湿系数），b = bH或bW，c为常数
  *
- * <p>文件来源：TU Wien VMF服务器 (http://vmf.geo.tuwien.ac.at/trop_products/VMF3/)
+ * 文件来源：TU Wien VMF服务器 (http://vmf.geo.tuwien.ac.at/trop_products/VMF3/)
  * 文件格式：每行 MJD ah aw bH bW [可选：ah2 aw2 bH2 bW2 ah3 aw3]
  *
- * <p>对应C版：RTKLIB使用简化GMF模型，本模块为v2.2.2新增优化
+ * 对应C版：RTKLIB使用简化GMF模型，本模块为v2.2.2新增优化
  */
 public final class Vmf3OpReader {
     private Vmf3OpReader() {}

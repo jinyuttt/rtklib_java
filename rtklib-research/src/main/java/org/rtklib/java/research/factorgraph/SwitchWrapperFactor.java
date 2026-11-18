@@ -8,13 +8,13 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 开关包装因子 — 为任意 GNSS 观测因子添加 SwitchVariable。
  *
- * <p>参考 gtsam_gnss 的 SwitchVariable 机制（PLANS 2025, Suzuki）：
+ * 参考 gtsam_gnss 的 SwitchVariable 机制（PLANS 2025, Suzuki）：
  * 每个因子连接一个开关变量 s ∈ [0, 1]，其残差缩放因子为 s。
  * 当观测质量差时，优化器自动将 s → 0，等效于"关闭"该因子。
- * SwitchPriorFactor 提供先验约束 s ~ 1，只有数据强烈反对时才偏离。</p>
+ * SwitchPriorFactor 提供先验约束 s ~ 1，只有数据强烈反对时才偏离。
  *
- * <h3>数学形式</h3>
- * <pre>
+ * 数学形式
+ *
  *   原残差: r(x) = h(x) - z
  *   开关残差: r'(x, s) = s · r(x)
  *
@@ -25,17 +25,15 @@ import org.ejml.simple.SimpleMatrix;
  *   Hessian 贡献（W = R^{-1} 为信息矩阵）:
  *     J^T W J → s² · J_orig^T W J_orig（状态块，被 s 衰减）
  *     r^T W r → 驱动 s 偏离 1 的梯度
- * </pre>
  *
- * <p>使用方式：
- * <pre>
+ * 使用方式：
+ *
  *   TcFactor tcFactor = new TcFactor(...);
  *   Variable switchVar = new Variable("sw_tc_0", 1);   // 初始值 = 1.0
  *   SwitchWrapperFactor swFactor = new SwitchWrapperFactor(tcFactor, switchVar);
  *   graph.addVariable(switchVar);
  *   graph.addFactor(swFactor);
  *   graph.addFactor(new SwitchPriorFactor(switchVar, 0.1));  // s ~ N(1.0, 0.1²)
- * </pre>
  */
 public class SwitchWrapperFactor extends Factor {
 

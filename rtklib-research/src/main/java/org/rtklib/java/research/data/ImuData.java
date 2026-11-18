@@ -6,11 +6,11 @@ import org.rtklib.java.research.common.GTime;
 /**
  * IMU 原始数据（加速度计 + 陀螺仪）。
  *
- * <p>参考 GREAT-MSF / Wheel-GINS 的 IMU 数据模型：
+ * 参考 GREAT-MSF / Wheel-GINS 的 IMU 数据模型：
  * 加速度计输出比力 (specific force) 在载体坐标系 (body frame)，
- * 陀螺仪输出角速度在载体坐标系。</p>
+ * 陀螺仪输出角速度在载体坐标系。
  *
- * <p>典型 IMU 频率 100-200Hz，GNSS 频率 1Hz，需时间对齐。</p>
+ * 典型 IMU 频率 100-200Hz，GNSS 频率 1Hz，需时间对齐。
  */
 public class ImuData implements Serializable {
     private static final long serialVersionUID = 1L;

@@ -116,7 +116,7 @@ public class AiOpts implements Serializable {
 
     /**
      * 确定性基线（非 AI）：位置方差和 {@code qr[0]+qr[1]+qr[2]} 超过此值即降级（§3.2）。
-     * <p>默认 {@code Double.MAX_VALUE} 即分支关闭，保证 I-1 零回归。</p>
+     * 默认 {@code Double.MAX_VALUE} 即分支关闭，保证 I-1 零回归。
      */
     public double pppQrThreshold = DEFAULT_PPP_QR_THRESHOLD;
 
@@ -223,7 +223,7 @@ public class AiOpts implements Serializable {
 
     /**
      * 确定性位置方差门限钳位：非有限或负数一律回退默认值（分支关闭）。
-     * <p>负数若钳到 0 会让每个历元都被降级，故按「更保守」方向回退默认。</p>
+     * 负数若钳到 0 会让每个历元都被降级，故按「更保守」方向回退默认。
      */
     private static double clampQrThreshold(double v) {
         if (!Double.isFinite(v) || v < 0.0) {

@@ -11,14 +11,13 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * [Java扩展] QposSolver 单元测试。
  *
- * <p>钉死路线A的核心语义：</p>
- * <ul>
- *   <li>FIX 分支列集为 {@code A ∩ [0,NR)}，当 NR&gt;3 时电离层/对流层不确定性
- *       必须通过求逆边缘化传播到位置块（而非只取前 3 列）；</li>
- *   <li>FLOAT 分支列集保留模糊度列，位置块等于全活跃列法方程逆的前 3×3；</li>
- *   <li>必须用完整 {@code R⁻¹} 而非 {@code diag(R)⁻¹}；</li>
- *   <li>零列不进列集，位置列恒在列集最前。</li>
- * </ul>
+ * 钉死路线A的核心语义：
+ *
+ *   - FIX 分支列集为 {@code A ∩ [0,NR)}，当 NR>3 时电离层/对流层不确定性
+ *       必须通过求逆边缘化传播到位置块（而非只取前 3 列）；
+ *   - FLOAT 分支列集保留模糊度列，位置块等于全活跃列法方程逆的前 3×3；
+ *   - 必须用完整 {@code R⁻¹} 而非 {@code diag(R)⁻¹}；
+ *   - 零列不进列集，位置列恒在列集最前。
  */
 class QposSolverTest {
 

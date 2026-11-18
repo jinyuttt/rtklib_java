@@ -17,25 +17,25 @@ import java.util.Map;
 /**
  * [FIX-ALG-042 §13.9 Phase C] 闸3：基站间基线骨架网。
  *
- * <p><b>为什么需要闸3</b>：闸1/闸2 都基于 rover 的双差残差，rover 侧异常（位置跳变、
+ * 为什么需要闸3：闸1/闸2 都基于 rover 的双差残差，rover 侧异常（位置跳变、
  * 观测粗差、整历元模糊度重置）会同时污染所有基线，只能靠「公共模式分离」间接排除。
- * 基站间基线（base-base）不含 rover 观测，其长度变化是<b>纯粹</b>的基站位移观测量，
- * 因此可作为独立佐证：rover 无解（{@code totalNs=0}）时闸3 依然工作。</p>
+ * 基站间基线（base-base）不含 rover 观测，其长度变化是纯粹的基站位移观测量，
+ * 因此可作为独立佐证：rover 无解（{@code totalNs=0}）时闸3 依然工作。
  *
- * <p><b>实现方式</b>：对每对基站 {@code (i,j)} 维护一个独立的静态 {@link Rtk} 滤波器
+ * 实现方式：对每对基站 {@code (i,j)} 维护一个独立的静态 {@link Rtk} 滤波器
  * （{@code PMODE_STATIC}、{@code dynamics=0}），把基站 j 的观测当作 rover、
  * 基站 i 的坐标当作已知基站，调用 {@link RtkCore#rtkpos} 解出 j 相对 i 的位置。
  * 只用 FIX 解的基线长度，参考长度由前 {@link #REF_SAMPLES} 个 FIX 解的中位数确定，
- * 判据为 {@code |Δlen| > max(5 cm, 3σ)}（σ 取静态滤波器位置协方差）。</p>
+ * 判据为 {@code |Δlen| > max(5 cm, 3σ)}（σ 取静态滤波器位置协方差）。
  *
- * <p><b>归属逻辑</b>：{@code k>=3} 时单台基站位移会污染它参与的全部 {@code k-1} 对，
+ * 归属逻辑：{@code k>=3} 时单台基站位移会污染它参与的全部 {@code k-1} 对，
  * 而正常基站只污染 1 对，故「异常对数 >= 2」即可定位到具体基站；
- * {@code k=2} 时只有 1 对，只能给出「两基站间基线异常」的联合结论（不可定位）。</p>
+ * {@code k=2} 时只有 1 对，只能给出「两基站间基线异常」的联合结论（不可定位）。
  *
- * <p><b>本阶段定位</b>：闸3 输出为<b>诊断与佐证</b>，不直接驱动剔除。
+ * 本阶段定位：闸3 输出为诊断与佐证，不直接驱动剔除。
  * 剔除（Phase D）由闸2 的逐历元证据驱动，闸3 结论用于确认「位移确实发生在基站侧」
  * 而非 rover 侧。原因是静态骨架解的采样率低（默认 60 历元一次），
- * 单次结论的时延不足以支撑及时的剔除动作。</p>
+ * 单次结论的时延不足以支撑及时的剔除动作。
  */
 public class BaseSkeletonNetwork implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -145,9 +145,9 @@ public class BaseSkeletonNetwork implements Serializable {
     /**
      * 为「基站 j 相对基站 i」建立静态滤波器：基站 i 作为已知坐标（rb）。
      *
-     * <p>除模式与动态模型外，其余配置（{@code navsys}/{@code nf}/{@code ionoopt}/
+     * 除模式与动态模型外，其余配置（{@code navsys}/{@code nf}/{@code ionoopt}/
      * {@code tropopt}/{@code modear} 等）沿用联合解算的 {@link PrcOpt}，
-     * 保证骨架解与主解使用同一套观测模型（否则两条链路的天线/频率/系统配置可能不一致）。</p>
+     * 保证骨架解与主解使用同一套观测模型（否则两条链路的天线/频率/系统配置可能不一致）。
      */
     private Rtk createRtk(PrcOpt template, double[] rbBase) {
         Rtk rtk = new Rtk();

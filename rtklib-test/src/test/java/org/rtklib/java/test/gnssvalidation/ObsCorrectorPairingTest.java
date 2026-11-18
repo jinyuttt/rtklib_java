@@ -41,52 +41,42 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * 接口三 A2/A3 三跑配对：<b>A 组（原生，不注入） vs C 组（bias+scale 全开） vs
- * D 组（强制 {@code biasMeters≡0}，仅保留 {@code varianceScale}）</b>。
+ * 接口三 A2/A3 三跑配对：A 组（原生，不注入） vs C 组（bias+scale 全开） vs
+ * D 组（强制 {@code biasMeters≡0}，仅保留 {@code varianceScale}）。
  *
- * <p>
  * 这是 §7.5.2 的落地：A2 的每一条都要求「同历元配对」，不是跨数据集比两个比例。
- * 因此本类对<b>同一批输入</b>跑三遍，唯一差异是 {@link AiHooks#install} 注入的
+ * 因此本类对同一批输入跑三遍，唯一差异是 {@link AiHooks#install} 注入的
  * {@link ObsCorrector} 实现：C 组注入原样输出，D 组注入「偏差置零」装饰器；
  * 站/日/小时/基站/星历/AR 配置/天线改正全部复用
  * {@link FixValidatorHourlyCollectTest#createOpt()}，不在此处复制解算参数。
- * </p>
  *
- * <p>
- * <b>为什么要有 D 组</b>：C 组把两个头的效果混在一起，指标一旦变化无法归因。
+ * 为什么要有 D 组：C 组把两个头的效果混在一起，指标一旦变化无法归因。
  * D 组把 {@code biasMeters} 强制置 0，只剩 {@code varianceScale}（单侧方差膨胀）——
  * 于是「C 组相对 A 组的变化」可分解为「D 组（尺度头）」+「C 组相对 D 组（偏差头）」。
  * D 组同时也是注入正确性的反证：它的 trace 里 {@code after} 必须恒等于
  * {@code before}，否则说明 bias 并未真正置零。
- * </p>
  *
- * <p>
  * 产物（{@code data/fix-validator/pairing} 下，已被 .gitignore 忽略）：
- * </p>
- * <ul>
- *   <li>{@code pairing.A.sol.csv} / {@code pairing.C.sol.csv} / {@code pairing.D.sol.csv}：
- *       逐历元解（stat/ns/ECEF/ratio）；</li>
- *   <li>{@code pairing.A.ai3.csv} / {@code pairing.C.ai3.csv} / {@code pairing.D.ai3.csv}：
+ *
+ *   - {@code pairing.A.sol.csv} / {@code pairing.C.sol.csv} / {@code pairing.D.sol.csv}：
+ *       逐历元解（stat/ns/ECEF/ratio）；
+ *   - {@code pairing.A.ai3.csv} / {@code pairing.C.ai3.csv} / {@code pairing.D.ai3.csv}：
  *       逐 (历元, 星, 频点) 的 {@code before} / {@code after} / {@code Ri} / {@code Rj}
- *       （§7.5.3 的六元组，{@code Ri}/{@code Rj} 取方差膨胀前的原生值）；</li>
- *   <li>{@code _pairing_runs.csv}：每次运行的 {@code total_epochs} 与计数，供固定率分母
- *       与断点续跑使用（三组原子完成，{@code status=ok} 即三组都已落盘）。</li>
- * </ul>
- * <p>
+ *       （§7.5.3 的六元组，{@code Ri}/{@code Rj} 取方差膨胀前的原生值）；
+ *   - {@code _pairing_runs.csv}：每次运行的 {@code total_epochs} 与计数，供固定率分母
+ *       与断点续跑使用（三组原子完成，{@code status=ok} 即三组都已落盘）。
+ *
  * 指标计算（A2-1~A2-4、A3 真实复核）由 {@code training/obs_corrector/a2_pairing.py} 读取上述
  * CSV 完成，本类只负责「跑」与「落原始配对数据」，不在 Java 侧重复统计口径。
- * </p>
- * <p>
- * <b>保密约束</b>：本类不含任何站号、坐标、站址常量，站/日/基准站与切分（含哪两个站是
+ *
+ * 保密约束：本类不含任何站号、坐标、站址常量，站/日/基准站与切分（含哪两个站是
  * 未见测试站）全部由系统属性或训练产物 {@code obs_corrector.metrics.json} 传入。
- * </p>
- * <pre>
+ *
  * mvn test -pl rtklib-test -Dtest=ObsCorrectorPairingTest \
  *   -Dpairing.enable=true \
  *   -Dhourlyrtk.rinex-root=<rinex-root> -Dhourlyrtk.base=XXXX \
  *   -Dhourlyrtk.rovers=X1,X2 -Dhourlyrtk.days=2026-06-06 \
  *   -Dhourlyrtk.nf=2 -Dhourlyrtk.navsys=cmp -Dhourlyrtk.armode=fixhold
- * </pre>
  */
 @DisplayName("接口三 A2/A3 三跑配对：A（原生）/ C（bias+scale）/ D（仅 scale）")
 class ObsCorrectorPairingTest {
@@ -337,15 +327,13 @@ class ObsCorrectorPairingTest {
 
     /**
      * D 组装饰器：把接口三输出的 {@code biasMeters} 全部置 0，只透传 {@code varianceScale}。
-     * <p>
-     * 与「换一个模型」不同，本类<b>不改变</b>被包装实现的推理与短窗演化：同一个
+     *
+     * 与「换一个模型」不同，本类不改变被包装实现的推理与短窗演化：同一个
      * {@link ObsCorrectorImpl} 实例先跑 C 组、再跑 D 组，两组看到的窗口历史逐位一致，
      * 唯一差别是 core 拿到的偏差量——这样「C 相对 D 的差异」才能干净地归因到偏差头。
-     * </p>
-     * <p>
+     *
      * {@code varianceScale} 为 {@code null} 时返回 {@link CodeCorrection#NONE}（降级为
      * 不干预），与 core 侧对降级的判定一致。
-     * </p>
      */
     private static final class ScaleOnlyCorrector implements ObsCorrector {
         private final ObsCorrector delegate;
@@ -383,10 +371,9 @@ class ObsCorrectorPairingTest {
 
     /**
      * 只提供接口三的 {@link AiProvider}：接口一返回 {@code null}（本类不评估接口一）。
-     * <p>
+     *
      * 与直接 {@code AiHooks.install(provider)} 的区别仅在于接口三可以是任意实现
      * （C 组原样、D 组置零），从而三组共用同一套注入路径。
-     * </p>
      */
     private static final class SingleCorrectorProvider implements AiProvider {
         private final ObsCorrector obs;
@@ -408,16 +395,14 @@ class ObsCorrectorPairingTest {
 
     /**
      * {@code AI3/DDRES} 与 {@code AI3/DDRES_REJ} 的行级收集。
-     * <p>
-     * <b>先缓存后落盘</b>：{@code Trace.emit} 对回调异常是 {@code catch (Exception ignored)}
+     *
+     * 先缓存后落盘：{@code Trace.emit} 对回调异常是 {@code catch (Exception ignored)}
      * （trace 不得影响解算），若在回调里直接写文件，磁盘写失败会被静默吞掉，长时间跑的
      * 配对数据会缺行而无任何报错。故回调只做解析入表，{@link #flushTo} 在 {@code process()}
      * 返回后才写，IO 失败可正常抛出。
-     * </p>
-     * <p>
+     *
      * {@code DDRES_REJ} 只用于 A2-4 归因（判定 {@code ns} 减少是否由 {@code maxinno}
      * 剔除行为改变引起），不参与 A3；因此 {@code ri}/{@code rj} 留空，并以 {@code rej=1} 标记。
-     * </p>
      */
     private static final class Ai3Collector {
         private final String station;

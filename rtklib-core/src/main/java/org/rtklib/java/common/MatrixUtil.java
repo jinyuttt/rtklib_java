@@ -5,23 +5,21 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 矩阵工具类，封装 EJML SimpleMatrix 操作。
  *
- * <p>提供行优先数组与 EJML SimpleMatrix 之间的转换，以及常用矩阵运算。
- * 所有数组均按<b>行优先（row-major）</b>存储，即 M[row * cols + col]。</p>
+ * 提供行优先数组与 EJML SimpleMatrix 之间的转换，以及常用矩阵运算。
+ * 所有数组均按行优先（row-major）存储，即 M[row * cols + col]。
  *
- * <h3>为什么统一行优先</h3>
- * <ul>
- *   <li>Java/C++ 惯例是行优先，RTKLIB C 版本使用列优先（Fortran风格）</li>
- *   <li>EJML SimpleMatrix 内部也是行优先，直接映射无需转置</li>
- *   <li>避免行列优先混淆导致的矩阵乘法顺序错误</li>
- * </ul>
+ * 为什么统一行优先
  *
- * <h3>与RTKLIB C版本的对应关系</h3>
- * <table>
- *   <tr><th>C版本（列优先）</th><th>Java版本（行优先）</th></tr>
- *   <tr><td>H[k + nv*nx]</td><td>H[nv*nx + k]</td></tr>
- *   <tr><td>R[i + j*ny]</td><td>R[i*ny + j]</td></tr>
- *   <tr><td>P[i + j*nx]</td><td>P[i*nx + j]</td></tr>
- * </table>
+ *   - Java/C++ 惯例是行优先，RTKLIB C 版本使用列优先（Fortran风格）
+ *   - EJML SimpleMatrix 内部也是行优先，直接映射无需转置
+ *   - 避免行列优先混淆导致的矩阵乘法顺序错误
+ *
+ * 与RTKLIB C版本的对应关系
+ *
+ *    C版本（列优先） | Java版本（行优先）
+ *    H[k + nv*nx] | H[nv*nx + k]
+ *    R[i + j*ny] | R[i*ny + j]
+ *    P[i + j*nx] | P[i*nx + j]
  */
 public final class MatrixUtil {
     private MatrixUtil() {
@@ -74,7 +72,7 @@ public final class MatrixUtil {
     /**
      * 矩阵乘法 a * b。
      *
-     * <p>注意：矩阵乘法不满足交换律，a*b ≠ b*a</p>
+     * 注意：矩阵乘法不满足交换律，a*b ≠ b*a
      *
      * @param a 第一个矩阵
      * @param b 第二个矩阵
@@ -140,8 +138,8 @@ public final class MatrixUtil {
     /**
      * 矩阵求逆（安全版本）。
      *
-     * <p>矩阵奇异时返回 Optional.empty()，不抛异常。
-     * 与 C 版 matinv() 返回 0 的行为对齐。</p>
+     * 矩阵奇异时返回 Optional.empty()，不抛异常。
+     * 与 C 版 matinv() 返回 0 的行为对齐。
      *
      * @param A 输入矩阵
      * @return 逆矩阵，若矩阵奇异则返回 Optional.empty()

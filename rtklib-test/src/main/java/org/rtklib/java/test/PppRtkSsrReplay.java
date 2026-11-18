@@ -51,10 +51,9 @@ public final class PppRtkSsrReplay {
     private static String rinexRoot = System.getProperty("rtk.rinexRoot", DEFAULT_RINEX_ROOT);
     /**
      * RINEX 目录布局：
-     * <ul>
-     *   <li>{@code hour}：{@code <root>\<station>\<localHH>\<station>.obs}（外部抓取产物）</li>
-     *   <li>{@code post}：{@code <root>\<station>\<dateDir>\<localHH>.obs}（AutoRtkPostService 实时落盘产物）</li>
-     * </ul>
+     *
+     *   - {@code hour}：{@code <root>\<station>\<localHH>\<station>.obs}（外部抓取产物）
+     *   - {@code post}：{@code <root>\<station>\<dateDir>\<localHH>.obs}（AutoRtkPostService 实时落盘产物）
      */
     private static String rinexLayout = System.getProperty("rtk.rinexLayout", "hour");
     /** post 布局下的日期子目录名（如 {@code 2026-10-31}）。 */
@@ -104,11 +103,10 @@ public final class PppRtkSsrReplay {
     /**
      * 解析 RINEX 小时文件路径。
      *
-     * <p>AutoRtkPostService 的落盘布局是「路径按北京时间、内容按 UTC」：
+     * AutoRtkPostService 的落盘布局是「路径按北京时间、内容按 UTC」：
      * 目录 {@code 2026-10-31} 是北京日期，文件名 {@code 8.obs} 是北京小时，
      * 但文件内首历元是 UTC {@code 2026-10-31 00:00}。因此 UTC 小时 h 对应
      * 北京小时 h+8；超过 23 时日期目录要加一天（UTC 16:00 落在北京次日 00:00）。
-     * </p>
      */
     private static String hourFilePath(int utcHour, String ext) {
         int localHour = utcHour + LOCAL_HOUR_OFFSET;
@@ -202,11 +200,11 @@ public final class PppRtkSsrReplay {
 
     /**
      * SSR 文件命名的时间基准：
-     * <ul>
-     *   <li>{@code local}（默认）：与 RINEX 落盘一致——文件按北京时间命名，但内容首历元是 UTC，
-     *       故 UTC 小时 h 对应文件名 (h+8)，跨日时末级日期目录加一天（UTC 16:00 = 北京次日 00:00）。</li>
-     *   <li>{@code utc}：旧数据仓库按 UTC 小时命名，文件名即 UTC 小时。</li>
-     * </ul>
+     *
+     *   - {@code local}（默认）：与 RINEX 落盘一致——文件按北京时间命名，但内容首历元是 UTC，
+     *       故 UTC 小时 h 对应文件名 (h+8)，跨日时末级日期目录加一天（UTC 16:00 = 北京次日 00:00）。
+     *   - {@code utc}：旧数据仓库按 UTC 小时命名，文件名即 UTC 小时。
+     *
      * 未做 +8 偏移时，UTC 00:00 的观测会取到北京 00:00（即 UTC 16:00）的 SSR，
      * 两者相差 8 小时，SSR 全部过期却被静默使用。
      */
@@ -706,9 +704,9 @@ public final class PppRtkSsrReplay {
     /**
      * Pa 与 P 在「已固定模糊度」对角线上的分歧个数。
      *
-     * <p>UC 路径只改 Pa（模糊度行零化）、P 保持浮点值，故分歧数等于固定个数；
+     * UC 路径只改 Pa（模糊度行零化）、P 保持浮点值，故分歧数等于固定个数；
      * IFLC 路径 xa/Pa 与 x/P 同步更新，两处均为 0，分歧恒为 0。
-     * 位置行在两条路径上都与 P 相同，因此 rr/qr 不能作为「Pa 是否被写入」的证据。</p>
+     * 位置行在两条路径上都与 P 相同，因此 rr/qr 不能作为「Pa 是否被写入」的证据。
      */
     private static int paPDivergence(Rtk rtk, PrcOpt opt) {
         double[] Pa = rtk.Pa;

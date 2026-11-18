@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * IMU 预积分单元测试。
  *
- * <p>验证：SO(3) exp/log 一致性、静态IMU零位移、常值旋转积分。</p>
+ * 验证：SO(3) exp/log 一致性、静态IMU零位移、常值旋转积分。
  */
 class PreintegrationTest {
 

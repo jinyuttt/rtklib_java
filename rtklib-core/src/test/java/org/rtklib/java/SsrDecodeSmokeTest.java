@@ -20,17 +20,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * SSR 解码冒烟测试：验证 Rtcm.java 的 SSR 电文解码链路是活的。
- * <p>
+ *
  * 输入为 test-data/rtcm/ssr 下的真实录制单帧样本（来源于公开仓库
  * earthscope/gnsstools, codecs/rtcm/rtcm3/data），覆盖：
  * 1057/1058/1060（GPS 轨道/钟差/组合）、1063/1064（GLO 轨道/钟差）、
  * 1264/1265/1267/1270（GPS/GLO/QZS/IRN 相位偏差）。
- * </p>
- * <p>
+ *
  * 断言只做两件事：
  * 1) 每帧都能通过 CRC24Q 与对应解码器；
  * 2) 解码后 nav.ssr[] 中至少存在卫星的轨道改正（deph）与钟差改正（dclk）被真实赋值（非零）。
- * </p>
  */
 @DisplayName("SSR解码冒烟测试")
 class SsrDecodeSmokeTest {

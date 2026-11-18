@@ -2,10 +2,9 @@ package org.rtklib.java.ai.spi;
 
 /**
  * 接口三输入（当前历元快照）。
- * <p>
+ *
  * {@code sats} 长度等于 {@code ns}，顺序等于 {@code relpos} 的 {@code sat[]} 顺序，
  * 即 {@link CodeCorrection} 的行序约定。短窗历史由 impl 自行维护，core 不提供。
- * </p>
  *
  * @param epoch 历元序号
  * @param ns    参与双差的卫星数

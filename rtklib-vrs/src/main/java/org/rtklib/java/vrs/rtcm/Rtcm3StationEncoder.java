@@ -8,8 +8,8 @@ import org.slf4j.LoggerFactory;
 /**
  * [JAVA-ONLY 原创] RTCM 3.x 测站信息编码器（1005/1006/1033 等）。
  *
- * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。
- * 电文字段布局取自 RTCM 3.x 公开协议标准。</p>
+ * 归属声明：本项目原创实现，未移植任何外部开源项目代码。
+ * 电文字段布局取自 RTCM 3.x 公开协议标准。
  */
 public class Rtcm3StationEncoder {
     private static final Logger log = LoggerFactory.getLogger(Rtcm3StationEncoder.class);
@@ -70,8 +70,8 @@ public class Rtcm3StationEncoder {
     /**
      * 1032 Physical Reference Station Position。
      *
-     * <p>位域布局与 1005 完全一致，仅 DF141 取 1 表示「本坐标为物理参考站坐标」。
-     * 坐标优先取 {@code sta.xyz}（物理站 ECEF），未设置时回退 {@code sta.pos}。</p>
+     * 位域布局与 1005 完全一致，仅 DF141 取 1 表示「本坐标为物理参考站坐标」。
+     * 坐标优先取 {@code sta.xyz}（物理站 ECEF），未设置时回退 {@code sta.pos}。
      */
     public static boolean encodeType1032(Rtcm3Encoder enc, int sync) {
         double[] p = physicalPosition(enc.sta);
@@ -97,8 +97,8 @@ public class Rtcm3StationEncoder {
     /**
      * 1033 Receiver and Antenna Descriptors。
      *
-     * <p>字段顺序：天线描述 → 天线设置 ID → 天线序列号 → 接收机类型
-     * → 接收机固件版本 → 接收机序列号，全部为变长字符串（长度 8 bit + 字符）。</p>
+     * 字段顺序：天线描述 → 天线设置 ID → 天线序列号 → 接收机类型
+     * → 接收机固件版本 → 接收机序列号，全部为变长字符串（长度 8 bit + 字符）。
      */
     public static boolean encodeType1033(Rtcm3Encoder enc, int sync) {
         Sta sta = enc.sta;

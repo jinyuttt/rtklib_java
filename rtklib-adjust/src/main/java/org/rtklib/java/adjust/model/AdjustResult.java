@@ -39,25 +39,25 @@ public class AdjustResult {
     /**
      * 假固定嫌疑基站标识（仅当 {@link #reliabilityGrade} == SUSPECT 时非 null）。
      *
-     * <p>由基线间较差超过阈值、再按 {@code ratio × numSat} 取弱者得到，
-     * <b>只表示该基线的模糊度固定结果可疑</b>，不代表该基站发生了位移。</p>
+     * 由基线间较差超过阈值、再按 {@code ratio × numSat} 取弱者得到，
+     * 只表示该基线的模糊度固定结果可疑，不代表该基站发生了位移。
      *
-     * <p>基站位移的判定在独立通道：{@code BaselineConsistencyChecker.Report#baseDrifts}，
-     * 由跨历元漂移反算，与本字段不可混用。</p>
+     * 基站位移的判定在独立通道：{@code BaselineConsistencyChecker.Report#baseDrifts}，
+     * 由跨历元漂移反算，与本字段不可混用。
      */
     public final String suspectBaseId;
 
     /**
      * 准入阶段被拒绝进入 WLS 的 FLOAT 基线（默认空列表）。
      *
-     * <p>拒绝条件是"本历元恰好 1 条 FIX 且 FLOAT 与 FIX 的位置较差超过
-     * {@code floatAgreementThreshold}"。被拒绝的基线<b>不参与</b>平差，
+     * 拒绝条件是"本历元恰好 1 条 FIX 且 FLOAT 与 FIX 的位置较差超过
+     * {@code floatAgreementThreshold}"。被拒绝的基线不参与平差，
      * 因此 {@link #crossValidationDist} 对它而言不存在（为 {@link Double#NaN}），
-     * 该基线的位置较差只记录在本字段。</p>
+     * 该基线的位置较差只记录在本字段。
      *
-     * <p>本字段存在的唯一目的：让"拦截粗差 FLOAT"不变成"静默丢弃"。
+     * 本字段存在的唯一目的：让"拦截粗差 FLOAT"不变成"静默丢弃"。
      * 若下游只看 {@link #crossValidationDist}，被拒绝的 FLOAT 会表现为
-     * "无较差"而非"有 4.8 km 较差"，异常检测能力反而下降。</p>
+     * "无较差"而非"有 4.8 km 较差"，异常检测能力反而下降。
      */
     public final List<RejectedFloat> rejectedFloats;
 
@@ -157,8 +157,8 @@ public class AdjustResult {
     /**
      * 附加"准入阶段被拒绝的 FLOAT"记录。
      *
-     * <p>拒绝发生在 {@code GnssBaselineAdjust} 之前（候选集装配阶段），
-     * 而 {@code AdjustResult} 由平差内部构造，故用本方法在返回后补齐。</p>
+     * 拒绝发生在 {@code GnssBaselineAdjust} 之前（候选集装配阶段），
+     * 而 {@code AdjustResult} 由平差内部构造，故用本方法在返回后补齐。
      *
      * @param rejected 被拒绝的 FLOAT；null 或空时原样返回 {@code this}
      * @return 携带 rejected 记录的新实例

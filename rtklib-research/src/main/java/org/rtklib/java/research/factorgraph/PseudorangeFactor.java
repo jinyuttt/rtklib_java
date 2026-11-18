@@ -8,12 +8,12 @@ import org.rtklib.java.research.common.GnssConst;
 /**
  * 伪距观测因子（独立因子，不绑定伪距率/UWB）。
  *
- * <p>观测量：P_i = ρ_i + c*(dt_r - dt_s^i) + T_i + I_i + ε
+ * 观测量：P_i = ρ_i + c*(dt_r - dt_s^i) + T_i + I_i + ε
  *
- * <p>残差维度 = 卫星数，参数块：stateVar[11]</p>
+ * 残差维度 = 卫星数，参数块：stateVar[11]
  *
- * <p>与 TcFactor 的区别：本因子仅建模伪距，不与伪距率/UWB 紧耦合，
- * 适用于标准 PPP/RTK 实验中需要独立调权或单独开关伪距观测的场景。</p>
+ * 与 TcFactor 的区别：本因子仅建模伪距，不与伪距率/UWB 紧耦合，
+ * 适用于标准 PPP/RTK 实验中需要独立调权或单独开关伪距观测的场景。
  */
 public class PseudorangeFactor extends Factor {
 

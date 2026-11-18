@@ -10,14 +10,12 @@ import org.slf4j.LoggerFactory;
 
 /**
  * 接口 A 实现（设计文档 §3.3）：10 维特征 → ONNX 单行推理 → 连续置信度。
- * <p>
- * 只做「特征 + 推理 + 值域钳位」，<b>不做阈值判定</b>：阈值永远在 core 侧由
+ *
+ * 只做「特征 + 推理 + 值域钳位」，不做阈值判定：阈值永远在 core 侧由
  * {@code AiOpts.pppSolutionMinConfidence} 完成，换阈值不需要换模型。
- * </p>
- * <p>
- * 不修改任何 {@code Rtk}/{@code Ssat} 状态；只读 {@code ctx}。推理异常<b>不</b>在本类吞掉：
+ *
+ * 不修改任何 {@code Rtk}/{@code Ssat} 状态；只读 {@code ctx}。推理异常不在本类吞掉：
  * 由 core 侧统一捕获并按不干预处理（§3.6 / S1）。
- * </p>
  */
 public final class PppSolutionValidatorImpl implements PppSolutionValidator {
 

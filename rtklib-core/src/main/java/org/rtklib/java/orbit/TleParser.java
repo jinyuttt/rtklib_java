@@ -11,15 +11,14 @@ import java.util.List;
 /**
  * [REF: python-sgp4] TLE 文件读取与两行根解析器，逐行移植自 python-sgp4 的 io.py。
  *
- * <p>移植自 io.py 的 twoline2rv() 函数。支持两种文件格式：</p>
- * <ul>
- *   <li>Vallado 标准 2 行格式（如 sgp4-ver.tle）：仅含 line1 / line2</li>
- *   <li>带名称行的 3 行格式（如 data/tle.txt, data/tle-bds.txt）：
- *       第一行是名称，随后是 line1 / line2</li>
- * </ul>
+ * 移植自 io.py 的 twoline2rv() 函数。支持两种文件格式：
  *
- * <p>解析完成后会自动调用 {@link Sgp4Propagation#sgp4init} 完成初始化，
- * 将结果存入 {@link TleData#satrec}。</p>
+ *   - Vallado 标准 2 行格式（如 sgp4-ver.tle）：仅含 line1 / line2
+ *   - 带名称行的 3 行格式（如 data/tle.txt, data/tle-bds.txt）：
+ *       第一行是名称，随后是 line1 / line2
+ *
+ * 解析完成后会自动调用 {@link Sgp4Propagation#sgp4init} 完成初始化，
+ * 将结果存入 {@link TleData#satrec}。
  */
 public final class TleParser {
 

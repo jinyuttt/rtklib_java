@@ -6,8 +6,8 @@ import org.rtklib.java.research.common.GTime;
 /**
  * 广播星历（research模块自有）。
  *
- * <p>支持GPS/GAL/QZS/CMP的Kepler星历和GLONASS星历。
- * GLO 星历存储 PZ-90 ECEF 参考位置、速度、加速度，通过四阶 Runge-Kutta 数值积分传播。</p>
+ * 支持GPS/GAL/QZS/CMP的Kepler星历和GLONASS星历。
+ * GLO 星历存储 PZ-90 ECEF 参考位置、速度、加速度，通过四阶 Runge-Kutta 数值积分传播。
  */
 public class Ephemeris implements Serializable {
     private static final long serialVersionUID = 1L;

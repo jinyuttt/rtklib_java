@@ -18,8 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * FIX-ALG-057 回归测试：PPP-AR 链路的状态锁存与 MIN_NSAT_SOL 降级。
  *
- * <p>对应 PPP-RTK 侧的 FIX-ALG-054：逐历元入口必须清除上一历元 AR 写入的
- * SOLQ_FIX 锁存，且固定解标签同样受 MIN_NSAT_SOL=4 约束。</p>
+ * 对应 PPP-RTK 侧的 FIX-ALG-054：逐历元入口必须清除上一历元 AR 写入的
+ * SOLQ_FIX 锁存，且固定解标签同样受 MIN_NSAT_SOL=4 约束。
  */
 public class PppArStatLatchTest {
 

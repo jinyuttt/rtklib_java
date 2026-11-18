@@ -7,33 +7,32 @@ import org.rtklib.java.constants.Constants;
 /**
  * 卫星观测数据输出类，用于 monitor/trace/日志 输出。
  *
- * <p>从内部 {@link Ssat}（C 对齐结构）+ {@link Obsd} 提取单颗卫星的
- * 观测摘要信息，供外部系统（监控、日志、trace）使用。</p>
+ * 从内部 {@link Ssat}（C 对齐结构）+ {@link Obsd} 提取单颗卫星的
+ * 观测摘要信息，供外部系统（监控、日志、trace）使用。
  *
- * <h3>字段说明</h3>
- * <ul>
- *   <li>{@code satPrn}：卫星编号字符串，如 "G01"、"C12"、"R07"、"E03"</li>
- *   <li>{@code satSys}：卫星系统单字符，如 'G'(GPS)、'R'(GLONASS)、'C'(BDS)、'E'(Galileo)</li>
- *   <li>{@code az}：方位角（度），0~360</li>
- *   <li>{@code el}：高度角（度），0~90</li>
- *   <li>{@code cn0}：载噪比 C/N0 (dB-Hz)，流动站第一频率的 SNR 值</li>
- *   <li>{@code cn0Base}：基准站载噪比 C/N0 (dB-Hz)</li>
- *   <li>{@code used}：该卫星是否被用于定位解算</li>
- *   <li>{@code fixState}：模糊度固定状态（0=未固定, 1=浮点, 2=固定）</li>
- * </ul>
+ * 字段说明
  *
- * <h3>[Java扩展] 诊断字段（diagMask控制）</h3>
- * <ul>
- *   <li>{@code resp}：伪距残差(m)，DIAG_SAT_RESIDUAL时有效</li>
- *   <li>{@code resc}：载波残差(m)，DIAG_SAT_RESIDUAL时有效</li>
- *   <li>{@code slip}：周跳标志，DIAG_SAT_CYCLESLIP时有效</li>
- *   <li>{@code gf}：GF组合值(m)，DIAG_SAT_CYCLESLIP时有效</li>
- *   <li>{@code mw}：MW组合值(周)，DIAG_SAT_CYCLESLIP时有效</li>
- *   <li>{@code rejc}：拒绝计数，DIAG_SAT_CYCLESLIP时有效</li>
- *   <li>{@code amb}：模糊度浮点值(周)，DIAG_SAT_AMBIGUITY时有效</li>
- *   <li>{@code stdA}：模糊度标准差(周)，DIAG_SAT_AMBIGUITY时有效</li>
- * </ul>
- * <p>未启用时对应字段为NaN或默认值，零开销向后兼容。</p>
+ *   - {@code satPrn}：卫星编号字符串，如 "G01"、"C12"、"R07"、"E03"
+ *   - {@code satSys}：卫星系统单字符，如 'G'(GPS)、'R'(GLONASS)、'C'(BDS)、'E'(Galileo)
+ *   - {@code az}：方位角（度），0~360
+ *   - {@code el}：高度角（度），0~90
+ *   - {@code cn0}：载噪比 C/N0 (dB-Hz)，流动站第一频率的 SNR 值
+ *   - {@code cn0Base}：基准站载噪比 C/N0 (dB-Hz)
+ *   - {@code used}：该卫星是否被用于定位解算
+ *   - {@code fixState}：模糊度固定状态（0=未固定, 1=浮点, 2=固定）
+ *
+ * [Java扩展] 诊断字段（diagMask控制）
+ *
+ *   - {@code resp}：伪距残差(m)，DIAG_SAT_RESIDUAL时有效
+ *   - {@code resc}：载波残差(m)，DIAG_SAT_RESIDUAL时有效
+ *   - {@code slip}：周跳标志，DIAG_SAT_CYCLESLIP时有效
+ *   - {@code gf}：GF组合值(m)，DIAG_SAT_CYCLESLIP时有效
+ *   - {@code mw}：MW组合值(周)，DIAG_SAT_CYCLESLIP时有效
+ *   - {@code rejc}：拒绝计数，DIAG_SAT_CYCLESLIP时有效
+ *   - {@code amb}：模糊度浮点值(周)，DIAG_SAT_AMBIGUITY时有效
+ *   - {@code stdA}：模糊度标准差(周)，DIAG_SAT_AMBIGUITY时有效
+ *
+ * 未启用时对应字段为NaN或默认值，零开销向后兼容。
  */
 public class SatObsData implements Serializable {
     private static final long serialVersionUID = 1L;

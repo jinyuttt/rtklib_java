@@ -12,10 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 接口一特征提取自洽测试（设计文档 §5.1）。
- * <p>
+ *
  * 覆盖两类风险：特征顺序错位（训练/推理列名对不上）与退化输入未兜底
  * （{@code 0/0} 除法、{@code NaN} 入模型污染整批输出）。
- * </p>
  */
 @DisplayName("接口一特征提取：顺序与退化兜底")
 class FixQualityFeaturesTest {

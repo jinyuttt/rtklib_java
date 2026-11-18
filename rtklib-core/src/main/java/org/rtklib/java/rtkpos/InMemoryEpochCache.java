@@ -13,10 +13,9 @@ import java.util.Arrays;
 
 /**
  * 内存环形缓冲区缓存，按sourceId分桶。
- * <p>
+ *
  * 每个sourceId对应一个独立的环形缓冲区，容量由maxEpochsPerSource控制。
  * 超出容量时自动丢弃最旧的历元。
- * </p>
  */
 public class InMemoryEpochCache implements EpochCache {
 

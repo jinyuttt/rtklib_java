@@ -16,32 +16,27 @@ import java.io.Writer;
 
 /**
  * 采集型接口三实现：把每历元每 {@code (sat, frq)} 的 17 维特征落盘成 CSV 一行，
- * 并<b>恒输出「不干预」</b>（{@code bias = 0}、{@code varianceScale = 1}）。
- * <p>
+ * 并恒输出「不干预」（{@code bias = 0}、{@code varianceScale = 1}）。
+ *
  * 恒不干预的两个后果：
- * </p>
- * <ul>
- *   <li>core 侧 {@code ddres} 的残差、方差、{@code maxinno} 剔除行为与不注入逐位一致，
- *       故同一次运行既产出训练特征、又产出「无干预」的码残差基线（A 组）；</li>
- *   <li>不会产生 {@code AI3/AI_DEGRADE}，不会因为采集而改变解算结果。</li>
- * </ul>
- * <p>
- * <b>短窗状态必须由 {@link ObsCorrectorImpl} 维护，不得在本类重算。</b>
+ *
+ *   - core 侧 {@code ddres} 的残差、方差、{@code maxinno} 剔除行为与不注入逐位一致，
+ *       故同一次运行既产出训练特征、又产出「无干预」的码残差基线（A 组）；
+ *   - 不会产生 {@code AI3/AI_DEGRADE}，不会因为采集而改变解算结果。
+ *
+ * 短窗状态必须由 {@link ObsCorrectorImpl} 维护，不得在本类重算。
  * 短窗聚合（{@code f13~f16}）依赖三条重置规则（数据缺口 / 周跳 / 卫星消失），
  * 重写一份必然与推理侧错位，且错位是静默的：训练分布与推理分布不同而两边都不报错。
  * 因此本类内部持有一个 {@code ObsCorrectorImpl}，配一个恒输出 {@code (0, 1)} 的
  * 桩推理后端，让它跑完整的「重置 → 入窗 → 聚合」流程，再取它算出的聚合值。
- * </p>
- * <p>
- * <b>时序契约：</b>本类落盘的是「本历元模型输入」，标签（码残差）由同一历元的
+ *
+ * 时序契约：本类落盘的是「本历元模型输入」，标签（码残差）由同一历元的
  * {@code AI3/DDRES} trace 提供，两者靠 {@code (runId, epoch, sat, frq)} 对齐。
  * 因此特征行必须在 {@code ddres} 之前写入——core 的 {@code aiComputeCorrection}
  * 恰好位于迭代首轮 {@code zdres(rover)} 之后、首次 {@code ddres} 之前，天然满足。
- * </p>
- * <p>
+ *
  * 写盘失败不抛异常（{@code ObsCorrector} 契约要求不抛）：一旦失败即停止写入并
  * 继续返回不干预，解算不受影响，仅丢失采集数据。
- * </p>
  */
 public final class RecordingObsCorrector implements ObsCorrector, AutoCloseable {
 

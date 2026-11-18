@@ -3,13 +3,13 @@ package org.rtklib.java.otl;
 /**
  * [JAVA-ONLY 原创] 本模块输出 BLQ 文件时所需的 11 个主分潮。
  *
- * <p><b>来源说明</b>：分潮名称与 Doodson 编码取自公开发表的
+ * 来源说明：分潮名称与 Doodson 编码取自公开发表的
  * IERS Conventions (2010) 第 7 章（海洋潮汐负荷）表 7.1，以及
- * Schureman (1958) <i>Manual of Harmonic Analysis and Prediction of Tides</i>。
- * 两者均为公开标准/文献，不构成任何特定软件实现的代码来源。</p>
+ * Schureman (1958) Manual of Harmonic Analysis and Prediction of Tides。
+ * 两者均为公开标准/文献，不构成任何特定软件实现的代码来源。
  *
- * <p>Doodson 编码在此以整数表示（如 M2 为 {@code 255555}，对应
- * Doodson 数 255.555），整数形式便于逐位分解出六个基本天文幅角的乘子。</p>
+ * Doodson 编码在此以整数表示（如 M2 为 {@code 255555}，对应
+ * Doodson 数 255.555），整数形式便于逐位分解出六个基本天文幅角的乘子。
  */
 public enum TidalConstituent {
 

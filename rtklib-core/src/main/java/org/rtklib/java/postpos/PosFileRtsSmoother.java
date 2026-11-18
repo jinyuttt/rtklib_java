@@ -16,42 +16,40 @@ import org.slf4j.LoggerFactory;
 /**
  * 基于RTKLIB .pos文件的RTS平滑后处理工具（测试功能）。
  *
- * <p><b>⚠ 此功能为测试/实验性质，仅供验证和评估使用，不建议直接用于生产环境。</b></p>
+ * ⚠ 此功能为测试/实验性质，仅供验证和评估使用，不建议直接用于生产环境。
  *
- * <h3>功能概述</h3>
- * <p>解析RTKLIB标准输出格式的.pos文件（ENU baseline模式），对基线分量(e,n,u)进行
- * Rauch-Tung-Striebel (RTS) 固定区间平滑，输出平滑后的结果。</p>
+ * 功能概述
+ * 解析RTKLIB标准输出格式的.pos文件（ENU baseline模式），对基线分量(e,n,u)进行
+ * Rauch-Tung-Striebel (RTS) 固定区间平滑，输出平滑后的结果。
  *
- * <h3>两种平滑模式</h3>
- * <ul>
- *   <li><b>简单反转配对模式</b> ({@link #smooth})：将历元序列反转作为后向数据，
+ * 两种平滑模式
+ *
+ *   - 简单反转配对模式 ({@link #smooth})：将历元序列反转作为后向数据，
  *       与前向数据逐历元配对，调用{@link Smoother#smooth}做协方差加权融合。
- *       适用于全固定解数据；对含浮点解的数据可能恶化结果。</li>
- *   <li><b>卡尔曼滤波模式</b> ({@link #smoothKalman})：对.pos中的位置估计作为伪观测，
+ *       适用于全固定解数据；对含浮点解的数据可能恶化结果。
+ *   - 卡尔曼滤波模式 ({@link #smoothKalman})：对.pos中的位置估计作为伪观测，
  *       分别执行前向和后向卡尔曼滤波，再用{@link Smoother#smooth}融合。
- *       浮点解历元通过协方差放大自动降权，实测对含浮点解数据有效。</li>
- * </ul>
+ *       浮点解历元通过协方差放大自动降权，实测对含浮点解数据有效。
  *
- * <h3>重要限制（测试功能说明）</h3>
- * <ul>
- *   <li>.pos文件中的(e,n,u)已经是RTK前向卡尔曼滤波的输出结果，并非原始GPS观测数据。</li>
- *   <li>简单反转法的前向和后向数据完全相关（同一份数据），不是真正的独立双向滤波。</li>
- *   <li>卡尔曼模式将已滤波结果当作"伪观测"再滤波（"滤波之滤波"），数学上不严格：
- *       前后向估计存在隐含相关性，存在过度平滑风险。</li>
- *   <li>严格的RTS平滑需要原始观测数据（.obs/.nav），通过
- *       {@code PostPosProcessor.processCombined()}实现。</li>
- *   <li>本工具适用于静态基线（位置基本不变）的场景评估，对动态基线需谨慎。</li>
- * </ul>
+ * 重要限制（测试功能说明）
  *
- * <h3>输入格式</h3>
- * <p>RTKLIB标准.pos文件（ENU baseline模式），每行格式：</p>
- * <pre>
+ *   - .pos文件中的(e,n,u)已经是RTK前向卡尔曼滤波的输出结果，并非原始GPS观测数据。
+ *   - 简单反转法的前向和后向数据完全相关（同一份数据），不是真正的独立双向滤波。
+ *   - 卡尔曼模式将已滤波结果当作"伪观测"再滤波（"滤波之滤波"），数学上不严格：
+ *       前后向估计存在隐含相关性，存在过度平滑风险。
+ *   - 严格的RTS平滑需要原始观测数据（.obs/.nav），通过
+ *       {@code PostPosProcessor.processCombined()}实现。
+ *   - 本工具适用于静态基线（位置基本不变）的场景评估，对动态基线需谨慎。
+ *
+ * 输入格式
+ * RTKLIB标准.pos文件（ENU baseline模式），每行格式：
+ *
  * yyyy/MM/dd HH:mm:ss.SSSS  e(m)  n(m)  u(m)  Q  ns  sde  sdn  sdu  sden  sdnu  sdue  age  ratio
- * </pre>
- * <p>Q=1为固定解，Q!=1为非固定解（浮点解等）。表头行以%开头，自动跳过。</p>
  *
- * <h3>使用示例</h3>
- * <pre>
+ * Q=1为固定解，Q!=1为非固定解（浮点解等）。表头行以%开头，自动跳过。
+ *
+ * 使用示例
+ *
  * // 最简调用：文件路径 + 默认配置（卡尔曼模式）
  * SmoothResult result = PosFileRtsSmoother.process("0.pos", new SmoothConfig());
  *
@@ -67,21 +65,19 @@ import org.slf4j.LoggerFactory;
  *     List.of("0.pos", "1.pos", "2.pos"), config);
  *
  * // 实体列表输入
- * List&lt;PosEpoch&gt; epochs = PosFileRtsSmoother.parse("0.pos");
- * List&lt;SmoothedEpoch&gt; smoothed = PosFileRtsSmoother.smoothKalman(epochs);
+ * List<PosEpoch> epochs = PosFileRtsSmoother.parse("0.pos");
+ * List<SmoothedEpoch> smoothed = PosFileRtsSmoother.smoothKalman(epochs);
  *
  * // Reader输入（HTTP/流式）
- * List&lt;PosEpoch&gt; epochs = PosFileRtsSmoother.parseFromReader(reader);
- * </pre>
+ * List<PosEpoch> epochs = PosFileRtsSmoother.parseFromReader(reader);
  *
- * <h3>命令行入口</h3>
- * <pre>
- * java PosFileRtsSmoother [--kalman|--simple] [--q=STD] [--scale=S] &lt;pos_file&gt; [pos_file2 ...]
+ * 命令行入口
+ *
+ * java PosFileRtsSmoother [--kalman|--simple] [--q=STD] [--scale=S] <pos_file> [pos_file2 ...]
  *   --kalman    卡尔曼RTS模式（默认）
  *   --simple    简单反转配对模式
  *   --q=STD     过程噪声标准差(m)，默认0.001
  *   --scale=S   非固定解方差放大倍数，默认10000
- * </pre>
  *
  * @see Smoother#smooth(double[], double[], double[], double[], int, double[], double[])
  */
@@ -333,7 +329,7 @@ public class PosFileRtsSmoother {
      * 简单反转配对RTS平滑。
      * 将历元序列反转作为后向数据，epoch[i]与epoch[N-1-i]配对，
      * 调用{@link Smoother#smooth}做协方差加权融合。
-     * <p>适用于全固定解数据；对含浮点解的数据可能恶化结果（前后向完全相关）。</p>
+     * 适用于全固定解数据；对含浮点解的数据可能恶化结果（前后向完全相关）。
      */
     public static List<SmoothedEpoch> smooth(List<PosEpoch> epochs) {
         return smooth(epochs, 100.0 * 100.0);
@@ -404,10 +400,10 @@ public class PosFileRtsSmoother {
 
     /**
      * 卡尔曼滤波RTS平滑（推荐）。
-     * <p>将.pos中的位置估计作为伪观测，分别执行前向和后向卡尔曼滤波，
-     * 再用{@link Smoother#smooth}融合。浮点解历元通过协方差放大自动降权。</p>
-     * <p><b>注意</b>：.pos中的值已是RTK前向滤波结果，此方法为"滤波之滤波"，
-     * 数学上不严格，存在过度平滑风险，适用于静态基线场景评估。</p>
+     * 将.pos中的位置估计作为伪观测，分别执行前向和后向卡尔曼滤波，
+     * 再用{@link Smoother#smooth}融合。浮点解历元通过协方差放大自动降权。
+     * 注意：.pos中的值已是RTK前向滤波结果，此方法为"滤波之滤波"，
+     * 数学上不严格，存在过度平滑风险，适用于静态基线场景评估。
      *
      * @param epochs 历元列表
      * @param processNoiseStd 过程噪声标准差(m)，控制滤波器记忆长度，越小平滑越强

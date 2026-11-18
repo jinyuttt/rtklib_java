@@ -16,23 +16,22 @@ import java.io.IOException;
 /**
  * IGS ERP（Earth Rotation Parameters）文件读取器。
  *
- * <p>读取IGS格式的ERP文件，包含地球自转参数：
- * <ul>
- *   <li>xp, yp — 极移坐标（微角秒 → 弧度）</li>
- *   <li>ut1_utc — UT1-UTC时间差（微秒 → 秒）</li>
- *   <li>lod — 日长变化（微秒/天 → 秒/天）</li>
- *   <li>xpr, ypr — 极移速率（微角秒/天 → 弧度/天）</li>
- * </ul>
+ * 读取IGS格式的ERP文件，包含地球自转参数：
  *
- * <p>IGS ERP文件格式（version 2）：
- * <pre>
+ *   - xp, yp — 极移坐标（微角秒 → 弧度）
+ *   - ut1_utc — UT1-UTC时间差（微秒 → 秒）
+ *   - lod — 日长变化（微秒/天 → 秒/天）
+ *   - xpr, ypr — 极移速率（微角秒/天 → 弧度/天）
+ *
+ * IGS ERP文件格式（version 2）：
+ *
  *   version 2
  *   MJD  Xpole  Ypole  UT1-UTC  LOD  ...  Xrt  Yrt
  *   60484.00  0.05839  0.34527  -0.1234567  0.0001234  ...  0.000123  -0.000456
- * </pre>
+ *
  * 数据单位：极移为微角秒（microarcsec），UT1-UTC和LOD为微秒（microsecond）。
  *
- * <p>对应C版：RTKLIB rtkcmn.c readerp()
+ * 对应C版：RTKLIB rtkcmn.c readerp()
  */
 public final class ErpReader {
     private ErpReader() {}
@@ -44,14 +43,13 @@ public final class ErpReader {
     /**
      * 读取IGS ERP文件到Nav数据结构。
      *
-     * <p>解析流程：
-     * <ol>
-     *   <li>查找"version 2"行，确认文件格式</li>
-     *   <li>查找包含MJD/Xpole/Ypole/UT1/LOD的表头行，判断UTC/TAI标志</li>
-     *   <li>逐行读取纯数值数据行，解析14列浮点数</li>
-     *   <li>单位转换：xp/yp ×1E-6×AS2R, ut1_utc ×1E-7, lod ×1E-7, xpr/ypr ×1E-6×AS2R</li>
-     *   <li>若TAI标志，将UT1-TAI转换为UT1-UTC</li>
-     * </ol>
+     * 解析流程：
+     *
+     *   - 查找"version 2"行，确认文件格式
+     *   - 查找包含MJD/Xpole/Ypole/UT1/LOD的表头行，判断UTC/TAI标志
+     *   - 逐行读取纯数值数据行，解析14列浮点数
+     *   - 单位转换：xp/yp ×1E-6×AS2R, ut1_utc ×1E-7, lod ×1E-7, xpr/ypr ×1E-6×AS2R
+     *   - 若TAI标志，将UT1-TAI转换为UT1-UTC
      *
      * @param file ERP文件路径
      * @param nav  导航数据，ERP记录存入nav.erp

@@ -10,20 +10,19 @@ import java.util.List;
  * [JAVA-ONLY 原创] 海洋潮汐负荷计算的独立实现：由 FES2004 球谐系数合成
  * BLQ 系数表，或直接合成任意历元的三维位移序列。
  *
- * <p><b>理论依据（公开标准，非代码来源）</b></p>
- * <ul>
- *   <li>IERS Conventions (2010) 第 7 章：海洋潮汐负荷位移的球谐合成公式，
- *       含负荷 Love 数 h_n、l_n 与地球长半轴归一化因子 (a_e/r)^n；</li>
- *   <li>Farrell (1972) 提出的负荷 Love 数概念与 Green 函数表述；</li>
- *   <li>FES2004 全球海潮模型的球谐系数（LEGOS/CNES 公开发布数据）；</li>
- *   <li>Doodson (1921) 的潮汐幅角编码，及 Schureman (1958) 的交点潮调制级数。</li>
- * </ul>
+ * 理论依据（公开标准，非代码来源）
  *
- * <p>本类完全按上述公开物理公式与定义独立编写，采用面向对象的分层结构
+ *   - IERS Conventions (2010) 第 7 章：海洋潮汐负荷位移的球谐合成公式，
+ *       含负荷 Love 数 h_n、l_n 与地球长半轴归一化因子 (a_e/r)^n；
+ *   - Farrell (1972) 提出的负荷 Love 数概念与 Green 函数表述；
+ *   - FES2004 全球海潮模型的球谐系数（LEGOS/CNES 公开发布数据）；
+ *   - Doodson (1921) 的潮汐幅角编码，及 Schureman (1958) 的交点潮调制级数。
+ *
+ * 本类完全按上述公开物理公式与定义独立编写，采用面向对象的分层结构
  * （{@link GeodeticSite} 描述测站、{@link LegendreTable} 提供球谐基函数、
  * {@link DoodsonArgument} 描述幅角编码、{@link NodalCorrection} 描述交点潮调制、
  * {@link ComplexNumber} 表示复数振幅），未复制任何第三方源码的变量命名、
- * 数组打包索引或循环结构。</p>
+ * 数组打包索引或循环结构。
  */
 public final class BlqCalculator {
 

@@ -11,31 +11,26 @@ import java.io.Writer;
 
 /**
  * 采集型接口 A 实现：把每次 {@code confidence()} 调用的上下文落盘成 CSV 一行，
- * 并<b>恒返回 {@code 1.0}</b>（不干预）。
- * <p>
+ * 并恒返回 {@code 1.0}（不干预）。
+ *
  * 恒返回 {@code 1.0} 的两个后果与 {@link RecordingFixValidator} 同源：
- * </p>
- * <ul>
- *   <li>{@code 1.0 >= pppSolutionMinConfidence} 恒成立，采集不会把任何历元降级，
- *       解算结果与不注入逐位一致——这份数据同时就是 A 的确定性基线对照组；</li>
- *   <li>采集到的 {@code deterministic_degraded} 仍是 core 按 {@code posVar > 阈值}
- *       独立算出的归因字段（§3.5），不受本类影响。</li>
- * </ul>
- * <p>
- * 特征必须复用 {@link PppSolutionFeatures#extractRaw}，<b>不得在本类重算</b>：该函数内含
+ *
+ *   - {@code 1.0 >= pppSolutionMinConfidence} 恒成立，采集不会把任何历元降级，
+ *       解算结果与不注入逐位一致——这份数据同时就是 A 的确定性基线对照组；
+ *   - 采集到的 {@code deterministic_degraded} 仍是 core 按 {@code posVar > 阈值}
+ *       独立算出的归因字段（§3.5），不受本类影响。
+ *
+ * 特征必须复用 {@link PppSolutionFeatures#extractRaw}，不得在本类重算：该函数内含
  * 退化处理（负方差归零、{@code ns<=0} 不除零），重写一份会让训练分布与推理分布悄悄错位。
- * </p>
- * <p>
+ *
  * 位置列 {@code x,y,z} 由宿主经 {@link PppPositionSource} 提供（SPI 快照不含坐标，见该类
- * 说明）；未提供时留空，由组装阶段计为 {@code missing_position}，<b>绝不填 0</b>——
+ * 说明）；未提供时留空，由组装阶段计为 {@code missing_position}，绝不填 0——
  * 伪造坐标会把标签算成百万米级误差，比缺数据更糟。给了 {@code reference} 时额外写
  * {@code pos_err_3d}（有真值口径优先于簇心口径）。
- * </p>
- * <p>
+ *
  * 写盘失败不抛异常（{@code PppSolutionValidator} 契约要求不抛）：失败即停止写入并返回
  * {@code 1.0}，解算不受影响，仅丢失采集数据。本类不承诺跨线程安全（{@code AiHooks}
  * 是 {@code ThreadLocal} 单槽，天然一线程一实例）。
- * </p>
  */
 public final class RecordingPppSolutionValidator implements PppSolutionValidator, AutoCloseable {
 

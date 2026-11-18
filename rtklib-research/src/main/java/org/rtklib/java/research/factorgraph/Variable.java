@@ -6,7 +6,7 @@ import org.rtklib.java.research.common.MatrixOps;
 /**
  * 因子图变量节点（research模块因子图框架）。
  *
- * <p>代表待估计的状态量，如位置、速度、钟差、模糊度等。</p>
+ * 代表待估计的状态量，如位置、速度、钟差、模糊度等。
  */
 public class Variable {
     public final String name;

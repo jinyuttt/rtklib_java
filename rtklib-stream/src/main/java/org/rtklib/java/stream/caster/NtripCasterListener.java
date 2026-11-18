@@ -5,12 +5,12 @@ import org.rtklib.java.stream.nmea.NmeaGga;
 /**
  * NTRIP Caster 事件监听器。
  *
- * <p>所有回调在 Caster 内部线程中触发，实现方需自行保证线程安全，
- * 且不应在回调中执行阻塞操作。</p>
+ * 所有回调在 Caster 内部线程中触发，实现方需自行保证线程安全，
+ * 且不应在回调中执行阻塞操作。
  *
- * <p>本接口只负责「告知」，不决定数据流向：需要向客户端回送改正数的场景，
+ * 本接口只负责「告知」，不决定数据流向：需要向客户端回送改正数的场景，
  * 由应用层在 {@link #onGga} 中调用 {@link CasterSession#send(byte[])}
- * 或 {@link NtripCaster#publish(String, byte[])} 完成。</p>
+ * 或 {@link NtripCaster#publish(String, byte[])} 完成。
  *
  * @see NtripCaster
  * @see CasterSession

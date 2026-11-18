@@ -18,11 +18,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * NTRIP Sourcetable 响应解码单元测试。
- * <p>
+ *
  * 使用本地 ServerSocket 模拟 Caster，覆盖三种响应形态：
  * NTRIP 1.0 明文、NTRIP 2.0 chunked、NTRIP 2.0 chunked+gzip。
  * 不依赖外网与认证信息，可在 CI 稳定执行。
- * </p>
  */
 class NtripSourcetableDecodeTest {
 

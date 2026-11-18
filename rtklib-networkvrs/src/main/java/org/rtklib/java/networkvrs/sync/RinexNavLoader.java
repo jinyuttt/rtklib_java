@@ -11,9 +11,9 @@ import java.util.List;
 /**
  * 从 RINEX 3 混合导航文件（如 BRDC00WRD_R_..._MN.rnx）加载广播星历。
  *
- * <p>只取 GPS/GAL/BDS/QZS/IRN 的 {@link Eph}（GLONASS 星历在 {@code nav.geph}，
+ * 只取 GPS/GAL/BDS/QZS/IRN 的 {@link Eph}（GLONASS 星历在 {@code nav.geph}，
  * 档 2 网解暂不使用）；装载后可附到 {@link StationObservation} 供卫星高度角与
- * 对流层模型使用。</p>
+ * 对流层模型使用。
  */
 public final class RinexNavLoader {
 

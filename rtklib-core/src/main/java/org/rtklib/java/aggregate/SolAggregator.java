@@ -14,13 +14,12 @@ import java.util.Map;
 /**
  * 历元聚合工具主入口。
  *
- * <p>输入窗口内多个 {@link SolData}，输出一个融合结果。支持两种模式：</p>
- * <ul>
- *   <li>{@link AggregationMode#ROBUST}：鲁棒加权（IGG3 降权），适合静态压噪声、抗假固定</li>
- *   <li>{@link AggregationMode#KALMAN_SMOOTH}：卡尔曼前向滤波 + RTS 平滑，适合跟踪位移</li>
- * </ul>
+ * 输入窗口内多个 {@link SolData}，输出一个融合结果。支持两种模式：
  *
- * <p>纯函数式接口，不修改 solstatic / RtkProcessor / PppProcessor。</p>
+ *   - {@link AggregationMode#ROBUST}：鲁棒加权（IGG3 降权），适合静态压噪声、抗假固定
+ *   - {@link AggregationMode#KALMAN_SMOOTH}：卡尔曼前向滤波 + RTS 平滑，适合跟踪位移
+ *
+ * 纯函数式接口，不修改 solstatic / RtkProcessor / PppProcessor。
  */
 public final class SolAggregator {
 

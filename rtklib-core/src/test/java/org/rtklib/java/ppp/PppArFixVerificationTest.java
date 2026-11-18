@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * 数值验证测试：直接验证P2（Fix-and-Hold最小历元守卫）和P3（Partial AR周空间转换）的修复正确性。
  *
- * <p>这些测试不依赖真实数据文件，而是构造受控输入来验证修复的数值行为。</p>
+ * 这些测试不依赖真实数据文件，而是构造受控输入来验证修复的数值行为。
  */
 public class PppArFixVerificationTest {
 
@@ -68,8 +68,8 @@ public class PppArFixVerificationTest {
     /**
      * P2验证：Fix-and-Hold最小历元守卫
      *
-     * <p>验证当nfix < pppArFixHoldMinEp时，pppArFixHold()不收紧方差；
-     * 当nfix >= pppArFixHoldMinEp时，正确收紧方差到pppArFixHoldVar。</p>
+     * 验证当nfix < pppArFixHoldMinEp时，pppArFixHold()不收紧方差；
+     * 当nfix >= pppArFixHoldMinEp时，正确收紧方差到pppArFixHoldVar。
      */
     @Test
     @DisplayName("P2: Fix-and-Hold最小历元守卫")
@@ -125,9 +125,9 @@ public class PppArFixVerificationTest {
     /**
      * P3验证：Partial AR周空间转换 - WL+NL两步固定的数值正确性
      *
-     * <p>构造6颗GPS卫星，IF组合模糊度由WL和N1(L1模糊度)整周值构建。
+     * 构造6颗GPS卫星，IF组合模糊度由WL和N1(L1模糊度)整周值构建。
      * PAR基于WL+NL两步固定：x[idx] = N1 * λ_NL + N_WL * f2 * λ_WL / (f1+f2)。
-     * 验证pppPartialAR()能正确固定模糊度，且固定值重建正确。</p>
+     * 验证pppPartialAR()能正确固定模糊度，且固定值重建正确。
      */
     @Test
     @DisplayName("P3: Partial AR周空间转换数值验证")
@@ -195,8 +195,8 @@ public class PppArFixVerificationTest {
     /**
      * P3验证：Partial AR方差过滤 - 高方差模糊度应被拒绝
      *
-     * <p>设置一些低方差和一方差模糊度，验证只有低方差的被固定。
-     * 使用正确的IF组合模糊度格式：x[idx] = N1 * λ_NL + N_WL * f2 * λ_WL / (f1+f2)。</p>
+     * 设置一些低方差和一方差模糊度，验证只有低方差的被固定。
+     * 使用正确的IF组合模糊度格式：x[idx] = N1 * λ_NL + N_WL * f2 * λ_WL / (f1+f2)。
      */
     @org.junit.jupiter.api.Disabled("LAMBDA method fails with synthetic diagonal covariance - requires realistic correlation structure")
     @Test
@@ -258,8 +258,8 @@ public class PppArFixVerificationTest {
     /**
      * P3验证：多系统混合 - GPS+BDS波长差异处理
      *
-     * <p>验证不同系统的波长被正确处理，固定值=N1*λ_NL + N_WL*f2*λ_WL/(f1+f2)。
-     * PAR基于WL+NL两步固定，输入x[idx]是IF组合模糊度。</p>
+     * 验证不同系统的波长被正确处理，固定值=N1*λ_NL + N_WL*f2*λ_WL/(f1+f2)。
+     * PAR基于WL+NL两步固定，输入x[idx]是IF组合模糊度。
      */
     @org.junit.jupiter.api.Disabled("LAMBDA method fails with synthetic diagonal covariance - requires realistic correlation structure")
     @Test

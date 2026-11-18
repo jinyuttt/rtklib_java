@@ -14,22 +14,21 @@ import java.util.concurrent.TimeUnit;
 /**
  * JMH micro-benchmark for SimpleMatrix primitive operations.
  *
- * <p>Covers the four hot-path operations in KalmanFilter.update():
+ * Covers the four hot-path operations in KalmanFilter.update():
  * constructor, multiply, invert, and transpose.
  * Results feed into Tier 0 baseline and Tier 2 (3A) SimpleMatrix-to-primitive
- * array migration decision.</p>
+ * array migration decision.
  *
- * <p>Matrix dimensions mirror actual KalmanFilter.update() usage:
- * <ul>
- *   <li>k (compressed state): 10, 50, 150, 300</li>
- *   <li>nv (observation): 5, 20, 40, 60</li>
- *   <li>k × k (covariance): 10×10, 50×50, 150×150, 300×300</li>
- *   <li>nv × nv (innovation cov): 5×5, 20×20, 40×40, 60×60</li>
- *   <li>k × nv (gain / design): 50×20, 150×40, 300×60</li>
- * </ul>
+ * Matrix dimensions mirror actual KalmanFilter.update() usage:
  *
- * <p>Run with:
- * <pre>mvn test -pl rtklib-core "-Dtest=JmhRunnerTest#runSimpleMatrixBenchmark" -DfailIfNoTests=false</pre>
+ *   - k (compressed state): 10, 50, 150, 300
+ *   - nv (observation): 5, 20, 40, 60
+ *   - k × k (covariance): 10×10, 50×50, 150×150, 300×300
+ *   - nv × nv (innovation cov): 5×5, 20×20, 40×40, 60×60
+ *   - k × nv (gain / design): 50×20, 150×40, 300×60
+ *
+ * Run with:
+ * mvn test -pl rtklib-core "-Dtest=JmhRunnerTest#runSimpleMatrixBenchmark" -DfailIfNoTests=false
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)

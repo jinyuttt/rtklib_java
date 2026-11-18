@@ -3,13 +3,13 @@ package org.rtklib.java.rtcm;
 /**
  * 自定义 RTCM3 消息解码器注入接口。
  *
- * <p>用于 RTCM 标准之外、但借用 RTCM3 帧结构的专有消息（例如 IGS 使用的
+ * 用于 RTCM 标准之外、但借用 RTCM3 帧结构的专有消息（例如 IGS 使用的
  * 专有消息号 4076）。实现类由外部扩展模块提供，通过
  * {@link Rtcm#registerCustomDecoder(CustomMessageDecoder)} 注册，
- * 核心的通用 RTCM 解析逻辑不包含任何专有格式代码。</p>
+ * 核心的通用 RTCM 解析逻辑不包含任何专有格式代码。
  *
- * <p>当 {@link Rtcm} 收到未内置支持的消息号时，会依次委托给已注册的解码器；
- * 没有任何解码器处理时，仍然按“已消费但不解析”处理，与原有行为一致。</p>
+ * 当 {@link Rtcm} 收到未内置支持的消息号时，会依次委托给已注册的解码器；
+ * 没有任何解码器处理时，仍然按“已消费但不解析”处理，与原有行为一致。
  */
 public interface CustomMessageDecoder {
 

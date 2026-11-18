@@ -2,25 +2,23 @@ package org.rtklib.java.stream;
 
 /**
  * 串口配置。
- * <p>
+ *
  * 封装串口流所需的全部参数，包括端口名称、波特率、数据位、停止位、校验位和超时设置。
  * 所有参数均有默认值，可直接使用或按需调整。
- * </p>
  *
- * <p>默认值一览：
- * <ul>
- *   <li>portName: ""（必须设置，如Windows "COM3"、Linux "/dev/ttyUSB0"）</li>
- *   <li>baudRate: 115200</li>
- *   <li>dataBits: 8</li>
- *   <li>stopBits: 1</li>
- *   <li>parity: 0（无校验）</li>
- *   <li>flowControl: 0（无流控）</li>
- *   <li>readTimeoutMs: 0（非阻塞）</li>
- *   <li>writeTimeoutMs: 0</li>
- * </ul>
+ * 默认值一览：
  *
- * <p>校验位取值：0=无校验，1=奇校验，2=偶校验，3=Mark，4=Space。
- * <br>流控取值：0=无，1=RTS/CTS硬件流控，2=XON/XOFF软件流控，3=RTS/CTS + XON/XOFF。
+ *   - portName: ""（必须设置，如Windows "COM3"、Linux "/dev/ttyUSB0"）
+ *   - baudRate: 115200
+ *   - dataBits: 8
+ *   - stopBits: 1
+ *   - parity: 0（无校验）
+ *   - flowControl: 0（无流控）
+ *   - readTimeoutMs: 0（非阻塞）
+ *   - writeTimeoutMs: 0
+ *
+ * 校验位取值：0=无校验，1=奇校验，2=偶校验，3=Mark，4=Space。
+ *  流控取值：0=无，1=RTS/CTS硬件流控，2=XON/XOFF软件流控，3=RTS/CTS + XON/XOFF。
  *
  * @see SerialPort
  */

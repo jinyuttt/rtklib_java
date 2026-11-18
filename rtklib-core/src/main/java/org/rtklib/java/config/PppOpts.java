@@ -6,10 +6,9 @@ import org.rtklib.java.cssr.CompactSsrDecoder;
 
 /**
  * PPP / PPP-RTK 公共参数。
- * <p>
+ *
  * 从 {@link RtkConfig} 拆分出的独立子配置，字段名去掉原 {@code ppp} 前缀
  * （{@code enablePppIsbClockInit} → {@code enableIsbClockInit}）。
- * </p>
  */
 public class PppOpts implements Serializable {
     private static final long serialVersionUID = 1L;

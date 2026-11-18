@@ -4,12 +4,12 @@ package org.rtklib.java.orbit;
 /**
  * 单条 TLE (Two-Line Element) 数据容器。
  *
- * <p>持有解析前的原始 TLE 行字符串和卫星编号，以及解析并执行 sgp4init 后
+ * 持有解析前的原始 TLE 行字符串和卫星编号，以及解析并执行 sgp4init 后
  * 得到的 SGP4 卫星记录（{@link Satellite}）。{@link TleParser#tleRead} 在
- * 读取文件后会自动调用 twoline2rv + sgp4init 填充 {@link #satrec}。</p>
+ * 读取文件后会自动调用 twoline2rv + sgp4init 填充 {@link #satrec}。
  *
- * <p>对应 python-sgp4 中 io.twoline2rv 返回的 Satellite 对象及其附属字段
- * (line1/line2/satnum_str/classification/intldesg/epochyr/epochdays/...)。</p>
+ * 对应 python-sgp4 中 io.twoline2rv 返回的 Satellite 对象及其附属字段
+ * (line1/line2/satnum_str/classification/intldesg/epochyr/epochdays/...)。
  */
 public class TleData {
 

@@ -5,7 +5,7 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * IACE（整数模糊度聚类估计）结果。
  *
- * <p>与 LAMBDA 的 LambdaResult 对应，提供聚类评分为替代 Ratio 检验。</p>
+ * 与 LAMBDA 的 LambdaResult 对应，提供聚类评分为替代 Ratio 检验。
  */
 public class IaceResult {
     public boolean success;

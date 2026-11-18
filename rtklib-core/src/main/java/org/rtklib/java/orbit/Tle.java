@@ -3,7 +3,7 @@ package org.rtklib.java.orbit;
 /**
  * TLE 集合容器，对应测试代码 Sgp4PropagatorTest 中使用的 {@code Tle} 类型。
  *
- * <p>持有 {@link #n} 条 {@link TleData}，由 {@link TleParser#tleRead} 填充。</p>
+ * 持有 {@link #n} 条 {@link TleData}，由 {@link TleParser#tleRead} 填充。
  */
 public class Tle {
 

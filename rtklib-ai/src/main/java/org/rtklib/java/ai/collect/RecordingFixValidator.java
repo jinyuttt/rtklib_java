@@ -11,28 +11,23 @@ import java.io.Writer;
 
 /**
  * 采集型接口一实现：把每次 {@code aiAcceptFix()} 调用的上下文落盘成 CSV 一行，
- * 并<b>恒返回 {@code 1.0}</b>（不干预）。
- * <p>
+ * 并恒返回 {@code 1.0}（不干预）。
+ *
  * 恒返回 1.0 的两个后果：
- * </p>
- * <ul>
- *   <li>core 走原生固定分支，行为与不注入逐位一致，故这份数据同时是 A/B 的对照组基线；</li>
- *   <li>{@code 1.0 >= fixValidatorMinConfidence} 恒成立，不会产生 {@code AR/AI_REJECT}，
- *       不会因为采集而改变解算结果。</li>
- * </ul>
- * <p>
- * 特征必须复用 {@link FixQualityFeatures#extractRaw}，<b>不得在本类重算</b>：
+ *
+ *   - core 走原生固定分支，行为与不注入逐位一致，故这份数据同时是 A/B 的对照组基线；
+ *   - {@code 1.0 >= fixValidatorMinConfidence} 恒成立，不会产生 {@code AR/AI_REJECT}，
+ *       不会因为采集而改变解算结果。
+ *
+ * 特征必须复用 {@link FixQualityFeatures#extractRaw}，不得在本类重算：
  * 该函数内含退化处理（{@code nPhaseRows==0 → prr=0}、{@code ns<=0 → 不除零}），
  * 重写一份会让训练分布与推理分布悄悄错位。
- * </p>
- * <p>
+ *
  * 写盘失败不抛异常（{@code FixValidator} 契约要求不抛）：一旦失败即停止写入并返回 1.0，
  * 解算不受影响，仅丢失采集数据。
- * </p>
- * <p>
+ *
  * 本类不承诺跨线程安全：{@code AiHooks} 是 {@code ThreadLocal} 单槽，天然一线程一实例。
  * 并行采集时每个线程各自 {@code open()} 自己的会话。
- * </p>
  */
 public final class RecordingFixValidator implements FixValidator, AutoCloseable {
 

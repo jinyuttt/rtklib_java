@@ -7,38 +7,34 @@ import java.util.Locale;
 /**
  * LAMBDA/MLAMBDA整周模糊度固定算法。
  *
- * <p>对应RTKLIB lambda.c。实现整数最小二乘估计，用于RTK模糊度固定。</p>
+ * 对应RTKLIB lambda.c。实现整数最小二乘估计，用于RTK模糊度固定。
  *
- * <h3>算法流程</h3>
- * <ol>
- *   <li>LD分解：Q = L' * diag(D) * L</li>
- *   <li>LAMBDA降相关：通过整数高斯变换和置换，使搜索空间更紧凑</li>
- *   <li>MLAMBDA搜索：在降相关后的空间中搜索最优整数解</li>
- *   <li>逆变换：将搜索结果变换回原始空间 F = Z'\E</li>
- * </ol>
+ * 算法流程
  *
- * <h3>参考文献</h3>
- * <ul>
- *   <li>[1] P.J.G.Teunissen, The least-square ambiguity decorrelation adjustment:
- *       a method for fast GPS ambiguity estimation, J.Geodesy, Vol.70, 65-82, 1995</li>
- *   <li>[2] X.-W.Chang, X.Yang, T.Zhou, MLAMBDA: A modified LAMBDA method for
- *       integer least-squares estimation. J Geodesy 2005;79:552-565.</li>
- * </ul>
+ *   - LD分解：Q = L' * diag(D) * L
+ *   - LAMBDA降相关：通过整数高斯变换和置换，使搜索空间更紧凑
+ *   - MLAMBDA搜索：在降相关后的空间中搜索最优整数解
+ *   - 逆变换：将搜索结果变换回原始空间 F = Z'\E
  *
- * <h3>矩阵存储约定（行优先）</h3>
- * <ul>
- *   <li>Q[n*n]：协方差矩阵，行优先 Q[i*n+j]</li>
- *   <li>L[n*n]：下三角矩阵，行优先 L[i*n+j]</li>
- *   <li>Z[n*n]：变换矩阵，行优先 Z[i*n+j]</li>
- *   <li>F[n*m]：固定解，行优先 F[i*m+j]</li>
- * </ul>
+ * 参考文献
  *
- * <h3>与RTKLIB C版本的关键差异</h3>
- * <ul>
- *   <li>C版本使用列优先（Fortran风格），Java版本统一使用行优先</li>
- *   <li>矩阵运算（Z'*a, Z'\E）使用EJML通过MatrixUtil封装</li>
- *   <li>元素级运算（gauss, perm, search）保持1D数组操作，索引从列优先转为行优先</li>
- * </ul>
+ *   - [1] P.J.G.Teunissen, The least-square ambiguity decorrelation adjustment:
+ *       a method for fast GPS ambiguity estimation, J.Geodesy, Vol.70, 65-82, 1995
+ *   - [2] X.-W.Chang, X.Yang, T.Zhou, MLAMBDA: A modified LAMBDA method for
+ *       integer least-squares estimation. J Geodesy 2005;79:552-565.
+ *
+ * 矩阵存储约定（行优先）
+ *
+ *   - Q[n*n]：协方差矩阵，行优先 Q[i*n+j]
+ *   - L[n*n]：下三角矩阵，行优先 L[i*n+j]
+ *   - Z[n*n]：变换矩阵，行优先 Z[i*n+j]
+ *   - F[n*m]：固定解，行优先 F[i*m+j]
+ *
+ * 与RTKLIB C版本的关键差异
+ *
+ *   - C版本使用列优先（Fortran风格），Java版本统一使用行优先
+ *   - 矩阵运算（Z'*a, Z'\E）使用EJML通过MatrixUtil封装
+ *   - 元素级运算（gauss, perm, search）保持1D数组操作，索引从列优先转为行优先
  */
 public final class Lambda {
     private Lambda() {
@@ -49,16 +45,15 @@ public final class Lambda {
     /**
      * LAMBDA/MLAMBDA整数最小二乘估计。
      *
-     * <p>对应RTKLIB lambda()。对浮点模糊度进行整数估计，返回m个最优固定解。</p>
+     * 对应RTKLIB lambda()。对浮点模糊度进行整数估计，返回m个最优固定解。
      *
-     * <p>计算步骤：</p>
-     * <ol>
-     *   <li>LD分解：Q = L' * diag(D) * L</li>
-     *   <li>LAMBDA降相关：reduction(n, L, D, Z)</li>
-     *   <li>变换浮点模糊度：z = Z' * a</li>
-     *   <li>MLAMBDA搜索：search(n, m, L, D, z, E, s)</li>
-     *   <li>逆变换固定解：F = Z'\E</li>
-     * </ol>
+     * 计算步骤：
+     *
+     *   - LD分解：Q = L' * diag(D) * L
+     *   - LAMBDA降相关：reduction(n, L, D, Z)
+     *   - 变换浮点模糊度：z = Z' * a
+     *   - MLAMBDA搜索：search(n, m, L, D, z, E, s)
+     *   - 逆变换固定解：F = Z'\E
      *
      * @param n 浮点参数个数（双差模糊度数）
      * @param m 固定解个数（通常为2，用于ratio检验）
@@ -75,8 +70,8 @@ public final class Lambda {
     /**
      * 带诊断出参的重载。
      *
-     * <p>failInfo[0] 返回 factorLD 失败时首个非正对角元下标（原始行序），
-     * 成功或未进入分解时置 -1。仅用于诊断，不改变数值结果。</p>
+     * failInfo[0] 返回 factorLD 失败时首个非正对角元下标（原始行序），
+     * 成功或未进入分解时置 -1。仅用于诊断，不改变数值结果。
      */
     public static int lambda(int n, int m, double[] a, double[] Q, double[] F, double[] s,
                              int[] failInfo) {
@@ -165,9 +160,9 @@ public final class Lambda {
     /**
      * LD分解：Q = L' * diag(D) * L。
      *
-     * <p>对应RTKLIB LD()。将协方差矩阵Q分解为下三角矩阵L和对角矩阵D。</p>
+     * 对应RTKLIB LD()。将协方差矩阵Q分解为下三角矩阵L和对角矩阵D。
      *
-     * <p><b>行优先索引</b>：C版本 L[i+j*n]（列优先）→ Java版本 L[i*n+j]（行优先）</p>
+     * 行优先索引：C版本 L[i+j*n]（列优先）→ Java版本 L[i*n+j]（行优先）
      *
      * @param n   矩阵维数
      * @param Q   协方差矩阵 [n*n]，行优先，输入
@@ -208,10 +203,10 @@ public final class Lambda {
     /**
      * 整数高斯变换。
      *
-     * <p>对应RTKLIB gauss()。对L和Z矩阵的第i列和第j列进行整数高斯变换，
-     * 消除L[i][j]的小数部分。</p>
+     * 对应RTKLIB gauss()。对L和Z矩阵的第i列和第j列进行整数高斯变换，
+     * 消除L[i][j]的小数部分。
      *
-     * <p><b>行优先索引</b>：C版本 L[k+j*n]（列优先）→ Java版本 L[k*n+j]（行优先）</p>
+     * 行优先索引：C版本 L[k+j*n]（列优先）→ Java版本 L[k*n+j]（行优先）
      *
      * @param n 矩阵维数
      * @param L 下三角矩阵 [n*n]，行优先，输入/输出
@@ -230,9 +225,9 @@ public final class Lambda {
     /**
      * 置换操作。
      *
-     * <p>对应RTKLIB perm()。交换L矩阵的第j列和第j+1列，同时更新D和Z。</p>
+     * 对应RTKLIB perm()。交换L矩阵的第j列和第j+1列，同时更新D和Z。
      *
-     * <p><b>行优先索引</b>：C版本 L[j+k*n]（列优先）→ Java版本 L[j*n+k]（行优先）</p>
+     * 行优先索引：C版本 L[j+k*n]（列优先）→ Java版本 L[j*n+k]（行优先）
      *
      * @param n   矩阵维数
      * @param L   下三角矩阵 [n*n]，行优先，输入/输出
@@ -271,8 +266,8 @@ public final class Lambda {
     /**
      * LAMBDA降相关。
      *
-     * <p>对应RTKLIB reduction()。通过整数高斯变换和置换操作，
-     * 使协方差矩阵的条件数减小，搜索空间更紧凑。</p>
+     * 对应RTKLIB reduction()。通过整数高斯变换和置换操作，
+     * 使协方差矩阵的条件数减小，搜索空间更紧凑。
      *
      * @param n 矩阵维数
      * @param L 下三角矩阵 [n*n]，行优先，输入/输出
@@ -303,17 +298,16 @@ public final class Lambda {
     /**
      * MLAMBDA搜索。
      *
-     * <p>对应RTKLIB search()。在降相关后的空间中搜索m个最优整数向量，
-     * 返回固定解和对应的残差平方和。</p>
+     * 对应RTKLIB search()。在降相关后的空间中搜索m个最优整数向量，
+     * 返回固定解和对应的残差平方和。
      *
-     * <p>搜索策略：从最高维度开始，逐步向下搜索，剪枝掉残差过大的候选解。</p>
+     * 搜索策略：从最高维度开始，逐步向下搜索，剪枝掉残差过大的候选解。
      *
-     * <p><b>行优先索引</b>：</p>
-     * <ul>
-     *   <li>S[k*n+i]：C版本 S[k+i*n]（列优先）→ 行优先</li>
-     *   <li>L[(k+1)*n+i]：C版本 L[k+1+i*n]（列优先）→ 行优先</li>
-     *   <li>zn[i*m+nn]：C版本 zn[i+nn*n]（列优先）→ 行优先</li>
-     * </ul>
+     * 行优先索引：
+     *
+     *   - S[k*n+i]：C版本 S[k+i*n]（列优先）→ 行优先
+     *   - L[(k+1)*n+i]：C版本 L[k+1+i*n]（列优先）→ 行优先
+     *   - zn[i*m+nn]：C版本 zn[i+nn*n]（列优先）→ 行优先
      *
      * @param n  浮点参数个数
      * @param m  固定解个数

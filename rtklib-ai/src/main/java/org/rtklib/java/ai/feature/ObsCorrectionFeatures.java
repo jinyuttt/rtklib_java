@@ -4,14 +4,12 @@ import org.rtklib.java.ai.spi.SatFeature;
 
 /**
  * 接口三特征提取（设计文档 §5.3，输入向量定死 17 维，每行 = 一个 {@code (sat i, frq)}）。
- * <p>
+ *
  * 本类只做「单星快照 + 窗口聚合 → 原始特征」，不做归一化（见 {@link FeatureNorm}），
  * 也不维护短窗状态（窗口住在 {@code ObsCorrectorImpl}，core 只给当前历元快照）。
- * </p>
- * <p>
+ *
  * 列名 {@code f0..f16} 与 §5.3 编号逐位对应，训练与推理必须完全一致：
- * </p>
- * <pre>
+ *
  * f0  el            高度角（弧度转度）
  * f1  az            方位角（度）
  * f2  snrRover      流动站 SNR（dBHz）
@@ -29,7 +27,6 @@ import org.rtklib.java.ai.spi.SatFeature;
  * f14 respWinStd    近 5 历元 resp 标准差（不足 2 样本填 0）
  * f15 rescWinMean   近 5 历元 resc 均值
  * f16 histLen       窗口内实际历元数 / 5，取值 [0.2, 1.0]
- * </pre>
  */
 public final class ObsCorrectionFeatures {
 
@@ -71,11 +68,10 @@ public final class ObsCorrectionFeatures {
 
     /**
      * 提取单行 17 维原始特征。
-     * <p>
+     *
      * 退化处理（§5.3）：缺失观测填 {@code 0}（{@code snr} 正常范围 0–60 dBHz，0 可区分）；
      * {@code resp}/{@code resc} 对参考星恒 0；{@code histLen} 至少 {@code 0.2}。
      * 非有限值一律归零——{@code NaN} 进入 ONNX 会污染整批输出。
-     * </p>
      *
      * @param sf  单星特征，非 {@code null}
      * @param frq 频点下标，必须落在数组长度内（越界按缺失处理）
@@ -109,10 +105,9 @@ public final class ObsCorrectionFeatures {
 
     /**
      * 星座标识：{@code sys} 是 {@code SYS_??} 位掩码，取尾随零个数。
-     * <p>
+     *
      * 不做 one-hot（星座数会随版本增长，输入维会漂移）；也绝不能直接喂位掩码
      * （{@code 0x01/0x04/0x08} 在数值上无序关系，MLP 会学出伪序）。
-     * </p>
      */
     public static double sysId(int sys) {
         if (sys == 0) return 0.0;

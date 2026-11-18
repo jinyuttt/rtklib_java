@@ -23,10 +23,10 @@ public final class JointCore {
     /**
      * [§13.9 Phase B] 降权达到该倍数（R 膨胀 4 倍，对应位移约 2 倍门限）的基线不参与 AR。
      *
-     * <p>AR 取各基线 ratio 的最小值，任一条基线 LAMBDA 失败即整体退回 FLOAT。被降权的基线
+     * AR 取各基线 ratio 的最小值，任一条基线 LAMBDA 失败即整体退回 FLOAT。被降权的基线
      * 模糊度方差随 R 同比放大（4 倍 R → 2 倍 σ），其 Qb 已无法支撑整数固定；若仍把它
      * 纳入 AR，会拖垮其余健康基线的固定（实测双基线 FIX 率 91% → 55%）。
-     * 故超过该倍数即从 AR 中摘除，只保留它在滤波中的（已降权的）观测贡献。</p>
+     * 故超过该倍数即从 AR 中摘除，只保留它在滤波中的（已降权的）观测贡献。
      */
     private static final double AR_SKIP_WEIGHT = 4.0;
 
@@ -696,14 +696,14 @@ public final class JointCore {
     /**
      * [FIX-ALG-042 P5] 周跳检测：逐基线调用 core 的 detslpDop/detslpCode/detslpLl/detslpGf。
      *
-     * <p>此前 joint 从未调用这四个函数，{@code ssat.slip} 只读不写，周跳永不检出。
-     * 调用顺序对齐 {@code RtkCore.udbias}：Dop → Code → Ll → Gf。</p>
+     * 此前 joint 从未调用这四个函数，{@code ssat.slip} 只读不写，周跳永不检出。
+     * 调用顺序对齐 {@code RtkCore.udbias}：Dop → Code → Ll → Gf。
      *
-     * <p>状态隔离：检测在 {@code jrtk.ssatBl[b]} 上进行而非全局 {@code jrtk.ssat}。
+     * 状态隔离：检测在 {@code jrtk.ssatBl[b]} 上进行而非全局 {@code jrtk.ssat}。
      * 全局状态只有一个 base 槽位，k 条基线会互相覆盖，使基站 B 的周跳误重置基站 A 的模糊度。
      * 各基线数组只喂入「同一份 rover 观测 + 本站基站观测」，rover 侧状态天然一致，
      * 唯一差异即需要隔离的 base 侧状态。检测后把各基线的周跳标志合并回全局
-     * {@code jrtk.ssat}，供输出与诊断使用（判定逻辑一律读 per-baseline 状态）。</p>
+     * {@code jrtk.ssat}，供输出与诊断使用（判定逻辑一律读 per-baseline 状态）。
      */
     private static void detectCycleSlip(JointRtk jrtk, Obsd[] roverObs, int roverN,
                                         BaseStation[] bases, int nBaseline, int nf,
@@ -850,11 +850,11 @@ public final class JointCore {
     /**
      * [§2.1.1 / §0.2] 大气状态（电离层 + 对流层）过程噪声与初值。
      *
-     * <p>对齐 {@code RtkCore.udion/udtrop}。此前 joint 只给模糊度加 {@code prn[0]}，
+     * 对齐 {@code RtkCore.udion/udtrop}。此前 joint 只给模糊度加 {@code prn[0]}，
      * 大气维度虽存在但 P 恒为 0，状态不吸收任何误差——配 {@code ionoopt=EST} /
      * {@code tropopt=EST} 等于没配。此处按「初值 std[1]/std[2] + 过程噪声 prn[1]/prn[2]」
      * 接线，并按共享布局遍历：电离层按块（共享时仅 1 块），对流层 rover 侧按块、
-     * 基站侧按基站各一份。</p>
+     * 基站侧按基站各一份。
      */
     private static void udatm(JointRtk jrtk, BaselineObs[] blObs, int nBaseline, double tt,
                               BaseStation[] bases) {

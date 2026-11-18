@@ -16,18 +16,17 @@ import org.rtklib.java.research.data.ObservationEpoch;
 /**
  * FE-GUT 数据集加载器（移植自 FE-GUT fileio/psfileloader.h 等文件加载器）。
  *
- * <p>读取 FE-GUT 格式的 GNSS/UWB 仿真数据，构建 ObservationEpoch。
- * 数据集包含 6 颗卫星、4 个 UWB 锚点、12000 个历元（1200 秒 @ 10Hz）。</p>
+ * 读取 FE-GUT 格式的 GNSS/UWB 仿真数据，构建 ObservationEpoch。
+ * 数据集包含 6 颗卫星、4 个 UWB 锚点、12000 个历元（1200 秒 @ 10Hz）。
  *
- * <h3>数据文件格式</h3>
- * <ul>
- *   <li>psdata.txt：时间 + 6 个伪距值，空格分隔</li>
- *   <li>psratedata.txt：时间 + 6 个伪距率值</li>
- *   <li>satposdata.txt：时间 + 18 个卫星坐标（6 颗 × 3 轴）</li>
- *   <li>satveldata.txt：时间 + 18 个卫星速度</li>
- *   <li>uwbdata.txt：时间 + 4 个 UWB 测距值</li>
- *   <li>navdata.txt：时间 + 7 个导航真值（位置3 + 速度3 + ??）</li>
- * </ul>
+ * 数据文件格式
+ *
+ *   - psdata.txt：时间 + 6 个伪距值，空格分隔
+ *   - psratedata.txt：时间 + 6 个伪距率值
+ *   - satposdata.txt：时间 + 18 个卫星坐标（6 颗 × 3 轴）
+ *   - satveldata.txt：时间 + 18 个卫星速度
+ *   - uwbdata.txt：时间 + 4 个 UWB 测距值
+ *   - navdata.txt：时间 + 7 个导航真值（位置3 + 速度3 + ??）
  */
 public class DatasetLoader {
 

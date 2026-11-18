@@ -21,15 +21,15 @@ import java.util.Map;
  * [JAVA-ONLY 原创] 双差观测构造：给定两站在同一历元的观测与广播星历，生成逐卫星双差量。
  * 双差观测方程与信号对选择策略均为本项目自行设计，未移植任何外部开源项目代码。
  *
- * <p>信号对按系统固定优先级选取（BDS 优先 B1I/B3I，GPS 优先 L1C/L2W，GAL 优先 L1C/L5Q），
+ * 信号对按系统固定优先级选取（BDS 优先 B1I/B3I，GPS 优先 L1C/L2W，GAL 优先 L1C/L5Q），
  * 避免各站自动选频导致频间偏差不一致。参考星取两站最低高度角最大者；
- * 卫星位置按信号发射时刻迭代（2 次），并含 Sagnac 改正。</p>
+ * 卫星位置按信号发射时刻迭代（2 次），并含 Sagnac 改正。
  *
- * <p>星历来源由 {@code ephopt} 决定：广播星历（默认）、SP3/CLK 精密星历、SSR 改正。
+ * 星历来源由 {@code ephopt} 决定：广播星历（默认）、SP3/CLK 精密星历、SSR 改正。
  * 后两者对「取不到星历」的处置统一为剔除该星，不回退广播星历（SSR 模式按
- * {@link SsrCorrector#MAXAGESSR} 判定龄期，超龄或缺失即剔除）。</p>
+ * {@link SsrCorrector#MAXAGESSR} 判定龄期，超龄或缺失即剔除）。
  *
- * <p>GLONASS 需要频率号，本阶段不参与网解。</p>
+ * GLONASS 需要频率号，本阶段不参与网解。
  */
 public final class DdObservationBuilder {
 
@@ -240,15 +240,15 @@ public final class DdObservationBuilder {
     /**
      * 卫星位置：按信号发射时刻迭代 2 次。
      *
-     * <p>{@code EPHOPT_BRDC} 走广播星历；{@code EPHOPT_PREC} 走 SP3/CLK 精密星历
+     * {@code EPHOPT_BRDC} 走广播星历；{@code EPHOPT_PREC} 走 SP3/CLK 精密星历
      * （失败即剔除该星，不回退广播）；{@code EPHOPT_SSRAPC/SSRCOM} 在广播星历位置
-     * 上叠加 {@code nav.ssr} 轨道改正，无改正数据的卫星保持广播值。</p>
+     * 上叠加 {@code nav.ssr} 轨道改正，无改正数据的卫星保持广播值。
      *
-     * <p>SSR 模式「保留广播值」是本模块（短基线网解）的专属处置，前提为基线
-     * &lt; 50 km：此时站间双差把米级轨道误差当共模量消掉，剔除卫星反而削弱
+     * SSR 模式「保留广播值」是本模块（短基线网解）的专属处置，前提为基线
+     * < 50 km：此时站间双差把米级轨道误差当共模量消掉，剔除卫星反而削弱
      * LAMBDA 的模糊度支撑。基线更长时轨道误差不再共模，须改走 PPP-RTK 的剔除
      * 口径（超龄/无改正即剔除该星，见 {@code PppRtkCore}，对齐 RTKLIB
-     * {@code satpos_ssr} 置 {@code svh=-1}）。</p>
+     * {@code satpos_ssr} 置 {@code svh=-1}）。
      */
     private static SatState satPos(GTime time, Nav nav, int sat, double[] approxRr,
                                    int ephopt, Obsd obs) {
@@ -298,7 +298,7 @@ public final class DdObservationBuilder {
     /**
      * SSR 轨道/钟差改正：无改正数据（含龄期超 {@link SsrCorrector#MAXAGESSR}）时保持广播值不变。
      *
-     * <p>有效性判定全部下沉到 {@link SsrCorrector}：改正有效才写入，否则 {@code rs}/{@code dts}
+     * 有效性判定全部下沉到 {@link SsrCorrector}：改正有效才写入，否则 {@code rs}/{@code dts}
      * 原样保留。是否因缺改正剔除卫星由调用方口径决定，本模块口径见 {@link #satPos}。
      */
     private static void applySsr(Nav nav, double[] rs, double[] dts, Obsd obs) {
@@ -406,8 +406,8 @@ public final class DdObservationBuilder {
     /**
      * Melbourne-Wübbena 宽巷浮点模糊度（周）。
      *
-     * <p>{@code N_WL = (L1 - L2) - (f1*P1 + f2*P2)/((f1+f2)*lambda_WL)}，
-     * 相位以周计、码以米计，几何与电离层一阶项抵消。</p>
+     * {@code N_WL = (L1 - L2) - (f1*P1 + f2*P2)/((f1+f2)*lambda_WL)}，
+     * 相位以周计、码以米计，几何与电离层一阶项抵消。
      */
     private static double mw(Obsd obs, SignalPair p) {
         double[] v = values(obs, p);

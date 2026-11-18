@@ -5,15 +5,14 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 组合导航积分状态（移植自FE-GUT types.h IntegrationState/IntegrationStateData）。
  *
- * <p>12维状态向量：[r(3), v(3), a(3), tu, fu, tdk]
- * <ul>
- *   <li>r: ECEF位置 (m)</li>
- *   <li>v: ECEF速度 (m/s)</li>
- *   <li>a: ECEF加速度 (m/s²)</li>
- *   <li>tu: GNSS接收机钟差 (m)</li>
- *   <li>fu: GNSS接收机钟漂 (m/s)</li>
- *   <li>tdk: UWB时间偏移 (s)</li>
- * </ul>
+ * 12维状态向量：[r(3), v(3), a(3), tu, fu, tdk]
+ *
+ *   - r: ECEF位置 (m)
+ *   - v: ECEF速度 (m/s)
+ *   - a: ECEF加速度 (m/s²)
+ *   - tu: GNSS接收机钟差 (m)
+ *   - fu: GNSS接收机钟漂 (m/s)
+ *   - tdk: UWB时间偏移 (s)
  */
 public class IntegrationState {
 

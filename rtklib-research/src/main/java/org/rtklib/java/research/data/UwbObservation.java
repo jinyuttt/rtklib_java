@@ -6,7 +6,7 @@ import org.rtklib.java.research.common.GTime;
 /**
  * UWB测距观测数据（移植自FE-GUT types.h UWB结构体）。
  *
- * <p>记录一个历元中多个UWB锚点的距离观测值。</p>
+ * 记录一个历元中多个UWB锚点的距离观测值。
  */
 public class UwbObservation implements Serializable {
     private static final long serialVersionUID = 1L;

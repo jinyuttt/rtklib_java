@@ -24,11 +24,11 @@ import java.util.Set;
 /**
  * [JAVA-ONLY 原创] 网络 VRS 主入口（档 1 骨架）。
  *
- * <p>流程：多站观测 → 历元对齐 → 逐卫星收集各站改正量 → IDW 插值到流动站位置。
+ * 流程：多站观测 → 历元对齐 → 逐卫星收集各站改正量 → IDW 插值到流动站位置。
  * 本阶段不做站间网解，色散/非色散改正量由 {@link CorrectionProvider} 提供
- * （档 2 接入网解与误差分解后替换实现）；插值结果后续交给 rtklib-vrs 生成 RTCM。</p>
+ * （档 2 接入网解与误差分解后替换实现）；插值结果后续交给 rtklib-vrs 生成 RTCM。
  *
- * <p><b>归属声明</b>：本项目原创实现，未移植任何外部开源项目代码。</p>
+ * 归属声明：本项目原创实现，未移植任何外部开源项目代码。
  */
 public class NetworkVrsProcessor {
 
@@ -96,9 +96,9 @@ public class NetworkVrsProcessor {
     /**
      * 相对改正模式：以主站为零点，插值其余各站相对主站的增量，再交给 VRS 生成层。
      *
-     * <p>与 {@link #process} 的区别在于输出语义：这里每颗卫星的改正量是
+     * 与 {@link #process} 的区别在于输出语义：这里每颗卫星的改正量是
      * "流动站处相对主站的增量"，配合主站观测即可还原虚拟站观测，供
-     * rtklib-vrs 的 {@code VrsCorrectionProvider} 使用。主站缺失该卫星时整颗卫星跳过。</p>
+     * rtklib-vrs 的 {@code VrsCorrectionProvider} 使用。主站缺失该卫星时整颗卫星跳过。
      *
      * @param masterId 主站名，必须存在于 {@code stations} 中
      */
@@ -123,8 +123,8 @@ public class NetworkVrsProcessor {
     /**
      * 档 2：走网解与误差分解，再用 IDW/FKP 插值到流动站。
      *
-     * <p>与 {@link #processRelative} 的输出契约一致（相对主站增量），但改正量来自
-     * 基线网双差解与误差分解，而非单站模型；档 1 行为保持不变。</p>
+     * 与 {@link #processRelative} 的输出契约一致（相对主站增量），但改正量来自
+     * 基线网双差解与误差分解，而非单站模型；档 1 行为保持不变。
      *
      * @param stations 各站观测
      * @param nav      广播星历（可为 null，此时使用各站自带星历）
@@ -139,8 +139,8 @@ public class NetworkVrsProcessor {
     /**
      * 档 2 + SSR：在网解前逐历元把 SSR 改正注入 {@code nav.ssr[]}。
      *
-     * <p>与 {@code config.ephemerisOption = EPHOPT_SSRAPC/SSRCOM} 配合使用；
-     * {@code ssr} 为 {@code null} 时与四参数版本完全等价。</p>
+     * 与 {@code config.ephemerisOption = EPHOPT_SSRAPC/SSRCOM} 配合使用；
+     * {@code ssr} 为 {@code null} 时与四参数版本完全等价。
      *
      * @param ssr 逐历元 SSR 改正提供者（RTCM 回放或精密产品反算）
      */

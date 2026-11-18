@@ -32,24 +32,24 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * NTRIP Caster 服务端。
  *
- * <p>监听 TCP 端口，处理客户端的 NTRIP 请求：{@code GET /} 返回挂载点列表，
+ * 监听 TCP 端口，处理客户端的 NTRIP 请求：{@code GET /} 返回挂载点列表，
  * {@code GET /mountpoint} 建立下行订阅。订阅成功后客户端可上行 NMEA GGA，
- * 由 {@link NtripCasterListener#onGga} 交给应用层。</p>
+ * 由 {@link NtripCasterListener#onGga} 交给应用层。
  *
- * <p>本类只做连接与分发，不生成任何改正数据：下行内容全部来自
+ * 本类只做连接与分发，不生成任何改正数据：下行内容全部来自
  * {@link #publish(String, byte[])}，调用方把字节交给 Caster，由 Caster
  * 复制并广播给该挂载点的全部订阅者。数据从哪来、按什么规则合成，
- * 属于应用层职责。</p>
+ * 属于应用层职责。
  *
- * <p>典型用法：
- * <pre>{@code
+ * 典型用法：
+ * {@code
  * NtripCasterConfig config = new NtripCasterConfig()
  *         .addMountPoint(new MountPoint("VRS01"))
  *         .addUser("user", "pass");
  * NtripCaster caster = new NtripCaster(config, listener);
  * caster.start();
  * caster.publish("VRS01", rtcmBytes);
- * }</pre>
+ * }
  *
  * @see NtripCasterConfig
  * @see NtripCasterListener
@@ -142,8 +142,8 @@ public class NtripCaster implements AutoCloseable {
     /**
      * 向指定挂载点的全部订阅者广播一帧数据。
      *
-     * <p>非阻塞：数据被复制一次后投递到各会话队列，实际发送由会话写线程完成。
-     * 无订阅者时调用是安全的空操作。</p>
+     * 非阻塞：数据被复制一次后投递到各会话队列，实际发送由会话写线程完成。
+     * 无订阅者时调用是安全的空操作。
      *
      * @param mountpoint 挂载点名称
      * @param data       完整数据帧，允许为空或 null

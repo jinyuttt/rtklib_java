@@ -4,9 +4,8 @@ import java.io.Serializable;
 
 /**
  * RTK（双差相对定位）专用参数。
- * <p>
+ *
  * 从 {@link RtkConfig} 拆分出的独立子配置，归属 RtkCore / RtkOptimizations 等 RTK 相关逻辑。
- * </p>
  */
 public class RtkOpts implements Serializable {
     private static final long serialVersionUID = 1L;

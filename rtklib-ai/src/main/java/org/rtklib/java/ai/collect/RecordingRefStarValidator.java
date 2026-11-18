@@ -13,22 +13,21 @@ import java.util.Arrays;
 
 /**
  * 采集型接口四实现：把每历元每 {@code (sat, frq)} 的 15 维特征落盘成 CSV 一行，
- * 并<b>恒输出「不干预」</b>（风险分全 0）。
+ * 并恒输出「不干预」（风险分全 0）。
  *
  * 恒不干预的后果与接口三的 {@link RecordingObsCorrector} 完全同构：
- * <ul>
- *   <li>风险分全 0 时 core 的降级分支永不触发（{@code aiRefRisk[i] > refStarRiskMax} 恒假），
- *       参考星选择与不注入逐位一致，故同一次运行既产出训练特征、又产出 A 组基线；</li>
- *   <li>不产生 {@code AI4/AI_DEGRADE}、{@code AI4/REFSTAR_SWITCH}，采集不改变解算结果。</li>
- * </ul>
  *
- * <b>本类不维护任何窗口状态</b>：{@code snrWinMean} / {@code snrWinStd} / {@code refCount}
+ *   - 风险分全 0 时 core 的降级分支永不触发（{@code aiRefRisk[i] > refStarRiskMax} 恒假），
+ *       参考星选择与不注入逐位一致，故同一次运行既产出训练特征、又产出 A 组基线；
+ *   - 不产生 {@code AI4/AI_DEGRADE}、{@code AI4/REFSTAR_SWITCH}，采集不改变解算结果。
+ *
+ * 本类不维护任何窗口状态：{@code snrWinMean} / {@code snrWinStd} / {@code refCount}
  * 由 core 的 {@code AiRefStarState} 在推理前算好并通过 {@link RefStarContext} 下传，
- * 本类只做格式化落盘。这一点与接口三<b>不同</b>（接口三的短窗聚合在 impl 内），
+ * 本类只做格式化落盘。这一点与接口三不同（接口三的短窗聚合在 impl 内），
  * 原因是接口四的窗口语义是「近 W 历元、不含当历元」且依赖参考星掩码，
  * core 已持有该状态；impl 再算一份必然与推理侧错位。
  *
- * <b>时序契约：</b>特征行写入点与接口三相同（{@code aiDecideRefStar} 位于首轮 {@code zdres}
+ * 时序契约：特征行写入点与接口三相同（{@code aiDecideRefStar} 位于首轮 {@code zdres}
  * 之后、首次 {@code ddres} 之前），故落盘的是「本历元模型输入」。
  * 标签来自 {@code AI4/IS_REF} trace（当历元真实参考星），
  * 两者靠 {@code (run_id, epoch, sat, frq)} 对齐。

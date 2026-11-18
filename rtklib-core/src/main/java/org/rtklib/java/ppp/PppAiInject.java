@@ -17,14 +17,12 @@ import org.rtklib.java.trace.Trace;
 
 /**
  * PPP 体系 AI 接口的上下文装配与施加（A / B / D）。
- * <p>
+ *
  * 只负责「取快照 → 调 provider → 单侧施加」，失效安全与熔断记账全部交给
  * {@link PppAiGuard}。provider 未注入时所有方法首行即返回，不改动任何数值（I-1）。
- * </p>
- * <p>
+ *
  * 类本身 {@code public} 只为让 {@code org.rtklib.java.ppprtk} 的 PPP-RTK 固定注入点
  * 复用同一套失效安全运行时；方法可见性保持包内，不构成对外 API。
- * </p>
  */
 public final class PppAiInject {
 
@@ -38,11 +36,10 @@ public final class PppAiInject {
 
     /**
      * 接口 B 施加：把方差膨胀因子乘到 R 的对角元。
-     * <p>
+     *
      * 每历元最多一次批量推理，结果按 {@code rtk.epoch} 缓存，同历元的后续迭代直接复用
      * （{@code pppRes} 每历元最多被调用 16 次，不缓存会重复推理）。
      * 只改 R 对角元、只做膨胀（{@code scale >= 1.0}），不改 {@code varr} 与任何状态（S2）。
-     * </p>
      *
      * @param nv      本历元被接受的观测行数
      * @param rowSat  行序 → 卫星号（长度 {@code >= nv}）
@@ -262,11 +259,10 @@ public final class PppAiInject {
 
     /**
      * 接口 A 施加：解有效性置信度低于阈值时把本历元降级为 {@code SOLQ_NONE}。
-     * <p>
+     *
      * 只在 {@code SOLQ_PPP} 上生效（S4）；确定性 qr 门限已把本历元降级时（{@code SOLQ_NONE}
      * 且 {@code pppQrDegraded}）仍照常调用，用于区分「确定性拦的」与「AI 独立拦的」——
      * 该历元写入是幂等的（§3.3）。{@code SOLQ_FIX} / {@code SOLQ_FLOAT} 一律不触碰。
-     * </p>
      */
     static void applySolutionValidator(Rtk rtk) {
         try {
@@ -318,13 +314,12 @@ public final class PppAiInject {
     /**
      * 接口 D 施加：PPP-RTK 固定候选提交前的校验闸门（只否决、不优选，§5）。
      *
-     * <p>本方法在候选已算好、尚未提交任何求解状态时调用，因此</p>
-     * <ul>
-     *   <li>返回 {@code true}：调用方按确定性结果提交固定解；</li>
-     *   <li>返回 {@code false}：调用方丢弃候选、保持浮点解（S2 不残留脏状态）；</li>
-     *   <li>未注入 / 熔断 / {@code null} / NaN / 越界 / 异常 / 超预算：返回 {@code true}
-     *       （不干预，保留确定性固定解，S1 只降级不升级）。</li>
-     * </ul>
+     * 本方法在候选已算好、尚未提交任何求解状态时调用，因此
+     *
+     *   - 返回 {@code true}：调用方按确定性结果提交固定解；
+     *   - 返回 {@code false}：调用方丢弃候选、保持浮点解（S2 不残留脏状态）；
+     *   - 未注入 / 熔断 / {@code null} / NaN / 越界 / 异常 / 超预算：返回 {@code true}
+     *       （不干预，保留确定性固定解，S1 只降级不升级）。
      *
      * @return {@code false} 仅当 provider 给出合法置信度且低于 {@code pppRtkFixMinConfidence}
      */

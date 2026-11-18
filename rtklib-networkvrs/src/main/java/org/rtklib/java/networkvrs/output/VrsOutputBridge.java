@@ -25,8 +25,8 @@ import java.util.TreeMap;
 /**
  * [JAVA-ONLY 原创] 网络改正输出桥：把网络插值得到的相对主站改正量交给 rtklib-vrs 生成 RTCM3。
  *
- * <p>以主站观测为基准，逐历元构造 {@link ObservationEpoch} 驱动 {@link VrsGenerator}；
- * 改正量按 {@code 历元时间 + 卫星号} 查表，命中则替代模型改正，未命中回退为模型改正。</p>
+ * 以主站观测为基准，逐历元构造 {@link ObservationEpoch} 驱动 {@link VrsGenerator}；
+ * 改正量按 {@code 历元时间 + 卫星号} 查表，命中则替代模型改正，未命中回退为模型改正。
  */
 public final class VrsOutputBridge {
 
@@ -56,8 +56,8 @@ public final class VrsOutputBridge {
     /**
      * 输出为字节数组（便捷重载）：把全部帧攒在内存里一次性返回。
      *
-     * <p>只适合有界批量场景；连续推流请用 {@link #generate} 的 {@link RtcmSink} 重载，
-     * 避免字节在内存中无界累积。</p>
+     * 只适合有界批量场景；连续推流请用 {@link #generate} 的 {@link RtcmSink} 重载，
+     * 避免字节在内存中无界累积。
      *
      * @return 全部 RTCM3 帧拼接后的字节
      */
@@ -74,7 +74,7 @@ public final class VrsOutputBridge {
     /**
      * 库主入口：把改正量交给 VRS 生成器，每条 RTCM3 帧以字节数组回调给出口。
      *
-     * <p>库不关心字节去向——落盘、推 socket、入队都由调用方实现。</p>
+     * 库不关心字节去向——落盘、推 socket、入队都由调用方实现。
      *
      * @param master       主站观测（同时作为 VRS 计算的基准观测与星历来源）
      * @param targetPos    虚拟站大地坐标 [lat(rad), lon(rad), height(m)]，由调用方按流动站位置给出

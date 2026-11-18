@@ -14,26 +14,26 @@ import java.util.List;
 /**
  * [JAVA-ONLY 原创] FCB（Fractional Cycle Bias）产品读取器，用于 PPP-AR 模糊度固定。
  *
- * <p>RTKLIB C 版（2.5.0/2.5.1）与 RTKLIB-EX 均无 FCB 读取实现（其 {@code ppp_ar.c} 为空桩），
+ * RTKLIB C 版（2.5.0/2.5.1）与 RTKLIB-EX 均无 FCB 读取实现（其 {@code ppp_ar.c} 为空桩），
  * 本类为本项目自研；FCB 文件格式属 WHU/CNES/IGS-MGEX 公开发布的产品格式约定，
- * 格式定义不构成代码来源，产品数据本身属数据引用。</p>
+ * 格式定义不构成代码来源，产品数据本身属数据引用。
  *
- * <p>FCB产品提供宽巷(WL)和窄巷(NL)的小数偏差改正值，使浮点模糊度
+ * FCB产品提供宽巷(WL)和窄巷(NL)的小数偏差改正值，使浮点模糊度
  * 能够正确取整为整数模糊度，从而实现PPP-AR（Ambiguity Resolution）。
  *
- * <p>文件格式（WHU/CNES）：
- * <pre>
+ * 文件格式（WHU/CNES）：
+ *
  *   WL 或 WIDELANE 标记行（宽巷段开始）
  *   time  sat  fcb_wl  [fcb_nl]
  *   NL 或 NARROWLANE 标记行（窄巷段开始）
  *   time  sat  fcb_nl
- * </pre>
+ *
  * 其中time=GPS秒，sat=卫星编号（G01/R01/E01/C01格式）
  *
- * <p>文件来源：WHU(WUM) / CNES / IGS-MGEX
+ * 文件来源：WHU(WUM) / CNES / IGS-MGEX
  * 存储目录：product/fcb/（由ProductDownloader.downloadFcb()下载）
  *
- * <p>对应C版：RTKLIB未内置FCB，本模块为v2.2.2新增
+ * 对应C版：RTKLIB未内置FCB，本模块为v2.2.2新增
  */
 public final class FcbReader {
     private FcbReader() {}

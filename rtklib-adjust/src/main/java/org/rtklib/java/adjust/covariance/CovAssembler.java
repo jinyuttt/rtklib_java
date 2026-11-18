@@ -7,30 +7,30 @@ import org.rtklib.java.data.*;
 /**
  * [JAVA-ONLY 原创] 协方差拼接核心。
  *
- * <p>从多条BaselineEntry提取协方差，动态组装mxm全局观测协方差矩阵R，
- * 并提供"融合后 rover 协方差"的信息矩阵融合工具。</p>
+ * 从多条BaselineEntry提取协方差，动态组装mxm全局观测协方差矩阵R，
+ * 并提供"融合后 rover 协方差"的信息矩阵融合工具。
  *
- * <h3>融合后的 rover 协方差（仅供结果评估）</h3>
- * <p>多条基线各自给出P_rover_k，公共Pr_fused取信息矩阵融合：</p>
- * <pre>
+ * 融合后的 rover 协方差（仅供结果评估）
+ * 多条基线各自给出P_rover_k，公共Pr_fused取信息矩阵融合：
+ *
  *   W_k = P_rover_k^{-1}
  *   Pr_fused = (W_1 + W_2 + W_3)^{-1}
- * </pre>
- * <p>单条基线时Pr_fused = P_rover_1，无需融合。</p>
  *
- * <h3>全局R矩阵结构</h3>
- * <p>core 是单基线引擎，各基站独立调用，因此默认认为各基线解算误差相互独立
- * （{@code rho = 0}），R 为块对角阵：</p>
- * <pre>
+ * 单条基线时Pr_fused = P_rover_1，无需融合。
+ *
+ * 全局R矩阵结构
+ * core 是单基线引擎，各基站独立调用，因此默认认为各基线解算误差相互独立
+ * （{@code rho = 0}），R 为块对角阵：
+ *
  *   k=1: R = [C_11]                (3x3)
  *   k=2: R = [C_11,   0; 0, C_22]  (6x6)
  *   k=3: R = blkdiag(C_11, C_22, C_33)  (9x9)
- * </pre>
- * <p>若实测发现基线间存在不可忽略的共模误差，可用
- * {@link #assembleGlobalR(BaselineEpoch, boolean, double)} 传入 {@code rho > 0}。</p>
  *
- * <p>注意：{@link #fuseRoverCovariance(double[][][])} 得到的是"融合后坐标的
- * 方差"，属于<b>结果</b>的协方差，不能当作观测量的互协方差块使用。</p>
+ * 若实测发现基线间存在不可忽略的共模误差，可用
+ * {@link #assembleGlobalR(BaselineEpoch, boolean, double)} 传入 {@code rho > 0}。
+ *
+ * 注意：{@link #fuseRoverCovariance(double[][][])} 得到的是"融合后坐标的
+ * 方差"，属于结果的协方差，不能当作观测量的互协方差块使用。
  */
 public class CovAssembler {
 
@@ -49,11 +49,11 @@ public class CovAssembler {
     /**
      * 从SolData提取3x3 ECEF协方差矩阵。
      *
-     * <p>优先使用 {@link SolData#covEcef}（完整 3×3 ECEF 协方差，行优先，含非对角符号；
+     * 优先使用 {@link SolData#covEcef}（完整 3×3 ECEF 协方差，行优先，含非对角符号；
      * 来源为 {@code Sol.qPos}（DIAG_QPOS）或 {@code Sol.qr} 展开，两者均由 core 决定）。
      * 仅当该历元无协方差时才回退到 {@link Accuracy} 重构，
      * 此时非对角只能取绝对值——{@link Accuracy} 的 c12/c23/c31 已是
-     * {@code sqrt(|c_ij|)}，符号信息在构造时已丢失。</p>
+     * {@code sqrt(|c_ij|)}，符号信息在构造时已丢失。
      *
      * @param solData 来自rtklib-core的解算结果
      * @return 3x3协方差矩阵 (m^2)，行优先；如果无ECEF精度返回null
@@ -84,8 +84,8 @@ public class CovAssembler {
     /**
      * 加权融合多条基线的Rover协方差，得到公共Pr_fused。
      *
-     * <p>信息矩阵融合：Pr_fused = (P1^{-1} + P2^{-1} + P3^{-1})^{-1}</p>
-     * <p>单条基线时直接返回P_rover_1。</p>
+     * 信息矩阵融合：Pr_fused = (P1^{-1} + P2^{-1} + P3^{-1})^{-1}
+     * 单条基线时直接返回P_rover_1。
      *
      * @param pRovers 各基线的Rover 3x3协方差矩阵
      * @return 融合后的3x3协方差矩阵，行优先
@@ -128,9 +128,9 @@ public class CovAssembler {
     /**
      * [Java扩展] 组装全局观测协方差矩阵R (mxm)，可选启用基线质量加权(P0)。
      *
-     * <p>启用质量加权时，对角块C_ii按qualityFactor缩放：
+     * 启用质量加权时，对角块C_ii按qualityFactor缩放：
      * R_effective_ii = C_ii / w_i，等效于将该基线的权重乘以w_i。
-     * 非对角块(Pr_fused)不缩放，因为互协方差是物理量。</p>
+     * 非对角块(Pr_fused)不缩放，因为互协方差是物理量。
      *
      * @param epoch         包含有效基线的历元数据
      * @param qualityWeight 是否启用基线质量加权
@@ -144,12 +144,12 @@ public class CovAssembler {
     /**
      * 组装全局观测协方差矩阵R (mxm)，可指定基线间相关系数。
      *
-     * <p>启用质量加权时，对角块C_ii按qualityFactor缩放：
-     * R_effective_ii = C_ii / w_i，等效于将该基线的权重乘以w_i。</p>
+     * 启用质量加权时，对角块C_ii按qualityFactor缩放：
+     * R_effective_ii = C_ii / w_i，等效于将该基线的权重乘以w_i。
      *
-     * <p>互协方差块按 {@code R_ij = rho · sqrt(C_ii ⊙ C_jj)} 逐元素构造。
+     * 互协方差块按 {@code R_ij = rho · sqrt(C_ii ⊙ C_jj)} 逐元素构造。
      * {@code rho = 0} 表示各基线解算结果相互独立（core 为单基线引擎、逐基站
-     * 独立调用，这是当前架构的实际情况），此时 R 为块对角阵。</p>
+     * 独立调用，这是当前架构的实际情况），此时 R 为块对角阵。
      *
      * @param epoch         包含有效基线的历元数据
      * @param qualityWeight 是否启用基线质量加权
@@ -203,9 +203,9 @@ public class CovAssembler {
     /**
      * 组装观测向量l (3k x 1)。
      *
-     * <p>观测向量为各基线估计的Rover ECEF位置（基线增量+基站坐标），
+     * 观测向量为各基线估计的Rover ECEF位置（基线增量+基站坐标），
      * 而非基线增量本身。因为观测方程 l_i = P01 - Base_i + v_i，
-     * 等价于 (l_i + Base_i) = P01 + v_i，有效观测是Rover位置。</p>
+     * 等价于 (l_i + Base_i) = P01 + v_i，有效观测是Rover位置。
      */
     public static SimpleMatrix assembleObservationVector(BaselineEpoch epoch) {
         int k = epoch.count;
@@ -223,7 +223,7 @@ public class CovAssembler {
     /**
      * 动态构造设计矩阵H (3k x 3)。
      *
-     * <p>每条基线对应H中连续3行，构成3x3单位阵I₃。</p>
+     * 每条基线对应H中连续3行，构成3x3单位阵I₃。
      */
     public static SimpleMatrix assembleDesignMatrix(int k) {
         int m = 3 * k;
@@ -239,14 +239,14 @@ public class CovAssembler {
     /**
      * [Java扩展] 动态构造设计矩阵H (3k x 3)。
      *
-     * <p>当前恒为单位阵堆叠（每个基线块为 I₃），因为基线增量本身就是
-     * rover 坐标改正的观测值，二者等价。</p>
+     * 当前恒为单位阵堆叠（每个基线块为 I₃），因为基线增量本身就是
+     * rover 坐标改正的观测值，二者等价。
      *
-     * <p>注意：{@link SolData#hPos} 是 {@code N⁻¹H_posᵀW} 形式的 3×nv
-     * <b>灵敏度矩阵</b>（nv 为该历元双差观测数），量纲与 3×3 行块不匹配，
+     * 注意：{@link SolData#hPos} 是 {@code N⁻¹H_posᵀW} 形式的 3×nv
+     * 灵敏度矩阵（nv 为该历元双差观测数），量纲与 3×3 行块不匹配，
      * 不能用作这里的 H 块。因此下面的 hPos 分支仅在长度为 9 时启用，
      * 而 3×nv 在 nv≥4 时恒 ≥12，实际不会触发——保留为将来若改为
-     * 3×3 等效矩阵时的扩展点。</p>
+     * 3×3 等效矩阵时的扩展点。
      *
      * @param epoch 包含有效基线的历元数据
      * @return 设计矩阵H (3k x 3)

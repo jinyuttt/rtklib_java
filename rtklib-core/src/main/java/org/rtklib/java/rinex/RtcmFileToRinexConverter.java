@@ -9,18 +9,15 @@ import java.io.IOException;
 
 /**
  * RTCM文件转RINEX文件转换器。
- * <p>
- * 输入RTCM文件路径，输出RINEX 3.x格式的观测文件(.obs)和导航文件(.nav)。
- * </p>
  *
- * <pre>
+ * 输入RTCM文件路径，输出RINEX 3.x格式的观测文件(.obs)和导航文件(.nav)。
+ *
  * // 示例：RTCM文件转RINEX
  * RtcmFileToRinexConverter converter = new RtcmFileToRinexConverter(3.05, "/output", "ROVER");
  * boolean ok = converter.convert("/data/1.rtcm3");
  *
  * // 或使用便捷方法
  * boolean ok = RtcmFileToRinexConverter.convertFile("/data/1.rtcm3", 3.05, "/output", "ROVER");
- * </pre>
  */
 public class RtcmFileToRinexConverter {
 

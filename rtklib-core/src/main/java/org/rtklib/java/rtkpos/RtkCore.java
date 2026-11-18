@@ -41,13 +41,13 @@ import java.util.Arrays;
 /**
  * [REF: RTKLIB 2.5.0 C] RTK 定位主流程（{@code rtkpos()} 及其 relpos/ddres/resamb 链路）。
  *
- * <p>逐行对齐 RTKLIB 2.5.0（demo5 / rtklibexplorer）C 版 {@code rtkpos.c} 的
+ * 逐行对齐 RTKLIB 2.5.0（demo5 / rtklibexplorer）C 版 {@code rtkpos.c} 的
  * {@code rtkpos()} / {@code relpos()} / {@code ddres()} / {@code resamb()} / {@code udstate()}。
- * 与 C 版不一致之处均以 FIX-ALG 条目显式记录（见 {@code docs/ALGORITHM_FIX_LOG.md}）。</p>
+ * 与 C 版不一致之处均以 FIX-ALG 条目显式记录（见 {@code docs/ALGORITHM_FIX_LOG.md}）。
  *
- * <p><b>[JAVA-ONLY 原创]</b>：AI 钩子（{@code AiHooks}/{@code FixValidator}）、
+ * [JAVA-ONLY 原创]：AI 钩子（{@code AiHooks}/{@code FixValidator}）、
  * 以及 {@link RtkOptimizations} 系列扩展开关，均为本项目在 C 版骨架上追加的可选分支，
- * 默认关闭时与 C 版行为逐值一致。</p>
+ * 默认关闭时与 C 版行为逐值一致。
  */
 public final class RtkCore {
     private RtkCore() {
@@ -60,10 +60,9 @@ public final class RtkCore {
     private static final double RNX2CLK = 299792458.0;
     /**
      * 接口一几何退化门禁（§7.4.3 / D14）：{@code pdop} 高于该值的历元一律接受、不参与剔除。
-     * <p>
+     *
      * 必须与训练侧 {@code training/fix_validator/train.py} 的 {@code PDOP_ABSTAIN_MAX}
      * 保持同值，改任一处即视为改判据，须走新决策记录。
-     * </p>
      */
     private static final double AI_PDOP_ABSTAIN_MAX = 8.0;
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(RtkCore.class);
@@ -810,21 +809,18 @@ public final class RtkCore {
 
     /**
      * 接口一（AI 固定质量校验）接线（§3.3）。
-     * <p>
+     *
      * 未注入时直接返回 {@code true}：不构造上下文、不分配数组、不改变任何状态，
      * 原生行为逐位不变（I-1）。
-     * </p>
-     * <p>
+     *
      * 注入后：{@code pdop > 8.0} 的几何退化历元在阈值比较之前直接接受（§7.4.3 / D14，
      * 与训练侧 {@code PDOP_ABSTAIN_MAX} 同语义）；其余历元
      * {@code confidence >= AiOpts.fixValidatorMinConfidence} 即接受；
      * 异常、非有限置信度一律按 {@code 1.0}（不干预）处理，禁止 fail-closed（§3.4）。
-     * </p>
-     * <p>
+     *
      * 已知不可回滚副作用：{@code manage_amb_LAMBDA} 内对 {@code prev_ratio1/2}、
      * {@code excsat}、{@code lock[]} 的修改在本次校验之前已经发生，拒绝固定不会撤销它们，
      * 这是期望行为（ratio 确实很高，AR 历史应如实记录），不是 bug（§3.3）。
-     * </p>
      *
      * @return {@code true} 接受固定（进入原生固定分支）；{@code false} 拒绝（stat 保持浮点）
      */
@@ -874,17 +870,15 @@ public final class RtkCore {
 
     /**
      * 构造接口一输入（§4.4.5 / §5.1 六维来源）。
-     * <p>
+     *
      * {@code pdop} 必须局部重算：{@code rtk.sol.pdop} 的输入是 {@code ssat[].azel}，
      * 而该字段在全仓库范围内从未被赋值，故恒为 0；仰角只能取自 {@code relpos} 的工作
      * 缓冲 {@code azel}，按 {@code iu[]} 索引。此处**不回写** {@code rtk.sol.pdop}，
      * 否则会改变 sol 输出与 RESULT trace 的 pdop 字段，破坏 I-1 的日志基线。
-     * </p>
-     * <p>
+     *
      * {@code prr}/{@code pcr} 取自固定解回代那次 {@code ddres} 的 {@code v[]}，
      * 不用 {@code ssat.resp/resc}：后者按频点存、参考星恒 0、且入口被清零，
      * 用它会系统性低估 RMS（§5.1）。
-     * </p>
      */
     private static FixQualityContext buildFixQualityContext(Rtk rtk, int[] sat, int[] iu,
                                                             int ns, int nf, int nb, double[] xa,
@@ -1599,15 +1593,15 @@ public final class RtkCore {
     /**
      * [JAVA-ONLY] 逐卫星IFLC频率对协商（sticky策略）。
      *
-     * <p>在rtkpos()中zdres(base)之前调用，仅RTK双站模式（mode>PMODE_DGPS且nr>0）生效。
+     * 在rtkpos()中zdres(base)之前调用，仅RTK双站模式（mode>PMODE_DGPS且nr>0）生效。
      * obs须按(接收端,卫星号)排序：obs[0..nu)流动站、obs[nu..nu+nr)基准站。
      * 对两站公共卫星：
-     * <ul>
-     *   <li>sticky：上一配对仍结构可用（两站该频段槽位code非0）则保持不变；</li>
-     *   <li>失效重选：按系统优先级表从两站公共频段中重选，切换时置iflcPairSwitch
-     *       （udbias消费后强制重置该星模糊度并清lock，等效周跳处理）；</li>
-     *   <li>无公共频率对：iflcSlot清零，该星回退固定槽位（通常因数据缺失被IFLC跳过）。</li>
-     * </ul>
+     *
+     *   - sticky：上一配对仍结构可用（两站该频段槽位code非0）则保持不变；
+     *   - 失效重选：按系统优先级表从两站公共频段中重选，切换时置iflcPairSwitch
+     *       （udbias消费后强制重置该星模糊度并清lock，等效周跳处理）；
+     *   - 无公共频率对：iflcSlot清零，该星回退固定槽位（通常因数据缺失被IFLC跳过）。
+     *
      * 未协商/开关关闭/PPP模式：ssat.iflcSlot保持{0,0}，各读取点回退固定槽位，零影响。
      */
     static void negotiateIflcPairs(RtkState rtk, Obsd[] obs, int nu, int nr) {
@@ -1900,13 +1894,12 @@ public final class RtkCore {
 
     /**
      * 接口三 f10 的当历元可用性。
-     * <p>
+     *
      * 不能直接传 {@code ssat.vsat}：{@code relpos} 在每个历元开头就把 {@code vsat} 清零，
      * 而接口三推理位于首次 {@code ddres} 之前（§3.3），此时 {@code vsat} 必然全 0，
      * f10 会退化成恒 0 的常数维。此处按与 {@code ddres} 的 {@code validobs} 相同口径
      * （流动站与基准站同频点同时有该观测类型）判当历元结构可用性，逐频点填 0/1，
      * 既保留「该频点是否有效」的语义，又不会把 {@code ddres} 的后验结果（标签）漏进特征。
-     * </p>
      */
     private static int[] aiVsat(Obsd[] obs, int iu, int ir, int nf) {
         int[] vsat = new int[Constants.NFREQ];
@@ -2203,7 +2196,7 @@ public final class RtkCore {
         boolean traceDdres = traceRow && rtk.traceConfig != null && rtk.traceConfig.enabled
                 && rtk.traceCallback != null && rtk.traceConfig.topics.contains("AI3");
         /* [AI-4] 参考星轨迹 trace（§5.2 步骤 0）：只用于生成接口四标签 is_ref。
-         * 与接口四是否注入<b>无关</b>——未注入时它记录的正是原生参考星，即标签本身。
+         * 与接口四是否注入无关——未注入时它记录的正是原生参考星，即标签本身。
          * 关闭时仅多一次布尔短路，不构造任何 kv 数组，不进入生产热路径。 */
         boolean traceIsRef = traceRow && rtk.traceConfig != null && rtk.traceConfig.enabled
                 && rtk.traceCallback != null && rtk.traceConfig.topics.contains("AI4");
@@ -3312,8 +3305,8 @@ public final class RtkCore {
      * [Java扩展] 计算诊断数据：hPos等效设计矩阵和新息向量摘要。
      * 由diagMask控制，未启用的项不计算，零开销。
      *
-     * <p>hPos = (H_pos^T W H_pos)^{-1} H_pos^T W，其中 H_pos = H[:,0:3]，W = diag(R)^{-1}</p>
-     * <p>innovRms = sqrt(v^T R^{-1} v / nv)，innovMax = max(|v_i| / sqrt(R_ii))</p>
+     * hPos = (H_pos^T W H_pos)^{-1} H_pos^T W，其中 H_pos = H[:,0:3]，W = diag(R)^{-1}
+     * innovRms = sqrt(v^T R^{-1} v / nv)，innovMax = max(|v_i| / sqrt(R_ii))
      */
     private static void computeDiagData(Rtk rtk, PrcOpt opt,
                                         double[] v, double[] H, double[] R, int[] vflg,
@@ -3358,12 +3351,11 @@ public final class RtkCore {
     /**
      * [Java扩展] 从H[nv×nx]和R[nv×nv]计算位置分量等效设计矩阵hPos[9]。
      *
-     * <p>hPos = N^{-1} × H_pos^T × W，其中：</p>
-     * <ul>
-     *   <li>H_pos = H[:, 0:3]（nv×3位置分量子矩阵）</li>
-     *   <li>W = diag(R)^{-1}（对角加权）</li>
-     *   <li>N = H_pos^T × W × H_pos（3×3法方程）</li>
-     * </ul>
+     * hPos = N^{-1} × H_pos^T × W，其中：
+     *
+     *   - H_pos = H[:, 0:3]（nv×3位置分量子矩阵）
+     *   - W = diag(R)^{-1}（对角加权）
+     *   - N = H_pos^T × W × H_pos（3×3法方程）
      *
      * @param H  设计矩阵（行优先，nv×nx）
      * @param R  观测噪声矩阵（行优先，nv×nv）

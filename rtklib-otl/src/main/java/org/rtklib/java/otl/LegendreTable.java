@@ -3,12 +3,12 @@ package org.rtklib.java.otl;
 /**
  * [JAVA-ONLY 原创] 完全归一化连带勒让德函数及其对余纬的一、二阶导数数值表。
  *
- * <p><b>来源说明</b>：完全归一化（4π 归一）连带勒让德函数的定义与三项递推关系
+ * 来源说明：完全归一化（4π 归一）连带勒让德函数的定义与三项递推关系
  * 是公开的数学结果，见 IERS Conventions (2010) 第 4 章及标准球谐分析教材
- * （Heiskanen &amp; Moritz, <i>Physical Geodesy</i>）。本类按这些定义独立实现，
- * 采用按 (阶, 次) 直接寻址的二维表，未沿用任何源码的一维打包索引方案。</p>
+ * （Heiskanen & Moritz, Physical Geodesy）。本类按这些定义独立实现，
+ * 采用按 (阶, 次) 直接寻址的二维表，未沿用任何源码的一维打包索引方案。
  *
- * <p>本类是不可变值对象：构造时一次性算好全部阶次，之后只读。</p>
+ * 本类是不可变值对象：构造时一次性算好全部阶次，之后只读。
  */
 public final class LegendreTable {
 
@@ -65,7 +65,7 @@ public final class LegendreTable {
     /**
      * 以 cosθ、sinθ 三项递推全部 P(n, m)。
      *
-     * <p>低阶种子：P(0,0)=1，P(1,0)=√3·cosθ，P(1,1)=√3·sinθ。</p>
+     * 低阶种子：P(0,0)=1，P(1,0)=√3·cosθ，P(1,1)=√3·sinθ。
      */
     private void fillNormalizedValues() {
         normalizedValue[0][0] = 1.0;

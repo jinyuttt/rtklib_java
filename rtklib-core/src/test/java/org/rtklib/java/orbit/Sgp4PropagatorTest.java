@@ -11,9 +11,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * SGP4/SDP4传播器Vallado标准验证测试。
  *
- * <p>使用Vallado 2006 (AIAA 2006-6753) SGP4-VER.TLE标准测试数据，
+ * 使用Vallado 2006 (AIAA 2006-6753) SGP4-VER.TLE标准测试数据，
  * 验证WGS72 TEME坐标系下的位置速度精度。
- * 参考值由python-sgp4 (WGS72) 生成。</p>
+ * 参考值由python-sgp4 (WGS72) 生成。
  */
 class Sgp4PropagatorTest {
 

@@ -84,9 +84,9 @@ public class JointRtk implements Serializable {
     /**
      * [FIX-ALG-042 §13.9 Phase D] 已被剔除的基线标志。
      *
-     * <p>被剔除的基线不再参与任何滤波计算：其观测不进入 ddres、其模糊度状态块被冻结
+     * 被剔除的基线不再参与任何滤波计算：其观测不进入 ddres、其模糊度状态块被冻结
      * （x=0、P 行列为 0），因此 nx 布局不变，其余基线的索引与状态完全不受影响。
-     * 冻结不可逆：基站坐标修正后需重建 {@link JointRtk}（或调用 {@link #clearExcluded()}）。</p>
+     * 冻结不可逆：基站坐标修正后需重建 {@link JointRtk}（或调用 {@link #clearExcluded()}）。
      */
     public boolean[] baselineExcluded;
 
@@ -118,8 +118,8 @@ public class JointRtk implements Serializable {
     /**
      * [§13.9 Phase D] 剔除第 b 条基线：冻结其模糊度状态块，后续历元不再参与滤波。
      *
-     * <p>只清该基线的模糊度段（{@code [offset, offset+NB)}），rover 坐标、共享大气与
-     * 其他基线的模糊度保持原样，因此不会像重建 nx 那样打断其他基线的收敛。</p>
+     * 只清该基线的模糊度段（{@code [offset, offset+NB)}），rover 坐标、共享大气与
+     * 其他基线的模糊度保持原样，因此不会像重建 nx 那样打断其他基线的收敛。
      */
     public void excludeBaseline(int b) {
         if (b < 0 || b >= nBaseline) return;
@@ -316,9 +316,9 @@ public class JointRtk implements Serializable {
     /**
      * [§2.1.1] 刷新本周期的共享策略开关。
      *
-     * <p>电离层共享在长基线下不成立（DD 电离层残差随基站距离变化），
+     * 电离层共享在长基线下不成立（DD 电离层残差随基站距离变化），
      * {@link JointConfig#sharedIonoMaxDist} 给出上限，超限则本周期退回每基线独立电离层。
-     * 需在分配 nx 之前调用，保证索引函数与维度计算一致。</p>
+     * 需在分配 nx 之前调用，保证索引函数与维度计算一致。
      */
     public void refreshAtmSharing() {
         boolean shareIono = jointConfig == null || jointConfig.sharedIono;

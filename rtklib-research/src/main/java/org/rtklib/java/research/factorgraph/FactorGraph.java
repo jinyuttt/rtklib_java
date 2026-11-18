@@ -11,7 +11,7 @@ import org.rtklib.java.research.common.MatrixOps;
 /**
  * 因子图（research模块因子图框架）。
  *
- * <p>管理变量节点和因子节点，提供高斯-牛顿/Levenberg-Marquardt优化。</p>
+ * 管理变量节点和因子节点，提供高斯-牛顿/Levenberg-Marquardt优化。
  */
 public class FactorGraph {
     private final Map<String, Variable> variables;

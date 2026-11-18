@@ -14,8 +14,8 @@ import java.util.List;
 /**
  * [JAVA-ONLY 原创] FES2004 海潮模型网格文件读取（{@code /otl/FES2004S1.dat}）。
  *
- * <p><b>归属声明</b>：解析逻辑由本项目实现；FES2004 数据文件本身来自
- * LEGOS/CNES 公开发布的模型产品，属数据引用而非代码来源。</p>
+ * 归属声明：解析逻辑由本项目实现；FES2004 数据文件本身来自
+ * LEGOS/CNES 公开发布的模型产品，属数据引用而非代码来源。
  */
 public final class Fes2004Loader {
 

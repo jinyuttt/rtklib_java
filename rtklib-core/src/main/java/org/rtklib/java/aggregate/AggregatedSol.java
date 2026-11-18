@@ -5,8 +5,8 @@ import org.rtklib.java.data.GTime;
 /**
  * 历元聚合输出结果。
  *
- * <p>对象永不为 null。失败时 {@link #status} 为非 OK 枚举值，
- * {@link #posEcef}/{@link #covEcef} 为 null。</p>
+ * 对象永不为 null。失败时 {@link #status} 为非 OK 枚举值，
+ * {@link #posEcef}/{@link #covEcef} 为 null。
  */
 public final class AggregatedSol {
 

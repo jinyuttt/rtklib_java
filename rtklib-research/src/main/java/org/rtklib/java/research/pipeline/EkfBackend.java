@@ -19,7 +19,7 @@ import org.rtklib.java.research.stochastic.StochasticModel;
 /**
  * EKF 后端实现（实现 SolverBackend 接口，内部桥接 EkfState）。
  *
- * <p>移植自 FE-GUT ekfstate.cc/.h + gnss_uwb.cc 主循环的 EKF 分支。</p>
+ * 移植自 FE-GUT ekfstate.cc/.h + gnss_uwb.cc 主循环的 EKF 分支。
  */
 public class EkfBackend implements SolverBackend {
 

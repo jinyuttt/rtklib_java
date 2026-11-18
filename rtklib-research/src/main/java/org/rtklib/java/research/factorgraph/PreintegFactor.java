@@ -8,23 +8,21 @@ import org.rtklib.java.research.common.RotationUtils;
 /**
  * IMU 预积分因子。
  *
- * <p>连接两个关键帧的状态节点（位姿+速度）和零偏节点。
- * 残差 = 15 维：r_ΔR(3) + r_Δv(3) + r_Δp(3) + r_Δb_a(3) + r_Δb_ω(3)</p>
+ * 连接两个关键帧的状态节点（位姿+速度）和零偏节点。
+ * 残差 = 15 维：r_ΔR(3) + r_Δv(3) + r_Δp(3) + r_Δb_a(3) + r_Δb_ω(3)
  *
- * <p>连接变量 (5 个)：</p>
- * <pre>
+ * 连接变量 (5 个)：
+ *
  *   varIndex 0: state_k [r, v, a, tu, fu, R, ba, bg]  (20 dim)
  *   varIndex 1: state_{k+1}                              (20 dim)
  *   varIndex 2: bias_k  [ba, bg]                          (6 dim)
  *   varIndex 3: bias_{k+1}                                (6 dim)
  *   varIndex 4: delta (preintegration) [dR(9), dv(3), dp(3)] (15 dim)
- * </pre>
  *
- * <p>或者简化版本 (2 个变量)：</p>
- * <pre>
+ * 或者简化版本 (2 个变量)：
+ *
  *   varIndex 0: state_k   [r(3), v(3), R(9), ba(3), bg(3)]  (21 dim)
  *   varIndex 1: state_{k+1}                                    (21 dim)
- * </pre>
  */
 public class PreintegFactor extends Factor {
 

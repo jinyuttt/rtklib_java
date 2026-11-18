@@ -12,9 +12,9 @@ import java.util.Map;
 /**
  * 单个基准站的观测输入。
  *
- * <p>站点坐标取自 RINEX 头 APPROX POSITION XYZ 或 RTCM 1005/1006（ECEF，米），
+ * 站点坐标取自 RINEX 头 APPROX POSITION XYZ 或 RTCM 1005/1006（ECEF，米），
  * 观测为按时间升序排列的 {@link Obsd} 列表，另附该站的广播星历
- * （用于计算卫星高度角与对流层模型；RINEX 装载时为空）。</p>
+ * （用于计算卫星高度角与对流层模型；RINEX 装载时为空）。
  */
 public final class StationObservation {
 

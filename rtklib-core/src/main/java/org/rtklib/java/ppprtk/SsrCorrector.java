@@ -28,8 +28,8 @@ public final class SsrCorrector {
     /**
      * SSR 轨道/钟差改正数计算，等价 RTKLIB satpos_ssr (ephemeris.c L630-676)。
      *
-     * <p>返回 false 表示该星 SSR 改正不可用（RTKLIB 语义为 svh=-1），调用方必须剔除该星，
-     * 严禁回退广播星历。输出 deph[0..2]（m，径向/切向/法向）与 dclk[0]（m）。</p>
+     * 返回 false 表示该星 SSR 改正不可用（RTKLIB 语义为 svh=-1），调用方必须剔除该星，
+     * 严禁回退广播星历。输出 deph[0..2]（m，径向/切向/法向）与 dclk[0]（m）。
      *
      * @param maxAge SSR 最大龄期（s），小于等于 0 表示不做龄期判定
      */

@@ -7,17 +7,16 @@ import java.util.List;
 /**
  * Lightweight end-to-end timing utility for PPP/RTK epoch-level profiling.
  *
- * <p>Usage:
- * <pre>
+ * Usage:
+ *
  * PerfTimer timer = new PerfTimer("relpos");
  * // ... hot path ...
  * timer.record();
  * // after all epochs:
  * timer.report();
- * </pre>
  *
- * <p>This complements JMH micro-benchmarks by providing whole-program epoch timing,
- * GC-aware accounting, and P99 latency measurement.</p>
+ * This complements JMH micro-benchmarks by providing whole-program epoch timing,
+ * GC-aware accounting, and P99 latency measurement.
  */
 public class PerfTimer {
 

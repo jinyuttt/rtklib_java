@@ -11,10 +11,9 @@ import org.slf4j.LoggerFactory;
 
 /**
  * 外部缓存实现，通过 {@link ExternalCacheProvider} 对接Redis/数据库/文件等。
- * <p>
+ *
  * 历元数据通过Java序列化转为byte[]存入外部提供者，
  * 查询时反序列化还原为 {@link CachedEpoch}。
- * </p>
  */
 public class ExternalEpochCache implements EpochCache {
 

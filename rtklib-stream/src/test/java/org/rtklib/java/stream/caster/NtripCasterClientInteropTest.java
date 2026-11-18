@@ -21,8 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Caster 与既有 {@link NtripClient} 的协议互操作验证。
  *
- * <p>本模块的客户端与服务端互为对照：客户端能订阅 Caster，Caster 能解析客户端
- * 上行的 GGA，即证明两侧实现的 NTRIP 握手、鉴权与数据分帧相互一致。</p>
+ * 本模块的客户端与服务端互为对照：客户端能订阅 Caster，Caster 能解析客户端
+ * 上行的 GGA，即证明两侧实现的 NTRIP 握手、鉴权与数据分帧相互一致。
  */
 class NtripCasterClientInteropTest {
 

@@ -5,15 +5,15 @@ import org.ejml.simple.SimpleMatrix;
 /**
  * 随机模型接口（research模块自有）。
  *
- * <p>定义观测噪声矩阵 R 和过程噪声矩阵 Q 的构建方式，支持传统经验模型和学习型模型。
- * 返回 {@link SimpleMatrix} 而非标量，支持非对角协方差结构。</p>
+ * 定义观测噪声矩阵 R 和过程噪声矩阵 Q 的构建方式，支持传统经验模型和学习型模型。
+ * 返回 {@link SimpleMatrix} 而非标量，支持非对角协方差结构。
  *
- * <h3>使用方式</h3>
- * <pre>{@code
+ * 使用方式
+ * {@code
  *   StochasticModel model = new ElevationSnrModel(0.3, 0.003, 0.1);
  *   SimpleMatrix R = model.observationCovariance(elevations, sys, 1.0);
  *   SimpleMatrix Q = model.processNoiseCovariance(12, 0.1);
- * }</pre>
+ * }
  */
 public interface StochasticModel {
 

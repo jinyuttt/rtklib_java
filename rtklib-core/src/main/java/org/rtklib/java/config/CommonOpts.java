@@ -4,9 +4,8 @@ import java.io.Serializable;
 
 /**
  * 所有定位模式共用的参数。
- * <p>
+ *
  * 从 {@link RtkConfig} 拆分出的独立子配置，归属 RTK 主滤波器（RtkCore）等各模式共用逻辑。
- * </p>
  */
 public class CommonOpts implements Serializable {
     private static final long serialVersionUID = 1L;

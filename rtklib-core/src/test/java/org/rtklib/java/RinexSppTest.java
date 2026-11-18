@@ -789,7 +789,7 @@ public class RinexSppTest {
     /**
      * 统计单个历元中真正可用于 SPP 的卫星数，判据与 {@link SppCore#rescode} 首轮迭代一致：
      * 星历可用（{@link EphModel#satpos} 输出有效位置）、未被 {@code satexclude} 剔除、高度角不低于阈值。
-     * <p>
+     *
      * 初始接收机位置取 (0,0,0)，与 {@code estpos} 首轮迭代保持一致，从而与 {@code nv < NX} 的判定口径对齐。
      */
     private static int countUsableSats(Obsd[] obs, int start, int end, Nav nav, PrcOpt opt) {

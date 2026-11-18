@@ -8,8 +8,8 @@ import org.rtklib.java.research.common.MatrixOps;
 /**
  * Partial AR（部分模糊度固定）（research模块自有）。
  *
- * <p>按多因子加权得分排序，逐步固定子集模糊度。
- * 支持传统单因子（高度角/方差）和综合多因子（高度角+SNR+相位残差+方差）两种模式。</p>
+ * 按多因子加权得分排序，逐步固定子集模糊度。
+ * 支持传统单因子（高度角/方差）和综合多因子（高度角+SNR+相位残差+方差）两种模式。
  */
 public class PartialArSolver {
     private final double ratioThreshold;
@@ -46,7 +46,7 @@ public class PartialArSolver {
     /**
      * 多因子加权排序。
      *
-     * <p>score_i = wElev·norm(el) + wSnr·norm(snr) + wRes·norm(-|res|) + wVar·norm(-var)
+     * score_i = wElev·norm(el) + wSnr·norm(snr) + wRes·norm(-|res|) + wVar·norm(-var)
      *
      * @param floatAmb        浮点模糊度 (n×1)
      * @param ambCov          模糊度协方差 (n×n)

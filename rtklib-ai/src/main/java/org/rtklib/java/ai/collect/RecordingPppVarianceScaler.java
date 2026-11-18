@@ -13,26 +13,22 @@ import java.util.Arrays;
 
 /**
  * 采集型接口 B 实现：把每历元每 {@code (sat, frq)} 的 12 维特征、非差伪距残差与
- * 名义 {@code σ} 落盘成 CSV 一行，并<b>恒输出「不干预」</b>（全部 {@code 1.0}）。
- * <p>
+ * 名义 {@code σ} 落盘成 CSV 一行，并恒输出「不干预」（全部 {@code 1.0}）。
+ *
  * 恒输出 {@code 1.0} 的后果与 {@link RecordingObsCorrector} 同源：R 矩阵对角元不变，
  * 解算结果与不注入逐位一致，因此同一次运行既产出接口 B 的训练样本，又产出
  * 「无干预」的对照基线。
- * </p>
- * <p>
- * <b>{@code σ} 的唯一来源是 {@link PppObservationContext#nominalSigma()}（core 侧
- * R 对角元开方）</b>，本类不自己算、也不从特征反推：训练目标
+ *
+ * {@code σ} 的唯一来源是 {@link PppObservationContext#nominalSigma()}（core 侧
+ * R 对角元开方），本类不自己算、也不从特征反推：训练目标
  * {@code v_norm = resp / sigma} 必须与 core 实际施加的观测权重同一口径，否则
  * 学到的因子在推理时会系统性偏大或偏小。
- * </p>
- * <p>
- * 非有限或非正的 {@code σ} 行直接<b>跳过</b>（不写占位值）：组装阶段对
+ *
+ * 非有限或非正的 {@code σ} 行直接跳过（不写占位值）：组装阶段对
  * {@code σ <= 0} 与非有限残差同样丢弃，两处口径一致，避免「训练有、推理没有」的错位。
- * </p>
- * <p>
+ *
  * 写盘失败不抛异常（{@code PppVarianceScaler} 契约要求不抛）：失败即停止写入并继续
  * 返回不干预，解算不受影响，仅丢失采集数据。
- * </p>
  */
 public final class RecordingPppVarianceScaler implements PppVarianceScaler, AutoCloseable {
 

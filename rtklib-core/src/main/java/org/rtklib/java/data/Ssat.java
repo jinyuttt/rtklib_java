@@ -6,17 +6,16 @@ import org.rtklib.java.constants.Constants;
 /**
  * 卫星状态结构体。
  *
- * <p>对应RTKLIB ssat_t。跟踪每颗卫星在RTK解算过程中的状态，
- * 包括观测值有效性、残差、模糊度固定状态、周跳标志等。</p>
+ * 对应RTKLIB ssat_t。跟踪每颗卫星在RTK解算过程中的状态，
+ * 包括观测值有效性、残差、模糊度固定状态、周跳标志等。
  *
- * <h3>关键字段说明</h3>
- * <ul>
- *   <li>vsat[f]：卫星在频率f上是否有效（0=无效, 1=有效）</li>
- *   <li>fix[f]：模糊度固定状态（0=未固定, 1=浮点, 2=固定）</li>
- *   <li>slip[f]：周跳标志（0=无周跳, 非0=有周跳）</li>
- *   <li>resp[f]：伪距残差（米）</li>
- *   <li>resc[f]：载波相位残差（米）</li>
- * </ul>
+ * 关键字段说明
+ *
+ *   - vsat[f]：卫星在频率f上是否有效（0=无效, 1=有效）
+ *   - fix[f]：模糊度固定状态（0=未固定, 1=浮点, 2=固定）
+ *   - slip[f]：周跳标志（0=无周跳, 非0=有周跳）
+ *   - resp[f]：伪距残差（米）
+ *   - resc[f]：载波相位残差（米）
  */
 public class Ssat implements Serializable {
     private static final long serialVersionUID = 1L;

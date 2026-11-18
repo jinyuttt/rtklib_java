@@ -10,9 +10,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * [§2.1.1] 共享大气状态布局的维度与索引一致性测试。
  *
- * <p>不依赖实测数据，只验证 nx 计算、baselineOffset 起点与 II/ITrover/ITbase 索引
+ * 不依赖实测数据，只验证 nx 计算、baselineOffset 起点与 II/ITrover/ITbase 索引
  * 在同一布局下自洽：默认 BRDC/SAAS 下与旧「每基线复制」结构逐维一致（回归安全），
- * EST 共享模式下大气不再随基线数线性膨胀。</p>
+ * EST 共享模式下大气不再随基线数线性膨胀。
  */
 class JointAtmLayoutTest {
 

@@ -8,12 +8,12 @@ import org.rtklib.java.research.common.GnssConst;
 /**
  * 多普勒/伪距率观测因子。
  *
- * <p>观测量：D_i = -λ_i · f_d = ρ̇_i + c·(ṫ_r - ṫ_s^i) + ε
+ * 观测量：D_i = -λ_i · f_d = ρ̇_i + c·(ṫ_r - ṫ_s^i) + ε
  *
- * <p>残差维度 = 卫星数，参数块：stateVar[11]</p>
+ * 残差维度 = 卫星数，参数块：stateVar[11]
  *
- * <p>是 GNSS/INS 紧耦合 FGO (3.1) 的前置条件——IMU 预积分需要
- * 速度约束，本因子提供来自 GNSS 多普勒的速度观测。</p>
+ * 是 GNSS/INS 紧耦合 FGO (3.1) 的前置条件——IMU 预积分需要
+ * 速度约束，本因子提供来自 GNSS 多普勒的速度观测。
  */
 public class DopplerFactor extends Factor {
 

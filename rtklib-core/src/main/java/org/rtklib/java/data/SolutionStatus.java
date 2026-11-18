@@ -5,18 +5,16 @@ import org.rtklib.java.constants.Constants;
 /**
  * 定位解状态枚举。
  *
- * <p>对应 RTKLIB SOLQ_??? 常量，用于 {@link SolData#status} 字段。</p>
+ * 对应 RTKLIB SOLQ_??? 常量，用于 {@link SolData#status} 字段。
  *
- * <ul>
- *   <li>{@code NONE}   (0)：无解</li>
- *   <li>{@code FIX}    (1)：固定解（整周模糊度已固定）</li>
- *   <li>{@code FLOAT}  (2)：浮点解（模糊度未固定）</li>
- *   <li>{@code SBAS}   (3)：SBAS 差分解</li>
- *   <li>{@code DGPS}   (4)：DGPS 差分解</li>
- *   <li>{@code SINGLE} (5)：单点定位解</li>
- *   <li>{@code PPP}    (6)：精密单点定位解</li>
- *   <li>{@code DR}     (7)：推算解（Dead Reckoning）</li>
- * </ul>
+ *   - {@code NONE}   (0)：无解
+ *   - {@code FIX}    (1)：固定解（整周模糊度已固定）
+ *   - {@code FLOAT}  (2)：浮点解（模糊度未固定）
+ *   - {@code SBAS}   (3)：SBAS 差分解
+ *   - {@code DGPS}   (4)：DGPS 差分解
+ *   - {@code SINGLE} (5)：单点定位解
+ *   - {@code PPP}    (6)：精密单点定位解
+ *   - {@code DR}     (7)：推算解（Dead Reckoning）
  */
 public enum SolutionStatus {
     NONE(Constants.SOLQ_NONE, "None"),

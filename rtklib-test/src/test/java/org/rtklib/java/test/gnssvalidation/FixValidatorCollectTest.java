@@ -38,34 +38,28 @@ import java.util.Map;
 
 /**
  * 接口一真实数据采集：多站 × 多日，逐站选最近邻基站，产出采集 CSV + AR/FIX trace + 真值表。
- * <p>
+ *
  * 默认关闭（避免常规 {@code mvn test} 触发下载与长时间解算）。启用方式：
- * </p>
- * <pre>
+ *
  * mvn test -pl rtklib-test -Dtest=FixValidatorCollectTest -Dfixvalidator.collect=true
- * </pre>
- * <p>
+ *
  * 可覆盖属性：
- * </p>
- * <ul>
- *   <li>{@code fixvalidator.year}（默认 2024）</li>
- *   <li>{@code fixvalidator.doys}（默认 {@code 060,061}）</li>
- *   <li>{@code fixvalidator.stations}（默认 6 站，逗号分隔）</li>
- *   <li>{@code fixvalidator.max-base-km}（默认 60，超过则跳过该站当日）</li>
- *   <li>{@code fixvalidator.glo-mode}（{@code off/on/fixhold/autocal}，默认 {@code autocal}）</li>
- *   <li>{@code fixvalidator.igg}（默认 {@code false}）</li>
- *   <li>{@code fixvalidator.niter}（默认 1）</li>
- *   <li>{@code fixvalidator.run-suffix}（默认空，便于同一 (站, 日) 跑多套配置）</li>
- * </ul>
- * <p>
+ *
+ *   - {@code fixvalidator.year}（默认 2024）
+ *   - {@code fixvalidator.doys}（默认 {@code 060,061}）
+ *   - {@code fixvalidator.stations}（默认 6 站，逗号分隔）
+ *   - {@code fixvalidator.max-base-km}（默认 60，超过则跳过该站当日）
+ *   - {@code fixvalidator.glo-mode}（{@code off/on/fixhold/autocal}，默认 {@code autocal}）
+ *   - {@code fixvalidator.igg}（默认 {@code false}）
+ *   - {@code fixvalidator.niter}（默认 1）
+ *   - {@code fixvalidator.run-suffix}（默认空，便于同一 (站, 日) 跑多套配置）
+ *
  * 真值口径：RINEX 头 {@code APPROX POSITION XYZ} 与香港地政总署 SatRef 官方坐标表
  * （ITRF96 @ 1998.121）逐位一致，即测站参考点；叠加 {@code ANTENNA: DELTA H/E/N}
  * 后转为天线相位中心，与 {@code PostPosProcessor#posFromSta} 完全同口径。
  * 头坐标仅用于选最近邻基站与距离上限判断。真值表落在 {@code data/} 下，不入库。
- * </p>
- * <p>
+ *
  * 幂等：某 (站, 日) 的 CSV 与 trace 均已存在时直接跳过，可断点续采。
- * </p>
  */
 @DisplayName("接口一真实数据采集（多站多日）")
 class FixValidatorCollectTest {
@@ -199,24 +193,20 @@ class FixValidatorCollectTest {
     }
 
     /**
-     * 接口三采集：与接口一<b>同一站/同一日/同一基站配对</b>，只换采集器与 trace 主题。
-     * <p>
+     * 接口三采集：与接口一同一站/同一日/同一基站配对，只换采集器与 trace 主题。
+     *
      * 复用同一套 {@code createOpt()} / 选基站 / 读星历逻辑是刻意的：接口三的特征必须与
      * 接口一的基线逐位可比（A2 配对验收的前提就是两组解算除注入外完全一致），
      * 任何配置漂移都会让配对归因失去意义。
-     * </p>
-     * <p>
+     *
      * trace 主题为 {@code AI3}（{@code DDRES} / {@code DDRES_REJ} / {@code CORRECT}）加
      * {@code AR}（{@code FIX} / {@code FAIL}，仅用于给数据集填 {@code solution_stat}）。
-     * {@code actions} 必须置 {@code null}：它是<b>跨主题的全局过滤器</b>，若沿用接口一的
+     * {@code actions} 必须置 {@code null}：它是跨主题的全局过滤器，若沿用接口一的
      * {@code {FIX, FAIL}}，{@code DDRES} 会被一并滤掉，trace 里一行标签都不会剩下。
-     * </p>
-     * <p>
+     *
      * 启用方式：
-     * </p>
-     * <pre>
+     *
      * mvn test -pl rtklib-test -Dtest=FixValidatorCollectTest -Dobs-corrector.collect=true
-     * </pre>
      */
     @Test
     void collectObsCorrector() throws Exception {

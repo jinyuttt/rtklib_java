@@ -15,17 +15,16 @@ import org.slf4j.LoggerFactory;
  * 接口四实现（设计文档 §3.1 / §5.3）：{@code ns × nf} 行特征 → 一次批量推理 → 逐星风险分。
  *
  * 三条硬边界：
- * <ul>
- *   <li><b>只否决、不优选</b>（§1.1）：本类只输出风险分，参考星由 core 的原生评分选择，
- *       本类<b>不</b>返回「建议的参考星」；</li>
- *   <li><b>不抛异常</b>：任何契约违规（上下文非法、输出长度不符、含非有限值、后端异常）
- *       一律返回 {@code null}，由 core 侧统一降级为「全 0.0 = 不干预」并写 {@code AI4 / AI_DEGRADE}；</li>
- *   <li><b>无跨历元状态</b>：窗口统计（{@code snrWinMean} / {@code snrWinStd} / {@code refCount}）
- *       全部由 core 的 {@code AiRefStarState} 维护后下传，本类若自带一份窗口必然与推理侧错位。</li>
- * </ul>
+ *
+ *   - 只否决、不优选（§1.1）：本类只输出风险分，参考星由 core 的原生评分选择，
+ *       本类不返回「建议的参考星」；
+ *   - 不抛异常：任何契约违规（上下文非法、输出长度不符、含非有限值、后端异常）
+ *       一律返回 {@code null}，由 core 侧统一降级为「全 0.0 = 不干预」并写 {@code AI4 / AI_DEGRADE}；
+ *   - 无跨历元状态：窗口统计（{@code snrWinMean} / {@code snrWinStd} / {@code refCount}）
+ *       全部由 core 的 {@code AiRefStarState} 维护后下传，本类若自带一份窗口必然与推理侧错位。
  *
  * 行序契约（H2）：输入行序恒为 {@code ctx.sats()} 顺序 × {@code frq}，输出行序相同；
- * 逐星聚合取该星所有频点风险分的<b>最大值</b>（任一频点风险高即该星不适合作参考星，
+ * 逐星聚合取该星所有频点风险分的最大值（任一频点风险高即该星不适合作参考星，
  * 均值会被「大部分频点干净」稀释）。行序反查回 {@code sat[]} 下标由 core 负责，本类不得推算。
  */
 public final class RefStarValidatorImpl implements RefStarValidator {

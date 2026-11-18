@@ -9,11 +9,11 @@ import java.util.Map;
 /**
  * [JAVA-ONLY 原创] 海潮负荷模型的数据集合：FES2004 球谐系数与负荷 Love 数。
  *
- * <p><b>来源说明</b>：FES2004 球谐系数来自 LEGOS/CNES 公开发布的模型产品，
+ * 来源说明：FES2004 球谐系数来自 LEGOS/CNES 公开发布的模型产品，
  * 负荷 Love 数来自公开发表的负荷 Love 数表。本类只负责按分潮归类与只读访问，
- * 属数据组织逻辑，不含任何第三方源码结构。</p>
+ * 属数据组织逻辑，不含任何第三方源码结构。
  *
- * <p>本类是不可变值对象。</p>
+ * 本类是不可变值对象。
  */
 public final class OceanLoadingModel {
 

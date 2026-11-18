@@ -9,9 +9,9 @@ import java.util.List;
 /**
  * 广播星历选择工具：按「参考时刻 toe 距目标历元最近」为每颗卫星挑一条星历。
  *
- * <p>RTKLIB 的 {@code nav.eph[sat-1]} / {@code nav.geph[prn-1]} 是单槽位存储，
+ * RTKLIB 的 {@code nav.eph[sat-1]} / {@code nav.geph[prn-1]} 是单槽位存储，
  * 连续接收多份星历会被后到的覆盖。MAC 改正差与 VRS 生成都需要在指定历元使用
- * 当时有效的星历（其 IODE / IOD 必须与流动站持有的星历一致），因此需要显式选择。</p>
+ * 当时有效的星历（其 IODE / IOD 必须与流动站持有的星历一致），因此需要显式选择。
  */
 public final class EphSelector {
 
@@ -76,7 +76,7 @@ public final class EphSelector {
      * 把星历池中每颗卫星「toe 距 {@code time} 最近」的星历写入 {@code nav}，
      * 供逐历元生成的编码器（VRS / MAC）读取。
      *
-     * <p>池中已存在比 {@code nav} 当前槽位更合适的星历时才覆盖，因此可以反复调用。</p>
+     * 池中已存在比 {@code nav} 当前槽位更合适的星历时才覆盖，因此可以反复调用。
      */
     public static void applyEphPool(List<Eph> pool, List<Geph> gephPool, Nav nav, GTime time) {
         if (nav == null) return;

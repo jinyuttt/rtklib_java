@@ -21,43 +21,38 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
- * PPP 体系（接口 A / 接口 B）数据采集会话——<b>唯一稳定入口</b>。
- * <p>
+ * PPP 体系（接口 A / 接口 B）数据采集会话——唯一稳定入口。
+ *
  * 与 {@link CollectSession} 同构：注入 provider → 运行解算 → 还原注入 → 落清单，
  * 用 try-with-resources 保证收尾。标准用法：
- * </p>
- * <pre>{@code
+ *
+ * {@code
  * CollectConfig cfg = CollectConfig.of(Paths.get("out/ppp"), "GEJ3034", "2021-304");
  * try (PppCollectSession s = PppCollectSession.open(cfg, epoch -> rtk.sol.rr)) {
  *     s.runWith(() -> solveOneFile(cfg));
  * }
- * }</pre>
- * <p>
- * <b>一次会话 = 一个站 × 一个日 × 一个 runId</b>，同时采集两个接口：
- * </p>
- * <ul>
- *   <li>接口 A（历元级，10 维）→ {@link CollectConfig#pppCsvPath()}，清单 {@code _runs.csv}；</li>
- *   <li>接口 B（行级，12 维）→ {@link CollectConfig#pppScaleCsvPath()}，清单
- *       {@value #SCALE_MANIFEST_NAME}。</li>
- * </ul>
- * <p>
+ * }
+ *
+ * 一次会话 = 一个站 × 一个日 × 一个 runId，同时采集两个接口：
+ *
+ *   - 接口 A（历元级，10 维）→ {@link CollectConfig#pppCsvPath()}，清单 {@code _runs.csv}；
+ *   - 接口 B（行级，12 维）→ {@link CollectConfig#pppScaleCsvPath()}，清单
+ *       {@value #SCALE_MANIFEST_NAME}。
+ *
  * 两份清单而非一份：两份 CSV 的行数口径不同（历元数 vs 观测行数），而运行清单的
  * {@code rows} 列是组装阶段判断「运行是否残缺」的依据。混在一份清单里，B 的组装
  * 会拿 A 的行数当自己的，残缺判定随之失效。两份清单共用 {@link CollectSession#MANIFEST_HEADER}，
  * 列序与既有清单完全一致，故接口一/三的组装代码无需改动即可读 {@code _runs.csv}。
- * </p>
- * <p>
- * <b>位置回调</b>：接口 A 的标签是「解算位置 vs 参考坐标」的 3D 误差，而
+ *
+ * 位置回调：接口 A 的标签是「解算位置 vs 参考坐标」的 3D 误差，而
  * {@code PppSolutionContext} 刻意不含坐标（S2：impl 只读快照）。二者由宿主弥合：
  * 宿主持有 {@code Rtk}，逐历元把 {@code sol.rr} 交给 {@link PppPositionSource}。
  * 不提供回调时 A 的 CSV 位置列留空，组装阶段计为 {@code missing_position} 并丢弃该历元
  * （不伪造坐标）。接口 B 不需要位置回调——它的标签 {@code resp / sigma} 全在快照里。
- * </p>
- * <p>
+ *
  * 前置条件：{@code ionoopt == IONOOPT_IFLC} 时 core 跳过接口 B（R 为标量），采集会得到
  * 空数据集；动态 PPP 还需 {@code opt.dynamics == 1} 才有足够的状态自由度。采集须用
  * 非 IFLC、且与目标场景一致的配置。
- * </p>
  */
 public final class PppCollectSession implements AutoCloseable {
 
@@ -157,7 +152,7 @@ public final class PppCollectSession implements AutoCloseable {
     }
 
     /**
-     * 注入 → 执行 → <b>还原</b>，保证注入点一定恢复原状（即使 {@code body} 抛异常）。
+     * 注入 → 执行 → 还原，保证注入点一定恢复原状（即使 {@code body} 抛异常）。
      *
      * @param body 解算动作
      */
@@ -242,10 +237,9 @@ public final class PppCollectSession implements AutoCloseable {
 
     /**
      * 追加一行运行清单。
-     * <p>
+     *
      * {@code status} 恒为 {@code ok}：本方法只在正常 {@code close()} 时执行，
      * 崩溃的运行不会走到这里，正是「残缺运行没有 ok 行」的识别依据。
-     * </p>
      */
     private void appendManifest(Path manifest, Path csv, long rows) throws IOException {
         StringBuilder sb = new StringBuilder(192);

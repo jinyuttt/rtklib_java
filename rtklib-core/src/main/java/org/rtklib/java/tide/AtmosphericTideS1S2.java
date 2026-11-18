@@ -5,24 +5,24 @@ import org.rtklib.java.constants.Constants;
 /**
  * IERS2010 S1/S2大气潮汐位移计算。
  *
- * <p>大气潮汐是大气压力的日周期(S1)和半日周期(S2)变化引起的测站位移，
+ * 大气潮汐是大气压力的日周期(S1)和半日周期(S2)变化引起的测站位移，
  * 主要影响垂直方向（可达~0.5cm），对高精度PPP（mm级）不可忽略。
  *
- * <p>S1潮（周日潮）：周期24h，主要由太阳加热引起
+ * S1潮（周日潮）：周期24h，主要由太阳加热引起
  * S2潮（半日潮）：周期12h，主要由大气压力半日波引起
  *
- * <p>位移模型：
- * <pre>
+ * 位移模型：
+ *
  *   dR = Σ Pn(sinφ) * [An*cos(θ+χn) + Bn*sin(θ+χn)] * sf
  *   dT, dL 类似但幅度更小（约为dR的10%）
- * </pre>
+ *
  * 其中：
  * - Pn: Legendre多项式
  * - φ: 纬度, θ: 潮汐角(S1=θ1, S2=2θ1)
  * - An/Bn: 振幅系数, χn: 相位
  * - sf: 气压缩放因子(p_actual/p_standard)
  *
- * <p>参考：IERS Conventions 2010, Chapter 7.1.3
+ * 参考：IERS Conventions 2010, Chapter 7.1.3
  * 对应C版：RTKLIB未实现S1/S2大气潮，本模块为v2.2.2新增
  */
 public final class AtmosphericTideS1S2 {

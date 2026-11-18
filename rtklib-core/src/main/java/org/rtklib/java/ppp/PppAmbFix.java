@@ -38,9 +38,9 @@ public class PppAmbFix {
     /**
      * WL+NL 级联固定的候选结果（「算」阶段产物）。
      *
-     * <p>只承载候选模糊度与质量特征，<b>不含任何求解状态写入</b>：调用方必须显式调用
+     * 只承载候选模糊度与质量特征，不含任何求解状态写入：调用方必须显式调用
      * {@link #applyWlNlFix(Rtk, double[], WlNlFix)} 才会改动 {@code rtk.x/P/xa/ssat.fix}，
-     * 从而满足施加原子性（S2）——校验方拒绝时可以整体丢弃候选而不留脏状态。</p>
+     * 从而满足施加原子性（S2）——校验方拒绝时可以整体丢弃候选而不留脏状态。
      */
     public static final class WlNlFix {
         /** 固定模糊度个数（{@code >0} 才可提交）。 */
@@ -67,8 +67,8 @@ public class PppAmbFix {
         /**
          * 把候选写进调用方提供的求解数组（{@code x} 与 {@code P}），不触碰 {@code ssat.fix}。
          *
-         * <p>供「三段式」的提交阶段使用：调用方先写入自己的临时数组，AI 校验通过后再
-         * 赋值给 {@code rtk.x/P} 并置 {@code ssat.fix}（S2）。</p>
+         * 供「三段式」的提交阶段使用：调用方先写入自己的临时数组，AI 校验通过后再
+         * 赋值给 {@code rtk.x/P} 并置 {@code ssat.fix}（S2）。
          */
         public void applyTo(double[] x, double[] P, int nx) {
             for (int i = 0; i < nFixed; i++) {
@@ -80,8 +80,8 @@ public class PppAmbFix {
     /**
      * 「算」阶段：只计算 WL+NL 固定候选，不写 {@code rtk.x/P/xa/ssat.fix}。
      *
-     * <p>{@code rtk.sol.ratio} 仍在计算过程中写入——它是 LAMBDA 搜索的诊断量，
-     * 语义与 RTKLIB 一致（ratio 检验失败也保留），不属于固定状态。</p>
+     * {@code rtk.sol.ratio} 仍在计算过程中写入——它是 LAMBDA 搜索的诊断量，
+     * 语义与 RTKLIB 一致（ratio 检验失败也保留），不属于固定状态。
      *
      * @return 候选；无法固定时返回 {@code null}
      */
@@ -95,8 +95,8 @@ public class PppAmbFix {
     /**
      * 「提交」阶段：把候选一次性施加到 {@code rtk.x/P/xa/ssat.fix}。
      *
-     * <p>写入集合与 v3.4.0 完全一致（{@code x/P} 的固定行零化、{@code xa} 同步、{@code ssat.fix = 1}），
-     * 且不含任何可抛点，保证施加原子性（S2）。</p>
+     * 写入集合与 v3.4.0 完全一致（{@code x/P} 的固定行零化、{@code xa} 同步、{@code ssat.fix = 1}），
+     * 且不含任何可抛点，保证施加原子性（S2）。
      */
     public static void applyWlNlFix(Rtk rtk, double[] xa, WlNlFix fix) {
         int nx = rtk.nx;
@@ -691,13 +691,13 @@ public class PppAmbFix {
     /**
      * PPP-AR Fix-and-Hold策略：将已固定模糊度的方差收紧到极小值。
      *
-     * <p>原理：模糊度固定后，将其协方差从浮点值(~1.0)收紧到pppArFixHoldVar(~1e-6)，
+     * 原理：模糊度固定后，将其协方差从浮点值(~1.0)收紧到pppArFixHoldVar(~1e-6)，
      * 使后续历元中该模糊度不会被重新浮点化，从而"锁定"固定解。
      *
-     * <p>触发条件：rtk.sol.stat == SOLQ_FIX（当前历元已成功固定）
+     * 触发条件：rtk.sol.stat == SOLQ_FIX（当前历元已成功固定）
      * 安全保护：仅收紧方差 > pppArFixHoldVar 的模糊度（避免重复收紧）
      *
-     * <p>对应C版：RTKLIB RTK模式有类似策略，PPP模式未实现，本模块为v2.3.0新增
+     * 对应C版：RTKLIB RTK模式有类似策略，PPP模式未实现，本模块为v2.3.0新增
      */
     public static void pppArFixHold(Rtk rtk, Nav nav) {
         RtkConfig cfg = rtk.rtkConfig;
@@ -732,7 +732,7 @@ public class PppAmbFix {
     /**
      * PPP部分模糊度固定（Partial AR）——基于WL+NL两步固定框架。
      *
-     * <p>数学原理：PPP中x[IB]存储的是IF组合模糊度（单位：米），不能直接对它做LAMBDA。
+     * 数学原理：PPP中x[IB]存储的是IF组合模糊度（单位：米），不能直接对它做LAMBDA。
      * 正确做法是复用WL+NL两步固定：
      * 1. 构建WL宽巷模糊度（周），做LAMBDA搜索
      * 2. 若WL全集ratio不够，按方差排序剔除最大方差的卫星，对子集做WL LAMBDA
@@ -740,10 +740,10 @@ public class PppAmbFix {
      * 4. 若NL全集ratio不够，同样做子集搜索
      * 5. 最终固定 N₁ = N_WL + N_NL（周），再乘λ₁转回米
      *
-     * <p>与pppAmbFixWlNl的区别：当WL或NL的ratio不够时，不直接放弃，
+     * 与pppAmbFixWlNl的区别：当WL或NL的ratio不够时，不直接放弃，
      * 而是尝试剔除方差最大的卫星子集，寻找能通过ratio检验的最大子集。
      *
-     * <p>对应C版：RTKLIB未实现Partial AR，本模块为v2.3.0新增
+     * 对应C版：RTKLIB未实现Partial AR，本模块为v2.3.0新增
      */
     public static int pppPartialAR(Rtk rtk, double[] bias, double[] xa,
                                     int gps, int glo, int sbs, Nav nav) {
@@ -1251,13 +1251,13 @@ public class PppAmbFix {
      * NL弧段累加 [JAVA-ONLY]（PRIDE-PPPAR 弧段累加机制的窄巷应用，落在 RTKLIB
      * 卫星状态 {@code xrnl}/{@code rn}/{@code ninl} 上）。
      *
-     * <p>每历元将滤波后的模糊度状态换算为窄巷周值（x[IB]/λ_NL），按高度角权重 wele
+     * 每历元将滤波后的模糊度状态换算为窄巷周值（x[IB]/λ_NL），按高度角权重 wele
      * （el>=30°取1.0，否则2·sin(el)，与WL/EWL弧段一致）累加进当前弧段；周跳
      * （ssat.slip[0]，每历元由udbias_ppp入口清零后由detslp检测器置位）或重新锁定
      * （lock<=1）时重置弧段。必须在滤波更新之后调用（pppPartialAR入口处），使累加
      * 序列与固定时消费的状态一致。
      *
-     * <p>累加的原始量不含WL改正项（−N_wl·f2/(f1−f2)），该项在固定时用当期WL固定值
+     * 累加的原始量不含WL改正项（−N_wl·f2/(f1−f2)），该项在固定时用当期WL固定值
      * 补减，保证弧段序列与单历元WL固定结果解耦。x[idx]==0.0（状态未初始化哨兵）不
      * 累加，避免污染弧段统计。
      */
@@ -1451,19 +1451,18 @@ public class PppAmbFix {
     /**
      * 三频PPP-AR：EWL→WL→NL级联固定。
      *
-     * <p>数学原理：利用第三频点（L5/E5a/B2a）形成超宽巷（EWL）组合，
+     * 数学原理：利用第三频点（L5/E5a/B2a）形成超宽巷（EWL）组合，
      * 其波长极长（GPS L5-L2: ~5.86m, Galileo E5a-E5b: ~9.77m），
      * 可直接取整固定，无需LAMBDA搜索。
      *
-     * <p>级联步骤：
-     * <ol>
-     *   <li>EWL：MW-like组合(f2,f3)，取整固定（波长极长，码噪声仅~0.03-0.09周）</li>
-     *   <li>WL：用固定EWL验证候选卫星，LAMBDA搜索固定</li>
-     *   <li>NL：用固定WL构建NL模糊度，LAMBDA搜索固定</li>
-     *   <li>重构：N_fixed = N_NL*λ_NL + N_WL*f2*λ_WL/(f1+f2)</li>
-     * </ol>
+     * 级联步骤：
      *
-     * <p>对应C版：RTKLIB未实现三频PPP-AR，本模块为v2.3.0新增
+     *   - EWL：MW-like组合(f2,f3)，取整固定（波长极长，码噪声仅~0.03-0.09周）
+     *   - WL：用固定EWL验证候选卫星，LAMBDA搜索固定
+     *   - NL：用固定WL构建NL模糊度，LAMBDA搜索固定
+     *   - 重构：N_fixed = N_NL*λ_NL + N_WL*f2*λ_WL/(f1+f2)
+     *
+     * 对应C版：RTKLIB未实现三频PPP-AR，本模块为v2.3.0新增
      */
     public static int pppAmbFixEwlWlNl(Rtk rtk, double[] bias, double[] xa,
                                          int gps, int glo, int sbs, Nav nav) {
