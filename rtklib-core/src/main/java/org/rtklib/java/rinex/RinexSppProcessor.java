@@ -19,9 +19,8 @@ public class RinexSppProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(RinexSppProcessor.class);
 
-    private static final String POS_HEADER =
-            "# SPP (Single Point Positioning) Result - RINEX Input\n" +
-            "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
+    /** .pos 输出标题，列集合由 {@link SolData#posFileHeader(String, int)} 按 posMask 生成 */
+    private static final String POS_TITLE = "SPP (Single Point Positioning) Result - RINEX Input";
 
     private final PrcOpt opt;
     private final PosHandler handler;
@@ -39,7 +38,7 @@ public class RinexSppProcessor {
         if (outputStream != null) {
             this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
             try {
-                this.writer.write(POS_HEADER);
+                this.writer.write(SolData.posFileHeader(POS_TITLE, this.opt.posMask));
                 this.writer.flush();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);

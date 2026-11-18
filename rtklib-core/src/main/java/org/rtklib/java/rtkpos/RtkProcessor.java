@@ -31,28 +31,22 @@ import java.util.TreeMap;
 
 /**
  * RTK相对定位处理器。
- * <p>
+ *
  * 流水线处理：feed()每解析出一个观测历元就立即定位，通过回调或输出流实时输出结果。
  * finish()仅表示数据输入结束，处理剩余缓存历元并通知完成。
- * </p>
- * <p>
+ *
  * 与SppProcessor不同，RTK需要流动站和基准站的观测数据。
  * RTCM数据流中，流动站观测（rcv=1）和基准站观测（rcv=2）通过RTCM消息中的
  * 基准站天线坐标（1005/1006）自动区分。基准站坐标从RTCM消息中提取，
  * 也可通过PrcOpt.rb手动设置。
- * </p>
- * <p>
- * 输出支持（独立工作，只要存在就使用）：
- * <ul>
- *   <li>OutputStream：定位结果以.pos格式逐行写入并刷新，可为null</li>
- *   <li>PosHandler回调：实时通知定位结果/失败/完成，可为null</li>
- * </ul>
- * </p>
- * <p>
- * 注意：RtkProcessor不可重用，调用finish()后即完成生命周期。
- * </p>
  *
- * <pre>
+ * 输出支持（独立工作，只要存在就使用）：
+ *
+ *   - OutputStream：定位结果以.pos格式逐行写入并刷新，可为null
+ *   - PosHandler回调：实时通知定位结果/失败/完成，可为null
+ *
+ * 注意：RtkProcessor不可重用，调用finish()后即完成生命周期。
+ *
  * // 示例1：批量模式（RTCM文件）
  * RtkProcessor rtk = new RtkProcessor(opt, handler, outputStream);
  * RtkResult result = rtk.process("rover_rtcm", "base_rtcm");
@@ -74,7 +68,6 @@ import java.util.TreeMap;
  * // 示例4：byte[]输入
  * RtkProcessor rtk = new RtkProcessor(opt);
  * RtkResult result = rtk.process(roverBytes, baseBytes);
- * </pre>
  */
 public class RtkProcessor implements Serializable {
 
@@ -82,9 +75,8 @@ public class RtkProcessor implements Serializable {
 
     private static final Logger log = LoggerFactory.getLogger(RtkProcessor.class);
 
-    private static final String POS_HEADER =
-            "# RTK (Relative Positioning) Result\n" +
-            "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
+    /** .pos 输出标题，列集合由 {@link SolData#posFileHeader(String, int)} 按 posMask 生成 */
+    private static final String POS_TITLE = "RTK (Relative Positioning) Result";
 
     private static final int[] SOL_PRIO = {6, 1, 2, 3, 4, 5, 1, 6};
     private static final int[] COMBINED_SOL_PRIO = {7, 1, 2, 3, 4, 5, 1, 6};
@@ -165,7 +157,7 @@ public class RtkProcessor implements Serializable {
         if (outputStream != null) {
             this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
             try {
-                this.writer.write(POS_HEADER);
+                this.writer.write(SolData.posFileHeader(POS_TITLE, this.opt.posMask));
                 this.writer.flush();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -753,14 +745,15 @@ public class RtkProcessor implements Serializable {
                     outputBestSol();
                 }
             } else {
+                double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
+                SolData solData = new SolData(lastRoverSourceId, solCopy, opt.posMask, rb, rtk.ssat, opt.diagMask);
                 if (handler != null) {
                     handler.onSolution(new Sol(rtk.sol), copySsatArray(rtk.ssat));
-                    double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
-                    handler.onResult(new SolData(lastRoverSourceId, solCopy, opt.posMask, rb, rtk.ssat, opt.diagMask));
+                    handler.onResult(solData);
                 }
                 if (writer != null) {
                     try {
-                        writer.write(formatSolutionLine(solCopy));
+                        writer.write(SolData.posFileLine(solData));
                         writer.flush();
                     } catch (IOException e) {
                         throw new UncheckedIOException(e);
@@ -803,13 +796,14 @@ public class RtkProcessor implements Serializable {
         bestSol.time = bestTime != null ? bestTime : bestSol.time;
         solStaticOutputs.add(bestSol);
 
+        double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
+        SolData solData = new SolData(lastRoverSourceId, bestSol, opt.posMask, rb, bestSsat, opt.diagMask);
         if (handler != null) {
-            double[] rb = (opt.rb[0] != 0 || opt.rb[1] != 0 || opt.rb[2] != 0) ? opt.rb : null;
-            handler.onResult(new SolData(lastRoverSourceId, bestSol, opt.posMask, rb, bestSsat, opt.diagMask));
+            handler.onResult(solData);
         }
         if (writer != null) {
             try {
-                writer.write(formatSolutionLine(bestSol));
+                writer.write(SolData.posFileLine(solData));
                 writer.flush();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -1130,7 +1124,7 @@ public class RtkProcessor implements Serializable {
                 }
                 if (writer != null) {
                     try {
-                        writer.write(formatSolutionLine(combinedBest));
+                        writer.write(SolData.posFileLine(sd));
                         writer.flush();
                     } catch (IOException e) {
                         throw new UncheckedIOException(e);
@@ -1383,66 +1377,33 @@ public class RtkProcessor implements Serializable {
         return result;
     }
 
+    /**
+     * 按默认输出掩码（ECEF|LLH）格式化一行 .pos 记录。
+     *
+     * 保留为对外 API。内部输出路径统一走 {@link SolData#posFileLine(SolData)}，
+     * 以便协方差列跟随 {@link PrcOpt#posMask}：LLH/ENU 用 {@code covenu} 后的
+     * ENU 标准差，ECEF 用 {@code soltocov} 后的 ECEF 标准差。
+     *
+     * @param sol 定位解
+     * @return 一行 .pos 文本
+     */
     public static String formatSolutionLine(Sol sol) {
-        double[] llh = new double[3];
-        CoordTransform.ecef2pos(sol.rr, llh);
-        double latDeg = llh[0] * Constants.R2D;
-        double lonDeg = llh[1] * Constants.R2D;
-        double height = llh[2];
-
-        double[] ymdhms = TimeSystem.time2ymdhms(sol.time);
-        String dateStr = String.format("%04d/%02d/%02d", (int) ymdhms[0], (int) ymdhms[1], (int) ymdhms[2]);
-        String timeStr = String.format("%02d:%02d:%09.6f", (int) ymdhms[3], (int) ymdhms[4], ymdhms[5]);
-
-        String qStr;
-        switch (sol.stat) {
-            case Constants.SOLQ_FIX:    qStr = "1"; break;
-            case Constants.SOLQ_FLOAT:  qStr = "2"; break;
-            case Constants.SOLQ_SBAS:   qStr = "3"; break;
-            case Constants.SOLQ_DGPS:   qStr = "4"; break;
-            case Constants.SOLQ_SINGLE: qStr = "5"; break;
-            case Constants.SOLQ_PPP:    qStr = "6"; break;
-            default:                    qStr = "0"; break;
-        }
-
-        double sdn = sol.qr[0] > 0 ? Math.sqrt(sol.qr[0]) : 0;
-        double sde = sol.qr[1] > 0 ? Math.sqrt(sol.qr[1]) : 0;
-        double sdu = sol.qr[2] > 0 ? Math.sqrt(sol.qr[2]) : 0;
-        double sdne = sol.qr[3] > 0 ? Math.sqrt(Math.abs(sol.qr[3])) : 0;
-        double sdeu = sol.qr[4] > 0 ? Math.sqrt(Math.abs(sol.qr[4])) : 0;
-        double sdun = sol.qr[5] > 0 ? Math.sqrt(Math.abs(sol.qr[5])) : 0;
-
-        return String.format("  %s %s %14.9f %14.9f %10.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f %5.1f %5.1f %5.1f %5.1f\n",
-                dateStr, timeStr, latDeg, lonDeg, height,
-                qStr, sol.ns,
-                sdn, sde, sdu, sdne, sdeu, sdun,
-                sol.age, sol.ratio,
-                sol.gdop, sol.pdop, sol.hdop, sol.vdop);
+        return SolData.posFileLine(new SolData(sol, PrcOpt.POS_ECEF | PrcOpt.POS_LLH));
     }
 
     public static void writePosFile(RtkResult result, String outputPath) throws IOException {
         try (BufferedWriter w = new BufferedWriter(new FileWriter(outputPath))) {
-            w.write(POS_HEADER);
+            w.write(SolData.posFileHeader(POS_TITLE, result.posMask));
             for (SolData solData : result.solutions) {
-                w.write(formatSolDataLine(solData));
+                w.write(SolData.posFileLine(solData));
             }
             w.write(String.format("# Total: %d, Success: %d, Fail: %d\n",
                     result.totalEpochs, result.successCount, result.failCount));
         }
     }
 
-    static String formatSolDataLine(SolData solData) {Position llh = solData.getPosition(CoordType.LLH);
-        Accuracy acc = solData.getAccuracy(CoordType.ENU);
-        if (acc == null) acc = solData.getAccuracy(CoordType.LLH);
-        if (llh == null || acc == null) return "";
-
-        String qStr = String.valueOf(solData.status.code);
-        return String.format("  %s %14.9f %14.9f %10.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f %5.1f %5.1f %5.1f %5.1f\n",
-                solData.timeStr, llh.v1, llh.v2, llh.v3,
-                qStr, solData.numSat,
-                acc.s2, acc.s1, acc.s3, acc.c12, acc.c23, acc.c31,
-                solData.age, solData.ratio,
-                solData.gdop, solData.pdop, solData.hdop, solData.vdop);
+    static String formatSolDataLine(SolData solData) {
+        return SolData.posFileLine(solData);
     }
 
     private static Obsd copyObsd(Obsd src) {
@@ -1488,7 +1449,7 @@ public class RtkProcessor implements Serializable {
             Ssat[] ssat = (i < ssatSource.size()) ? ssatSource.get(i) : null;
             solDataList.add(new SolData(outputSource.get(i), opt.posMask, rb, ssat, opt.diagMask));
         }
-        return new RtkResult(totalEpochs, successCount, failCount, solDataList);
+        return new RtkResult(totalEpochs, successCount, failCount, solDataList, opt.posMask);
     }
 
     private byte[] ensureCapacity(byte[] buf, int need) {
@@ -1521,15 +1482,23 @@ public class RtkProcessor implements Serializable {
         public final int successCount;
         public final int failCount;
         public final List<SolData> solutions;
+        /** 生成该结果时使用的输出坐标掩码，供 {@link #writePosFile} 选择表头 */
+        public final int posMask;
         public int[] diagIggDownWeightPerSat;
         public int diagIggDownWeightCount;
         public int diagIggCallCount;
 
         public RtkResult(int totalEpochs, int successCount, int failCount, List<SolData> solutions) {
+            this(totalEpochs, successCount, failCount, solutions, PrcOpt.POS_ECEF | PrcOpt.POS_LLH);
+        }
+
+        public RtkResult(int totalEpochs, int successCount, int failCount, List<SolData> solutions,
+                         int posMask) {
             this.totalEpochs = totalEpochs;
             this.successCount = successCount;
             this.failCount = failCount;
             this.solutions = solutions;
+            this.posMask = posMask;
         }
     }
 }

@@ -3,7 +3,6 @@ package org.rtklib.java.joint;
 import org.rtklib.java.common.CompatFileIO;
 import org.rtklib.java.common.SatUtils;
 import org.rtklib.java.constants.Constants;
-import org.rtklib.java.coord.CoordTransform;
 import org.rtklib.java.data.*;
 import org.rtklib.java.pntpos.PosHandler;
 import org.rtklib.java.rinex.RinexParser;
@@ -20,9 +19,8 @@ public class JointRtkProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(JointRtkProcessor.class);
 
-    private static final String POS_HEADER =
-            "# Joint RTK (Multi-Baseline) Result\n" +
-            "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
+    /** .pos 输出标题，列集合由 {@link SolData#posFileHeader(String, int)} 按 posMask 生成 */
+    private static final String POS_TITLE = "Joint RTK (Multi-Baseline) Result";
 
     private PrcOpt opt;
     private JointConfig jointConfig;
@@ -68,7 +66,7 @@ public class JointRtkProcessor {
         if (outputStream != null) {
             this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
             try {
-                this.writer.write(POS_HEADER);
+                this.writer.write(SolData.posFileHeader(POS_TITLE, this.opt.posMask));
                 this.writer.flush();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -411,14 +409,15 @@ public class JointRtkProcessor {
             Sol solCopy = new Sol(jrtk.sol);
             solutions.add(solCopy);
 
+            double[] rb = jrtk.rb;
+            SolData solData = new SolData(lastRoverSourceId, solCopy, opt.posMask, rb, jrtk.ssat, opt.diagMask);
             if (handler != null) {
-                double[] rb = jrtk.rb;
                 handler.onSolution(solCopy, copySsatArray(jrtk.ssat));
-                handler.onResult(new SolData(lastRoverSourceId, solCopy, opt.posMask, rb, jrtk.ssat, opt.diagMask));
+                handler.onResult(solData);
             }
             if (writer != null) {
                 try {
-                    writer.write(formatSolutionLine(solCopy));
+                    writer.write(SolData.posFileLine(solData));
                     writer.flush();
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
@@ -673,7 +672,8 @@ public class JointRtkProcessor {
         List<SolData> solDataList = solutions.stream()
                 .map(sol -> new SolData(lastRoverSourceId, sol, opt.posMask, rb, jrtk.ssat, opt.diagMask))
                 .toList();
-        return new JointRtkResult(totalEpochs, successCount, failCount, solDataList, solutions);
+        return new JointRtkResult(totalEpochs, successCount, failCount, solDataList, solutions,
+                opt.posMask);
     }
 
     private BaseStation findBase(String id) {
@@ -827,41 +827,17 @@ public class JointRtkProcessor {
         return groups;
     }
 
+    /**
+     * 按默认输出掩码（ECEF|LLH）格式化一行 .pos 记录。
+     *
+     * 保留为对外 API。内部输出路径统一走 {@link SolData#posFileLine(SolData)}，
+     * 以便协方差列跟随 {@link PrcOpt#posMask}。
+     *
+     * @param sol 定位解
+     * @return 一行 .pos 文本
+     */
     public static String formatSolutionLine(Sol sol) {
-        double[] llh = new double[3];
-        CoordTransform.ecef2pos(sol.rr, llh);
-        double latDeg = llh[0] * Constants.R2D;
-        double lonDeg = llh[1] * Constants.R2D;
-        double height = llh[2];
-
-        double[] ymdhms = TimeSystem.time2ymdhms(sol.time);
-        String dateStr = String.format("%04d/%02d/%02d", (int) ymdhms[0], (int) ymdhms[1], (int) ymdhms[2]);
-        String timeStr = String.format("%02d:%02d:%09.6f", (int) ymdhms[3], (int) ymdhms[4], ymdhms[5]);
-
-        String qStr;
-        switch (sol.stat) {
-            case Constants.SOLQ_FIX:    qStr = "1"; break;
-            case Constants.SOLQ_FLOAT:  qStr = "2"; break;
-            case Constants.SOLQ_SBAS:   qStr = "3"; break;
-            case Constants.SOLQ_DGPS:   qStr = "4"; break;
-            case Constants.SOLQ_SINGLE: qStr = "5"; break;
-            case Constants.SOLQ_PPP:    qStr = "6"; break;
-            default:                    qStr = "0"; break;
-        }
-
-        double sdn = sol.qr[0] > 0 ? Math.sqrt(sol.qr[0]) : 0;
-        double sde = sol.qr[1] > 0 ? Math.sqrt(sol.qr[1]) : 0;
-        double sdu = sol.qr[2] > 0 ? Math.sqrt(sol.qr[2]) : 0;
-        double sdne = sol.qr[3] > 0 ? Math.sqrt(Math.abs(sol.qr[3])) : 0;
-        double sdeu = sol.qr[4] > 0 ? Math.sqrt(Math.abs(sol.qr[4])) : 0;
-        double sdun = sol.qr[5] > 0 ? Math.sqrt(Math.abs(sol.qr[5])) : 0;
-
-        return String.format("  %s %s %14.9f %14.9f %10.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f %5.1f %5.1f %5.1f %5.1f\n",
-                dateStr, timeStr, latDeg, lonDeg, height,
-                qStr, sol.ns,
-                sdn, sde, sdu, sdne, sdeu, sdun,
-                sol.age, sol.ratio,
-                sol.gdop, sol.pdop, sol.hdop, sol.vdop);
+        return SolData.posFileLine(new SolData(sol, PrcOpt.POS_ECEF | PrcOpt.POS_LLH));
     }
 
     private static Obsd copyObsd(Obsd src) {
@@ -929,14 +905,23 @@ public class JointRtkProcessor {
         public final int failCount;
         public final List<SolData> solutions;
         public final List<Sol> solList;
+        /** 生成该结果时使用的输出坐标掩码，供输出表头选择列集合 */
+        public final int posMask;
 
         public JointRtkResult(int totalEpochs, int successCount, int failCount,
                               List<SolData> solutions, List<Sol> solList) {
+            this(totalEpochs, successCount, failCount, solutions, solList,
+                    PrcOpt.POS_ECEF | PrcOpt.POS_LLH);
+        }
+
+        public JointRtkResult(int totalEpochs, int successCount, int failCount,
+                              List<SolData> solutions, List<Sol> solList, int posMask) {
             this.totalEpochs = totalEpochs;
             this.successCount = successCount;
             this.failCount = failCount;
             this.solutions = solutions;
             this.solList = solList;
+            this.posMask = posMask;
         }
     }
 }

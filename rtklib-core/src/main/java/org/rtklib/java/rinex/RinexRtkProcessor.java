@@ -18,28 +18,24 @@ import java.util.List;
 
 /**
  * RINEX文件RTK相对定位处理器（薄壳，委托PostPosProcessor）。
- * <p>
+ *
  * 输入RINEX观测文件(.obs)和导航文件(.nav)路径，执行RTK定位并输出结果。
  * 支持流动站和基准站分别提供RINEX文件，也支持单站RINEX文件。
  * 支持回调、输出流和结果对象三种方式获取定位结果。
- * </p>
  *
- * <pre>
  * // 示例1：流动站+基准站RINEX文件RTK定位
  * RinexRtkProcessor rtk = new RinexRtkProcessor(opt, handler, outputStream);
  * RtkResult result = rtk.process("ROVER.obs", "BASE.obs", "ROVER.nav");
  *
  * // 示例2：便捷方法
  * RtkResult result = RinexRtkProcessor.processRinex("ROVER.obs", "BASE.obs", "NAV.nav", opt);
- * </pre>
  */
 public class RinexRtkProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(RinexRtkProcessor.class);
 
-    private static final String POS_HEADER =
-            "# RTK (Relative Positioning) Result - RINEX Input\n" +
-            "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
+    /** .pos 输出标题，列集合由 {@link SolData#posFileHeader(String, int)} 按 posMask 生成 */
+    private static final String POS_TITLE = "RTK (Relative Positioning) Result - RINEX Input";
 
     private final PrcOpt opt;
     private final SolOpt solOpt;
@@ -66,7 +62,7 @@ public class RinexRtkProcessor {
         if (outputStream != null) {
             this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
             try {
-                this.writer.write(POS_HEADER);
+                this.writer.write(SolData.posFileHeader(POS_TITLE, this.opt.posMask));
                 this.writer.flush();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);

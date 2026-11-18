@@ -18,7 +18,6 @@ import org.rtklib.java.ppp.PppCore;
 import org.rtklib.java.config.RtkConfig;
 import org.rtklib.java.rtkpos.CombinedFilter;
 import org.rtklib.java.rtkpos.RtkCore;
-import org.rtklib.java.rtkpos.RtkProcessor;
 import org.rtklib.java.rtkpos.SegmentSigmaFilter;
 import org.rtklib.java.time.TimeSystem;
 import org.rtklib.java.trace.TraceCallback;
@@ -37,9 +36,8 @@ public class PostPosProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(PostPosProcessor.class);
 
-    private static final String POS_HEADER =
-            "# Post-Processing Result\n" +
-            "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
+    /** .pos 输出标题，列集合由 {@link SolData#posFileHeader(String, int)} 按 posMask 生成 */
+    private static final String POS_TITLE = "Post-Processing Result";
 
     private final PrcOpt opt;
     private final SolOpt sopt;
@@ -67,7 +65,7 @@ public class PostPosProcessor {
         if (outputStream != null) {
             this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
             try {
-                this.writer.write(POS_HEADER);
+                this.writer.write(SolData.posFileHeader(POS_TITLE, this.opt.posMask));
                 this.writer.flush();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -156,7 +154,7 @@ public class PostPosProcessor {
 
         if (roverParser.obs.n == 0) {
             log.warn("No observation data in RINEX file");
-            return new PostPosResult(0, 0, 0, List.of(), List.of());
+            return new PostPosResult(0, 0, 0, List.of(), List.of(), opt.posMask);
         }
 
         double[] approxPos = null;
@@ -317,7 +315,7 @@ public class PostPosProcessor {
 
         if (adaptive != null) adaptive.deactivate();
         finishOutput(totalEpochs, successCount, failCount);
-        PostPosResult pr = new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions, ssatList), solutions);
+        PostPosResult pr = new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions, ssatList), solutions, opt.posMask);
         pr.finalRtk = rtk;
         return pr;
     }
@@ -406,7 +404,7 @@ public class PostPosProcessor {
         }
         if (adaptive != null) adaptive.deactivate();
         finishOutput(totalEpochs, successCount, failCount);
-        PostPosResult pr = new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions, ssatList), solutions);
+        PostPosResult pr = new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(solutions, ssatList), solutions, opt.posMask);
         pr.finalRtk = rtk;
         return pr;
     }
@@ -505,7 +503,7 @@ public class PostPosProcessor {
         }
 
         finishOutput(totalEpochs, successCount, failCount);
-        PostPosResult pr = new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(combined, null), combined);
+        PostPosResult pr = new PostPosResult(totalEpochs, successCount, failCount, toSolDataList(combined, null), combined, opt.posMask);
         pr.finalRtk = rtkF;
         return pr;
     }
@@ -620,13 +618,14 @@ public class PostPosProcessor {
     }
 
     private void outputSolution(Sol sol, Ssat[] ssat) {
+        SolData solData = new SolData(sol, opt.posMask, null, ssat);
         if (handler != null) {
             handler.onSolution(new Sol(sol), ssat);
-            handler.onResult(new SolData(sol, opt.posMask, null, ssat));
+            handler.onResult(solData);
         }
         if (writer != null) {
             try {
-                writer.write(RtkProcessor.formatSolutionLine(sol));
+                writer.write(SolData.posFileLine(solData));
                 writer.flush();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -848,15 +847,24 @@ public class PostPosProcessor {
         public final int failCount;
         public final List<SolData> solutions;
         final List<Sol> solList;
+        /** 生成该结果时使用的输出坐标掩码，供输出表头选择列集合 */
+        public final int posMask;
         Rtk finalRtk;
 
         public PostPosResult(int totalEpochs, int successCount, int failCount,
                              List<SolData> solutions, List<Sol> solList) {
+            this(totalEpochs, successCount, failCount, solutions, solList,
+                    PrcOpt.POS_ECEF | PrcOpt.POS_LLH);
+        }
+
+        public PostPosResult(int totalEpochs, int successCount, int failCount,
+                             List<SolData> solutions, List<Sol> solList, int posMask) {
             this.totalEpochs = totalEpochs;
             this.successCount = successCount;
             this.failCount = failCount;
             this.solutions = solutions;
             this.solList = solList;
+            this.posMask = posMask;
         }
     }
 }

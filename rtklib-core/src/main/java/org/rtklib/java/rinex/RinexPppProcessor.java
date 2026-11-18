@@ -19,9 +19,8 @@ public class RinexPppProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(RinexPppProcessor.class);
 
-    private static final String POS_HEADER =
-            "# PPP (Precise Point Positioning) Result - RINEX Input (EXPERIMENTAL)\n" +
-            "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
+    /** .pos 输出标题，列集合由 {@link SolData#posFileHeader(String, int)} 按 posMask 生成 */
+    private static final String POS_TITLE = "PPP (Precise Point Positioning) Result - RINEX Input (EXPERIMENTAL)";
 
     private final PrcOpt opt;
     private final SolOpt solOpt;
@@ -62,7 +61,7 @@ public class RinexPppProcessor {
         this.solOpt = solOpt != null ? new SolOpt(solOpt) : null;
         if (outputStream != null) {
             this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
-            try { this.writer.write(POS_HEADER); this.writer.flush(); } catch (IOException e) { throw new UncheckedIOException(e); }
+            try { this.writer.write(SolData.posFileHeader(POS_TITLE, this.opt.posMask)); this.writer.flush(); } catch (IOException e) { throw new UncheckedIOException(e); }
         } else { this.writer = null; }
     }
 

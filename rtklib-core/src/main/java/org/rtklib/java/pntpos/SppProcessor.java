@@ -6,7 +6,6 @@ import org.rtklib.java.data.*;
 import org.rtklib.java.ephemeris.EphModel;
 import org.rtklib.java.rtcm.Rtcm;
 import org.rtklib.java.time.TimeSystem;
-import org.rtklib.java.coord.CoordTransform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,27 +29,22 @@ import java.util.TreeMap;
 
 /**
  * SPP（Single Point Positioning，单点定位）处理器。
- * <p>
+ *
  * 流水线处理：feed()每解析出一个观测历元就立即定位，通过回调或输出流实时输出结果。
  * finish()仅表示数据输入结束，处理剩余缓存历元并通知完成。
- * </p>
- * <p>
+ *
  * 星历未就绪时，观测历元会被缓存；星历到达后，缓存历元被修正时间并依次定位输出，
  * 之后新到达的观测历元立即定位。
- * </p>
- * <p>
- * 输出支持（独立工作，只要存在就使用）：
- * <ul>
- *   <li>OutputStream：定位结果以.pos格式逐行写入并刷新，可为null</li>
- *   <li>PosHandler回调：实时通知定位结果/失败/完成，可为null</li>
- * </ul>
- * PosHandler为RTK/SPP共用接口，SPP不使用的字段保持默认值。
- * </p>
- * <p>
- * 注意：SppProcessor不可重用，调用finish()后即完成生命周期。
- * </p>
  *
- * <pre>
+ * 输出支持（独立工作，只要存在就使用）：
+ *
+ *   - OutputStream：定位结果以.pos格式逐行写入并刷新，可为null
+ *   - PosHandler回调：实时通知定位结果/失败/完成，可为null
+ *
+ * PosHandler为RTK/SPP共用接口，SPP不使用的字段保持默认值。
+ *
+ * 注意：SppProcessor不可重用，调用finish()后即完成生命周期。
+ *
  * // 示例1：批量模式
  * SppProcessor spp = new SppProcessor(opt, handler, outputStream);
  * SppResult result = spp.process("data.rtcm");
@@ -62,15 +56,13 @@ import java.util.TreeMap;
  *     spp.feed(chunk);  // 每个历元立即定位并回调/写流
  * }
  * SppResult result = spp.finish();  // 数据输入结束
- * </pre>
  */
 public class SppProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(SppProcessor.class);
 
-    private static final String POS_HEADER =
-            "# SPP (Single Point Positioning) Result\n" +
-            "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
+    /** .pos 输出标题，列集合由 {@link SolData#posFileHeader(String, int)} 按 posMask 生成 */
+    private static final String POS_TITLE = "SPP (Single Point Positioning) Result";
 
     private final PrcOpt opt;
     private final PosHandler handler;
@@ -139,7 +131,7 @@ public class SppProcessor {
         if (outputStream != null) {
             this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
             try {
-                this.writer.write(POS_HEADER);
+                this.writer.write(SolData.posFileHeader(POS_TITLE, this.opt.posMask));
                 this.writer.flush();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -253,11 +245,10 @@ public class SppProcessor {
 
     /**
      * 流式输入RTCM数据，流水线处理。
-     * <p>
+     *
      * 解析RTCM消息，每解析出一个观测历元就立即执行SPP定位，
      * 通过回调或输出流实时输出结果。星历未就绪时观测历元会被缓存。
      * 可多次调用以逐步输入数据（如网络实时流）。
-     * </p>
      *
      * @param data   RTCM原始字节数据
      * @param offset 数据起始偏移量
@@ -316,15 +307,13 @@ public class SppProcessor {
 
     /**
      * 重置处理器状态，使其可继续使用。
-     * <p>
+     *
      * 重置定位状态（坐标、卫星状态）和统计计数器，清除缓存的观测数据。
      * 保留配置（PrcOpt、PosHandler、OutputStream）和已积累的星历数据（Rtcm/nav），
      * 后续feed()输入的数据可直接使用已有星历进行定位。
-     * </p>
-     * <p>
+     *
      * 典型场景：网络实时流中，一个会话结束后调用finish()获取统计，
      * 再调用reset()开始下一个会话，无需重新等待星历。
-     * </p>
      */
     public void reset() {
         sol.rr = new double[6];
@@ -362,11 +351,10 @@ public class SppProcessor {
 
     /**
      * 表示数据输入结束，处理剩余缓存历元并通知完成。
-     * <p>
+     *
      * finish()仅表示不再有新数据输入。如果还有星历未就绪时缓存的观测历元，
      * 会尝试处理（若星历已就绪则定位，否则计入失败）。
      * 最后通过回调或输出流通知处理完成。
-     * </p>
      *
      * @return 定位结果汇总
      * @throws IllegalStateException 重复调用
@@ -416,10 +404,9 @@ public class SppProcessor {
 
     /**
      * 批量处理RTCM字节数据进行SPP定位。
-     * <p>
+     *
      * 采用两阶段批处理：先解析所有RTCM消息收集完整星历，再逐历元定位。
      * 确保与rtklib C版本结果一致。结果通过回调或输出流实时输出。
-     * </p>
      *
      * @param data RTCM原始字节数据
      * @return 定位结果
@@ -578,9 +565,9 @@ public class SppProcessor {
      */
     public static void writePosFile(SppResult result, String outputPath) throws IOException {
         try (BufferedWriter w = new BufferedWriter(new FileWriter(outputPath))) {
-            w.write(POS_HEADER);
+            w.write(SolData.posFileHeader(POS_TITLE, result.posMask));
             for (SolData solData : result.solutions) {
-                w.write(formatSolDataLine(solData));
+                w.write(SolData.posFileLine(solData));
             }
             w.write(String.format("# Total: %d, Success: %d, Fail: %d\n",
                     result.totalEpochs, result.successCount, result.failCount));
@@ -712,13 +699,15 @@ public class SppProcessor {
                 solCopy.rr[2] = avg[2];
             }
 
+            double[] rb = hasBasePos ? basePos : null;
+            SolData solData = new SolData(lastSourceId, solCopy, opt.posMask, rb, ssat);
             if (handler != null) {
                 handler.onSolution(new Sol(sol), copySsatArray(ssat));
-                handler.onResult(new SolData(lastSourceId, solCopy, opt.posMask, null, ssat));
+                handler.onResult(solData);
             }
             if (writer != null) {
                 try {
-                    writer.write(formatSolutionLine(solCopy));
+                    writer.write(SolData.posFileLine(solData));
                     writer.flush();
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
@@ -775,54 +764,20 @@ public class SppProcessor {
     }
 
     static String formatSolDataLine(SolData solData) {
-        Position llh = solData.getPosition(CoordType.LLH);
-        Accuracy acc = solData.getAccuracy(CoordType.ENU);
-        if (llh == null || acc == null) return "";
-
-        String qStr = String.valueOf(solData.status.code);
-        return String.format("  %s %14.9f %14.9f %10.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f %5.1f %5.1f %5.1f %5.1f\n",
-                solData.timeStr, llh.v1, llh.v2, llh.v3,
-                qStr, solData.numSat,
-                acc.s2, acc.s1, acc.s3, acc.c12, acc.c23, acc.c31,
-                solData.age, solData.ratio,
-                solData.gdop, solData.pdop, solData.hdop, solData.vdop);
+        return SolData.posFileLine(solData);
     }
 
+    /**
+     * 按默认输出掩码（ECEF|LLH）格式化一行 .pos 记录。
+     *
+     * 保留为对外 API。内部输出路径统一走 {@link SolData#posFileLine(SolData)}，
+     * 以便协方差列跟随 {@link PrcOpt#posMask}。
+     *
+     * @param sol 定位解
+     * @return 一行 .pos 文本
+     */
     static String formatSolutionLine(Sol sol) {
-        double[] llh = new double[3];
-        CoordTransform.ecef2pos(sol.rr, llh);
-        double latDeg = llh[0] * Constants.R2D;
-        double lonDeg = llh[1] * Constants.R2D;
-        double height = llh[2];
-
-        double[] ymdhms = TimeSystem.time2ymdhms(sol.time);
-        String dateStr = String.format("%04d/%02d/%02d", (int) ymdhms[0], (int) ymdhms[1], (int) ymdhms[2]);
-        String timeStr = String.format("%02d:%02d:%09.6f", (int) ymdhms[3], (int) ymdhms[4], ymdhms[5]);
-
-        String qStr;
-        switch (sol.stat) {
-            case Constants.SOLQ_FIX:    qStr = "1"; break;
-            case Constants.SOLQ_FLOAT:  qStr = "2"; break;
-            case Constants.SOLQ_SBAS:   qStr = "3"; break;
-            case Constants.SOLQ_DGPS:   qStr = "4"; break;
-            case Constants.SOLQ_SINGLE: qStr = "5"; break;
-            case Constants.SOLQ_PPP:    qStr = "6"; break;
-            default:                    qStr = "0"; break;
-        }
-
-        double sdn = sol.qr[0] > 0 ? Math.sqrt(sol.qr[0]) : 0;
-        double sde = sol.qr[1] > 0 ? Math.sqrt(sol.qr[1]) : 0;
-        double sdu = sol.qr[2] > 0 ? Math.sqrt(sol.qr[2]) : 0;
-        double sdne = sol.qr[3] > 0 ? Math.sqrt(Math.abs(sol.qr[3])) : 0;
-        double sdeu = sol.qr[4] > 0 ? Math.sqrt(Math.abs(sol.qr[4])) : 0;
-        double sdun = sol.qr[5] > 0 ? Math.sqrt(Math.abs(sol.qr[5])) : 0;
-
-        return String.format("  %s %s %14.9f %14.9f %10.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f %5.1f %5.1f %5.1f %5.1f\n",
-                dateStr, timeStr, latDeg, lonDeg, height,
-                qStr, sol.ns,
-                sdn, sde, sdu, sdne, sdeu, sdun,
-                sol.age, sol.ratio,
-                sol.gdop, sol.pdop, sol.hdop, sol.vdop);
+        return SolData.posFileLine(new SolData(sol, PrcOpt.POS_ECEF | PrcOpt.POS_LLH));
     }
 
     private static boolean isObsType(int type) {
@@ -875,7 +830,7 @@ public class SppProcessor {
             Ssat[] ssat = (i < solutionSsatList.size()) ? solutionSsatList.get(i) : null;
             solDataList.add(new SolData(solutions.get(i), opt.posMask, null, ssat));
         }
-        return new SppResult(totalEpochs, successCount, failCount, solDataList);
+        return new SppResult(totalEpochs, successCount, failCount, solDataList, opt.posMask);
     }
 
     /**
@@ -890,12 +845,20 @@ public class SppProcessor {
         public final int failCount;
         /** 定位成功的结果列表 */
         public final List<SolData> solutions;
+        /** 生成该结果时使用的输出坐标掩码，供 {@link #writePosFile} 选择表头 */
+        public final int posMask;
 
         SppResult(int totalEpochs, int successCount, int failCount, List<SolData> solutions) {
+            this(totalEpochs, successCount, failCount, solutions, PrcOpt.POS_ECEF | PrcOpt.POS_LLH);
+        }
+
+        SppResult(int totalEpochs, int successCount, int failCount, List<SolData> solutions,
+                  int posMask) {
             this.totalEpochs = totalEpochs;
             this.successCount = successCount;
             this.failCount = failCount;
             this.solutions = solutions;
+            this.posMask = posMask;
         }
     }
 }

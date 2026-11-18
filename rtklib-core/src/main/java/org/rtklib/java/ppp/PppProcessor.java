@@ -36,32 +36,26 @@ import java.util.TreeMap;
 
 /**
  * PPP（Precise Point Positioning，精密单点定位）处理器。
- * <p>
+ *
  * 实验性模块，非主要功能。
- * </p>
- * <p>
+ *
  * 流水线处理：feed()每解析出一个观测历元就立即定位，通过回调或输出流实时输出结果。
  * 星历未就绪时，观测历元会被缓存；星历到达后，缓存历元被修正时间并依次定位输出，
  * 之后新到达的观测历元立即定位。
- * </p>
- * <p>
+ *
  * PPP需要精密星历（SP3）和精密钟差（CLK）数据以获得高精度定位结果。
  * 可通过loadSp3()/loadClk()加载，也可在process()时指定文件路径。
  * 当无精密星历时，退化为使用广播星历。
- * </p>
- * <p>
- * 输出支持（独立工作，只要存在就使用）：
- * <ul>
- *   <li>OutputStream：定位结果以.pos格式逐行写入并刷新，可为null</li>
- *   <li>PosHandler回调：实时通知定位结果/失败/完成，可为null</li>
- * </ul>
- * PosHandler为RTK/SPP/PPP共用接口。
- * </p>
- * <p>
- * 注意：PppProcessor不可重用，调用finish()后即完成生命周期。
- * </p>
  *
- * <pre>
+ * 输出支持（独立工作，只要存在就使用）：
+ *
+ *   - OutputStream：定位结果以.pos格式逐行写入并刷新，可为null
+ *   - PosHandler回调：实时通知定位结果/失败/完成，可为null
+ *
+ * PosHandler为RTK/SPP/PPP共用接口。
+ *
+ * 注意：PppProcessor不可重用，调用finish()后即完成生命周期。
+ *
  * // 示例1：批量模式（RTCM文件 + 精密星历）
  * PppProcessor ppp = new PppProcessor(opt, handler, outputStream);
  * ppp.loadSp3("igs15904.sp3");
@@ -81,15 +75,13 @@ import java.util.TreeMap;
  *     ppp.feed(chunk);
  * }
  * PppResult result = ppp.finish();
- * </pre>
  */
 public class PppProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(PppProcessor.class);
 
-    private static final String POS_HEADER =
-            "# PPP (Precise Point Positioning) Result (EXPERIMENTAL)\n" +
-            "#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n";
+    /** .pos 输出标题，列集合由 {@link SolData#posFileHeader(String, int)} 按 posMask 生成 */
+    private static final String POS_TITLE = "PPP (Precise Point Positioning) Result (EXPERIMENTAL)";
 
     private static final int[] SOL_PRIO = {6, 1, 2, 3, 4, 5, 1, 6};
     private static final int[] COMBINED_SOL_PRIO = {7, 1, 2, 3, 4, 5, 1, 6};
@@ -148,7 +140,7 @@ public class PppProcessor {
         if (outputStream != null) {
             this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
             try {
-                this.writer.write(POS_HEADER);
+                this.writer.write(SolData.posFileHeader(POS_TITLE, this.opt.posMask));
                 this.writer.flush();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -231,15 +223,15 @@ public class PppProcessor {
 
     /**
      * 接入适配：暴露内部 {@link Nav}（含 {@code nav.ssr[]}）。
-     * <p>仅用于本地接入验证工具读取已解码的 SSR 状态，不改变任何解算语义。</p>
+     * 仅用于本地接入验证工具读取已解码的 SSR 状态，不改变任何解算语义。
      */
     public Nav getNav() { return rtcm.nav; }
 
     /**
      * 接入适配：载入 RINEX 广播星历并置位星历就绪标志。
-     * <p>实时 SSR 流本身不带广播星历，短时录制或纯 SSR 流场景下观测历元会永久排队。
+     * 实时 SSR 流本身不带广播星历，短时录制或纯 SSR 流场景下观测历元会永久排队。
      * 本方法把外部 RINEX 导航文件的星历合并进内部 {@link Nav}，已解码的
-     * {@code nav.ssr[]} 保持不变；不改变任何解算语义。</p>
+     * {@code nav.ssr[]} 保持不变；不改变任何解算语义。
      *
      * @param navFilePath RINEX 导航文件路径
      * @return 是否成功解析并载入
@@ -469,18 +461,16 @@ public class PppProcessor {
 
     /**
      * [FIX-ALG-055] SPP 重初始化专用的 scratch 卫星状态数组。
-     * <p>
+     *
      * {@link PntPos#pntpos} 会先清写全部 {@code snrRover/snrBase}，结束时再清写全部
      * {@code vs/azel/resp/resc}，只保留本次历元参与 SPP 的卫星。若把滤波器在用的
      * {@code rtk.ssat} 直接传进去，已收敛的逐星状态（历史高度角、残差、有效标志）
      * 会被 SPP 抹掉，导致 PPP 侧后续历元的选星/定权与失锁判断偏离。
-     * </p>
-     * <p>
+     *
      * SPP 对 ssat 的唯一读取是 {@code snrRover[0]}，而该值由 pntpos 自己按 obs 写入，
      * 因此一份独立的 scratch 数组即可满足 SPP 的全部需求，且不与滤波器共享任何可变状态。
      * 数组惰性创建后复用：每次 pntpos 返回时已把 vs/azel/resp/resc 全部归零重填，
      * 不存在跨历元残留。
-     * </p>
      *
      * @return 长度 {@link Constants#MAXSAT} 的 scratch 数组，元素非 null
      */
@@ -496,14 +486,13 @@ public class PppProcessor {
 
     /**
      * [FIX-ALG-056] SPP 重初始化专用的 scratch 解算结果。
-     * <p>
+     *
      * {@link PntPos#pntpos} 会往传入的 {@code Sol} 写 {@code stat/ns/rr/qr/ratio/age}。
      * 若直接传 {@code rtk.sol}，滤波器一旦收敛，SPP 的米级单点解会覆盖掉
      * {@code sol.rr}——而 {@code sol.rr} 正是 {@code udpos()} 的 re-init 参考、
      * {@code udtrop/udiono} 的映射函数输入，覆盖后整条轨迹会被拽走（实测偏移约 5 m，
      * 随后 AR 全线失败）。因此 SPP 结果先落到这份 scratch，再由 {@link #needSppInit}
      * 决定是否采纳。
-     * </p>
      *
      * @return 复用的 scratch {@link Sol} 实例
      */
@@ -516,16 +505,15 @@ public class PppProcessor {
 
     /**
      * [FIX-ALG-056] 判断滤波器是否真的还没有位置，从而需要采纳 SPP 单点解。
-     * <p>
+     *
      * 仅两种情况为真：
-     * <ol>
-     *   <li>{@code rtk.nx == 0}：滤波器尚未初始化，SPP 解就是初值来源；</li>
-     *   <li>{@code rtk.x[0..2]} 全零：状态向量没有位置（{@code udpos()} 会走 re-init 分支
-     *       从 {@code sol.rr} 取值，此时同样需要 SPP 解）。</li>
-     * </ol>
+     *
+     *   - {@code rtk.nx == 0}：滤波器尚未初始化，SPP 解就是初值来源；
+     *   - {@code rtk.x[0..2]} 全零：状态向量没有位置（{@code udpos()} 会走 re-init 分支
+     *       从 {@code sol.rr} 取值，此时同样需要 SPP 解）。
+     *
      * 其余情况（已收敛、或位置虽然失锁但仍保有上一历元参考位置）一律不采纳，
      * 保持 {@code sol.rr} 为 AR/KF 的位置参考不被污染。
-     * </p>
      *
      * @param r 待检查的滤波器实例
      * @return 需要采纳 SPP 解返回 {@code true}
@@ -800,9 +788,9 @@ public class PppProcessor {
 
     public static void writePosFile(PppResult result, String outputPath) throws IOException {
         try (BufferedWriter w = new BufferedWriter(new FileWriter(outputPath))) {
-            w.write(POS_HEADER);
+            w.write(SolData.posFileHeader(POS_TITLE, result.posMask));
             for (SolData solData : result.solutions) {
-                w.write(formatSolDataLine(solData));
+                w.write(SolData.posFileLine(solData));
             }
             w.write(String.format("# Total: %d, Success: %d, Fail: %d\n",
                     result.totalEpochs, result.successCount, result.failCount));
@@ -810,17 +798,7 @@ public class PppProcessor {
     }
 
     static String formatSolDataLine(SolData solData) {
-        Position llh = solData.getPosition(CoordType.LLH);
-        Accuracy acc = solData.getAccuracy(CoordType.ENU);
-        if (llh == null || acc == null) return "";
-
-        String qStr = String.valueOf(solData.status.code);
-        return String.format("  %s %14.9f %14.9f %10.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f %5.1f %5.1f %5.1f %5.1f\n",
-                solData.timeStr, llh.v1, llh.v2, llh.v3,
-                qStr, solData.numSat,
-                acc.s2, acc.s1, acc.s3, acc.c12, acc.c23, acc.c31,
-                solData.age, solData.ratio,
-                solData.gdop, solData.pdop, solData.hdop, solData.vdop);
+        return SolData.posFileLine(solData);
     }
 
     private void onRtcmMessage() {
@@ -1074,13 +1052,14 @@ public class PppProcessor {
                     outputBestSol();
                 }
             } else {
+                SolData solData = new SolData(solCopy, opt.posMask, null, rtk.ssat);
                 if (handler != null) {
                     handler.onSolution(new Sol(rtk.sol), copySsatArray(rtk.ssat));
-                    handler.onResult(new SolData(solCopy, opt.posMask, null, rtk.ssat));
+                    handler.onResult(solData);
                 }
                 if (writer != null) {
                     try {
-                        writer.write(formatSolutionLine(solCopy));
+                        writer.write(SolData.posFileLine(solData));
                         writer.flush();
                     } catch (IOException e) {
                         throw new UncheckedIOException(e);
@@ -1197,13 +1176,14 @@ public class PppProcessor {
         bestSol.time = bestTime != null ? bestTime : bestSol.time;
         solStaticOutputs.add(bestSol);
 
+        SolData solData = new SolData(bestSol, opt.posMask, null, rtk.ssat);
         if (handler != null) {
             handler.onSolution(new Sol(bestSol), copySsatArray(rtk.ssat));
-            handler.onResult(new SolData(bestSol, opt.posMask, null, rtk.ssat));
+            handler.onResult(solData);
         }
         if (writer != null) {
             try {
-                writer.write(formatSolutionLine(bestSol));
+                writer.write(SolData.posFileLine(solData));
                 writer.flush();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -1226,41 +1206,18 @@ public class PppProcessor {
         return -1;
     }
 
+    /**
+     * 按默认输出掩码（ECEF|LLH）格式化一行 .pos 记录。
+     *
+     * 保留为对外 API。内部输出路径统一走 {@link SolData#posFileLine(SolData)}，
+     * 以便协方差列跟随 {@link PrcOpt#posMask}：LLH/ENU 用 {@code covenu} 后的
+     * ENU 标准差，ECEF 用 {@code soltocov} 后的 ECEF 标准差。
+     *
+     * @param sol 定位解
+     * @return 一行 .pos 文本
+     */
     public static String formatSolutionLine(Sol sol) {
-        double[] llh = new double[3];
-        CoordTransform.ecef2pos(sol.rr, llh);
-        double latDeg = llh[0] * Constants.R2D;
-        double lonDeg = llh[1] * Constants.R2D;
-        double height = llh[2];
-
-        double[] ymdhms = TimeSystem.time2ymdhms(sol.time);
-        String dateStr = String.format("%04d/%02d/%02d", (int) ymdhms[0], (int) ymdhms[1], (int) ymdhms[2]);
-        String timeStr = String.format("%02d:%02d:%09.6f", (int) ymdhms[3], (int) ymdhms[4], ymdhms[5]);
-
-        String qStr;
-        switch (sol.stat) {
-            case Constants.SOLQ_FIX:    qStr = "1"; break;
-            case Constants.SOLQ_FLOAT:  qStr = "2"; break;
-            case Constants.SOLQ_SBAS:   qStr = "3"; break;
-            case Constants.SOLQ_DGPS:   qStr = "4"; break;
-            case Constants.SOLQ_SINGLE: qStr = "5"; break;
-            case Constants.SOLQ_PPP:    qStr = "6"; break;
-            default:                    qStr = "0"; break;
-        }
-
-        double sdn = sol.qr[0] > 0 ? Math.sqrt(sol.qr[0]) : 0;
-        double sde = sol.qr[1] > 0 ? Math.sqrt(sol.qr[1]) : 0;
-        double sdu = sol.qr[2] > 0 ? Math.sqrt(sol.qr[2]) : 0;
-        double sdne = sol.qr[3] > 0 ? Math.sqrt(Math.abs(sol.qr[3])) : 0;
-        double sdeu = sol.qr[4] > 0 ? Math.sqrt(Math.abs(sol.qr[4])) : 0;
-        double sdun = sol.qr[5] > 0 ? Math.sqrt(Math.abs(sol.qr[5])) : 0;
-
-        return String.format("  %s %s %14.9f %14.9f %10.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f %5.1f %5.1f %5.1f %5.1f\n",
-                dateStr, timeStr, latDeg, lonDeg, height,
-                qStr, sol.ns,
-                sdn, sde, sdu, sdne, sdeu, sdun,
-                sol.age, sol.ratio,
-                sol.gdop, sol.pdop, sol.hdop, sol.vdop);
+        return SolData.posFileLine(new SolData(sol, PrcOpt.POS_ECEF | PrcOpt.POS_LLH));
     }
 
     private List<List<Obsd>> groupObsByEpoch(Obsd[] data, int n) {
@@ -1441,7 +1398,7 @@ public class PppProcessor {
                 }
                 if (writer != null) {
                     try {
-                        writer.write(formatSolutionLine(combinedBest));
+                        writer.write(SolData.posFileLine(sd));
                         writer.flush();
                     } catch (IOException e) {
                         throw new UncheckedIOException(e);
@@ -1456,7 +1413,7 @@ public class PppProcessor {
             List<SolData> solDataList = solStaticOutputs.stream()
                     .map(sol -> new SolData(sol, opt.posMask))
                     .toList();
-            return new PppResult(totalEpochs, cSuccess, cFail, solDataList);
+            return new PppResult(totalEpochs, cSuccess, cFail, solDataList, opt.posMask);
         }
 
         List<SolData> solDataList = combined.stream()
@@ -1471,7 +1428,7 @@ public class PppProcessor {
             handler.onFinish(totalEpochs, cSuccess, cFail);
         }
 
-        return new PppResult(totalEpochs, cSuccess, cFail, solDataList);
+        return new PppResult(totalEpochs, cSuccess, cFail, solDataList, opt.posMask);
     }
 
     private PppResult buildResult() {
@@ -1482,11 +1439,11 @@ public class PppProcessor {
             Ssat[] ssat = (i < ssatSource.size()) ? ssatSource.get(i) : null;
             solDataList.add(new SolData(outputSource.get(i), opt.posMask, null, ssat));
         }
-        return new PppResult(totalEpochs, successCount, failCount, solDataList);
+        return new PppResult(totalEpochs, successCount, failCount, solDataList, opt.posMask);
     }
 
     private PppResult buildResult(int total, int success, int fail) {
-        return new PppResult(total, success, fail, List.of());
+        return new PppResult(total, success, fail, List.of(), opt.posMask);
     }
 
     private void ensureCapacity(int need) {
@@ -1521,12 +1478,20 @@ public class PppProcessor {
         public final int successCount;
         public final int failCount;
         public final List<SolData> solutions;
+        /** 生成该结果时使用的输出坐标掩码，供 {@link #writePosFile} 选择表头 */
+        public final int posMask;
 
         public PppResult(int totalEpochs, int successCount, int failCount, List<SolData> solutions) {
+            this(totalEpochs, successCount, failCount, solutions, PrcOpt.POS_ECEF | PrcOpt.POS_LLH);
+        }
+
+        public PppResult(int totalEpochs, int successCount, int failCount, List<SolData> solutions,
+                         int posMask) {
             this.totalEpochs = totalEpochs;
             this.successCount = successCount;
             this.failCount = failCount;
             this.solutions = solutions;
+            this.posMask = posMask;
         }
     }
 }

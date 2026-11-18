@@ -609,10 +609,129 @@ C 版无对应输出。量产数据下会产生大量日志，属待清理项。
 
 | C版格式 | C版函数 | Java版状态 | 说明 |
 |---------|---------|------------|------|
-| LLH/XYZ/ENU | outsol() | ✅ 已实现 | 由 `SolOpt.posf`（SOLF_LLH/XYZ/ENU）选择 |
+| LLH | outpos() | ✅ 已实现 | 统一由 `SolData.posFileHeader/posFileLine` 按 `posMask` 输出 LLH 或 ECEF 列集合 |
+| XYZ / ENU | outecef()/outenu() | ❌ 未实现 | `SolOpt.posf`（SOLF_LLH/XYZ/ENU）字段存在但**全工程无读取点**，无法切换 |
 | NMEA 0183 | outnmea_rmc/gga/gsa/gsv() | ❌ 未实现 | 仅有常量 `SOLF_NMEA`；rtklib-stream 的 `NmeaGga`/`NmeaGgaParser` 只做 GGA 上行**解析**，不含 NMEA 输出编码 |
 | Solution Status | outsols() | ❌ 未实现 | 仅有常量 `SOLF_STAT` |
 | GSI F1/F2 | outsols() | ❌ 未实现 | 仅有常量 `SOLF_GSIF` |
+
+#### 15.3.1 `.pos` 逐字段核对（2026-11-18）
+
+核对基准：C 版 `RTKLIB-2.5.0/src/solution.c` 的 `outsolheads()` / `outsols()` / `outpos()`
+与仓库内 C 版原始输出样本 `test-data/reference/*.pos`；
+对照 Java 版 `RtkProcessor.formatSolDataLine` / `PppProcessor.formatSolutionLine`。
+
+结论：**坐标、Q、ns、age、ratio 的数值来源与 C 版一致**（同一 `sol` 结构、同一 `ecef2pos`），
+差异集中在「格式与可配置项」和「两处协方差列归属」两类。
+
+格式层差异：
+
+| 项目 | C 版 | Java 版 | 备注 |
+|------|------|---------|------|
+| 注释符 | `%`（`COMMENTH`） | `#` | 按 `%` 过滤头部的下游脚本会失配 |
+| 头部图例 | `% (lat/lon/height=WGS84/ellipsoidal,Q=1:fix,...)` | 无 | `outsolheads()` 的 `leg1/leg2` |
+| 头部文件块 | `% program` / `% inp file` / `% obs start` / `% obs end` / `% pos mode` / `% solution` / `% elev mask` … | 无 | 受 `opt->outhead`、`opt->outopt` 控制，Java 未读取 |
+| 时间格式 | `timef=0` → GPS 周+周内秒（`1958 289469.000`）；`timef=1` → `2018/06/06 00:00:00.000`（`timeu=3`） | 固定 `2018/06/06 00:00:00.000000`（秒 6 位小数） | `SolOpt.timef/timeu/times` 均无读取点；`times`（UTC/JST）亦未生效 |
+| 行首 | 无前导空格 | 2 个前导空格 | |
+| Q 列 | `%3d` 右对齐 | `%s` 左对齐（宽度 1） | 多位数状态列会错位 |
+| age 列 | `%6.2f` | `%5.1f` | 精度少一位 |
+| 附加列 | 无 | 追加 `gdop pdop hdop vdop` 4 列 | Java 额外信息 |
+| 行尾 | `\r\n` | `\n` | |
+| 尾行 | 无 | `# Total: N, Success: N, Fail: N` | Java 额外信息 |
+| 分隔符 | `opt2sep()`：默认单空格，支持 `\t` 与自定义 | 固定单空格 | `SolOpt.sep` 未读取 |
+| 大地水准面高 | `opt->height==1` 时 `pos[2]-=geoidh(pos)` | 无 | `SolOpt.height` 未读取（且无 geoid 模块） |
+| 度分秒 | `opt->degf` 非 0 时输出 `d°m's` | 无 | `SolOpt.degf` 未读取 |
+| 速度列 | `opt->outvel` 非 0 时追加 vn/ve/vu + sdv* | 无 | `SolOpt.outvel` 未读取 |
+| 标准差抑制 | `maxsolstd>0 && sol_std>maxsolstd` 时整历元跳过 | 无 | `SolOpt.maxsolstd` 未读取 |
+| 负方差处理 | 对角 `SQRT()` 得 NaN；互协方差 `sqvar()` 保号 | `>0?sqrt:0`、`sqrt(abs())` 丢符号 | 仅异常解算时数值不同 |
+
+数值层差异（原两处列归属错误，已于 2026-11-18 修正，见 15.3.3）：
+
+1. **RTK 输出互协方差两列互换**（已修正）：`formatSolDataLine` 曾传入 `acc.s2, acc.s1, acc.s3, acc.c12, acc.c23, acc.c31`。
+   前 4 项正确（`s2=σn`、`s1=σe`、`s3=σu`、`c12=σen`），但第 5 列 `sdeu` 取到 `c23`（`Q[5]`，实为 σnu），
+   第 6 列 `sdun` 取到 `c31`（`Q[2]`，实为 σeu）。C 版为 `sdeu=sqvar(Q[2])`、`sdun=sqvar(Q[5])`，
+   即**这两列在 Java 输出中是对调的**（对角标准差不受影响）。现统一入口输出 `acc.c31, acc.c23`，与 C 版一致。
+2. **PPP 流式输出把 ECEF 协方差当 ENU 打印**（已修正）：`PppProcessor.formatSolutionLine` 曾直接取 `sol.qr[0..2]`
+   （σx/σy/σz）与 `qr[3..5]`（σxy/σyz/σxz），却标注为 `sdn/sde/sdu/sdne/sdeu/sdun`。
+   C 版 `outpos()` 先 `soltocov()` 再 `covenu()`，取 `Q[4]/Q[0]/Q[8]/Q[1]/Q[2]/Q[5]`。
+   同类问题也曾存在于 `RtkProcessor`/`SppProcessor`/`JointRtkProcessor`/`PostPosProcessor` 的
+   `formatSolutionLine`（见 15.3.2）。现已全部改走 `SolData.posFileLine`。
+   C 版参考样本 `ppp_wtzr_20180606.pos` 本身是 XYZ 输出（`sdx/sdy/sdz`），才与 Java 数值同源。
+
+附带一处文档与实现不一致（已修正）：`Accuracy` 的 Javadoc 曾写「`c23=σeu`、`c31=σnu`」，
+而 `SolData.buildAccuracies` 实际赋值为 `c23=Q[5]=σnu`、`c31=Q[2]=σeu`
+（命名规则 `c12/c23/c31` 与 `s1=e/s2=n/s3=u` 自洽，是注释文字写反）。
+
+影响面：`.pos` 文件主要用于人读与后处理比对；上述差异不改变解算状态量与坐标，
+但会破坏按列位解析 `.pos` 的外部脚本（尤其 `sdeu`/`sdun` 互换与 PPP 的 ECEF/ENU 混用）。
+需要与 C 版逐字节比对时，应先用 `solstatic`/`posMask` 之外的开关确认输出坐标系，再比对数值。
+
+#### 15.3.2 输出语义核实：posMask 的控制面（2026-11-18）
+
+`PrcOpt.posMask` 定义：`POS_ECEF=1`、`POS_LLH=2`、`POS_ENU=4`，默认 `POS_ECEF|POS_LLH`（=3）。
+全工程**没有配置/CLI 入口**可修改该值，仅 `PrcOpt` 默认值与 `rtklib-adjust`、个别测试显式赋值。
+
+三个输出面对 posMask 的响应完全不同：
+
+| 输出面 | 受 posMask 控制 | 协方差来源 | 实际坐标系 |
+|--------|-----------------|------------|------------|
+| `PosHandler.onResult(SolData)` | ✅ 是 | `SolData.buildAccuracies` | mask 含 ECEF → ECEF；含 LLH/ENU → `covenu` 后的 ENU |
+| `Rtk/Ppp/SppProcessor.writePosFile` | 间接（经 SolData 取值） | `SolData.getAccuracy` | 同上，但能否取到取决于 mask |
+| 流式 `writer` / `PostPosProcessor.outputSolution` | ❌ 完全绕过 | `Sol.qr[0..5]` | 恒为 ECEF |
+
+由此确认三条语义事实：
+
+1. **`Accuracy(LLH)` 装的是 ENU 数值**。`buildAccuracies` 在 `posMask & (POS_LLH|POS_ENU)` 时统一做
+   `soltocov → covenu`，把同一组 `s1=σe / s2=σn / s3=σu` 同时挂到 LLH 与 ENU 两个标签下。
+   默认 mask=3 时只有 `Accuracy(LLH)` 存在，`getAccuracy(ENU)` 返回 **null**。
+2. **回退策略不一致**。`RtkProcessor.formatSolDataLine` 有 `acc==null → getAccuracy(LLH)` 回退，
+   默认 mask 下输出正确（sdn=σn、sde=σe、sdu=σu）；`PppProcessor`/`SppProcessor` 的
+   `formatSolDataLine` 无回退，默认 mask 下每历元返回 `""`，`writePosFile` 只剩表头与 Total 行。
+   （`PppProcessor.writePosFile` 目前无调用方，属潜伏缺陷；SPP 的同类路径未被测试覆盖，
+   相关测试因数据缺失被 skip。）
+3. **文本输出不读 posMask**。`RtkProcessor`/`PppProcessor`/`SppProcessor`/`JointRtkProcessor`
+   的 `formatSolutionLine` 与 `PostPosProcessor.outputSolution` 一律直接取 `sol.qr`，
+   即 RINEX 后处理、实时流、联合解算产出的 `.pos` 全部是「LLH 坐标 + ECEF 标准差」混装，
+   与 C 版 `outpos()` 的 `soltocov → covenu` 不一致。
+
+结论修正：此前「PPP 改用 covenu」的表述只描述了症状。真正的问题是**输出语义分裂为两套**：
+posMask 只管 `SolData`，不管文本输出；同一份解算结果走 `onResult` 与走 `writer` 得到不同协方差。
+若要对齐 C 版，应让文本输出也遵循 posMask 语义——mask 含 LLH 时输出 `covenu` 后的 ENU 标准差，
+仅 ECEF 时改用 `x/y/z-ecef` 表头与 `sdx/sdy/sdz` 列；而不是在单个 `formatSolutionLine` 里硬编码 `covenu`。
+
+#### 15.3.3 输出语义统一（2026-11-18 已实施）
+
+按 15.3.2 的结论，把 `.pos` 文本输出收敛为**唯一入口**，消除多处理器重复实现：
+
+| 入口 | 位置 | 作用 |
+|------|------|------|
+| `SolData.posFileHeader(String title, int posMask)` | `data/SolData.java` | 按 `posMask` 生成表头列集合：含 LLH → `lat/lon/height + sdn…sdun`；仅 ECEF → `x/y/z-ecef + sdx…sdzx`；仅 ENU → `e/n/u + sdn…sdun` |
+| `SolData.posFileLine(SolData)` | `data/SolData.java` | 与表头同序取值：LLH 行用 `Accuracy(LLH)`（`covenu` 后的 ENU 标准差），ECEF 行用 `Accuracy(ECEF)`（`soltocov` 后的 ECEF 标准差），ENU 行用 `Accuracy(ENU)`；缺精度返回空串，避免输出无协方差残行 |
+
+已迁移的调用点（全部改走上述入口，行与表头严格同源）：
+
+- `RtkProcessor`：流式输出、静态解输出、组合解输出、`writePosFile`
+- `PppProcessor`：流式输出、`solstatic` 窗口输出、组合解输出、`writePosFile`
+- `SppProcessor`：流式输出、`writePosFile`
+- `JointRtkProcessor`：流式输出
+- `PostPosProcessor.outputSolution`（RINEX 前向/后向/组合三条路径共用）
+- `RinexSpp/RinexRtk/RinexPppProcessor` 的表头
+- 测试工具 `ResultWriter.writePosHeader/writePosLine`
+
+协方差列顺序按 C 版 `outpos()` 固化：`sdn, sde, sdu, sdne, sdeu, sdun`
+= `Accuracy(s2=σn, s1=σe, s3=σu, c12=σen, c31=σeu, c23=σnu)`，
+即 `sdeu` 取 `c31`、`sdun` 取 `c23`（修正了原互换）。
+
+对外 API 兼容：各处理器原有的 `formatSolutionLine(Sol)` / `formatSolDataLine(SolData)` 静态方法签名保留，
+内部转发到 `SolData` 统一入口（默认 `POS_ECEF|POS_LLH` 掩码）；`RtkResult`/`PppResult`/`SppResult`/
+`JointRtkResult`/`PostPosResult` 新增 `posMask` 字段并保留旧构造器重载，使 `writePosFile` 的表头能与
+生成结果时的掩码一致（此前只能假定默认掩码）。
+
+残留（本次未改动，属独立问题）：
+
+- `RinexSpp/RinexRtk/RinexPppProcessor` 只写表头与 `# Total` 尾行，**不写数据行**（内部
+  `PostPosProcessor` 未接 `outputStream`，行数据无处落地）；表头已随 `posMask` 切换，但行缺失仍需另行修复。
+- 格式层差异（注释符 `%`→`#`、`timef/timeu/sep/degf/height/outvel/maxsolstd` 未读取等）保持不变。
 
 ### 15.4 坐标转换与格式
 

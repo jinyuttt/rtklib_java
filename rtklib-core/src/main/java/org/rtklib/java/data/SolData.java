@@ -12,38 +12,36 @@ import java.util.List;
 /**
  * 定位结果输出数据类，Java 友好的封装。
  *
- * <p>从内部 {@link Sol}（C 对齐结构，始终 type=0 ECEF）转换而来。
+ * 从内部 {@link Sol}（C 对齐结构，始终 type=0 ECEF）转换而来。
  * 根据 {@link PrcOpt#posMask} 配置，在构造时完成坐标转换，
- * 输出时直接使用，无需再计算。</p>
+ * 输出时直接使用，无需再计算。
  *
- * <h3>核心设计</h3>
- * <ul>
- *   <li>位置、速度、精度分别用 {@link Position}、{@link Velocity}、{@link Accuracy} 封装，
- *       每个类只有 3 个分量 + type 标识</li>
- *   <li>通过 {@code List<Position>} 等列表支持多格式输出：
+ * 核心设计
+ *
+ *   - 位置、速度、精度分别用 {@link Position}、{@link Velocity}、{@link Accuracy} 封装，
+ *       每个类只有 3 个分量 + type 标识
+ *   - 通过 {@code List<Position>} 等列表支持多格式输出：
  *       posMask=POS_ECEF 时只有 1 个 Position(ECEF)，
  *       posMask=POS_ECEF|POS_LLH 时有 2 个 Position(ECEF, LLH)，
- *       posMask=POS_ECEF|POS_LLH|POS_ENU 时有 3 个</li>
- *   <li>内部 {@link Sol} 始终 type=0 (ECEF)，不做任何修改</li>
- * </ul>
+ *       posMask=POS_ECEF|POS_LLH|POS_ENU 时有 3 个
+ *   - 内部 {@link Sol} 始终 type=0 (ECEF)，不做任何修改
  *
- * <h3>posMask 配置</h3>
- * <ul>
- *   <li>{@link PrcOpt#POS_ECEF} (1)：输出 ECEF 格式</li>
- *   <li>{@link PrcOpt#POS_LLH}  (2)：输出 LLH 格式</li>
- *   <li>{@link PrcOpt#POS_ENU}  (4)：输出 ENU 基线格式（需要基站位置 rb）</li>
- *   <li>可组合：{@code POS_ECEF | POS_LLH} = 3，同时输出 ECEF 和 LLH</li>
- * </ul>
+ * posMask 配置
  *
- * <h3>协方差转换</h3>
- * <p>内部 {@code Sol.qr} 存储 ECEF 协方差 (m²)，
+ *   - {@link PrcOpt#POS_ECEF} (1)：输出 ECEF 格式
+ *   - {@link PrcOpt#POS_LLH}  (2)：输出 LLH 格式
+ *   - {@link PrcOpt#POS_ENU}  (4)：输出 ENU 基线格式（需要基站位置 rb）
+ *   - 可组合：{@code POS_ECEF | POS_LLH} = 3，同时输出 ECEF 和 LLH
+ *
+ * 协方差转换
+ * 内部 {@code Sol.qr} 存储 ECEF 协方差 (m²)，
  * ENU 精度通过 {@code soltocov → covenu} 旋转后开方得到，
- * 与 RTKLIB .pos 文件格式一致（sde/sdn/sdu/sdne/sdeu/sdun）。</p>
+ * 与 RTKLIB .pos 文件格式一致（sde/sdn/sdu/sdne/sdeu/sdun）。
  *
- * <h3>速度</h3>
- * <p>速度来自 {@code Sol.rr[3..5]}（ECEF），仅 RTK dynamics=1 时有值。
+ * 速度
+ * 速度来自 {@code Sol.rr[3..5]}（ECEF），仅 RTK dynamics=1 时有值。
  * LLH 和 ENU 对速度的表示相同（都是 ENU 方向 {ve,vn,vu}），
- * 故 Velocity.type 只有 0(ECEF) 和 1(ENU) 两种。</p>
+ * 故 Velocity.type 只有 0(ECEF) 和 1(ENU) 两种。
  */
 public class SolData implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -104,9 +102,9 @@ public class SolData implements Serializable {
     /**
      * [Java扩展] 单历元归约法方程位置协方差（3×3，行优先9元素），null=未启用。
      *
-     * <p>与 {@link #covEcef} 的区别：{@code qPos} 只反映当前历元双差观测，
+     * 与 {@link #covEcef} 的区别：{@code qPos} 只反映当前历元双差观测，
      * 不含跨历元相关性；{@code covEcef} 默认来自 Kalman 后验 {@link Sol#qr}。
-     * 两者同时可用时，{@code covEcef} 优先取 {@code qPos}（见 buildCovEcef）。</p>
+     * 两者同时可用时，{@code covEcef} 优先取 {@code qPos}（见 buildCovEcef）。
      */
     public final double[] qPos;
 
@@ -122,15 +120,15 @@ public class SolData implements Serializable {
     /**
      * [Java扩展] ECEF 三维完整协方差（m²，行优先，含符号）。
      *
-     * <p>数据来源按优先级：{@link #qPos}（DIAG_QPOS 开启且计算成功时，单历元归约
+     * 数据来源按优先级：{@link #qPos}（DIAG_QPOS 开启且计算成功时，单历元归约
      * 法方程协方差，不含跨历元相关性）→ {@link Sol#qr}（上三角 6 值对称展开，
-     * Kalman 后验）。两者都是网平差等后处理使用的真值来源。</p>
+     * Kalman 后验）。两者都是网平差等后处理使用的真值来源。
      *
-     * <p>{@link Accuracy} 中的 c12/c23/c31 只保留了绝对值开方（源自 .pos 输出格式
-     * 约定），且<b>始终</b>读 {@link Sol#qr}，不随本字段的数据源切换而改变——这是
-     * 刻意设计：显示口径与后处理口径分离。</p>
+     * {@link Accuracy} 中的 c12/c23/c31 只保留了绝对值开方（源自 .pos 输出格式
+     * 约定），且始终读 {@link Sol#qr}，不随本字段的数据源切换而改变——这是
+     * 刻意设计：显示口径与后处理口径分离。
      *
-     * <p>null 表示该历元无有效协方差（RTKLIB 约定 qr[0]==0 为哨兵）。</p>
+     * null 表示该历元无有效协方差（RTKLIB 约定 qr[0]==0 为哨兵）。
      */
     public final double[] covEcef;
 
@@ -199,8 +197,8 @@ public class SolData implements Serializable {
     /**
      * 构造 ECEF 完整 3x3 协方差（行优先，含符号）。
      *
-     * <p>优先级：{@link Sol#qPos}（3×3 单历元归约法方程协方差，行优先 9 元素，
-     * 已是 ECEF 顺序，无需转换）→ {@link Sol#qr}（上三角 6 值对称展开）。</p>
+     * 优先级：{@link Sol#qPos}（3×3 单历元归约法方程协方差，行优先 9 元素，
+     * 已是 ECEF 顺序，无需转换）→ {@link Sol#qr}（上三角 6 值对称展开）。
      *
      * @return 9 元素协方差；无有效协方差时返回 null
      */
@@ -310,6 +308,90 @@ public class SolData implements Serializable {
         return String.format("%04d/%02d/%02d %02d:%02d:%09.6f",
                 (int) ymdhms[0], (int) ymdhms[1], (int) ymdhms[2],
                 (int) ymdhms[3], (int) ymdhms[4], ymdhms[5]);
+    }
+
+    /**
+     * 生成 .pos 文件表头，列集合由 {@code posMask} 决定。
+     *
+     * 选择顺序与 {@link #posFileLine(SolData)} 一致：LLH → ECEF → ENU。
+     * LLH/ENU 表头对应 {@code covenu} 后的 ENU 标准差列，
+     * ECEF 表头对应 {@code soltocov} 后的 ECEF 标准差列，与 C 版
+     * {@code outpos()} 的 {@code opt->posf} 分支语义对齐。
+     *
+     * @param title   表头标题（不含 {@code #}），可为 null
+     * @param posMask 输出坐标掩码，见 {@link PrcOpt}
+     * @return 表头文本（含换行）
+     */
+    public static String posFileHeader(String title, int posMask) {
+        StringBuilder sb = new StringBuilder();
+        if (title != null && !title.isEmpty()) {
+            sb.append("# ").append(title).append('\n');
+        }
+        if ((posMask & POS_LLH) != 0) {
+            sb.append("#  Date       Time       lat(deg)      lon(deg)     height(m)  Q  ns")
+              .append("   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n");
+        } else if ((posMask & POS_ECEF) != 0) {
+            sb.append("#  Date       Time       x-ecef(m)      y-ecef(m)      z-ecef(m)  Q  ns")
+              .append("   sdx(m)   sdy(m)   sdz(m)  sdxy(m)  sdyz(m)  sdzx(m) age(s)  ratio gdop  pdop  hdop  vdop\n");
+        } else {
+            sb.append("#  Date       Time        e(m)           n(m)           u(m)  Q  ns")
+              .append("   sde(m)   sdn(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio gdop  pdop  hdop  vdop\n");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 生成 .pos 文件的一行记录，坐标与协方差全部取自本对象已预计算的数据。
+     *
+     * 选择顺序与 {@link #posFileHeader(String, int)} 一致：
+     *
+     *   - 有 LLH：输出 lat/lon/height + ENU 标准差（sdn/sde/sdu/sdne/sdeu/sdun）
+     *   - 否则有 ECEF：输出 x/y/z + ECEF 标准差（sdx/sdy/sdz/sdxy/sdyz/sdzx）
+     *   - 否则有 ENU：输出 e/n/u 基线 + ENU 标准差
+     *
+     * 缺少对应精度时返回空串（避免输出无协方差的残行）。
+     *
+     * @param solData 定位结果
+     * @return 一行文本（含换行），无法输出时返回空串
+     */
+    public static String posFileLine(SolData solData) {
+        if (solData == null) return "";
+        Position llh = solData.getPosition(CoordType.LLH);
+        if (llh != null) {
+            Accuracy acc = solData.getAccuracy(CoordType.LLH);
+            if (acc == null) acc = solData.getAccuracy(CoordType.ENU);
+            if (acc == null) return "";
+            return String.format("  %s %14.9f %14.9f %10.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f %5.1f %5.1f %5.1f %5.1f\n",
+                    solData.timeStr, llh.v1, llh.v2, llh.v3,
+                    solData.status.code, solData.numSat,
+                    acc.s2, acc.s1, acc.s3, acc.c12, acc.c31, acc.c23,
+                    solData.age, solData.ratio,
+                    solData.gdop, solData.pdop, solData.hdop, solData.vdop);
+        }
+        Position ecef = solData.getPosition(CoordType.ECEF);
+        if (ecef != null) {
+            Accuracy acc = solData.getAccuracy(CoordType.ECEF);
+            if (acc == null) return "";
+            return String.format("  %s %14.4f %14.4f %14.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f %5.1f %5.1f %5.1f %5.1f\n",
+                    solData.timeStr, ecef.v1, ecef.v2, ecef.v3,
+                    solData.status.code, solData.numSat,
+                    acc.s1, acc.s2, acc.s3, acc.c12, acc.c23, acc.c31,
+                    solData.age, solData.ratio,
+                    solData.gdop, solData.pdop, solData.hdop, solData.vdop);
+        }
+        Position enu = solData.getPosition(CoordType.ENU);
+        if (enu != null) {
+            Accuracy acc = solData.getAccuracy(CoordType.ENU);
+            if (acc == null) acc = solData.getAccuracy(CoordType.LLH);
+            if (acc == null) return "";
+            return String.format("  %s %14.4f %14.4f %14.4f  %s %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %5.1f %6.1f %5.1f %5.1f %5.1f %5.1f\n",
+                    solData.timeStr, enu.v1, enu.v2, enu.v3,
+                    solData.status.code, solData.numSat,
+                    acc.s1, acc.s2, acc.s3, acc.c12, acc.c31, acc.c23,
+                    solData.age, solData.ratio,
+                    solData.gdop, solData.pdop, solData.hdop, solData.vdop);
+        }
+        return "";
     }
 
     @Override
