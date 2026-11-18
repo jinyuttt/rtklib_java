@@ -853,6 +853,7 @@ cfg.pppRtk.enableFixHold = true;  // 启用Fix-and-Hold
 
 - `SsrIono`已实现dispBias→STEC提取路径（`extractSsrStec()`）和VTEC→STEC映射路径（`vtecToStec()`，从IONEX网格双线性插值→映射函数→STEC，作为dispBias失败后的fallback）
 - 紧凑SSR（CLAS）解码器已实现：`CompactSsrDecoder`（`org.rtklib.java.cssr`包），支持L6帧解码+MT1-12全消息类型+STEC/Trop本地改正+网格插值
+- **本地大气改正（STEC/Trop）止于解码层，未接入定位链路**：`getStec()` 全仓库零调用，`SsrIono.stecModel()` 无 LocalCorr 分支；`getTrop()` 所在的 `TROPOPT_SSR` 直接改正分支因 `PppOpts.cssrDecoder` 无任何赋值而不可达；`ConstraintEngine` 与 `PrcOpt.constrainstec/constrainztd` 未建立。缺真实 CLAS L6 / 区域 SSR 流时接线无法产生可验证差异，故不接线（现状与前置条件见 [ROADMAP.md §1.3](ROADMAP.md) 注）
 
 ---
 

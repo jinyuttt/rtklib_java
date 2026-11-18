@@ -53,11 +53,24 @@
 | 事项 | 说明 |
 |------|------|
 | 完好性 4A~4D | RAIM 保护级 / 完好性通道 / ARAIM 解分离 / 固定解完好性。RAIM FDE 已移植，但无车规/航空/监测场景驱动 |
-| PPP-RTK 区域大气约束 4E~4G | CLAS STEC 多项式、对流层 SSR 验证、伪观测约束引擎；缺真实 SSR 区域产品 |
+| PPP-RTK 区域大气约束 4E~4G | CLAS STEC 多项式、对流层 SSR 验证、伪观测约束引擎；缺真实 SSR 区域产品。**解码层已完成、应用层未接线**（见本节末注） |
 | 梯队 3 CI 回归（3.5G） | 缺入库的精选测试数据 |
 | Kalman 矩阵层重构 3A+3B-2 | JMH 实测 SimpleMatrix 非瓶颈（k≥150 时快 10x），已放弃 |
 | RtkConfig null 检查消除 3.5B | 无语义异常，保留 null 检查 |
 | TCP 客户端、接收机原始协议 | **功能定义不符合本项目定位，项目设计不做**（非缺口、非暂缓，无恢复条件） |
+
+> **4E~4G 代码现状（2026-11-17 核对）**
+>
+> **解码层已完成**：`CompactSsrDecoder.decodeCssrAtmos()` / `decodeCssrGrid()` 已把 CLAS 的区域大气改正全部解出——STEC 多项式系数 `LocalCorr.ci`、格网 STEC 残差 `LocalCorr.dstec`、对流层干/湿系数 `LocalCorr.ct[0..7]` 与格网残差 `dth`/`dtw`，并带 `flgStec`/`flgTrop` 位标志与 `stecQuality`/`tropQuality` 质量因子；`getStec(dlat, dlon)` / `getTrop(dlat, dlon)` 的多项式 + 格网残差插值也已实现。
+>
+> **应用层未接线**（三条断点）：
+> 1. `getStec()` 全仓库**零调用**，`SsrIono.stecModel()` 的优先级链（SSR dispBias → IONEX VTEC → 广播）中**没有 LocalCorr 分支**，`SsrIono` 甚至未 import `cssr` 包；
+> 2. `getTrop()` 仅被 `PppCore.modelTrop()` 的 `TROPOPT_SSR` 直接改正分支调用，而该分支要求 `PppOpts.cssrDecoder != null`——该字段为 `transient` 且**全仓库无任何赋值**，故整条分支不可达；
+> 3. `ConstraintEngine`（4G）与 `PrcOpt.constrainstec` / `constrainztd` **未建立**，全仓库零命中；`IONOOPT_SSR` 当前走「每星一个 STEC 状态估计」而非「伪观测约束」。
+>
+> 附带两点：`setGridDefinition()` 在生产路径无调用方（仅测试使用），故生产路径下 `gridDef == null`、格网残差项恒为 0；`CompactSsrDecoderTest` 只喂 Mask/Orbit/Clock/CBias 四帧，`decodeCssrAtmos`/`decodeCssrGrid`/`getStec`/`getTrop` **无测试覆盖**。
+>
+> **接线结论：不做。** 无 CLAS L6 或含区域大气改正的真实 SSR 流，接线后无法产生任何可验证的解算差异，只会新增不可测的死代码。待出现时段匹配的真实区域 SSR 产品后，按 [archive/ROADMAP_v3.3.0.md §8.4~8.6](archive/ROADMAP_v3.3.0.md#L449-L479) 的四步顺序（接格网 → 4E → 4F → 4G）一次性实施。
 
 ---
 
@@ -77,7 +90,7 @@
 | 事项 | 恢复条件 |
 |------|----------|
 | 3.5G CI 回归 | 精选测试数据入库（1h 静态 + 1h 车载 RINEX） |
-| 4E / 4F | 真实 SSR 数据可用（LocalCorr 结构已就绪） |
+| 4E / 4F | 真实区域 SSR 数据可用（LocalCorr 解码层已就绪）；接线还需补齐 §1.3 注中的三处断点 |
 | 4G | 4E + 4F 完成 + 区域 STEC/ZTD 产品可用 |
 | 完好性 4A~4D | ① 出现需要 PL + HAL/VAL 输出的真实场景；② 可获取 SSR STEC/ZTD 实时产品或具备区域监测站网；③ 核心模块回归验证通过 |
 | 3A+3B-2 | Profiling 显示 SimpleMatrix 分配占 >5% 总耗时（当前 1 Hz 下 106 MB/s 可接受） |

@@ -6,6 +6,12 @@
 
 ---
 
+## [Unreleased]
+
+### Docs
+
+- **PPP-RTK 区域大气约束 4E~4G 现状备案（不接线）**：核对 `CompactSsrDecoder` / `LocalCorr` / `SsrIono` / `PppCore` 后确认——CLAS 区域大气改正的解码层（STEC 多项式 `ci`、格网残差 `dstec`、对流层 `ct`/`dth`/`dtw`、质量因子）与取值层（`getStec()` / `getTrop()`）均已完成，但应用层存在三处断点：`getStec()` 无调用方且 `SsrIono.stecModel()` 无 LocalCorr 分支；`getTrop()` 所在的 `TROPOPT_SSR` 直接改正分支因 `PppOpts.cssrDecoder` 恒为 `null` 而不可达；`ConstraintEngine` 与 `PrcOpt.constrainstec/constrainztd` 未建立。因缺真实 CLAS L6 / 区域 SSR 流，接线无法产生可验证的解算差异，**决定不接线**，仅在 [ROADMAP.md §1.3](ROADMAP.md) 记录现状与恢复条件；同步修正 [PPP_Extra_Optimizations.md §10.4](PPP_Extra_Optimizations.md) 中「已实现」的乐观表述与 [PROJECT_FINAL_SUMMARY.md](PROJECT_FINAL_SUMMARY.md) 中 CLAS 接入方式的描述
+
 ## [3.5.0] - 2026-11-15
 
 > 许可证合规重构 + PPP 体系 AI 接口全链路交付版本：OTL 与 GPT3 模块按公开文献独立重写、第三方编译产物与 GPL 衍生代码从仓库与 Git 历史中彻底移除；PPP 接口 A / B 的 SPI、注入点、失效安全框架、Java 采集器与 Python 训练工具链并入主线（D 只交契约、不注入）。无对外 API 破坏性变更。
