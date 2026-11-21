@@ -260,9 +260,15 @@ org.rtklib.java.otl
 
 状态：接口一/接口三**代码已落地**；接口二按决策冻结。完整评估与逐项数据见 [GNSS-RTK-AI-report.md](docs/GNSS-RTK-AI-report.md)。
 
-> **关于模型**：仓库内**不提供可用于生产的预训练权重**，仅有 `src/test/resources/models/` 下的 `dummy_*` 演示模型，用途是契约测试与流水线冒烟，不具备实际改正能力。GNSS 数据在不同环境下分布差异极大（星座组合与可见星几何、遮挡与多路径形态、接收机型号与天线、采样率与截止高度角），在 A 环境训练的模型直接搬到 B 环境通常不成立。**实际使用必须用本机场景数据自行训练模型**，采集 → 组装 → 训练 → 导出 ONNX 的完整流程见 [训练管线说明](rtklib-ai/training/README.md)。
+> **关于模型（务必阅读）**：仓库内**不提供可用于生产的预训练权重**，仅有 `src/test/resources/models/` 下的 `dummy_*` 演示模型，用途是契约测试与流水线冒烟，不具备实际改正能力。
+>
+> - **必须用真实数据训练**：可用模型只能由真实观测数据训练产生（`CollectSession` 采集 → `assemble` 组装 → 训练 → 导出 ONNX）；演示/合成数据产出的模型不能用于定位改正。
+> - **泛化能力已验证：不具备**。项目按真实部署协议做过跨站验证（留多站 LOMO：2 标定站联合标定**全局单阈值** → 2 个完全未见站判定），**在原判据（1 pp / 30%）口径下 G-3 通过 0/7 组、0/14 站**；留一站（LOSO）的乐观上界也只有 1/7 站。放宽到 B/C 档（2 pp / 20%、5 pp / 15%）后，现有 4/7、6/7 数字全部来自**分站分位阈值（转导式）**口径；全局单阈值口径下 B/C 档**无实测结果**（现有 LOMO 探针只在 1 pp / 30% 原判据下执行），因此同样不构成泛化证据。根因已定位为**站址指纹效应**：6 维特征的跨站中位数极差达 2.7~3.9 倍，站内可判别的信息在换站后失效，单一全局阈值无法在各站同时满足「固定率预算 + 相对降幅」两项判据。因此**模型不可跨站、跨设备、跨场景直接复用**；接口三（观测改正）虽在同一批数据的 2 个未见站上通过了第一阶段验收（A1/A2/A3），但那 2 个站仍属同一山谷集群、同一设备批次，**不构成跨设备/跨场景泛化证据**（见 [AI 增强设计](docs/AI_ENHANCEMENT_DESIGN.md) §7.4.4 口径边界、§8.2.4~§8.2.6、§8.3）。
+> - **不同设备须各自训练**：数据分布随接收机型号、天线、固件与采样设置、遮挡与多路径形态、星座组合与可见星几何、采样率与截止高度角显著变化，A 设备训练的模型直接搬到 B 设备通常不成立；**每类设备都必须用该设备自身的真实数据重新训练**，跨设备/跨场景泛化责任由使用者承担（见 [AI 评估报告](docs/GNSS-RTK-AI-report.md) §1 核心结论与 §6 放行建议的「三句免责」，及附录 B 第 9 条跨站泛化边界）。
+>
+> 采集 → 组装 → 训练 → 导出 ONNX 的完整流程见 [训练管线说明](rtklib-ai/training/README.md)。
 
-> **验证结论**：经真实北斗恶劣峡谷数据双跑验证：受限于人造标签的物理精度与端到端不可控性，本模块当前仅作保守的方差膨胀（降权）辅助，默认关闭。彻底废除只看固定率的评估模式，真实配对数据见 [AI 评估报告](docs/GNSS-RTK-AI-report.md)。
+> **验证结论**：评估基于单批现场私有数据（6 站 × 4 日 × 24 h，纯北斗 / 超短基线 / 静态站，数据不入库），未见站评估仅在该批数据内部进行。受限于人造标签的物理精度与端到端不可控性，本模块当前仅作保守的方差膨胀（降权）辅助，默认关闭。彻底废除只看固定率的评估模式，真实配对数据见 [AI 评估报告](docs/GNSS-RTK-AI-report.md)。
 
 ### AI 接口实验支线
 
@@ -535,7 +541,7 @@ org.rtklib.java.otl
 | 因子图优化 FGO + IMU 预积分 | 通过 | FE-GUT 仿真数据集 |
 | 轨道模块 + 海潮负荷 | 通过 | Vallado（轨道）/ 4 站 BLQ 数值基线逐字节一致（海潮） |
 | 自适应引擎框架 | 进行中 | 14类实现，编译通过；待集成测试验证 |
-| AI 增强（`rtklib-ai`） | 部分完成；代码已落地；仓库仅含测试用演示模型 | SPI 注入不启用即零影响；接口二冻结；各环境需自行训练模型；详见 [AI 评估报告](docs/GNSS-RTK-AI-report.md) |
+| AI 增强（`rtklib-ai`） | 部分完成；代码已落地；仓库仅含测试用演示模型 | SPI 注入不启用即零影响；接口二冻结；必须用真实数据训练，各设备需各自训练，跨站泛化已验证不通过（LOMO 0/7 组、0/14 站，见 [AI 增强设计](docs/AI_ENHANCEMENT_DESIGN.md) §8.2.5）；详见 [AI 评估报告](docs/GNSS-RTK-AI-report.md) |
 
 剩余：PPP-RTK 区域大气约束、完好性保护级（HPL/VPL）、ARAIM、固定解完好性增强——均属研究深化方向，**无上游场景驱动，定版不再投入（WONTFIX）**。
 
@@ -565,7 +571,7 @@ org.rtklib.java.otl
 | 3 | [cssrlib](https://github.com/hirokawa/cssrlib) | Rui Hirokawa | MIT | RTCM 1043 SBAS 星历字段布局（`rtcm.py` 的 `decode_sbs_eph`）→ [Rtcm.decodeType1043](rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java) | 字段布局移植 |
 | 4 | [python-sgp4](https://github.com/brandon-rhodes/python-sgp4) | Brandon Rhodes | MIT | `propagation.py` / `io.py` / `sgp4init` → [Sgp4Propagation](rtklib-core/src/main/java/org/rtklib/java/orbit/Sgp4Propagation.java)、[TleParser](rtklib-core/src/main/java/org/rtklib/java/orbit/TleParser.java)、[Sgp4Time](rtklib-core/src/main/java/org/rtklib/java/orbit/Sgp4Time.java) | 逐行移植 |
 | 5 | [Orekit 12](https://gitlab.orekit.org/orekit/orekit) | CS GROUP（原 CS Systèmes d'Information） | Apache-2.0 | `KeplerianParametersConverter` / `KeplerianAnomalyUtility` 的 `rv2coe`/`coe2rv`/`solveKepler`/双曲开普勒求解 → [OrbitalMechanics](rtklib-core/src/main/java/org/rtklib/java/orbit/OrbitalMechanics.java) | 纯数学核心抽取（不引入运行时依赖） |
-| 6 | [PRIDE-PPPAR](https://github.com/WU-PRIDE/PRIDE-PPPAR) | 武汉大学 PRIDE Lab（张传银 等） | **GPL-3.0** | ① WL/NL 门限与弧段机制（`nl_maxdev`、'Critical search' 的 `minsav`、`fixamb_search` 的取整搜索思想）→ [PppAmbFix](rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFix.java)；② OTL 四支 `.f90` → **曾逐行移植，已整体废弃重写**（详见 [A.4](#a4-rtklib-otl-的独立性说明已处置)） | ① **仅思想参考**（未复制源码，数据结构/门限落点/控制流均不同）；② 旧版属衍生作品，**已删除并重写**，当前实现为独立实现 |
+| 6 | [PRIDE-PPPAR](https://github.com/WU-PRIDE/PRIDE-PPPAR) | 武汉大学 PRIDE Lab（张传银 等） | **GPL-3.0** | ① WL/NL 门限与弧段机制（`nl_maxdev`、'Critical search' 的 `minsav`、`fixamb_search` 的取整搜索思想）→ [PppAmbFix](rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFix.java)；② OTL 四支 `.f90` → **曾逐行移植，已整体废弃重写**（当前归属 `[JAVA-ONLY 原创]`，见 [A.3](#a3-原创模块归属对照)） | ① **仅思想参考**（未复制源码，数据结构/门限落点/控制流均不同）；② 旧版属衍生作品，**已删除并重写**，当前实现为独立实现 |
 | 7 | [GREAT-PVT](https://github.com/GREAT-WHU/GREAT-PVT) | GREAT-WHU（武汉大学） | **GPL-3.0** | `gambfix` 的 EWL→WL→NL 分级与级间约束传递思想（`gambiguity.cpp` 的 `processBatch(mode)`、虚拟观测段）→ [RtkOptimizationsCascadeAR](rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkOptimizationsCascadeAR.java) | **仅思想参考**（未复制源码） |
 
 ### A.2 数据与标准引用（非代码来源）
@@ -586,31 +592,7 @@ org.rtklib.java.otl
 | GPT3 5°网格（TU Wien） | TU Wien | 气压/温度/比湿先验值（[Gpt3GridReader](rtklib-core/src/main/java/org/rtklib/java/ephemeris/Gpt3GridReader.java) 按 Landskron & Böhm (2018) 模型独立实现） |
 | Landskron & Böhm (2018) VMF3/GPT3 模型；Askne & Nordius (1987) 水汽压公式 | 公开文献 | 高程归约与网格插值公式（同上，独立实现） |
 
-### A.3 BSD-2-Clause 兼容性校验
-
-本项目整体采用 BSD-2-Clause。逐项判定：
-
-| 上游许可证 | 兼容性 | 依据 | 分发义务 |
-|---|---|---|---|
-| BSD-2-Clause（RTKLIB 2.5.0 / RTKLIB-EX） | 兼容 | 同族宽松许可 | 保留原版权声明、条件与免责声明 |
-| MIT（cssrlib / python-sgp4） | 兼容 | MIT 为宽松许可，可并入 BSD-2-Clause 作品 | 保留 MIT 版权与许可声明 |
-| Apache-2.0（Orekit 12） | 兼容 | 宽松许可，允许再分发与再许可 | 保留版权/NOTICE；若上游含 NOTICE 文件须随附 |
-| GPL-3.0（PRIDE-PPPAR） | 当前无冲突 | ①WL/NL 门限与弧段仅参考算法思想与参数语义，未复制源码；②OTL 四支 `.f90` 的逐行移植版本已整体删除并按公开标准重写（见 [A.4](#a4-rtklib-otl-的独立性说明已处置)） | 无；若未来再次复制其源码则转为不兼容 |
-| GPL-3.0（GREAT-PVT） | 当前无冲突 | 仅参考算法思想，未复制源码，不构成衍生作品 | 无；若未来复制其源码则转为不兼容 |
-
-**结论**：RTKLIB 2.5.0、RTKLIB-EX、cssrlib、python-sgp4、Orekit 五类来源均与 BSD-2-Clause 兼容；PRIDE-PPPAR 的 WL/NL 部分与 GREAT-PVT 仅作思想参考，不含逐行移植代码；PRIDE-PPPAR 的 OTL 四支 `.f90` 逐行移植版本已删除并重写为独立实现，当前不存在许可证冲突。
-
-### A.4 `rtklib-otl` 的独立性说明（已处置）
-
-`rtklib-otl` 曾存在按外部 Fortran 源码逐行移植的早期版本。该版本已整体废弃并重写：
-
-- 现实现以 IERS Conventions (2010) 第 7 章的海洋潮汐负荷球谐合成公式、IERS 2010 表 5.3 的基本天文幅角、Doodson (1921) 幅角编码、Schureman (1958) 交点潮调制级数、Farrell (1972) 负荷 Love 数定义为依据，属公开物理公式的独立实现；
-- 代码组织改为面向对象分层（测站几何、球谐基函数表、幅角值对象、调制量值对象、复数振幅），不再与任何 `.f90` 文件存在函数名、变量名、数组打包索引或循环结构的对应关系；
-- 正确性以数值等价性验证代替结构对照：4 站 BLQ 振幅/相位与参考基线逐字节一致（差异 0.0000），位移时间序列差异 < 1e-10 mm。
-
-因此 `rtklib-otl` 当前归属为 `[JAVA-ONLY 原创]`，可按 BSD-2-Clause 分发。
-
-### A.5 原创模块归属（对照）
+### A.3 原创模块归属（对照）
 
 以下模块为纯 `[JAVA-ONLY 原创]`，**无任何外部开源代码依赖**，归属权不得错配给 RTKLIB-EX 或其他项目：
 
@@ -628,4 +610,4 @@ org.rtklib.java.otl
 
 ## License
 
-本项目基于 RTKLIB 原始代码移植，遵循 RTKLIB 的 BSD-2-Clause 许可证。第三方来源的许可证与兼容性判定见上节 [A.3](#a3-bsd-2-clause-兼容性校验)。
+本项目基于 RTKLIB 原始代码移植，遵循 RTKLIB 的 BSD-2-Clause 许可证。第三方来源的许可证见上节 [A.1](#a1-代码来源清单)。
