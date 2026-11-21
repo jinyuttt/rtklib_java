@@ -264,7 +264,7 @@ org.rtklib.java.otl
 
 > **验证结论**：经真实北斗恶劣峡谷数据双跑验证：受限于人造标签的物理精度与端到端不可控性，本模块当前仅作保守的方差膨胀（降权）辅助，默认关闭。彻底废除只看固定率的评估模式，真实配对数据见 [AI 评估报告](docs/GNSS-RTK-AI-report.md)。
 
-当前版本 v3.5.0（2026-11-12）：许可证合规重构版本。rtklib-otl 负荷潮模块与 GPT3 气象网格读取器已按 IERS Conventions (2010)、Doodson (1921)、Schureman (1958)、Farrell (1972)、Landskron & Böhm (2018)、Askne & Nordius (1987) 等公开文献独立重写，不再与任何外部 Fortran 源码存在函数名、变量名、数组索引或循环结构对应关系；仓库内全部第三方编译产物（RTKLIB-EX 可执行文件、Fortran 参考程序及其二进制、libopenblas.a）已从当前主干与 Git 历史中彻底移除，并加入 .gitignore 永久防护。对外 API 保持不变，OTL 数值与历史基线逐字节一致，GPT3 输出与重写前逐位一致（12 点回归测试固化）。同版新增 rtklib-ai 接口三的激进模式实验配置（默认关闭）。算法修复的闭环索引与精度实测见 终期技术摘要，版本级变更见 CHANGELOG。### AI 接口实验支线
+### AI 接口实验支线
 
 - 接口四（参考星风险判别）为实验 provider，默认关闭，仅显式注入。
 - 风险分学的是滑相前兆，不是 NLOS 判别；不要把它当污染判别器用。
@@ -298,7 +298,7 @@ org.rtklib.java.otl
 | [SPP 优化说明](docs/SPP_Extra_Optimizations.md) | SPP 优化项（EKF、M 估计、零速约束、多普勒+SNR 加权） |
 | [PPP 体系指南](docs/PPP_Optimization_Systems.md) | 浮点 PPP / PPP-AR / PPP-RTK 三分支的定位与测试纪律 |
 | [优化功能矩阵](docs/CORE_OPTIMIZATION_MATRIX.md) | 按定位模式×场景分类的优化功能矩阵，含静态实测结论、动态适用性、基线类型标记 |
-| [算法修复档案](docs/ALGORITHM_FIX_LOG.md) | FIX-ALG-001~062 逐条 C 依据 / 根因 / 验证（改算法前必读） |
+| [算法修复档案](docs/ALGORITHM_FIX_LOG.md) | FIX-ALG-001~066 逐条 C 依据 / 根因 / 验证（改算法前必读） |
 | [测试用例与数据指南](docs/DATA_GUIDE.md) | 测试规范、测试类总览、数据依赖、优化矩阵测试用例、上传规范 |
 | [轨道模块技术参考](docs/ORBIT_MODULE_REFERENCE.md) | TLE解析、SGP4/SDP4传播、六根数转换、二体传播 |
 | [开发路线图](docs/ROADMAP.md) | 各模块当前状态、未完成事项（按需激活/冻结/WONTFIX）、暂缓与恢复条件；历史梯队记录归档于 [docs/archive/ROADMAP_v3.3.0.md](docs/archive/ROADMAP_v3.3.0.md) |
@@ -380,6 +380,9 @@ org.rtklib.java.otl
 |------|------|
 | [AI 增强设计](docs/AI_ENHANCEMENT_DESIGN.md) | SPI 契约、特征定义、输出钳位、训练管线与降级策略（v1.11） |
 | [AI 评估报告](docs/GNSS-RTK-AI-report.md) | 接口一/接口三评估结论与逐项实测数据 |
+| [PPP 体系 AI 接入技术评估](docs/PPP_AI_ASSESSMENT.md) | AI 在 PPP/PPP-AR/PPP-RTK 中的定位与三重门槛，结论：本阶段不接入 |
+| [PPP 体系 AI 接入开发设计](docs/PPP_AI_DEVELOPMENT_DESIGN.md) | A/B/D 三个候选接口的 SPI、注入点、配置与降级，A0/A1/A2/A3 对照口径（v1.4） |
+| [接口四参考星风险判别设计](docs/AI_REFSTAR_SELECTION_DESIGN.md) | 条件触发参考星切换、锁相事件弱标签、R1–R4 探针协议（v1.1，实验 provider） |
 | [训练管线说明](rtklib-ai/training/README.md) | 数据集组装、训练与 ONNX 导出流程 |
 
 ### rtklib-test
