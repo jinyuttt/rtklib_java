@@ -141,12 +141,12 @@ AI 线**不修改 core 的数值行为**。core 只增加两类东西：
 
 | 机制 | 位置 | 作用 |
 |---|---|---|
-| ratio 门限 | [manage_amb_LAMBDA](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L2098-L2107) 的 `skip` 判据 + `thresar[0]` | 搜索空间可分性 |
-| 动态 ratio 门限 | [RtkCore.java#L1314](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1314) 附近的多项式调整 | 按卫星数修正门限 |
+| ratio 门限 | [manage_amb_LAMBDA](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L2098-L2107) 的 `skip` 判据 + `thresar[0]` | 搜索空间可分性 |
+| 动态 ratio 门限 | [RtkCore.java#L1314](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1314) 附近的多项式调整 | 按卫星数修正门限 |
 | 固定后残差校验 | `valpos(rtk, v, R, vflg, nv, 4.0)`（固定分支内） | 固定解的验后残差一致性 |
 | AR 滤波回退 | `opt.arfilter` 块，`prev_ratio1` / `prev_ratio2` 时序比较 | 用 ratio 历史识别可疑固定 |
-| 级联 AR | [RtkOptimizationsCascadeAR](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkOptimizationsCascadeAR.java#L241-L334) | EWL/WL/NL 三级独立门限 |
-| 部分固定 | [RtkOptimizationsPartialAR](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkOptimizationsPartialAR.java#L113-L118) | `partialArMinRatio` 逐子集门限 |
+| 级联 AR | [RtkOptimizationsCascadeAR](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkOptimizationsCascadeAR.java#L241-L334) | EWL/WL/NL 三级独立门限 |
+| 部分固定 | [RtkOptimizationsPartialAR](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkOptimizationsPartialAR.java#L113-L118) | `partialArMinRatio` 逐子集门限 |
 
 **结论**：接口一的价值不在于「有门限」，而在于**门限看不到的量**。ratio 是搜索空间的量，它无法区分两种情形：
 
@@ -159,7 +159,7 @@ AI 线**不修改 core 的数值行为**。core 只增加两类东西：
 
 接口二的设想是「在固定尝试前判断是否值得试」。但这条路径上**已有两套机制**：
 
-1. **`arfilter` 回退门控**：`prev_ratio2 < thres` 且 `nb_ar >= mindropsats` 时，主动降锁一颗卫星并重跑 `resamb_LAMBDA`（[manage_amb_LAMBDA](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L2113-L2160)）。
+1. **`arfilter` 回退门控**：`prev_ratio2 < thres` 且 `nb_ar >= mindropsats` 时，主动降锁一颗卫星并重跑 `resamb_LAMBDA`（[manage_amb_LAMBDA](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L2113-L2160)）。
 2. **`excsat` 剔除重试**：同一次调用内按「降锁 → 重解 → 恢复」做卫星剔除实验。
 
 也就是说，「是否值得尝试 / 该剔除哪颗」已经被 ratio 历史 + 卫星剔除实验部分覆盖。再叠一层 ML 判断，最可能的结果是**把本会成功的固定拦下来**——这不是实现 bug，是设计上的净负收益风险（据此冻结，见 D1）。
@@ -171,7 +171,7 @@ AI 线**不修改 core 的数值行为**。core 只增加两类东西：
 | IGGIII 抗差 | `RtkOpts.enableIggiii` 等 10 项 | 按标准化残差降权（`k0=3`、`k1=6`） |
 | SNR 中位数抗差 | `RtkOpts.enableSnrMedian` 等 10 项 | 相对 SNR 中位数降权，并反馈进 `varerr` |
 | 验后残差编辑 | `RtkOptimizationsResEdit.checkCycleSlip` / `checkPcConsistency` | 时序周跳 + 伪距-载波一致性 |
-| 观测误差模型 | [varerr](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1450-L1508) | 高度角 + SNR + 基线长 + 钟漂的解析方差 |
+| 观测误差模型 | [varerr](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1450-L1508) | 高度角 + SNR + 基线长 + 钟漂的解析方差 |
 | 位置验后校验 | `valpos`（4σ 门限） | 整体解的一致性 |
 
 **结论**：接口三的价值只在**现有解析模型无法表达的模式**上——例如 NLOS 造成的**系统性同向偏差**（残差大且符号一致，IGGIII 会降权但降权只是「不信」，不是「修正」），以及多路径随几何变化的**时变偏差**。IGGIII/SNR 都是「降权」，不改观测值；接口三做「改正」，是本质不同的动作。这也是它必须承担不确定性传播责任的原因（§4.3.4）。
@@ -250,9 +250,9 @@ AiHooks.clear();
 
 **为什么不用层层注入**（三条理由均来自本仓库实际代码，非假想）：
 
-1. **实例注入会静默丢失**。[PostPosProcessor.createRtk](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rinex/PostPosProcessor.java#L505-L516) 每次解算 `new Rtk()`，只拷 `opt` 与 `rtkConfig`，**不拷 `transient` 字段**；且前向（[L238](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rinex/PostPosProcessor.java#L238)）与反向（[L319](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rinex/PostPosProcessor.java#L319)）各调一次，赋值写在调用点极易漏掉反向，漏了不报错、只是 AI 静默不生效。同一坑已存在于既有先例：`traceCallback` 在 `PostPosProcessor` 上**根本没有 setter**（4 个 Processor 有，它没有）。
-2. **接口三的实现对象要在 `static` 上下文可取到**。`relpos` 是 `static`，`ddres` 是 `private static`（[L1546](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1546)），`Rtk` 实例由调用方持有、`RtkCore` 不持有。注入点让 `RtkCore` 无需依赖调用方在每个入口正确设置字段。
-3. **`joint` 模块完全在 Processor 体系之外**。[JointDdRes.java#L202-L206](file:///D:/code/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java#L202-L206) 直接静态调用 `RtkCore.varerr`，实例注入到不了这里。v1 接口三不接线 joint（§4.3.5），但 v2 若要覆盖 joint，注入点是唯一可行路径。
+1. **实例注入会静默丢失**。[PostPosProcessor.createRtk](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rinex/PostPosProcessor.java#L505-L516) 每次解算 `new Rtk()`，只拷 `opt` 与 `rtkConfig`，**不拷 `transient` 字段**；且前向（[L238](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rinex/PostPosProcessor.java#L238)）与反向（[L319](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rinex/PostPosProcessor.java#L319)）各调一次，赋值写在调用点极易漏掉反向，漏了不报错、只是 AI 静默不生效。同一坑已存在于既有先例：`traceCallback` 在 `PostPosProcessor` 上**根本没有 setter**（4 个 Processor 有，它没有）。
+2. **接口三的实现对象要在 `static` 上下文可取到**。`relpos` 是 `static`，`ddres` 是 `private static`（[L1546](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1546)），`Rtk` 实例由调用方持有、`RtkCore` 不持有。注入点让 `RtkCore` 无需依赖调用方在每个入口正确设置字段。
+3. **`joint` 模块完全在 Processor 体系之外**。[JointDdRes.java#L202-L206](file:///D:/rtklib/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java#L202-L206) 直接静态调用 `RtkCore.varerr`，实例注入到不了这里。v1 接口三不接线 joint（§4.3.5），但 v2 若要覆盖 joint，注入点是唯一可行路径。
 
 **依赖方向严格单向**：`rtklib-core` 只定义 `AiProvider` / `FixValidator` / `ObsCorrector` 三个接口与上下文记录类型，**对 `rtklib-ai` 零引用**；`rtklib-ai` 依赖 `rtklib-core` 实现这些接口，由宿主（或 `rtklib-ai` 的 `OnnxAiProvider`）调用 `AiHooks.install()` 注入。core 的 `pom.xml` 中不得出现 `rtklib-ai`。
 
@@ -278,9 +278,9 @@ AiHooks.clear();
 
 | 接口 | 文件 | 位置 | 语义 |
 |---|---|---|---|
-| 接口一 | [RtkCore.java#L476-L486](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L476-L486) | `boolean valOk = ...` 之后、`if (++rtk.nfix >= opt.minfix)` **之前** | 固定解产出后验证 |
-| 接口二 | [manage_amb_LAMBDA](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L2098-L2107) | `skip` 判据之后、`resamb_LAMBDA` 之前 | **冻结，不实施** |
-| 接口三 | [relpos 迭代内首轮](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L306-L323) + `ddres` 内两处 | **推理**：`for (i=0;i<opt.niter;i++)` 内、`i == 0` 的 `zdres(rover)` **成功之后**、首次 `ddres` 调用**之前**（[L307-L323](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L307-L323)），每历元 1 次批量推理，产出 `aiBias[]` / `aiScale[]` 局部数组；**施加**：`ddres` 的 `v[nv]` 组装处（[L1640-L1641](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1640-L1641)）与 `Ri`/`Rj` 赋值处（[L1748-L1749](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1748-L1749)），**只读查表** | 批量算改正 / 偏差扣除 / 方差膨胀 |
+| 接口一 | [RtkCore.java#L476-L486](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L476-L486) | `boolean valOk = ...` 之后、`if (++rtk.nfix >= opt.minfix)` **之前** | 固定解产出后验证 |
+| 接口二 | [manage_amb_LAMBDA](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L2098-L2107) | `skip` 判据之后、`resamb_LAMBDA` 之前 | **冻结，不实施** |
+| 接口三 | [relpos 迭代内首轮](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L306-L323) + `ddres` 内两处 | **推理**：`for (i=0;i<opt.niter;i++)` 内、`i == 0` 的 `zdres(rover)` **成功之后**、首次 `ddres` 调用**之前**（[L307-L323](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L307-L323)），每历元 1 次批量推理，产出 `aiBias[]` / `aiScale[]` 局部数组；**施加**：`ddres` 的 `v[nv]` 组装处（[L1640-L1641](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1640-L1641)）与 `Ri`/`Rj` 赋值处（[L1748-L1749](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1748-L1749)），**只读查表** | 批量算改正 / 偏差扣除 / 方差膨胀 |
 
 **接口一的位置必须精确到「`nfix` 自增之前」**，原因是该位置之后有三处不可逆副作用：
 
@@ -291,22 +291,22 @@ if (++rtk.nfix >= opt.minfix) {          // 计数器自增
 }
 ```
 
-若在 `stat = SOLQ_FIX` 之后才拒绝，这三处已执行，无法回滚。放在 `valOk` 之后、`nfix` 之前，则拒绝只需「不进固定分支」，`rtk.x` / `rtk.P` 仍持有浮点解（[RtkCore.java#L437](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L437) 已拷入），回退天然正确。
+若在 `stat = SOLQ_FIX` 之后才拒绝，这三处已执行，无法回滚。放在 `valOk` 之后、`nfix` 之前，则拒绝只需「不进固定分支」，`rtk.x` / `rtk.P` 仍持有浮点解（[RtkCore.java#L437](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L437) 已拷入），回退天然正确。
 
 **已知不可回滚的副作用**：`manage_amb_LAMBDA` 内部对 `prev_ratio1` / `prev_ratio2` / `excsat` / `lock[]` 的修改在接口一执行前已经发生，拒绝固定不会撤销它们。这**是期望行为**——ratio 确实很高，AR 历史应当如实记录。此点须写入实现注释，避免后续被当作 bug 修复。
 
 **接口三为什么必须拆成「批量算 + 只读施加」两类位置**（性能硬约束，不是风格选择）：
 
-`ddres` 有 **3 个调用点**：[L323](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L323)（迭代内）、[L431](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L431)（浮点解）、[L473](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L473)（固定解回代）。`niter` 默认 1（[PrcOpt.java#L215](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/data/PrcOpt.java#L215)），故每历元 `ddres` 实际执行 **2–3 次**。
+`ddres` 有 **3 个调用点**：[L323](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L323)（迭代内）、[L431](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L431)（浮点解）、[L473](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L473)（固定解回代）。`niter` 默认 1（[PrcOpt.java#L215](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/data/PrcOpt.java#L215)），故每历元 `ddres` 实际执行 **2–3 次**。
 
-在**单次** `ddres` 内，`varerr` 按双差对调用，每对调用两次（`Ri` 与 `Rj`，[L1748-L1749](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1748-L1749)）；双频 20–30 星约 76–116 次。乘以每历元 2–3 次 `ddres`，**合计约 150–350 次/历元**。若在 `varerr` 内做推理，按 1.2 ms/次即 **180–420 ms/历元**，直接不可用。
+在**单次** `ddres` 内，`varerr` 按双差对调用，每对调用两次（`Ri` 与 `Rj`，[L1748-L1749](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1748-L1749)）；双频 20–30 星约 76–116 次。乘以每历元 2–3 次 `ddres`，**合计约 150–350 次/历元**。若在 `varerr` 内做推理，按 1.2 ms/次即 **180–420 ms/历元**，直接不可用。
 
 因此定死为：
 
-1. **每历元算一次**：在迭代循环**第一轮**内、`zdres(rover)` 成功后、首次 `ddres` 之前（`i == 0` 守卫，[L307-L323](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L307-L323)）对 `ns × nf` 个「卫星-频点」批量推理，结果写入 `relpos` 的两个**局部**数组 `aiBias[ns*nf]` / `aiScale[ns*nf]`，作为参数传入 `ddres`。
-   **为什么不能放在循环之前（[L306](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L306)）**：`zdres(rover)` 在循环体内（[L307-L311](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L307-L311)），仰角/方位角数组 `azel` 在本历元**尚未计算**；放在循环前只能读到**上一历元**的 `azel`，特征是错的。
+1. **每历元算一次**：在迭代循环**第一轮**内、`zdres(rover)` 成功后、首次 `ddres` 之前（`i == 0` 守卫，[L307-L323](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L307-L323)）对 `ns × nf` 个「卫星-频点」批量推理，结果写入 `relpos` 的两个**局部**数组 `aiBias[ns*nf]` / `aiScale[ns*nf]`，作为参数传入 `ddres`。
+   **为什么不能放在循环之前（[L306](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L306)）**：`zdres(rover)` 在循环体内（[L307-L311](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L307-L311)），仰角/方位角数组 `azel` 在本历元**尚未计算**；放在循环前只能读到**上一历元**的 `azel`，特征是错的。
 2. **施加在 `ddres` 内、但只读**：偏差扣在 `v[nv]` 组装处，方差系数乘在 `Ri`/`Rj` 赋值处。两处都是纯查表，零推理。
-3. **`varerr` 函数本体不改**：这使 `rtklib-joint` 的静态调用（[JointDdRes.java#L202-L206](file:///D:/code/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java#L202-L206)）完全不受影响（§4.3.5）。
+3. **`varerr` 函数本体不改**：这使 `rtklib-joint` 的静态调用（[JointDdRes.java#L202-L206](file:///D:/rtklib/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java#L202-L206)）完全不受影响（§4.3.5）。
 4. **不修改 `obs` / `y`**：`v[nv]` 每次调用都由 `y` 现场重算，在 `v[nv]` 上扣偏差**天然幂等**——`ddres` 跑 2 次还是 3 次都不会重复扣除（§4.3.6）。
 
 **局部数组而非 `Rtk` 字段**：`aiBias`/`aiScale` 只在未注入时为 `null`、注入时才分配，`null` 路径零分配、零分支外开销，I-1 由此得到结构性保证（§3.4）。
@@ -389,7 +389,7 @@ if (++rtk.nfix >= opt.minfix) {          // 计数器自增
 
 完整定义见 §4.4.2（`CodeCorrection` 只有 `biasMeters` / `varianceScale` 两个分量，**不含 `sat`/`freq`**——行序即索引）。语义：
 
-- `biasMeters`：伪距偏差改正量（米）。**符号约定**：DD 残差按 `v = (rover_ref − base_ref) − (rover_j − base_j)` 组装（[L1640-L1641](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1640-L1641)），故改正施加为
+- `biasMeters`：伪距偏差改正量（米）。**符号约定**：DD 残差按 `v = (rover_ref − base_ref) − (rover_j − base_j)` 组装（[L1640-L1641](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1640-L1641)），故改正施加为
 
   ```java
   // refIdx / j 是卫星在 sat[] 中的下标（0-based），不是卫星号
@@ -398,9 +398,9 @@ if (++rtk.nfix >= opt.minfix) {          // 计数器自增
 
   即「参考星偏差减去本星偏差」，**不是**「整体减一个标量」。这与「先在流动站观测值上减去偏差、再做双差」在数学上等价，但只有前者幂等（§4.3.6）。
 
-  **索引必须用 `sat[]` 下标，禁止用卫星号 `sat[i] - 1`**：`refIdx`/`j` 由 `ddres` 现场按 `iu[]/ir[]` 选出（[L1585-L1606](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1585-L1606)），同一历元内 3 次 `ddres` 调用的 `refIdx` 可能不同（参考星按仰角/SNR 评分择优）；而卫星号与下标之间没有固定映射，用卫星号索引会越界或错行。
+  **索引必须用 `sat[]` 下标，禁止用卫星号 `sat[i] - 1`**：`refIdx`/`j` 由 `ddres` 现场按 `iu[]/ir[]` 选出（[L1585-L1606](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1585-L1606)），同一历元内 3 次 `ddres` 调用的 `refIdx` 可能不同（参考星按仰角/SNR 评分择优）；而卫星号与下标之间没有固定映射，用卫星号索引会越界或错行。
 - `varianceScale`：方差膨胀因子，**必须 ≥ 1.0，且 core 侧钳位到 `ai.varianceScaleMax`**（§4.3.4）
-- **仅 `code == true`**：`code` 由 `f >= nf` 判定（[L1583](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1583)），`frq = f % nf`（[L1582](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1582)）；相位不施加偏差，但**同样施加 `varianceScale`**（§4.3.1）
+- **仅 `code == true`**：`code` 由 `f >= nf` 判定（[L1583](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1583)），`frq = f % nf`（[L1582](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1582)）；相位不施加偏差，但**同样施加 `varianceScale`**（§4.3.1）
 
 #### 4.3.4 不确定性传播（关键契约）
 
@@ -416,19 +416,19 @@ R_i' = varianceScale_i × varerr(...)
 
 | 位置 | 时机 | 动作 |
 |---|---|---|
-| `relpos` 迭代**首轮**内、`zdres` 之后、首次 `ddres` 之前（`i == 0`，[L307-L323](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L307-L323)） | 每历元 1 次 | 批量推理 `ns × nf` 个「卫星-频点」，产出 `aiBias` / `aiScale` 两个局部数组 |
-| `ddres` 的 `v[nv]` 组装处（[L1640-L1641](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1640-L1641)） | 每次 `ddres` | 查表扣偏差：`v[nv] -= aiBias[refIdx*nf+frq] - aiBias[j*nf+frq]`（**仅 `code`**） |
-| `ddres` 的 `Ri`/`Rj` 赋值处（[L1748-L1749](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1748-L1749)），**在 `if (!code)` 半周补偿之后**（[L1751-L1752](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1751-L1752)） | 每次 `ddres` | 查表乘系数：`Ri[nv] *= aiScale[refIdx*nf+frq]`、`Rj[nv] *= aiScale[j*nf+frq]` |
+| `relpos` 迭代**首轮**内、`zdres` 之后、首次 `ddres` 之前（`i == 0`，[L307-L323](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L307-L323)） | 每历元 1 次 | 批量推理 `ns × nf` 个「卫星-频点」，产出 `aiBias` / `aiScale` 两个局部数组 |
+| `ddres` 的 `v[nv]` 组装处（[L1640-L1641](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1640-L1641)） | 每次 `ddres` | 查表扣偏差：`v[nv] -= aiBias[refIdx*nf+frq] - aiBias[j*nf+frq]`（**仅 `code`**） |
+| `ddres` 的 `Ri`/`Rj` 赋值处（[L1748-L1749](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1748-L1749)），**在 `if (!code)` 半周补偿之后**（[L1751-L1752](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1751-L1752)） | 每次 `ddres` | 查表乘系数：`Ri[nv] *= aiScale[refIdx*nf+frq]`、`Rj[nv] *= aiScale[j*nf+frq]` |
 
-**顺序敏感**：`varianceScale` 必须在 `Ri[nv] += 0.01` 之后施加（[L1750-L1753](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1750-L1753)）。若乘在半周补偿之前，`0.01` 会被膨胀因子放大，相位半周历元的方差被系统性高估。
+**顺序敏感**：`varianceScale` 必须在 `Ri[nv] += 0.01` 之后施加（[L1750-L1753](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1750-L1753)）。若乘在半周补偿之前，`0.01` 会被膨胀因子放大，相位半周历元的方差被系统性高估。
 
-**偏差改正会改变 `maxinno` 剔除行为（已知且期望）**：`maxinno` 门限判定在 `v[nv]` 组装之后、`Ri/Rj` 计算之前（[L1735-L1740](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1735-L1740)）。改正后的残差更小，被剔除的观测更少，`vsat`/`rejc` 也随之变化。这属期望行为（改正的目的就是让残差回到正常量级），但它意味着接口三**间接影响卫星可用性**，评估时必须与原生组对比 `ns` 的变化，不能只看固定率。
+**偏差改正会改变 `maxinno` 剔除行为（已知且期望）**：`maxinno` 门限判定在 `v[nv]` 组装之后、`Ri/Rj` 计算之前（[L1735-L1740](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1735-L1740)）。改正后的残差更小，被剔除的观测更少，`vsat`/`rejc` 也随之变化。这属期望行为（改正的目的就是让残差回到正常量级），但它意味着接口三**间接影响卫星可用性**，评估时必须与原生组对比 `ns` 的变化，不能只看固定率。
 
 **索引方向必须照抄，不得凭直觉对调**：
 
 - `Ri[nv]` ↔ **参考星** `sat[refIdx]`（`Ri` 的 `i` 是 reference）
 - `Rj[nv]` ↔ **非参考星** `sat[j]`
-- 证据：[L1748](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1748) 传入 `sat[refIdx]`，[L1749](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1749) 传入 `sat[j]`
+- 证据：[L1748](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1748) 传入 `sat[refIdx]`，[L1749](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1749) 传入 `sat[j]`
 - 后果若对调：两颗星的膨胀因子互换，且**不报错、不越界**——纯粹静默错误，评估时表现为「模型无效但看不出原因」
 
 **钳位（core 侧强制，不信任 impl）**：
@@ -451,7 +451,7 @@ if (!Double.isFinite(b) || Math.abs(b) > ai.obsCorrectorMaxBias) {
 - **`biasMeters` 超限时置 0，而不是钳到边界值**：钳到 `±10 m` 等于给观测强加一个 10 m 的错误改正，比不改更糟；置 0 则是「本行偏差弃权」，与 §4.3.1 一致。且此时**必须保留 `varianceScale`**——它是模型对自己不确定性的诚实申报，不应因偏差越界而丢弃
 - `biasMeters` 的 `NaN`/`Inf` 同样置 0（不是按 1.0，单位不同不可混用）
 
-**IFLC 边界（v1 必须禁用）**：`ionoopt == IONOOPT_IFLC` 时 `nf` 被强制为 1（[L152](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L152)），`y` 中已是**消电离层组合量**，逐频点偏差的物理含义不再成立。因此接口一、接口三**均在 core 侧门禁**（§4.3.7），而非由 impl 自行判断。
+**IFLC 边界（v1 必须禁用）**：`ionoopt == IONOOPT_IFLC` 时 `nf` 被强制为 1（[L152](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L152)），`y` 中已是**消电离层组合量**，逐频点偏差的物理含义不再成立。因此接口一、接口三**均在 core 侧门禁**（§4.3.7），而非由 impl 自行判断。
 
 **两条强制规则**：
 
@@ -464,17 +464,17 @@ if (!Double.isFinite(b) || Math.abs(b) > ai.obsCorrectorMaxBias) {
 
 #### 4.3.5 与 `rtklib-joint` 的边界
 
-`rtklib-joint` 的 [JointDdRes.java#L202-L206](file:///D:/code/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java#L202-L206) 直接静态调用 `RtkCore.varerr`，且**不在 `relpos` 调用链内**，拿不到 `relpos` 的局部 `aiBias`/`aiScale`。
+`rtklib-joint` 的 [JointDdRes.java#L202-L206](file:///D:/rtklib/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java#L202-L206) 直接静态调用 `RtkCore.varerr`，且**不在 `relpos` 调用链内**，拿不到 `relpos` 的局部 `aiBias`/`aiScale`。
 
 因此定死：
 
 1. v1 的接口三**只覆盖 `RtkCore.relpos` 的双差链路**，joint 的解算路径**不受任何影响**（`varerr` 本体不改、`ddres` 不共享）。
 2. 若 v2 要覆盖 joint，**必须复用同一张表**（由 joint 自己的批量推理产出），禁止在 joint 内逐星单独推理——同一历元两次推理既翻倍耗时，又会让两条链路的偏差不一致。
-3. `RtkCore.varerr` 是 `public static`（[L1450](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1450) 附近），**任何写进 `varerr` 的改动都会外溢到 joint 与所有外部调用方**。这是 v1 禁止改 `varerr` 的第二个理由（第一个是 §3.3 的调用次数）。
+3. `RtkCore.varerr` 是 `public static`（[L1450](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1450) 附近），**任何写进 `varerr` 的改动都会外溢到 joint 与所有外部调用方**。这是 v1 禁止改 `varerr` 的第二个理由（第一个是 §3.3 的调用次数）。
 
 #### 4.3.6 施加语义：幂等、逐行、成对
 
-**幂等性的来源**：`ddres` 每次调用都从 `y[]` **现场重算** `v[nv]`（[L1640-L1641](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1640-L1641)），`v[nv]` 不被累积修改。故在赋值语句后紧接一行扣除，无论 `ddres` 跑 2 次还是 3 次，每次都是「从原始 `y` 算出的残差 − 同一个偏差」，**不会重复扣除**。
+**幂等性的来源**：`ddres` 每次调用都从 `y[]` **现场重算** `v[nv]`（[L1640-L1641](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1640-L1641)），`v[nv]` 不被累积修改。故在赋值语句后紧接一行扣除，无论 `ddres` 跑 2 次还是 3 次，每次都是「从原始 `y` 算出的残差 − 同一个偏差」，**不会重复扣除**。
 
 **禁止的三种写法**（都会破坏幂等或自洽性）：
 
@@ -505,7 +505,7 @@ if (!Double.isFinite(b) || Math.abs(b) > ai.obsCorrectorMaxBias) {
 
 **trace**：每会话一次 `AR/AI_DEGRADE`，`reason=ionoopt=IFLC`，受 `AiOpts.traceDegrades` 控制。**只发一次**，不要每历元刷屏（IFLC 是全配置生效，不是偶发事件）。
 
-**门禁判定位置**：`relpos` 内已有 `nf` 局部量（[L152](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L152)），接口三门禁复用同一判断即可，**不重复读 `opt.ionoopt`**：
+**门禁判定位置**：`relpos` 内已有 `nf` 局部量（[L152](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L152)），接口三门禁复用同一判断即可，**不重复读 `opt.ionoopt`**：
 
 ```java
 boolean aiUsable = (opt.ionoopt != Constants.IONOOPT_IFLC);
@@ -561,7 +561,7 @@ public record CodeCorrection(double[] biasMeters, double[] varianceScale) {
 }
 ```
 
-**`CodeCorrection` 不含卫星号/频点号字段**：若带卫星号，core 就要做「卫星号 → 下标」映射，而 `refIdx`/`j` 是下标（[L1585-L1606](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1585-L1606)），映射一旦写错就是静默错行。**行序约定是唯一索引**，core 与 impl 共用同一份 `ctx.sats()` 顺序，零映射。
+**`CodeCorrection` 不含卫星号/频点号字段**：若带卫星号，core 就要做「卫星号 → 下标」映射，而 `refIdx`/`j` 是下标（[L1585-L1606](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1585-L1606)），映射一旦写错就是静默错行。**行序约定是唯一索引**，core 与 impl 共用同一份 `ctx.sats()` 顺序，零映射。
 
 #### 4.4.3 `ObsCorrectionContext`（接口三输入）
 
@@ -638,17 +638,17 @@ public record FixQualityContext(
 
 #### 4.4.5 字段来源与取值时机（接口一，精确到行）
 
-插入点：`if (valOk) {`（[L477](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L477)）之后、`if (++rtk.nfix >= opt.minfix)`（[L478](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L478)）之前。
+插入点：`if (valOk) {`（[L477](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L477)）之后、`if (++rtk.nfix >= opt.minfix)`（[L478](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L478)）之前。
 
 | 字段 | 来源 | 陷阱 |
 |---|---|---|
 | `ratio` | `rtk.sol.ratio`（L1970 / L1880） | 已是**本历元**值，可直取 |
 | `ns` | `rtk.sol.ns`（L442-L451） | 是「非零 `vsat` 卫星数」，不是 `relpos` 的局部 `ns` |
-| `nf` | `relpos` 的局部 `nf`（[L152](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L152)） | 已是 IFLC 归一后的值（IFLC 时恒 1）；**不要用 `opt.nf`**，否则 IFLC 下会与实际链路不符 |
+| `nf` | `relpos` 的局部 `nf`（[L152](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L152)） | 已是 IFLC 归一后的值（IFLC 时恒 1）；**不要用 `opt.nf`**，否则 IFLC 下会与实际链路不符 |
 | `nb` | `nb`（L462） | `nb <= 1` 时不会进入本分支（L467 守卫） |
-| `adrRms` | `rtk.x` vs `xa_arr`，索引 `IB(sat[i], f, opt)`（[L703](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L703)） | 只统计 `x[ib] != 0 && xa_arr[ib] != 0` 的项；`xa_arr` 是 L460 的工作缓冲区，插入点仍在作用域内 |
+| `adrRms` | `rtk.x` vs `xa_arr`，索引 `IB(sat[i], f, opt)`（[L703](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L703)） | 只统计 `x[ib] != 0 && xa_arr[ib] != 0` 的项；`xa_arr` 是 L460 的工作缓冲区，插入点仍在作用域内 |
 | `prrRms` / `pcrRms` | L473 那次 `ddres` 的 `v[]` + `vflg[]` + `nv` | 解码规则见 §5.1；**`vflg` 没有有效位** |
-| `pdop` | `wb.azel` + `RtklibCommon.dops`（[L596](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L596) 同签名） | **`rtk.sol.pdop` 恒为 0**，见 §5.1，禁用 |
+| `pdop` | `wb.azel` + `RtklibCommon.dops`（[L596](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L596) 同签名） | **`rtk.sol.pdop` 恒为 0**，见 §5.1，禁用 |
 | `epoch` | `rtk.epoch` | 直取 |
 
 **插入点为什么必须在 L478 自增之前**：`if (++rtk.nfix >= opt.minfix)` 这个分支体在接口一拒绝时会被整体跳过（§4.4.2）。若插入点放在 L478 之后，`nfix` 已自增，拒绝就无法阻止计数推进——本历元会被计为一次成功固定，`minfix` 门槛与 `rtk.nfix` 的语义都被破坏。**插入点在 L477 之后、L478 之前是唯一正确位置**，与 `nfix` 是否入特征无关。
@@ -697,7 +697,7 @@ if (aggressiveMinScale > 1.0) → 钳到 1.0 + 告警（等价保守模式）
 
 #### 4.5.3 `copyFrom`（必须实现，否则重建即丢参数）
 
-`RtkConfig` 是逐字段 `copyFrom`，`createRtk` 每次解算都重建 `Rtk` 并拷贝配置（[PostPosProcessor.java#L505-L516](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rinex/PostPosProcessor.java#L505-L516)）。若 `AiOpts` 不参与拷贝，前向/反向两次 `createRtk` 会把参数重置为默认值，表现为「配置里改了阈值但行为没变」。
+`RtkConfig` 是逐字段 `copyFrom`，`createRtk` 每次解算都重建 `Rtk` 并拷贝配置（[PostPosProcessor.java#L505-L516](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rinex/PostPosProcessor.java#L505-L516)）。若 `AiOpts` 不参与拷贝，前向/反向两次 `createRtk` 会把参数重置为默认值，表现为「配置里改了阈值但行为没变」。
 
 ```java
 public void copyFrom(AiOpts o) {
@@ -778,14 +778,14 @@ public void copyFrom(AiOpts o) {
 
 | # | 特征 | 定义 | 来源（精确到行） | 物理解释 |
 |---|---|---|---|---|
-| 1 | `adr` | 模糊度差 RMS：`sqrt(mean((x[ib] − xa_arr[ib])²))`，`ib = IB(sat[i], f, opt)`，只取 `x[ib] != 0 && xa_arr[ib] != 0` 的项 | `rtk.x` 与 `xa_arr`（[L460](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L460)、`manage_amb_LAMBDA` 输出）；索引函数 [IB](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L703) | 整数解离浮点解多远 |
-| 2 | `prr` | 相位残差 RMS：L473 那次 `ddres` 的 `v[]` 中 `isCode == 0` 行的 RMS | `v[]` / `vflg[]`（[L1766](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1766)） | 整数解与相位的拟合一致度 |
+| 1 | `adr` | 模糊度差 RMS：`sqrt(mean((x[ib] − xa_arr[ib])²))`，`ib = IB(sat[i], f, opt)`，只取 `x[ib] != 0 && xa_arr[ib] != 0` 的项 | `rtk.x` 与 `xa_arr`（[L460](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L460)、`manage_amb_LAMBDA` 输出）；索引函数 [IB](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L703) | 整数解离浮点解多远 |
+| 2 | `prr` | 相位残差 RMS：L473 那次 `ddres` 的 `v[]` 中 `isCode == 0` 行的 RMS | `v[]` / `vflg[]`（[L1766](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1766)） | 整数解与相位的拟合一致度 |
 | 3 | `pcr` | 伪距残差 RMS：同上 `isCode == 1` 行 | 同上 | 整数解与伪距的拟合一致度 |
-| 4 | `ratio` | LAMBDA ratio | `rtk.sol.ratio`（[L1970](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1970) / [L1880](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1880)） | 搜索空间可分性（保留作对照基线） |
-| 5 | `ns_fixed` | `nb / rtk.sol.ns` | `nb`（[L462](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L462)）、`rtk.sol.ns`（[L442-L451](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L442-L451)） | 几何冗余度 |
-| 6 | `pdop` | 位置 DOP，**局部重算**（`rtk.sol.pdop` 恒 0，不可用） | `wb.azel` + `RtklibCommon.dops`（[L596](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L596) 同签名） | 几何强度 |
+| 4 | `ratio` | LAMBDA ratio | `rtk.sol.ratio`（[L1970](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1970) / [L1880](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1880)） | 搜索空间可分性（保留作对照基线） |
+| 5 | `ns_fixed` | `nb / rtk.sol.ns` | `nb`（[L462](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L462)）、`rtk.sol.ns`（[L442-L451](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L442-L451)） | 几何冗余度 |
+| 6 | `pdop` | 位置 DOP，**局部重算**（`rtk.sol.pdop` 恒 0，不可用） | `wb.azel` + `RtklibCommon.dops`（[L596](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L596) 同签名） | 几何强度 |
 
-**`vflg` 解码规则（[L1766](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1766)）**——`vflg[nv]` 只有一个位域，**没有「有效位」**：
+**`vflg` 解码规则（[L1766](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1766)）**——`vflg[nv]` 只有一个位域，**没有「有效位」**：
 
 ```java
 int satRef    = (vflg[nv] >> 16) & 0xFF;
@@ -794,9 +794,9 @@ boolean isCode = ((vflg[nv] >> 4) & 0x01) == 1;
 int frq        =  vflg[nv] & 0x0F;
 ```
 
-`v[]` 中每一行都是**有效行**：无效行在 `nv++` 之前就 `continue` 了（[L1740](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1740) 的 `maxinno` 剔除、`validobs` 过滤等），因此不存在「按位过滤」这一步。**误把 `vflg & 1` 当作有效位（它其实是 `frq`）会静默丢掉所有奇数频点的行**，`prr`/`pcr` 变成半数样本的 RMS 而不报错。
+`v[]` 中每一行都是**有效行**：无效行在 `nv++` 之前就 `continue` 了（[L1740](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1740) 的 `maxinno` 剔除、`validobs` 过滤等），因此不存在「按位过滤」这一步。**误把 `vflg & 1` 当作有效位（它其实是 `frq`）会静默丢掉所有奇数频点的行**，`prr`/`pcr` 变成半数样本的 RMS 而不报错。
 
-**`pdop` 为什么必须局部重算**：`rtk.sol.pdop` 的赋值在 [L586-L598](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L586-L598)，输入是 `rtk.ssat[i].azel`；而 `ssat[].azel` 在**全仓库范围内从未被赋值**（`Ssat` 构造只分配 `new double[2]`，`zdres`/`ddres` 都不写它）。故 `dopNs` 恒为 0、`rtk.sol.pdop` **恒为 0**。仰角必须取自 `relpos` 的工作缓冲区 `wb.azel`（[L194](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L194)），按 `iu[i]` 索引：
+**`pdop` 为什么必须局部重算**：`rtk.sol.pdop` 的赋值在 [L586-L598](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L586-L598)，输入是 `rtk.ssat[i].azel`；而 `ssat[].azel` 在**全仓库范围内从未被赋值**（`Ssat` 构造只分配 `new double[2]`，`zdres`/`ddres` 都不写它）。故 `dopNs` 恒为 0、`rtk.sol.pdop` **恒为 0**。仰角必须取自 `relpos` 的工作缓冲区 `wb.azel`（[L194](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L194)），按 `iu[i]` 索引：
 
 ```java
 double[] dopAzel = new double[Constants.MAXSAT * 2];
@@ -813,7 +813,7 @@ double pdopLocal = dop[1];                            // dop = {gdop, pdop, hdop
 
 **不得回写 `rtk.sol.pdop`**：回写会改变 `sol` 输出与 `RESULT` trace 的 `pdop` 字段，破坏 I-1 的日志基线（§8）。
 
-**`prr`/`pcr` 必须取自 `v[]` 而非 `ssat.resp/resc`**：`ddres` 入口把 `resp`/`resc` 清零（[L1572-L1573](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1572-L1573) 附近），且只在**非参考星**上写值（[L1718](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1718)/[L1720](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1720)），参考星恒为 0。用 `resp`/`resc` 会系统性低估 RMS（少掉全部参考星行），且 `resp`/`resc` 是**按频点**存（长度 `nf`），无法区分 code/phase 行。
+**`prr`/`pcr` 必须取自 `v[]` 而非 `ssat.resp/resc`**：`ddres` 入口把 `resp`/`resc` 清零（[L1572-L1573](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1572-L1573) 附近），且只在**非参考星**上写值（[L1718](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1718)/[L1720](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1720)），参考星恒为 0。用 `resp`/`resc` 会系统性低估 RMS（少掉全部参考星行），且 `resp`/`resc` 是**按频点**存（长度 `nf`），无法区分 code/phase 行。
 
 **选 B 的理由**：
 
@@ -833,9 +833,9 @@ double pdopLocal = dop[1];                            // dop = {gdop, pdop, hdop
 
 | # | 特征 | 来源（精确到行/字段） | 说明 |
 |---|---|---|---|
-| 1 | 高度角、方位角 | `wb.azel`，按 `iu[i]` 索引（工作缓冲区 [L194](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L194)；由 `zdres` 在 [L1222-L1223](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1222-L1223) 写入） | **不是** `ssat[].azel`——该字段恒为 0（§5.1） |
+| 1 | 高度角、方位角 | `wb.azel`，按 `iu[i]` 索引（工作缓冲区 [L194](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L194)；由 `zdres` 在 [L1222-L1223](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1222-L1223) 写入） | **不是** `ssat[].azel`——该字段恒为 0（§5.1） |
 | 2 | 流动站 SNR、基准站 SNR | `ssat[sat-1].snrRover[f]`、`snrBase[f]` | 每历元由 `zdres` 写 |
-| 3 | 上一历元伪距残差、载波残差 | `ssat[sat-1].resp[frq]`、`resc[frq]` | **按频点存（长度 `nf`），不区分 code/phase 行**；只在非参考星写（[L1718](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1718)/[L1720](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1720)）；参考星恒 0；`ddres` 入口清零（[L1572-L1573](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1572-L1573) 附近） |
+| 3 | 上一历元伪距残差、载波残差 | `ssat[sat-1].resp[frq]`、`resc[frq]` | **按频点存（长度 `nf`），不区分 code/phase 行**；只在非参考星写（[L1718](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1718)/[L1720](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1720)）；参考星恒 0；`ddres` 入口清零（[L1572-L1573](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1572-L1573) 附近） |
 | 4 | 锁相时长 | `ssat[sat-1].lock[f]` | 每历元由 `udstate` 更新 |
 | 5 | 周跳标志、半周标志 | `ssat[sat-1].slip[f]`、`half[f]` | 位标志（`LLI_SLIP` / `LLI_HALFC`），不是布尔 |
 | 6 | 几何无关组合值 | `ssat[sat-1].gf[frq]` | **仅当 `opt.thresslip != 0` 时由 `detslpGf` 写**，否则恒 0；存的是当历元组合值，不是变化率 |
@@ -861,7 +861,7 @@ double pdopLocal = dop[1];                            // dop = {gdop, pdop, hdop
 | 9 | `gf` | `gf[frq]` | `opt.thresslip == 0` 时恒 0（**须在 `norm.json` 中标注该列可能恒零**） |
 | 10 | `vsat` | `vsat[frq]` | 恒 1（进入本表的星已通过 `zdres` 过滤） |
 | 11 | `fix` | `fix[frq]` | 0/1/2/3，按整数归一 |
-| 12 | `sysId` | `Integer.numberOfTrailingZeros(sys)`，`sys` 是**位掩码**（[Constants.java#L156-L163](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/constants/Constants.java#L156-L163)：`SYS_GPS=0x01, SYS_SBS=0x02, SYS_GLO=0x04, SYS_GAL=0x08, SYS_QZS=0x10, SYS_CMP=0x20, SYS_IRN=0x40, SYS_LEO=0x80`），故 `sysId` 取值为 `GPS=0 SBS=1 GLO=2 GAL=3 QZS=4 CMP=5 IRN=6 LEO=7` | **不做 one-hot**：星座数会随版本增长，one-hot 会让输入维漂移；且**绝不能直接喂 `sys` 原始位掩码**（`0x01/0x04/0x08` 在数值上毫无序关系，MLP 会学出「GAL 比 GLO 大」这种伪关系） |
+| 12 | `sysId` | `Integer.numberOfTrailingZeros(sys)`，`sys` 是**位掩码**（[Constants.java#L156-L163](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/constants/Constants.java#L156-L163)：`SYS_GPS=0x01, SYS_SBS=0x02, SYS_GLO=0x04, SYS_GAL=0x08, SYS_QZS=0x10, SYS_CMP=0x20, SYS_IRN=0x40, SYS_LEO=0x80`），故 `sysId` 取值为 `GPS=0 SBS=1 GLO=2 GAL=3 QZS=4 CMP=5 IRN=6 LEO=7` | **不做 one-hot**：星座数会随版本增长，one-hot 会让输入维漂移；且**绝不能直接喂 `sys` 原始位掩码**（`0x01/0x04/0x08` 在数值上毫无序关系，MLP 会学出「GAL 比 GLO 大」这种伪关系） |
 | 13 | `respWinMean` | 近 5 历元 `resp` 均值 | 历史不足 5 时按已有历元数取均值 |
 | 14 | `respWinStd` | 近 5 历元 `resp` 标准差 | 不足 2 个样本填 `0` |
 | 15 | `rescWinMean` | 近 5 历元 `resc` 均值 | 同 13 |
@@ -873,7 +873,7 @@ double pdopLocal = dop[1];                            // dop = {gdop, pdop, hdop
 2. `slip[frq] != 0`（该频点周跳）→ 只清空该 `(sat, frq)` 的窗口
 3. `ctx.sats()` 中不再出现的 `sat` → 从缓冲区移除（避免无界增长）
 
-**`dt` 的唯一来源是 `ctx.dt()`，且必须兜底**：`dt` 取自 `relpos` 的 `TimeSystem.timediff(obs[0].time, obs[nu].time)`（[L221](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L221)），`ddres` 用的也是同一个值。impl **不得自行从历元时间戳推算 `dt`**（那会引入第二套时间基准，与 core 的判定不一致）。
+**`dt` 的唯一来源是 `ctx.dt()`，且必须兜底**：`dt` 取自 `relpos` 的 `TimeSystem.timediff(obs[0].time, obs[nu].time)`（[L221](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L221)），`ddres` 用的也是同一个值。impl **不得自行从历元时间戳推算 `dt`**（那会引入第二套时间基准，与 core 的判定不一致）。
 
 `dt <= 0` 或非有限时 `1.5 * dt` 的判定失效（负值会让所有历元都被判为「缺口」，`0` 会让任何间隔都判为缺口），故定死：
 
@@ -1211,8 +1211,8 @@ GNSS 相邻历元高度相关（同卫星、同几何、同大气），随机切
 σ_dd = sqrt(Ri[nv] + Rj[nv])        // 单位：米；Ri/Rj 为 varerr 返回值（方差，m²）
 ```
 
-- 取 [RtkCore.java:2082-2083](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L2082-L2083) 的两行 `varerr` 结果**求和再开方**。`ddres` 是双差残差，其正常量级就是 `sqrt(Ri+Rj)`，不是单星 `σ_obs`（单星 σ 会系统性低估双差残差的正常量级）。
-- **必须取 `aiScale = 1` 的原生值**，即**方差膨胀之前**的 `Ri/Rj`（[RtkCore.java:2091-2093](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L2091-L2093) 的乘法之前）。若用膨胀后的方差，模型只要把 `varianceScale` 调大就能**自己给自己放宽门限**，A3 立刻失去意义（自我放宽，§4.3.4 的单侧膨胀被反向利用）。
+- 取 [RtkCore.java:2082-2083](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L2082-L2083) 的两行 `varerr` 结果**求和再开方**。`ddres` 是双差残差，其正常量级就是 `sqrt(Ri+Rj)`，不是单星 `σ_obs`（单星 σ 会系统性低估双差残差的正常量级）。
+- **必须取 `aiScale = 1` 的原生值**，即**方差膨胀之前**的 `Ri/Rj`（[RtkCore.java:2091-2093](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L2091-L2093) 的乘法之前）。若用膨胀后的方差，模型只要把 `varianceScale` 调大就能**自己给自己放宽门限**，A3 立刻失去意义（自我放宽，§4.3.4 的单侧膨胀被反向利用）。
 - 用 `σ_dd` 而不用固定 cm 门限的理由：`varerr` 已按仰角 / SNR / 基线长 / 钟漂给出方差（§4.3.4 的 `σ_obs² = varerr(...)`），`σ_dd` 随这些量自适应——大仰角卫星的门限自动收紧、低仰角自动放宽。固定 cm 门限做不到这一点（在大仰角上过松、低仰角上过严）。
 
 **第二步：前置守卫（只统计「改正前明显异常」的样本）。**
@@ -1252,7 +1252,7 @@ G0: |ddres_before| >= 3 * σ_dd
 4. **零基线必须恰为 0**：用同一 impl 但 `biasMeters` 全置 0 跑一遍，该跑的有效改正次数**必须为 0**（此时 `after == before`，R 与 D 均不成立）。这不是「显著性检验」，而是**判定链自检**：若非 0，说明配对索引错位或 `before/after` 取错了行（对应 A1-4 的行序对齐）。
    > v1.8 更正：上一版要求「显著高于零基线（≥ 3σ 二项检验）」。在新口径下零基线**恒为 0**，二项检验退化无意义；**统计显著性已内建在门限本身**（G0 的 3σ 与 D 分支的 3σ），不再需要额外检验。
 
-**数据来源（A3 可测量的前提）**：当前 `AI3/CORRECT` trace 只输出 `ns` / `nf` / `dt`（[RtkCore.java:1820-1821](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1820-L1821)），**不含逐行 `ddres` 与 `Ri`/`Rj`**，故 A3 现在无法直接测。须新增一条**仅评估期开启**的逐行 trace（或离线评估开关），输出 `(epoch, i, frq, ddres_before, ddres_after, Ri, Rj)` 六元组；约束两条：①该输出**不得进入生产热路径**（§3.3 的每历元开销约束）；②`biasMeters` 全置 0 的零基线跑必须用**同一开关、同一格式**，否则上面第 4 条的「零基线恒为 0」无法自检。
+**数据来源（A3 可测量的前提）**：当前 `AI3/CORRECT` trace 只输出 `ns` / `nf` / `dt`（[RtkCore.java:1820-1821](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1820-L1821)），**不含逐行 `ddres` 与 `Ri`/`Rj`**，故 A3 现在无法直接测。须新增一条**仅评估期开启**的逐行 trace（或离线评估开关），输出 `(epoch, i, frq, ddres_before, ddres_after, Ri, Rj)` 六元组；约束两条：①该输出**不得进入生产热路径**（§3.3 的每历元开销约束）；②`biasMeters` 全置 0 的零基线跑必须用**同一开关、同一格式**，否则上面第 4 条的「零基线恒为 0」无法自检。
 
 **第五步：不要求固定率提升。** 只要满足上述四条，A3 即通过——这正是「有出现辅助了固定就行了」的可判定形式。若同时观察到「改正后固定解偏差下降」的历元（强口径），优先报强口径，但**不以强口径为通过前提**。
 
@@ -1615,7 +1615,7 @@ LOSO 与真实部署的差距在于：LOSO 每站都用**自己的标签**扫阈
 
 #### 8.4.2 实现要点（与方案 A 的唯一差异是 Loss）
 
-- **契约完全不变**：输入 `[batch, 17]`、输出 `[batch, 2]`（`biasMeters` / `varianceScale`），钳位头仍是 `bias = B·tanh(z)`、`scale = 1 + (S-1)·sigmoid(z)`（[train.py#L96-L97](file:///D:/code/rtklib_java/rtklib-ai/training/obs_corrector/train.py#L96-L97)），与 Java 侧 core 逐位一致；**Java 侧零改动**，只换模型文件。
+- **契约完全不变**：输入 `[batch, 17]`、输出 `[batch, 2]`（`biasMeters` / `varianceScale`），钳位头仍是 `bias = B·tanh(z)`、`scale = 1 + (S-1)·sigmoid(z)`（[train.py#L96-L97](file:///D:/rtklib/rtklib_java/rtklib-ai/training/obs_corrector/train.py#L96-L97)），与 Java 侧 core 逐位一致；**Java 侧零改动**，只换模型文件。
 - **可导单步 WLS**（`training/obs_corrector/e2e_wls.py`）：几何矩阵 `H` **detach**（梯度不得穿透几何结构），仅模型输出的 `bias`/`scale` 参与回传；权重 `W = diag(1 / (base_var · scale))`，观测向量 `y = (raw_obs − comp_ranges) − bias`；只做**一步** `dx`，不迭代（保证可导）。
 - **导出**：`obs_corrector_e2e.onnx` + `.norm.json`（入 `training/out/`），产物与方案 A 并存。
 

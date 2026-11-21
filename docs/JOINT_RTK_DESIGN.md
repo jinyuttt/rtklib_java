@@ -1413,9 +1413,9 @@ core 中 `RtkCore` 的 `validobs`、`initx` 方法当前为 `private static`，j
 
 | 方法 | 位置 | 对应 core 方法 | 状态 |
 |------|------|---------------|------|
-| `JointDdRes.validobs(int iu, int ir, int f, int nf, double[] y)` | [JointDdRes.java](file:///D:/code/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java) | `RtkCore.validobs` | 保留，待切换 |
-| `JointDdRes.initx(double[] x, double[] P, int nx, double xi, double var, int i)` | [JointDdRes.java](file:///D:/code/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java) | `RtkCore.initx` | 保留，待切换 |
-| ~~`JointDdRes.SQR(double x)`~~ | ~~[JointDdRes.java](file:///D:/code/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java)~~ | `RtkCore.SQR`（已是 public） | **已删除（2026-10-28）** |
+| `JointDdRes.validobs(int iu, int ir, int f, int nf, double[] y)` | [JointDdRes.java](file:///D:/rtklib/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java) | `RtkCore.validobs` | 保留，待切换 |
+| `JointDdRes.initx(double[] x, double[] P, int nx, double xi, double var, int i)` | [JointDdRes.java](file:///D:/rtklib/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java) | `RtkCore.initx` | 保留，待切换 |
+| ~~`JointDdRes.SQR(double x)`~~ | ~~[JointDdRes.java](file:///D:/rtklib/rtklib_java/rtklib-joint/src/main/java/org/rtklib/java/joint/JointDdRes.java)~~ | `RtkCore.SQR`（已是 public） | **已删除（2026-10-28）** |
 
 ### 11.3 清理步骤
 

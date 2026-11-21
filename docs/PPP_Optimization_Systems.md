@@ -73,22 +73,25 @@
 
 - 基准：IFLC + Saastamoinen + IERS1996（tidecorr=7），GPS+GLO
 - 收敛后精度：**E = 2mm，N = 1.4cm，U = 4.8cm**（IGS20 框架，UNR 同日基准）
-- E 向已到浮点物理极限；U 向剩余 4.8cm 是当前主要优化空间（GPT3+VMF3 / IERS2010 方向）
+- E 向已到浮点物理极限；U 向剩余 4.8cm 是当前主要优化空间，已实测可归因的方向只有 GPT3 真网格（ΔU -1.3%~-1.9%），其余 U 向候选见 §1.3
 
 ### 1.3 浮点优化项清单（体系内可任意组合 A/B）
 
-| 优化项 | 开关 | 收益方向（实测 HKWS/HKSL） | 场景注意 | 优先级 |
+**数据口径**：下表收益均取自 `PppIndividualOptTest` 的香港 CORS 双站实测（HKWS / HKSL，RINEX 3.x 静态观测 + GBM 精密星历 SP3+CLK，全天 2880 历元（`maxEpochs=0` 全历元运行，默认 120 为 1 小时快跑）、skip=30，基线 = IFLC + Saastamoinen + GMF + IERS1996 潮汐(tidecorr=7) + 动态 PPP，FIX-ALG-029 修复后重测）。Δ 为相对基线变化，**正值为恶化**。原始表格见 [PPP_Extra_Optimizations.md §7.4](PPP_Extra_Optimizations.md)。**旧版表中无数据集标注的百分比区间已全部作废**——单站/单数据集结论不具备跨站可迁移性，下表以双站实测为准。
+
+| 优化项 | 开关 | 收益方向（实测 HKWS / HKSL） | 场景注意 | 优先级 |
 |--------|------|---------------------------|----------|--------|
-| 非组合 PPP（EST） | `opt.ionoopt = IONOOPT_EST` | N -30~40%、E -50~70%、U -7~22%，**三向全改善，当前最有效单项** | 状态量暴增（每卫星电离层），短弧段/低仰角星多时收敛慢 | 第一 |
-| ISB/IFCB/IFB | `enableIsbIfcbIfb` | E -57~75%（消除系统间偏差），存活率提升至 100% | **单 GPS 场景 ISB 不可观**，估计不可观参数反引噪声；N/U 在 IFLC 下有耦合恶化 | 第二（多系统必开） |
-| GPT3+VMF3 | `enableGpt3Vmf3` | N -20~34%、E -33~60% | **U 向曾恶化 +144~192%**（疑似缺 GPT3 网格文件致先验 ZTD 异常）——必须配 `useGpt3Grid=true` + 网格文件加载后再验 | 第三（网格就绪后） |
-| IERS2010 | `enableIers2010` | 当前实现实测 0%（缺 Hardisp 频率依赖 Love数，S1/S2 量级被噪声淹没） | 沿海站依赖 OTL 模型质量 | 第三（沿海站预期 U 向 1~3cm） |
+| 非组合 PPP（EST） | `opt.ionoopt = IONOOPT_EST` | HKWS：ΔN +43.8% / ΔE +117.6% / ΔU +139.7%（2879/2880 存活）；HKSL：**0/2880 完全无解**。**两站均未复现改善，站间不可迁移** | 状态量暴增（每卫星电离层），短弧段/低仰角星多时收敛慢；卫星-only OSB 对接收机码偏差无效。**本行未开 `enableIonoEstRobust`**，与 §8 中 ALGO + robust 标志 + DCB 的 2880/2880 属不同配置，不可互推 | **暂缓（待查）** |
+| ISB/IFCB/IFB | `enableIsbIfcbIfb` | 存活率 2880/2880（可复现）；HKWS：ΔN -28.1% / ΔE +57.6% / **ΔU +521.4%**；HKSL：ΔN +89.2% / ΔE +68.8% / **ΔU +207.4%**。**仅存活率提升稳定，N/E/U 改善站间不一致** | **单 GPS 场景 ISB 不可观**，估计不可观参数反引噪声；IFLC 下与 IFB 耦合致 U 向严重恶化 | **待查（不阻塞定版）** |
+| GPT3+VMF3 | `enableGpt3Vmf3` | fallback（无网格）：ΔN -40.6% / -41.7%，ΔE +83.5% / -51.8%（站间相反），ΔU +55.3% / +47.6%；**真网格**（`useGpt3Grid=true` + `gpt3_5.grd`）：ΔN -0.3% / +4.3%、ΔE +0.1% / -0.9%（≈基线），**ΔU -1.9% / -1.3%** | 必须配 `useGpt3Grid=true` + TU Wien 官方 5°×5° 网格文件；旧记「U 向恶化 +144~192%」为 vmf3 分母缺失 + ZHD 单位错配所致，已由 FIX-ALG-029 闭环 | 第二（网格就绪后） |
+| IERS2010 | `enableIers2010`（+ `enableAt1S2`） | 仅 `enableIers2010`：Δ 全为 0.0%（S1/S2 大气潮项已**内含**于该开关，位移 mm 量级，被基线噪声淹没）；`enableIers2010 + enableAt1S2`：ΔU **-29.9% / -54.6%**，ΔN -49.3% / +36.7%、ΔE +62.7% / +35.9%（站间不一致） | **归因警告**：`enableAt1S2` 在代码上只是把解算路由到 `PppCoreEx` 扩展路径（`PppBiasModel.extraDim()` 不增状态、不加任何改正项），故该 ΔU 只能来自解算路径差异，**不得当作「S1/S2 大气潮 U 收益」**，须与已知问题「PppCoreEx 浮点退化」一并复核；另缺 Hardisp 频率依赖 Love 数，当前实现非完整 IERS2010 | 待查（勿据此宣称 U 向收益） |
 | OSB 偏差改正 | `enableOsb` | 毫米~厘米级（观测值特异性偏差） | **PPP-AR 前置**：OSB 同时是 FCB 整数性来源 | 条件开启 |
 
 ### 1.4 限制
 
-- E 向 2mm 已到极限，浮点侧继续优化空间集中在 U 向（GPT3 网格就绪 + IERS2010 沿海场景）
-- ISB/IFCB/IFB 与 IFLC 存在耦合（N/U 恶化），需配合 AR 或改用非组合验证
+- E 向 2mm 已到极限，浮点侧继续优化空间集中在 U 向；**目前唯一可归因且跨站同向有效的 U 向项是 GPT3 真网格（ΔU -1.3%~-1.9%）**——`enableAt1S2` 组合下的 ΔU -30%~-55% 实为 `PppCoreEx` 路径差异，不能计入大气潮收益（见 §1.3 归因警告）
+- ISB/IFCB/IFB 与 IFLC 存在耦合（U 向 +207%~+521% 严重恶化），仅有「存活率提升至 100%」可稳定复现；**不可用「改用非组合 EST」作为规避手段**——EST 在 HKWS 同样恶化（ΔU +139.7%）、在 HKSL 直接 0/2880 无解
+- 浮点优化项的收益**站间不可迁移**：ISB/IFCB/IFB 的 N 向（-28.1% vs +89.2%）、GPT3 fallback 的 E 向（+83.5% vs -51.8%）在两站完全反向，EST 在 HKSL 直接无解——均禁止用单站结论外推；**跨站同向且可归因的仅 GPT3 真网格一项（U -1.3%~-1.9%）**
 - "开启了不一定更好"——各开关场景适用性见第 5 章矩阵
 
 ---
@@ -244,17 +247,19 @@ PPP-RTK 专属优化项（SSR 改正 → AR → Fix-and-Hold）
 
 ## 5. 场景优化矩阵（按体系）
 
-✅ 推荐开启 / ☑ 条件开启（前提满足） / ⚪ 无收益不推荐 / ⛔ 有害避免
+✅ 推荐开启 / ☑ 条件开启（前提满足） / ⚪ 无收益不推荐 / ⛔ 有害避免 / ⚠️ 待查（实测存疑，暂不默认开启）
 
 ### 浮点 PPP 体系
 
 | 开关 | 开阔静态 CORS | 城市动态 | 沿海站 | 单 GPS | 多系统多频 |
 |------|:---:|:---:|:---:|:---:|:---:|
-| 非组合 EST | ☑ | ⚪（短弧段收敛慢） | ☑ | ☑ | ✅ |
+| 非组合 EST | ⚠️ | ⚠️ | ⚠️（HKWS ΔU +139.7%） | ⚠️ | ⚠️（HKSL 0/2880 无解） |
 | GPT3+VMF3（含网格） | ✅ | ☑ | ☑ | ✅ | ✅ |
-| IERS2010 | ☑ | ⚪ | ✅（预期 U 1~3cm） | ☑ | ☑ |
-| ISB/IFCB/IFB | ⚪ | ⚪ | ⚪ | **⛔ 不可观** | ✅ |
+| IERS2010 | ☑ | ⚪ | ⚠️（`enableIers2010` 单独 0%；`+enableAt1S2` 的 ΔU -30%~-55% 实为 PppCoreEx 路径差异） | ☑ | ☑ |
+| ISB/IFCB/IFB | ⚪ | ⚪ | ⚪（ΔU +207%~+521%） | **⛔ 不可观** | ⚠️（仅存活率提升可复现） |
 | OSB | ☑ | ☑ | ☑ | ☑ | ✅（AR 前置） |
+
+> 降级依据：EST / ISB 两行整体降为「⚠️ 待查」，IERS2010 行的沿海站格降级——HKWS/HKSL 双站全天实测（§1.3、[PPP_Extra_Optimizations.md §7.4](PPP_Extra_Optimizations.md)）未复现任何可归因的 N/E/U 改善，原矩阵依据的无数据集标注结论已作废。IERS2010 单独开启实测无害但无收益（Δ=0.0%），故非沿海格保留「条件开启」。待 U 向劣化根因（含 `PppCoreEx` 路径差异）定位后再恢复评级。
 
 ### PPP-AR 体系（浮点收敛 + FCB/OSB 就绪为全局前提）
 
@@ -277,12 +282,12 @@ PPP-RTK 专属优化项（SSR 改正 → AR → Fix-and-Hold）
 
 ## 6. 场景 Preset（配置组合蓝图）
 
-> 以下为**配置组合建议**，不涉及新算法；每项收益以实测验收为准，定版冻结阶段仅组合既有开关。
+> 以下为**配置组合建议**，不涉及新算法；每项收益以实测验收为准，定版冻结阶段仅组合既有开关。**EST 目前为「待查」项（§1.3 / §5）**：LANDSLIDE / OPEN_SKY 中的 EST 仅作候选，启用前须先按 HKWS/HKSL 口径复核，未复核前默认按 IFLC 执行。
 
 | Preset | 体系 | 配置组合 | 目标 | 应用 |
 |--------|------|----------|------|------|
-| LANDSLIDE | 浮点 + PPP-AR | 非组合 EST + GPT3（网格）+ IERS2010 + `enablePppAR` + `enablePppPartialAR` + `enablePppArFixHold` | E/N < 1cm, U < 2cm | 滑坡/大坝监测 |
-| OPEN_SKY | 浮点 | 非组合 EST + GPT3（有网格）+ IERS2010 | E/N < 2cm, U < 5cm | 常规测绘/CORS |
+| LANDSLIDE | 浮点 + PPP-AR | 非组合 EST（待复核）+ GPT3（网格）+ IERS2010 + `enablePppAR` + `enablePppPartialAR` + `enablePppArFixHold` | E/N < 1cm, U < 2cm | 滑坡/大坝监测 |
+| OPEN_SKY | 浮点 | 非组合 EST（待复核）+ GPT3（有网格）+ IERS2010 | E/N < 2cm, U < 5cm | 常规测绘/CORS |
 | URBAN_CANYON | 浮点（抗差） | IFLC + 放宽 maxinno + 关闭 GPT3（网格未就绪时 U 向风险） | 不断星、坐标不飞 | 城市动态 |
 
 **验收前检查清单（D 类前置）**：LANDSLIDE 开 AR 前确认 `fcbFile` 加载、`nav.fcbWl != null`、ionoopt 与产品频点一致。

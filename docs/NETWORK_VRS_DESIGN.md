@@ -260,12 +260,12 @@ SSR **不能替代**基站观测（空间插值必须实测），但能显著提
 
 | 项 | 状态 | 位置 |
 |---|---|---|
-| 4076 消息号注册与分发 | ✅ | [Rtcm.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java) 的 `registerCustomDecoder` 注入点 |
-| 公共头部（12+3+8 位后 49 位） | ✅ | [IgsSsr4076Decoder.readCommonHeader](file:///D:/code/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsr4076Decoder.java) |
-| IM201/202 的 VTEC 质量指示 + 分层数 | ✅ | [parseVtecHeader](file:///D:/code/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsr4076Decoder.java) |
-| 分层头（高度/阶 N/次 M） | ✅ | [parseVtecLayers](file:///D:/code/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsr4076Decoder.java) |
-| 球谐系数 C/S | ✅ | [IgsSsrVtecLayer](file:///D:/code/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsrVtecLayer.java) |
-| VTEC 合成与 STEC 映射 | ✅ | [IgsSsrVtec](file:///D:/code/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsrVtec.java) |
+| 4076 消息号注册与分发 | ✅ | [Rtcm.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java) 的 `registerCustomDecoder` 注入点 |
+| 公共头部（12+3+8 位后 49 位） | ✅ | [IgsSsr4076Decoder.readCommonHeader](file:///D:/rtklib/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsr4076Decoder.java) |
+| IM201/202 的 VTEC 质量指示 + 分层数 | ✅ | [parseVtecHeader](file:///D:/rtklib/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsr4076Decoder.java) |
+| 分层头（高度/阶 N/次 M） | ✅ | [parseVtecLayers](file:///D:/rtklib/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsr4076Decoder.java) |
+| 球谐系数 C/S | ✅ | [IgsSsrVtecLayer](file:///D:/rtklib/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsrVtecLayer.java) |
+| VTEC 合成与 STEC 映射 | ✅ | [IgsSsrVtec](file:///D:/rtklib/rtklib_java/rtklib-ext-igs/src/main/java/org/rtklib/java/ext/igs/IgsSsrVtec.java) |
 
 > IM202 与 IM201 共用头部，但 IGS SSR v1 未定义其系数布局，故只解析到公共头，不臆测系数。
 > 完全归一化勒让德采用 Heiskanen &amp; Moritz 定义（P_00=1、P_10=√3·sinφ、P_11=√3·cosφ），

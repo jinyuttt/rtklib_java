@@ -1660,12 +1660,12 @@ s8  af1   ×2^-40  s/s    (clock drift)
 
 ### 实现要点
 
-- [Rtcm.java](file:///d:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java#L900) 新增 `decodeType1043()`，dispatch 注册 `case 1043`
+- [Rtcm.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java#L900) 新增 `decodeType1043()`，dispatch 注册 `case 1043`
 - 写入 `nav.seph[sat-1]`（Java 已有 `Seph` 类对应 C 版 `seph_t`）
 - `svid ≤ 0 || > 39` 检查（RTCM 标准 SBAS PRN 范围 120-158）
 - t0 按 cssrlib 对齐：取当日 GPST 的 86400 秒边界 + toc
 - 1043 不携带健康标志，`seph.svh = 0`
-- [PppProcessor.java](file:///d:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppProcessor.java#L1377) `isEphemerisType()` 加 1043
+- [PppProcessor.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppProcessor.java#L1377) `isEphemerisType()` 加 1043
 
 ### 验证
 

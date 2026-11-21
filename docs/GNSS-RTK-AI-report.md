@@ -5,7 +5,7 @@
 | 报告版本 | v1.3（追加 §8.10「激进钳位边界探索」四向对照与场景限定） |
 | 日期 | 2026-11-13 |
 | 范围 | 接口一（假固定判别）链路验证 + 接口三（观测改正）A1/A2/A3 第一阶段验收 + 方案 B 端到端对照实验 |
-| 判据来源 | [AI_ENHANCEMENT_DESIGN.md](file:///D:/code/rtklib_java/docs/AI_ENHANCEMENT_DESIGN.md) §7.5.1~§7.5.3（v1.9 / D17 / D18） |
+| 判据来源 | [AI_ENHANCEMENT_DESIGN.md](file:///D:/rtklib/rtklib_java/docs/AI_ENHANCEMENT_DESIGN.md) §7.5.1~§7.5.3（v1.9 / D17 / D18） |
 | 数据 | 现场私有数据 6 站 × 4 日 × 24 小时，576 run（不入库） |
 | 结论 | 接口三第一阶段 **A1/A2/A3 全部通过**，允许**显式注入**；**默认仍关闭**。方案 B（端到端坐标 Loss）**不交付**，作为「有效但不可控」的**实验 provider** 保留（默认关闭、仅显式注入）；最终交付**方案 A**（§8） |
 
@@ -37,8 +37,8 @@
 |---|---|
 | 注入点 | `AiProvider` + `AiHooks`，单例 ThreadLocal 隔离；接口一与接口三为**两个独立方法**，各自可返回 `null` |
 | 默认状态 | **无注入即关闭**。不注入时 core 不调用任何 AI 代码路径（I-1） |
-| 施加位置 | [RtkCore.java:2088](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L2088)：`v[nv] -= aiBias[refIdx*nf+frq] - aiBias[j*nf+frq]`（双差内成对扣除，参考星项同时进入） |
-| 输出钳位 | [RtkCore.java:1827-1852](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1827-L1852)：`varianceScale < 1.0` 强制置 1.0（单侧膨胀）；`|biasMeters| > obsCorrectorMaxBias`（默认 2.0 m）置 0（不钳边界） |
+| 施加位置 | [RtkCore.java:2088](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L2088)：`v[nv] -= aiBias[refIdx*nf+frq] - aiBias[j*nf+frq]`（双差内成对扣除，参考星项同时进入） |
+| 输出钳位 | [RtkCore.java:1827-1852](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1827-L1852)：`varianceScale < 1.0` 强制置 1.0（单侧膨胀）；`|biasMeters| > obsCorrectorMaxBias`（默认 2.0 m）置 0（不钳边界） |
 | 降级策略 | 输出非法（null / 长度不符 / 非有限）→ 本历元按**不干预**处理并写 `AI_DEGRADE` trace；实现抛异常同理（catch `Throwable`） |
 | 幂等性 | `v[nv]` 每历元由 `y` 现场重算，`ddres` 多次调用不重复扣除偏差 |
 | 热路径约束 | 每历元**批量推理一次**，`varerr` 只读查表，不在内层循环推理 |
@@ -63,8 +63,8 @@
 
 | 项 | 旧（错） | 新（对） |
 |---|---|---|
-| 模式 | 双差残差 `before` | **单星标签 `sd`**（默认，见 [assemble.py:74](file:///D:/code/rtklib_java/rtklib-ai/training/obs_corrector/assemble.py#L74)） |
-| 公式 | `label = before − median` | **`label = median_{(epoch,frq)}(before) − before`**（[assemble.py:219](file:///D:/code/rtklib_java/rtklib-ai/training/obs_corrector/assemble.py#L219)） |
+| 模式 | 双差残差 `before` | **单星标签 `sd`**（默认，见 [assemble.py:74](file:///D:/rtklib/rtklib_java/rtklib-ai/training/obs_corrector/assemble.py#L74)） |
+| 公式 | `label = before − median` | **`label = median_{(epoch,frq)}(before) − before`**（[assemble.py:219](file:///D:/rtklib/rtklib_java/rtklib-ai/training/obs_corrector/assemble.py#L219)） |
 | 与 core 对齐 | 反号 | 与 `v -= (bias_ref − bias_j)` 的**单星误差**语义同向 |
 
 符号错的后果是**整体反号**：模型输出与残差同向，实测 76.7% 的行的残差被**拉大**。修正后离线 RMS 由「虚高改善」变为真实改善。
@@ -212,7 +212,7 @@ A 组恒 0 ⇒ 配对索引与 `before/after` 取数无错位（A1-4 的行序�
 
 | # | 失效 | 后果 | 修正 | 验证 |
 |---|---|---|---|---|
-| 1 | **标签符号错**（`before − median`） | 模型输出与残差同向，76.7% 行的残差被**拉大**；离线指标虚高 | 改为 `median − before`（[assemble.py:219](file:///D:/code/rtklib_java/rtklib-ai/training/obs_corrector/assemble.py#L219)），默认模式改 `sd` | 离线 RMS 3.8337→3.3477 m；真实配对 A3 有效改正 10,386 行（同向压残差） |
+| 1 | **标签符号错**（`before − median`） | 模型输出与残差同向，76.7% 行的残差被**拉大**；离线指标虚高 | 改为 `median − before`（[assemble.py:219](file:///D:/rtklib/rtklib_java/rtklib-ai/training/obs_corrector/assemble.py#L219)），默认模式改 `sd` | 离线 RMS 3.8337→3.3477 m；真实配对 A3 有效改正 10,386 行（同向压残差） |
 | 2 | **A3 判据数学不可达**（`R(0.7)` 且 `D(3σ)`） | `reduction_reachable_rows = 0`，把「判据缺陷」误报成「模型无效」 | v1.9 放宽为 `R% (0.85)` **或** `Dσ (1.0σ_dd)`（D18） | 可达行 0 → 12,417；本批真实配对命中 10,386 行 |
 | 3 | **A2-4 过功效**（仅符号检验） | 0.03 颗的抖动被判成「明显变差」 | 加实用下限：下降 > 0.1 颗 **且** p < 0.05 才不通过 | C 组均值实为 **+0.0019 颗**，判通过 |
 | 4 | **A3 曾是离线代理** | `before/after` 非双跑配对，结论不可作为验收 | Java 侧三组双跑，真实 `before/after` | 零基线 A 组恒 0（0/1,051,993） |
@@ -241,7 +241,7 @@ A 组恒 0 ⇒ 配对索引与 `before/after` 取数无错位（A1-4 的行序�
 
 ## 7. 后续研究方向（**除第 1 项已执行外，其余本轮未执行**）
 
-本节第 2~4 项对应 [AI_ENHANCEMENT_DESIGN.md](file:///D:/code/rtklib_java/docs/AI_ENHANCEMENT_DESIGN.md) §4.6（激进模式，D19）与 §8.4（方案 B 执行结论），属**下一阶段改造计划**，与本次验收结论无因果关系，不得被读作「本轮已完成」；第 1 项已执行，记录见 §8：
+本节第 2~4 项对应 [AI_ENHANCEMENT_DESIGN.md](file:///D:/rtklib/rtklib_java/docs/AI_ENHANCEMENT_DESIGN.md) §4.6（激进模式，D19）与 §8.4（方案 B 执行结论），属**下一阶段改造计划**，与本次验收结论无因果关系，不得被读作「本轮已完成」；第 1 项已执行，记录见 §8：
 
 1. **方案 B：端到端训练（借鉴 TDL-GNSS / pyrtklib）**——**已执行完毕**（§8）。结论：在纯北斗 / 超短基线 / 静态站这一场景下，端到端坐标 Loss 未能超越人造标签监督（方案 A），**不交付**；但作为「有效但不可控」的实验 provider 保留（§8.9.6）。**重启调参的前置条件见 §8.9.7（四条，缺一不可）**。
 2. **激进模式 `enableAggressiveAi`**——允许 `varianceScale < 1.0`（带硬下限 0.1）与更大 `bias_max`，用于城市峡谷等动态场景。**当前为设计保留、代码未落地**（`AiOpts` 无该字段），未实施理由与重开条件见设计文档 §4.6 / D19（核心冲突：与 §4.3.4「单侧膨胀」契约级冲突）。
@@ -264,9 +264,9 @@ A 组恒 0 ⇒ 配对索引与 `before/after` 取数无错位（A1-4 的行序�
 
 架构**完全不变**：SPI 注入 + 默认关闭 + 失败退化；输入 17 维特征、输出 `[batch, 2]`（`biasMeters` / `varianceScale`），`tanh` / `sigmoid` 钳位与 Java 侧 core 逐位一致；导出 `obs_corrector_e2e.onnx` + `.norm.json`，**Java 侧零改动**，只换模型文件。
 
-差异只在训练目标（[train_e2e.py](file:///D:/code/rtklib_java/rtklib-ai/training/obs_corrector/train_e2e.py)）：
+差异只在训练目标（[train_e2e.py](file:///D:/rtklib/rtklib_java/rtklib-ai/training/obs_corrector/train_e2e.py)）：
 
-- 用 [e2e_wls.py](file:///D:/code/rtklib_java/rtklib-ai/training/obs_corrector/e2e_wls.py) 的可导单步 WLS 把 `bias`/`scale` 一路算到坐标，**几何矩阵 `H` 做 `detach`**，梯度只回传给模型输出；
+- 用 [e2e_wls.py](file:///D:/rtklib/rtklib_java/rtklib-ai/training/obs_corrector/e2e_wls.py) 的可导单步 WLS 把 `bias`/`scale` 一路算到坐标，**几何矩阵 `H` 做 `detach`**，梯度只回传给模型输出；
 - 数据切分与方案 A 完全一致（两层：先按站、再在训练站内按天），`seed` 相同，保证指标可比；
 - WLS 分组用整段 1 小时 run（压制单历元噪声，保留系统偏差）；
 - 两个 L2 正则：`β` 锚定 `H` 零空间、`scale` 锚定方差整体缩放自由度（两者对坐标 Loss 无梯度，不加会自由漂移）。
@@ -486,7 +486,7 @@ e2e-v2 D 的绝对错固数 4,101 为全表最低，但分解后：
 | **B 激进** | 方案 B | 坐标 Loss | 0.5 | `[0.5, 4.0]` |
 
 - A 的「保守 → 激进」是**同一模型只改推理钳位**；B 的是**两个独立模型**（仅 `scale_min` 不同，数据、切分、seed、`bias_max`、`hidden`、`lr`、`batch_runs` 全部一致）。
-- `--scale-min` 是本次为方案 B 新增的训练参数（[train_e2e.py](file:///D:/code/rtklib_java/rtklib-ai/training/obs_corrector/train_e2e.py)），训练侧与推理侧钳位同步。**此前的「激进模式测试」在方案 B 上是空操作**：模型 `scale_min` 恒为 1.0，推理放宽到 0.5 后没有任何样本落在新下界内，所以「A 激进无效果」的历史结论不能直接套用到方案 B。
+- `--scale-min` 是本次为方案 B 新增的训练参数（[train_e2e.py](file:///D:/rtklib/rtklib_java/rtklib-ai/training/obs_corrector/train_e2e.py)），训练侧与推理侧钳位同步。**此前的「激进模式测试」在方案 B 上是空操作**：模型 `scale_min` 恒为 1.0，推理放宽到 0.5 后没有任何样本落在新下界内，所以「A 激进无效果」的历史结论不能直接套用到方案 B。
 - **评估口径（与 §8.4 不同，禁止跨节比较）**：真值取外部独立文件 `truth.csv`；错误固定判据 0.20 m；RMS 按历元数加权合成；泛化口径取**测试站 2 站 × 4 日 = 192 run / 45,501 历元**（站级与站内日级两层切分均未参与训练与早停）。§8.4 的 H/V RMS 用自动真值 + 跨站算术聚合，故两节绝对值存在 1~6 cm 差异，只能各自内部比较。
 - 本节**只统计水平 H**，未复核垂直 V。
 

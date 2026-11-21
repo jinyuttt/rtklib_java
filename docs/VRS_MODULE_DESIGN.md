@@ -417,7 +417,7 @@ BDS 实例（13 星 → `maxSig = 64/13 = 4`，兜底裁剪时的选取结果）
 
 即每 5 个历元（75 s）发一次 1006 站坐标与 1042 星历，观测只发 BDS（无 GPS/GAL/QZS）。
 
-解码端靠 `obsflag` 累积同一同步帧的多条消息（[Rtcm.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java#L1749-L1752)）：
+解码端靠 `obsflag` 累积同一同步帧的多条消息（[Rtcm.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java#L1749-L1752)）：
 
 - 第 1 条消息 `sync=1` → 解码结束时 `obsflag=0`
 - 第 2 条消息进入 `decodeMsmHead` 时 `obsflag==0` → **不清空**已解出的观测，直接追加

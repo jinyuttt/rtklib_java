@@ -1741,7 +1741,7 @@ if (segmentSigmaFilter != null && rtk.sol.stat == Constants.SOLQ_FIX) {
 
 ### 17.3 静态短基线RTK逐项对照实测
 
-**测试文件**：[RtkOptimizationTest.java](file:///D:/code/rtklib_java/rtklib-core/src/test/java/org/rtklib/java/RtkOptimizationTest.java)
+**测试文件**：[RtkOptimizationTest.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/test/java/org/rtklib/java/RtkOptimizationTest.java)
 
 **场景**：RTK静态，短基线，Fix-and-Hold模式
 

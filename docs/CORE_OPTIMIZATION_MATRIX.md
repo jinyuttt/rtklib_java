@@ -108,7 +108,7 @@
 | T3 | 基站稳定性监测 | `BaseStationMonitor` | — | — | ✅ | ✅ | ✅ | ✅ | **监控工具**：SPP窗口差分检测基站位移 `【检测阈值10m/突变+5m/漂移】` |
 | T4 | 滑坡监测专用配置 | `LandslideMonitorTest` 用例 | — | — | ✅ | — | — | — | **静态长基线示例**：自适应Q+锚固+大气冻结组合 `【BDS三频+ARMODE_FIXHOLD】` |
 | T5 | SSR电离层 | `ionoopt=SSR/IONOOPT_TEC` | — | — | — | — | ✅ | ✅ | **PPP通用**：外部IONEX/SSR产品提供电离层先验→收敛加速 |
-| T6 | S1/S2大气潮 | `enableAt1S2` | false | — | — | — | — | ✅ | ✅ | **PPP通用**：IERS2010扩展，S1/S2大气潮改正 `【mm级，需enableIers2010=true；C版RTKLIB未实现S1/S2大气潮，Java版新增】` |
+| T6 | S1/S2大气潮 | `enableAt1S2` | false | — | — | — | — | ✅ | ✅ | **PPP通用**：`AtmosphericTideS1S2` 改正实际由 `enableIers2010` 触发并叠加，本开关仅切换解算路径到 `PppCoreEx` `【mm级；C版RTKLIB未实现S1/S2大气潮，Java版新增】` |
 | T7 | MW组合DCB校正 | 自动（mwmeas内） | false | — | — | — | — | ✅ | ✅ | **PPP-AR基础**：从nav.cbias读码偏差改正P1/P2→提升WL整数性 |
 | T8 | DCB文件独立读取 | `DcbReader` | — | — | — | — | — | ✅ | ✅ | **PPP工具**：支持CODE .DCB + IGS .BIA/.BSX格式 |
 | T9 | Joseph形式协方差更新 | `KalmanFilter.update()` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **通用（数值稳定性）**：C版用标准形式`P=(I-KH)P`，Java版用Joseph形式`P=(I-KH)P(I-KH)ᵀ+KRKᵀ`，保证协方差正半定 `【病态条件下差异可达厘米级】` |

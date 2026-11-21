@@ -413,7 +413,7 @@ System.arraycopy(basePos, 0, rtk.rb, 0, 3);
 
 **PRIDE-PPPAR验证**: 通过阅读PRIDE源码`read_satclk.f90`，确认PRIDE也是直接存储秒值（`a0(k,nprn(k))=c(1)`），不乘CLIGHT。
 
-**修复文件**: [ClkReader.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ephemeris/ClkReader.java)
+**修复文件**: [ClkReader.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ephemeris/ClkReader.java)
 
 **教训**: 移植C代码时必须逐行对比关键数据流，特别是单位转换。C版中clk存秒、std存秒，pephclk中std乘CLIGHT转米，这个隐含的约定必须完整移植。
 
@@ -450,7 +450,7 @@ if (!rtk->opt.dynamics) {
 }
 ```
 
-**修复文件**: [PppCore.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java)
+**修复文件**: [PppCore.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java)
 
 **教训**: PPP的状态转移方程必须按模式分别实现。静态模式位置保持不变（只增过程噪声），动态模式每历元重新初始化位置为SPP位置。混淆两者会导致位置不更新或过度平滑。
 
@@ -553,4 +553,4 @@ if (!rtk->opt.dynamics) {
 
 **说明**：24小时静态PPP下，基础版与优化版最终位置差异在分米级（N: ±0.14~0.18m, E: ±0.03~0.23m, U: 0.26~0.40m），GPT3+VMF3和IERS2010对位置估计的影响仍属分米级。成功历元比例较低（~17%），需进一步排查PPP收敛问题。
 
-> **PPP扩展优化技术详细文档**：[PPP_Extra_Optimizations.md](file:///D:/code/rtklib_java/docs/PPP_Extra_Optimizations.md) — 包含GPT3+VMF3、IERS2010、ISB/IFCB/IFB、PPP-AR的完整原理、实现细节、配置说明和改进路线图。
+> **PPP扩展优化技术详细文档**：[PPP_Extra_Optimizations.md](file:///D:/rtklib/rtklib_java/docs/PPP_Extra_Optimizations.md) — 包含GPT3+VMF3、IERS2010、ISB/IFCB/IFB、PPP-AR的完整原理、实现细节、配置说明和改进路线图。

@@ -75,7 +75,7 @@
 
 ### 2.3 实现细节
 
-**调用位置**：[PppCore.java:973-975](file:///d:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L973-L975) — `modelTrop()` 方法中
+**调用位置**：[PppCore.java:973-975](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L973-L975) — `modelTrop()` 方法中
 
 ```java
 if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableGpt3Vmf3) {
@@ -157,7 +157,7 @@ IERS2010潮汐模型在IERS1996（RTKLIB标准）基础上增加三项改正：
 
 ### 3.3 实现细节
 
-**调用位置**：[PppCore.java:698-706](file:///d:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L698-L706) — `pppRes()` 方法中
+**调用位置**：[PppCore.java:880-894](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L880-L894) — `pppRes()` 方法中（`PppCoreEx.pppResEx()` 复用同一方法，故扩展路径同样施加）
 
 ```java
 if (rtk.rtkConfig != null && rtk.rtkConfig.ppp.enableIers2010) {
@@ -196,8 +196,8 @@ dr_E = -9mm * m1,  dr_N = -9mm * m2,  dr_U = +33mm * m1
 
 ```java
 RtkConfig cfg = new RtkConfig();
-cfg.ppp.enableIers2010 = true;   // 启用IERS2010潮汐模型
-cfg.ppp.enableAt1S2 = true;      // S1/S2大气潮开关（已实现，由AtmosphericTideS1S2计算）
+cfg.ppp.enableIers2010 = true;   // 启用IERS2010潮汐模型（S1/S2大气潮随之无条件叠加）
+cfg.ppp.enableAt1S2 = true;      // 仅切换解算路径到 PppCoreEx，不控制 S1/S2 大气潮改正
 // 同时需要 opt.tidecorr = 1 或 7 以启用潮汐改正
 ```
 
@@ -206,6 +206,8 @@ cfg.ppp.enableAt1S2 = true;      // S1/S2大气潮开关（已实现，由Atmosp
 - 固体潮使用dehanttideinel（含P2+P3项，频率依赖Love数），精度满足mm级PPP需求
 - 极潮使用IERS标准公式（9mm/9mm/-33mm系数），未含频率依赖的Love数虚部改正（亚mm级影响）
 - 海潮负荷依赖外部OTL模型（FES2004/ESCAT等），精度取决于OTL网格分辨率
+- **`enableAt1S2` 与大气潮无代码关联**：`PppOptimizations.tideDisplacementIers2010()` 仅检查 `enableIers2010`，S1/S2 大气潮无条件内含；`enableAt1S2` 只决定 `PppProcessor` 是否把解算路由到 `PppCoreEx` 扩展路径。单独开启实测 Δ 全为 0.0%（mm 级被噪声淹没）
+- **实测归因警示**：`enableIers2010+enableAt1S2` 组合在香港双站出现 ΔU -30%~-55%，该差异是 `PppCoreEx` 路径差异（迭代提交语义），**不得计为 S1/S2 大气潮收益**
 - **改进方向**：极潮频率依赖虚部改正（亚mm级，当前影响可忽略）
 
 ---
@@ -230,7 +232,7 @@ cfg.ppp.enableAt1S2 = true;      // S1/S2大气潮开关（已实现，由Atmosp
 x = [pos(3), clk(1), ztd(1~3), amb(N*nf), ISB(3), IFCB(MAXSAT), IFB(4)]
 ```
 
-扩展维度计算（[PppBiasModel.extraDim()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppBiasModel.java#L11)）：
+扩展维度计算（[PppBiasModel.extraDim()](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppBiasModel.java#L11)）：
 
 ```java
 int dim = 0;
@@ -241,7 +243,7 @@ if (cfg.ppp.estimateIfb)  dim += 4;           // GPS/GLO/GAL/BDS
 
 ### 4.3 实现细节
 
-**调用入口**：[PppProcessor.java:829-836](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppProcessor.java#L829-L836)
+**调用入口**：[PppProcessor.java:829-836](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppProcessor.java#L829-L836)
 
 ```java
 if (rtk.rtkConfig != null && (rtk.rtkConfig.ppp.enableIsbIfcbIfb || rtk.rtkConfig.pppAr.enableAR
@@ -254,7 +256,7 @@ if (rtk.rtkConfig != null && (rtk.rtkConfig.ppp.enableIsbIfcbIfb || rtk.rtkConfi
 }
 ```
 
-**PppCoreEx处理流程**（[PppCoreEx.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java)）：
+**PppCoreEx处理流程**（[PppCoreEx.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java)）：
 
 1. 计算扩展状态向量维度 `nx = nxOrig + extraDim`
 2. 若状态向量维度不匹配，重新分配 `rtk.x[]`、`rtk.P[]`、`rtk.xa[]`、`rtk.Pa[]`
@@ -262,7 +264,7 @@ if (rtk.rtkConfig != null && (rtk.rtkConfig.ppp.enableIsbIfcbIfb || rtk.rtkConfi
 4. 迭代求解：`pppResEx()` 构建观测方程 → Kalman滤波更新 → 残差检验
 5. 收敛后按顺序尝试：三频 EWL→WL→NL（`enableMultiFreqAR`）→ 双频 WL+NL → Partial AR → BDS-3 AR → Fix-and-Hold
 
-**状态向量扩展**（[PppBiasModel.extendStateVector()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppBiasModel.java#L61)）：
+**状态向量扩展**（[PppBiasModel.extendStateVector()](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppBiasModel.java#L61)）：
 
 ```java
 // 复制原有状态和协方差到扩展向量
@@ -276,13 +278,13 @@ PNew[idx * nxNew + idx] = varIfcb;  // IFCB: 30² = 900 m²
 PNew[idx * nxNew + idx] = varIfb;   // IFB: 60² = 3600 m²
 ```
 
-**观测方程扩展**（[PppCoreEx.pppResEx()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L297)）：
+**观测方程扩展**（[PppCoreEx.pppResEx()](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L297)）：
 
 - ISB：GLO/GAL/BDS系统的观测方程中，对应ISB参数的H矩阵元素设为1.0
 - IFCB：第二频率载波相位观测方程中，对应卫星IFCB参数的H矩阵元素设为1.0
 - IFB：各系统码偏差观测方程中，对应系统IFB参数的H矩阵元素设为1.0
 
-**过程噪声更新**（[PppCoreEx.udstateEx()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L251)）：
+**过程噪声更新**（[PppCoreEx.udstateEx()](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L251)）：
 
 ```java
 // ISB/IFCB/IFB参数采用随机游走模型
@@ -352,7 +354,7 @@ PPP-AR（Ambiguity Resolution）通过固定整周模糊度，将PPP从浮点解
 
 ### 5.3 WL+NL 固定（pppAmbFixWlNl）
 
-**调用位置**：[PppCoreEx.java:214-221](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L214-L221)
+**调用位置**：[PppCoreEx.java:214-221](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L214-L221)
 
 ```java
 // 三频分支优先（enableMultiFreqAR）
@@ -368,7 +370,7 @@ if (cfg.pppAr.enableAR && rtk.sol.stat != Constants.SOLQ_FIX) {
 }
 ```
 
-**WL固定流程**（[PppAmbFix.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFix.java)）：
+**WL固定流程**（[PppAmbFix.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFix.java)）：
 
 1. 遍历所有卫星和频率，收集方差 < 1.0 cycle² 的模糊度
 2. 保留GPS、Galileo和BDS卫星（`SYS_GPS | SYS_GAL | SYS_CMP`）
@@ -383,7 +385,7 @@ if (cfg.pppAr.enableAR && rtk.sol.stat != Constants.SOLQ_FIX) {
 3. LAMBDA搜索，检查ratio > `cfg.pppAr.arRatioNl`（默认3.0）
 4. 若NL ratio不足，返回失败
 
-**FCB/OSB产品支持**（[PppAmbFix.getWlFcb()/getNlFcb()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFix.java#L1237-L1256)）：
+**FCB/OSB产品支持**（[PppAmbFix.getWlFcb()/getNlFcb()](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFix.java#L1237-L1256)）：
 
 ```java
 // 支持两种FCB产品来源：
@@ -412,7 +414,7 @@ rtk.ssat[sat - 1].fix[f] = 1;
 
 ### 5.4 Fix-and-Hold（pppArFixHold）
 
-**调用位置**：[PppCoreEx.java:245-247](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L245-L247)
+**调用位置**：[PppCoreEx.java:245-247](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L245-L247)
 
 模糊度固定后，将其协方差从浮点值(~1.0)收紧到`fixHoldVar`(默认1e-6)，使后续历元中该模糊度不会被重新浮点化，从而"锁定"固定解。
 
@@ -428,7 +430,7 @@ if (cfg.pppAr.enableFixHold && rtk.sol.stat == Constants.SOLQ_FIX) {
 
 ### 5.5 Partial AR（pppPartialAR）
 
-**调用位置**：[PppCoreEx.java:223-229](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L223-L229)
+**调用位置**：[PppCoreEx.java:223-229](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L223-L229)
 
 当全模糊度固定比率检验失败时，尝试固定一个子集：
 
@@ -452,11 +454,11 @@ if (cfg.pppAr.enablePartialAR && rtk.sol.stat != Constants.SOLQ_FIX) {
 
 ### 5.6 BDS-3 PPP-AR（pppAmbFixBds3）
 
-**调用位置**：[PppCoreEx.java:231-237](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L231-L237)
+**调用位置**：[PppCoreEx.java:231-237](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCoreEx.java#L231-L237)
 
 BDS-3新信号B1C(1575.42MHz)和B2a(1176.45MHz)的模糊度固定，仅针对PRN 19~46的BDS-3 MEO/IGSO卫星。固定策略与GPS/GAL的WL+NL一致。
 
-实现类：[PppAmbFixBds3.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFixBds3.java)
+实现类：[PppAmbFixBds3.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppAmbFixBds3.java)
 
 ```java
 if (cfg.pppAr.enableBds3AR) {
@@ -551,7 +553,7 @@ PPP-RTK扩展开关：`cfg.pppRtk.enable`
 
 ### 7.1 单元测试
 
-**文件**：[PppOptimizationsTest.java](file:///D:/code/rtklib_java/rtklib-core/src/test/java/org/rtklib/java/ppp/PppOptimizationsTest.java)
+**文件**：[PppOptimizationsTest.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/test/java/org/rtklib/java/ppp/PppOptimizationsTest.java)
 
 | 测试方法 | 验证内容 |
 |----------|----------|
@@ -571,7 +573,7 @@ PPP-RTK扩展开关：`cfg.pppRtk.enable`
 
 ### 7.2 集成测试
 
-**文件**：[RtkPppIntegrationTest.java](file:///D:/code/rtklib_java/rtklib-core/src/test/java/org/rtklib/java/ppp/RtkPppIntegrationTest.java)
+**文件**：[RtkPppIntegrationTest.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/test/java/org/rtklib/java/ppp/RtkPppIntegrationTest.java)
 
 | 测试方法 | 优化配置 |
 |----------|----------|
@@ -583,7 +585,7 @@ PPP-RTK扩展开关：`cfg.pppRtk.enable`
 
 ### 7.3 对比测试结果
 
-**文件**：[PppProductIntegrationTest.java](file:///D:/code/rtklib_java/rtklib-product/src/test/java/org/rtklib/java/product/PppProductIntegrationTest.java)
+**文件**：[PppProductIntegrationTest.java](file:///D:/rtklib/rtklib_java/rtklib-product/src/test/java/org/rtklib/java/product/PppProductIntegrationTest.java)
 
 **数据**：静态CORS站，RTCM流，1小时观测（15秒采样率），精密星历（SP3+CLK）
 
@@ -624,9 +626,9 @@ PPP-RTK扩展开关：`cfg.pppRtk.enable`
 
 ### 7.4 逐项对照测试（RINEX数据）
 
-**文件**：[PppIndividualOptTest.java](file:///D:/code/rtklib_java/rtklib-core/src/test/java/org/rtklib/java/ppp/PppIndividualOptTest.java)
+**文件**：[PppIndividualOptTest.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/test/java/org/rtklib/java/ppp/PppIndividualOptTest.java)
 
-**数据**：CORS静态站RINEX 3.x观测 + GBM精密星历(SP3+CLK)，120历元（1小时，30s采样），跳过前30历元收敛期
+**数据**：CORS静态站RINEX 3.x观测 + GBM精密星历(SP3+CLK)，全天 2880 历元（30s采样），跳过前30历元收敛期。**注意**：测试类默认 `maxEpochs = 120`（1小时快跑），下表全天结果需以 `maxEpochs = 0`（全历元）运行 `runIndividualOptComparison`。
 
 **基准配置**：IFLC+Saastamoinen+GMF+IERS1996潮汐(tidecorr=7)+动态PPP
 
@@ -661,6 +663,8 @@ PPP-RTK扩展开关：`cfg.pppRtk.enable`
 | 非组合PPP(EST) | 0/2880 | - | - | - | - | - | -100% | -100% | -100% |
 
 > EST 在 HKSL 站 0/2880 为独立问题（EST 模式不经过 GPT3 路径，本修复不影响其行为），归档待查。
+>
+> **配置差异说明**：本表 EST 行未开启 `enableIonoEstRobust`（默认 false）。[PPP_Optimization_Systems.md §8](PPP_Optimization_Systems.md) 中 ALGO 站 EST 2880/2880 是在 `enableIonoEstRobust=true` + DCB 产品下取得，属不同配置，**不能互相替代或外推**；香港双站结论仅代表默认配置。
 
 #### 逐项对照结论
 
@@ -669,14 +673,14 @@ PPP-RTK扩展开关：`cfg.pppRtk.enable`
 | **GPT3+VMF3（fallback）** | ✅ N大幅降 | ⚠️ 站间不一致 | ❌ +48%~+55% | 兜底先验质量限制（简化球谐 ah/aw 与水汽压先验），生产建议加载网格 |
 | **GPT3+VMF3+GRID（真网格）** | ≈基准 | ≈基准 | ✅ **-1.3%~-1.9%** | **U/3D 均略优于 NMF 基线**，推荐与官方 gpt3_5.grd 配合使用 |
 | **IERS2010** | 0% | 0% | 0% | 无可观测效果。当前实现实质=IERS1996+S1/S2大气潮，缺少Hardisp频率依赖Love数；海潮负荷对非沿海站无效 |
-| **IERS2010+S1/S2** | 站间不一致 | 站间不一致 | ✅ -30%~-55% | S1/S2大气潮对香港沿海站U向收益显著 |
+| **IERS2010+S1/S2** | 站间不一致 | 站间不一致 | ⚠️ -30%~-55% | **不是 S1/S2 大气潮收益**：S1/S2 已内含于 `enableIERS2010`（单独开启实测 0.0%）；`enableAt1S2` 仅切换解算路径到 `PppCoreEx`，该 U 向差异来自扩展路径的迭代提交语义差异，属待查路径问题 |
 | **ISB/IFCB/IFB** | ❌ | ❌ | ❌ +207%~+521% | 修复GPT3后暴露的独立问题（IFLC+IFB耦合），归档待查，不阻塞定版 |
-| **非组合PPP(EST)** | ❌ | ❌ | ❌ | HKWS站恶化、HKSL站完全无解，独立问题归档待查 |
+| **非组合PPP(EST)** | ❌ | ❌ | ❌ | HKWS站恶化、HKSL站完全无解，独立问题归档待查（默认配置，未开 `enableIonoEstRobust`） |
 
 **关键发现**：
-1. **GPT3+VMF3 的 U 向恶化已由 FIX-ALG-029 闭环**：根因为 vmf3 映射函数缺失连续分数分母（仅实现分子）+ ZHD 单位错配（hPa 按 Pa 系数计算，低估 100 倍）+ c 系数硬编码 0，详见 [ALGORITHM_FIX_LOG.md](file:///D:/code/rtklib_java/docs/ALGORITHM_FIX_LOG.md) FIX-ALG-029；缺 GPT3 网格文件的假设被 A/B 实测证伪（真网格与 fallback 修复前结果几乎一致）
+1. **GPT3+VMF3 的 U 向恶化已由 FIX-ALG-029 闭环**：根因为 vmf3 映射函数缺失连续分数分母（仅实现分子）+ ZHD 单位错配（hPa 按 Pa 系数计算，低估 100 倍）+ c 系数硬编码 0，详见 [ALGORITHM_FIX_LOG.md](file:///D:/rtklib/rtklib_java/docs/ALGORITHM_FIX_LOG.md) FIX-ALG-029；缺 GPT3 网格文件的假设被 A/B 实测证伪（真网格与 fallback 修复前结果几乎一致）
 2. **真网格路径稳定优于 NMF 基线**（HKWS U -1.9%、HKSL U -1.3%），GPT3 网格气象先验 + VMF3 映射函数组合有效
-3. **IERS2010当前实现不完整**：缺少Hardisp频率依赖Love数（IERS2010 vs IERS1996核心差异）；S1/S2大气潮在沿海站（HKWS/HKSL）U向收益 -30%~-55% 显著
+3. **IERS2010当前实现不完整**：缺少Hardisp频率依赖Love数（IERS2010 vs IERS1996核心差异）；S1/S2大气潮已内含于 `enableIers2010`，单独开启实测 Δ=0.0%（mm级被噪声淹没），**不存在可观测 U 向收益**。`+enableAt1S2` 的 -30%~-55% 实为 `PppCoreEx` 路径差异，不得归因于大气潮
 4. **ISB/IFCB/IFB 与 EST 为独立遗留问题**：U 向恶化/无解与 GPT3 路径无耦合，归档后续排查
 
 ---
@@ -697,8 +701,8 @@ PPP-RTK扩展开关：`cfg.pppRtk.enable`
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `enableIers2010` | boolean | false | IERS2010潮汐模型 |
-| `enableAt1S2` | boolean | false | S1/S2大气潮（已实现，由AtmosphericTideS1S2计算） |
+| `enableIers2010` | boolean | false | IERS2010潮汐模型（S1/S2 大气潮随之无条件叠加） |
+| `enableAt1S2` | boolean | false | 仅切换解算路径到 `PppCoreEx`，**不控制 S1/S2 大气潮改正** |
 
 > 以上字段均属 `cfg.ppp`（`PppOpts`）。
 
@@ -769,7 +773,7 @@ PPP-RTK扩展开关：`cfg.pppRtk.enable`
 ### 9.2 已完成（v3.0.0新增）
 
 - [x] VMF3 OP文件读取与集成（`Vmf3OpReader`，按MJD线性插值ah/aw/bH/bW）
-- [x] IERS2010 S1/S2大气潮实现（`AtmosphericTideS1S2`，`cfg.ppp.enableAt1S2`开关）
+- [x] IERS2010 S1/S2大气潮实现（`AtmosphericTideS1S2`，由 `cfg.ppp.enableIers2010` 触发并无条件叠加；`enableAt1S2` 仅用于路由到 `PppCoreEx`）
 - [x] IERS2010完整极潮（`Tides.tidePole()`，IERS标准9mm/9mm/-33mm公式）
 - [x] IONEX电离层网格读取与STEC内插（`IonexReader`，`IONOOPT_TEC`）
 - [x] OSB模型观测方程集成（`PppOsbModel`，IF组合+单频改正，注入`pppRes()`）
@@ -804,9 +808,9 @@ PPP-RTK（Precise Point Positioning - Real Time Kinematic）通过接收SSR（St
 
 ### 10.2 实现细节
 
-**核心处理器**：[PppRtkCore.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppRtkCore.java)
+**核心处理器**：[PppRtkCore.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppRtkCore.java)
 
-**SSR改正应用**：[SsrCorrector.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/SsrCorrector.java)
+**SSR改正应用**：[SsrCorrector.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/SsrCorrector.java)
 
 ```java
 // 在PppRtkCore.ppprtkRes()中应用SSR改正
@@ -817,13 +821,13 @@ double ssrCodeBiasCorr = SsrCorrector.applyCodeBiasCorr(ssr, sat, code, time);
 double ssrPhaseBiasCorr = SsrCorrector.applyPhaseBiasCorr(ssr, sat, freq, time);
 ```
 
-**RTCM SSR解码**：[Rtcm.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java)
+**RTCM SSR解码**：[Rtcm.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtcm/Rtcm.java)
 
 支持消息类型：
 - MT1057-1068：SSR轨道/钟差/码偏差/相位偏差
 - MT1240-1270：GAL/QZS/SBS/BDS/IRN SSR轨道/钟差/码偏差/相位偏差（标准RTCM SSR，非CLAS）
 
-**SSR数据结构**：[Ssr.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/Ssr.java)
+**SSR数据结构**：[Ssr.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/Ssr.java)
 
 ```java
 public class Ssr {
@@ -835,7 +839,7 @@ public class Ssr {
 }
 ```
 
-**PPP-RTK AR**：[PppRtkAmbFix.java](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppRtkAmbFix.java)
+**PPP-RTK AR**：[PppRtkAmbFix.java](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppRtkAmbFix.java)
 
 LAMBDA搜索 + ratio test + Fix-and-Hold，与标准PPP-AR类似但使用SSR相位偏差改正。
 
@@ -868,7 +872,7 @@ cfg.pppRtk.enableFixHold = true;  // 启用Fix-and-Hold
 
 ### 11.2 实现细节
 
-**观测方程分支**：[PppCore.pppRes()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L665)
+**观测方程分支**：[PppCore.pppRes()](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L665)
 
 ```java
 if (opt.ionoopt == Constants.IONOOPT_IFLC) {
@@ -904,7 +908,7 @@ public static int II(int sat, PrcOpt opt) {
 }
 ```
 
-**电离层初始化与传播**：[PppCore.udiono_ppp()](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java)
+**电离层初始化与传播**：[PppCore.udiono_ppp()](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java)
 
 ```java
 // 初始化电离层状态

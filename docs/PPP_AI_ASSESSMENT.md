@@ -94,7 +94,7 @@ M3 是本文新增的硬门槛，也是否决候选 A 的直接依据：**如果
 
 ### 3.1 PPP 浮点链路：三道前置之后才定级
 
-`updateStat` 里的 `ns` 判断（[PppCore.java#L1234-L1236](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L1234-L1236)）：
+`updateStat` 里的 `ns` 判断（[PppCore.java#L1234-L1236](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L1234-L1236)）：
 
 ```java
 if (rtk.sol.stat != Constants.SOLQ_FIX) {
@@ -102,20 +102,20 @@ if (rtk.sol.stat != Constants.SOLQ_FIX) {
 }
 ```
 
-但它只在 commit 成功时被调用（[PppCore.java#L249-L251](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L249-L251)），而 `stat = SOLQ_PPP` 只在 commit 分支被赋值（[PppCore.java#L239-L246](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L239-L246)）。进入该分支前已过三道关：
+但它只在 commit 成功时被调用（[PppCore.java#L249-L251](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L249-L251)），而 `stat = SOLQ_PPP` 只在 commit 分支被赋值（[PppCore.java#L239-L246](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L239-L246)）。进入该分支前已过三道关：
 
 | 关 | 位置 | 判据 |
 |---|---|---|
-| 迭代上限 | [PppCore.java#L209](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L209) | `MAX_ITER = 8`（[L32](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L32)），8 次内未 commit 则 `stat` 停在 `SOLQ_SINGLE` |
-| KF 数值 | [PppCore.java#L235-L237](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L235-L237) | `KalmanFilter.update` 返回 `info != 0` → `break`，不 commit |
-| 后验残差 | [PppCore.java#L239-L246](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L239-L246)、[#L968](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L968) | 后验重算按 `THRES_REJECT = 4.0`（[L763](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L763)）剔除，发生剔除则 `pppRes` 返回 0 → 不 commit |
+| 迭代上限 | [PppCore.java#L209](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L209) | `MAX_ITER = 8`（[L32](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L32)），8 次内未 commit 则 `stat` 停在 `SOLQ_SINGLE` |
+| KF 数值 | [PppCore.java#L235-L237](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L235-L237) | `KalmanFilter.update` 返回 `info != 0` → `break`，不 commit |
+| 后验残差 | [PppCore.java#L239-L246](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L239-L246)、[#L968](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L968) | 后验重算按 `THRES_REJECT = 4.0`（[L763](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L763)）剔除，发生剔除则 `pppRes` 返回 0 → 不 commit |
 
 三道关全未通过时 `stat` 停在 `SOLQ_SINGLE`，`updateStat` 不被调用，`sol.stat` 不变 → `PppProcessor` 侧 `sol.stat != SOLQ_NONE` 不成立 → **该历元根本不输出**。
 
 因此 PPP 浮点的真实失效形态不是「把米级误差当厘米级输出」，而是两点：
 
 1. **`SOLQ_PPP` 无精度等级**——RTK 的 `SOLQ_FIX` / `SOLQ_FLOAT` 隐含厘米级 / 分米级，PPP 只有一个 `SOLQ_PPP`，可能对应 3 cm，也可能对应 3 dm，下游无法按状态分流；
-2. **协方差已算出但未参与定级**——同一函数 6 行之后就把位置方差写进解（[PppCore.java#L1238-L1241](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L1238-L1241)）：
+2. **协方差已算出但未参与定级**——同一函数 6 行之后就把位置方差写进解（[PppCore.java#L1238-L1241](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L1238-L1241)）：
 
 ```java
 rtk.sol.qr[i] = (float) rtk.P[i * nx + i];   // 位置方差已导出，stat 未使用
@@ -125,7 +125,7 @@ rtk.sol.qr[i] = (float) rtk.P[i * nx + i];   // 位置方差已导出，stat 未
 
 ### 3.2 PPP-AR 链路：门控密度足够
 
-PPP-AR 的门控参数（[PppArOpts.java#L16-L47](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/config/PppArOpts.java#L16-L47)）：`arRatioWl = 2.0`、`arRatioNl = 3.0`、`arWlMaxdev = 0.20`、`arNlMaxdev = 0.15`、`arNlMaxsig = 0.15`、`arNlMinsav = 4`，另有 δ 门一致性检验。**六道门控参数 + 一致性检验**，已覆盖固定校验的功能位置，AI 在此处是重复建设。
+PPP-AR 的门控参数（[PppArOpts.java#L16-L47](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/config/PppArOpts.java#L16-L47)）：`arRatioWl = 2.0`、`arRatioNl = 3.0`、`arWlMaxdev = 0.20`、`arNlMaxdev = 0.15`、`arNlMaxsig = 0.15`、`arNlMinsav = 4`，另有 δ 门一致性检验。**六道门控参数 + 一致性检验**，已覆盖固定校验的功能位置，AI 在此处是重复建设。
 
 PPP-AR 固定校验另被两项数据条件排除：错误固定率 0.1%–1%，按 G-1 前置（≥100 事件）需 160 站·时级数据；且该链路可解释性要求高。见 §6。
 
@@ -135,9 +135,9 @@ PPP-AR 固定校验另被两项数据条件排除：错误固定率 0.1%–1%，
 
 | # | 事实 | 位置 |
 |---|---|---|
-| 1 | 门控只有 `ratio < arRatio` 一处（默认 3.0） | [PppRtkAmbFix.java#L141-L148](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkAmbFix.java#L141-L148) |
-| 2 | 固定后**无验后校验**——直接写 `xa[idx]`、`sol.stat = SOLQ_FIX`。对比 RTK 有 `valpos(v, R, vflg, nv, 4.0)` | [PppRtkAmbFix.java#L163-L187](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkAmbFix.java#L163-L187) |
-| 3 | 固定后**不回滚、不重解**——`Pa` 对应行列清零、`ssat[].fix[] = 1`，无位置条件更新 | [PppRtkAmbFix.java#L168-L173](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkAmbFix.java#L168-L173) |
+| 1 | 门控只有 `ratio < arRatio` 一处（默认 3.0） | [PppRtkAmbFix.java#L141-L148](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkAmbFix.java#L141-L148) |
+| 2 | 固定后**无验后校验**——直接写 `xa[idx]`、`sol.stat = SOLQ_FIX`。对比 RTK 有 `valpos(v, R, vflg, nv, 4.0)` | [PppRtkAmbFix.java#L163-L187](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkAmbFix.java#L163-L187) |
+| 3 | 固定后**不回滚、不重解**——`Pa` 对应行列清零、`ssat[].fix[] = 1`，无位置条件更新 | [PppRtkAmbFix.java#L168-L173](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkAmbFix.java#L168-L173) |
 
 对照 PPP-AR 的六道门控，**PPP-RTK 一条都不具备**。这是结构性缺失，不是参数偏松。
 
@@ -145,15 +145,15 @@ PPP-AR 固定校验另被两项数据条件排除：错误固定率 0.1%–1%，
 
 **① `fix[]` 是逐历元重置的，不是持久标记**
 
-[PppRtkCore.java#L115-L119](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkCore.java#L115-L119) 在 `ppprtkos` 入口无条件执行 `rtk.ssat[i].fix[j] = 0`。AR 打的 `fix[f] = 1/2` 到下一历元即消失。
+[PppRtkCore.java#L115-L119](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkCore.java#L115-L119) 在 `ppprtkos` 入口无条件执行 `rtk.ssat[i].fix[j] = 0`。AR 打的 `fix[f] = 1/2` 到下一历元即消失。
 
 **② UC（非组合）路径不回写滤波器**
 
-[PppRtkAmbFix.java#L160-L188](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkAmbFix.java#L160-L188) 只改局部 `xa[idx]`、清 `Pa` 行列，然后 `rtk.xa = xa; rtk.Pa = Pa;`。全仓库读回 `xa`/`Pa` 的只有 `RtkCore` / `CascadeAR` / `PartialAR`，**`ppprtk` 包内零处**。UC 下滤波器状态不受污染。
+[PppRtkAmbFix.java#L160-L188](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkAmbFix.java#L160-L188) 只改局部 `xa[idx]`、清 `Pa` 行列，然后 `rtk.xa = xa; rtk.Pa = Pa;`。全仓库读回 `xa`/`Pa` 的只有 `RtkCore` / `CascadeAR` / `PartialAR`，**`ppprtk` 包内零处**。UC 下滤波器状态不受污染。
 
 **③ 位置从不重解，`updateStat` 已补 FIX 分支（FIX-ALG-054，2026-11-11）**
 
-UC 路径 `xa` 是 `rtk.x` 的整体拷贝，只改模糊度分量，`xa[0..2]` 恒等于浮点位置。`updateStat` 当前形态（[PppRtkCore.java#L1017-L1045](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkCore.java#L1017-L1045)）：
+UC 路径 `xa` 是 `rtk.x` 的整体拷贝，只改模糊度分量，`xa[0..2]` 恒等于浮点位置。`updateStat` 当前形态（[PppRtkCore.java#L1017-L1045](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkCore.java#L1017-L1045)）：
 
 ```java
 // 入口（ppprtkos）无条件重置：标签逐历元独立，不再锁存
@@ -182,7 +182,7 @@ if (arFixed && rtk.xa != null && rtk.Pa != null) {
 }
 ```
 
-**v1.0 原文此处写「PPP-RTK 侧没有这个分支」，该表述已作废**：FIX-ALG-054 已补齐 FIX 分支，与 [RtkCore.java#L539-L546](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L539-L546) 对齐；`sol.stat` 亦由「永久锁存」改为「逐历元真实」。
+**v1.0 原文此处写「PPP-RTK 侧没有这个分支」，该表述已作废**：FIX-ALG-054 已补齐 FIX 分支，与 [RtkCore.java#L539-L546](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L539-L546) 对齐；`sol.stat` 亦由「永久锁存」改为「逐历元真实」。
 
 但**位置条件更新仍未实现**：代码注释自述「IFLC 分支当前不做位置条件更新，`xa[0..2]` 恒等于 `x[0..2]`……位置重解需另立条目」。故结论收敛为——**`stat` 真实、坐标仍是浮点**。
 
@@ -194,7 +194,7 @@ if (arFixed && rtk.xa != null && rtk.Pa != null) {
 | UC + `enableFixHold = true` | 浮点（经 hold 伪观测间接牵动） | 浮点 | `SOLQ_FIX` | 有（`fixAndHold` 写 `rtk.x`/`rtk.P`） |
 | IFLC（任意） | 浮点 | 浮点 | `SOLQ_FIX` | 有（`initx(..., 0.0, idx)` 焊死模糊度状态） |
 
-默认配置是 `enableAR = false`、`enableFixHold = false`（[PppRtkOpts.java#L17-L21](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/config/PppRtkOpts.java#L17-L21)）。而 [SSR_ACCESS_PLAYBOOK.md](SSR_ACCESS_PLAYBOOK.md) 记录的生产实测配置是**三频 3F（非 IFLC）+ 未开 fix-and-hold**，恰好落在**第一行**——即「AR 只留下一个标签」。
+默认配置是 `enableAR = false`、`enableFixHold = false`（[PppRtkOpts.java#L17-L21](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/config/PppRtkOpts.java#L17-L21)）。而 [SSR_ACCESS_PLAYBOOK.md](SSR_ACCESS_PLAYBOOK.md) 记录的生产实测配置是**三频 3F（非 IFLC）+ 未开 fix-and-hold**，恰好落在**第一行**——即「AR 只留下一个标签」。
 
 ### 3.4 三条链路的共同结构结论
 
@@ -241,7 +241,7 @@ if (arFixed && rtk.xa != null && rtk.Pa != null) {
 **前置第 0 条（确定性工程，与 AI 无关）**：先修 §3.3 的输出缺陷，否则校验对象残缺——校验器面对的是「浮点解 + FIX 标签」，学不到「固定坐标错在哪里」。两处改动：
 
 1. UC 路径在 `xa[idx]` 赋值后做位置条件更新（RTKLIB 原生 `resamb` 语义）；
-2. `updateStat` 补 `if (stat == SOLQ_FIX)` 分支，从 `xa`/`Pa` 取 `rr`/`qr`（照抄 [RtkCore.java#L539-L546](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L539-L546)）。
+2. `updateStat` 补 `if (stat == SOLQ_FIX)` 分支，从 `xa`/`Pa` 取 `rr`/`qr`（照抄 [RtkCore.java#L539-L546](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L539-L546)）。
 
 **接口改动：需要新接口。** 特征来源（WL/NL 两级 ratio、SSR 改正质量、固定后残差）与 `FixQualityContext` 的双差语义不同源，需新建 `PppRtkFixValidator` + context。
 
@@ -272,7 +272,7 @@ Ri[nv] *= aiScale[...];               // 改方差 → 不进状态 → 安全
 
 `aiBias` 通过 `v` 进入 KF 更新、污染模糊度状态；`aiScale` 只改观测权重，不改变状态物理含义。B 即「只输出 `varianceScale`、`biasMeters` 恒为 `null`」的裁剪版。
 
-**接口改动：存在硬阻塞。** 直觉方案「impl 返回 `biasMeters = null`、`varianceScale` 有值」不成立——core 的校验会**丢弃整个改正**（[RtkCore.java#L1743-L1747](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1743-L1747)）：
+**接口改动：存在硬阻塞。** 直觉方案「impl 返回 `biasMeters = null`、`varianceScale` 有值」不成立——core 的校验会**丢弃整个改正**（[RtkCore.java#L1743-L1747](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1743-L1747)）：
 
 ```java
 if (cc == null || cc.biasMeters() == null || cc.varianceScale() == null
@@ -282,7 +282,7 @@ if (cc == null || cc.biasMeters() == null || cc.varianceScale() == null
 }
 ```
 
-SPI javadoc 同义（[ObsCorrector.java#L16-L21](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ai/spi/ObsCorrector.java#L16-L21)）。按直觉方案原样实现，B 运行时等于**恒不干预**，不是「只改权重」。只有两条路：
+SPI javadoc 同义（[ObsCorrector.java#L16-L21](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ai/spi/ObsCorrector.java#L16-L21)）。按直觉方案原样实现，B 运行时等于**恒不干预**，不是「只改权重」。只有两条路：
 
 | 路径 | 代价 |
 |---|---|
@@ -348,7 +348,7 @@ qr[0] + qr[1] + qr[2] > 阈值  →  降级
 
 ### 5.3 B 无精度收益（否决依据：M2 + 降级语义）
 
-B 复用 core 的单边钳位（[RtkCore.java#L1767-L1769](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1767-L1769)：`s < 1.0 → 1.0`），**只能降权、不能升权**。「这条观测比模型认为的更好」无法表达。
+B 复用 core 的单边钳位（[RtkCore.java#L1767-L1769](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1767-L1769)：`s < 1.0 → 1.0`），**只能降权、不能升权**。「这条观测比模型认为的更好」无法表达。
 
 | 维度 | B 的收益 |
 |---|---|
@@ -472,14 +472,14 @@ public interface AiProvider {
 
 | # | 旧论断 | 事实 | 依据 |
 |---|---|---|---|
-| 1 | 「PPP 解有效性判断仅一行，空白最大」 | `updateStat` 之前还有三道关：`MAX_ITER = 8`、KF `info != 0`、后验残差 `THRES_REJECT = 4.0` | [PppCore.java#L209](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L209)、[#L235-L246](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L235-L246) |
-| 2 | 「不检查协方差是否可信」 | 协方差已导出到 `sol.qr`，只是未参与 `stat` 定级；真实缺陷是 `SOLQ_PPP` 无精度等级 | [PppCore.java#L1238-L1241](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L1238-L1241) |
-| 3 | 「无监督是 A 数据成本低的核心原因」 | 前提不成立：PPP 输出率高、误差超阈值不稀有；监督路线可复用接口一管线且能与 G-1 横向比较 | [PppCore.java#L1234-L1236](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L1234-L1236) |
-| 4 | 「B 不需要改 SPI，`biasMeters = null` 即可」 | null 会让整个改正被丢弃、`scale` 一并作废，等于恒不干预 | [RtkCore.java#L1743-L1747](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1743-L1747)、[ObsCorrector.java#L16-L21](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ai/spi/ObsCorrector.java#L16-L21) |
+| 1 | 「PPP 解有效性判断仅一行，空白最大」 | `updateStat` 之前还有三道关：`MAX_ITER = 8`、KF `info != 0`、后验残差 `THRES_REJECT = 4.0` | [PppCore.java#L209](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L209)、[#L235-L246](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L235-L246) |
+| 2 | 「不检查协方差是否可信」 | 协方差已导出到 `sol.qr`，只是未参与 `stat` 定级；真实缺陷是 `SOLQ_PPP` 无精度等级 | [PppCore.java#L1238-L1241](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L1238-L1241) |
+| 3 | 「无监督是 A 数据成本低的核心原因」 | 前提不成立：PPP 输出率高、误差超阈值不稀有；监督路线可复用接口一管线且能与 G-1 横向比较 | [PppCore.java#L1234-L1236](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppp/PppCore.java#L1234-L1236) |
+| 4 | 「B 不需要改 SPI，`biasMeters = null` 即可」 | null 会让整个改正被丢弃、`scale` 一并作废，等于恒不干预 | [RtkCore.java#L1743-L1747](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1743-L1747)、[ObsCorrector.java#L16-L21](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ai/spi/ObsCorrector.java#L16-L21) |
 | 5 | 「B 天然可复用到 PPP / PPP-RTK / joint」 | joint 需特征基线无关；跨链路需两套注入点与两个训练集 | [AI_ENHANCEMENT_DESIGN.md](AI_ENHANCEMENT_DESIGN.md) §1.5.1 / D11 |
-| 6 | 「B 改权重可带来 5–15% 精度改善」 | 单边钳位只能膨胀不能收缩，B 无精度收益；5–15% 归属接口三 | [RtkCore.java#L1767-L1769](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1767-L1769) |
-| 7 | 「PPP-RTK 比 PPP-AR 的两级门控更弱」 | 表述不足：PPP-RTK 是结构性缺失三点，PPP-AR 实为 6 个门控参数 + δ 门 | [PppRtkAmbFix.java#L141-L187](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkAmbFix.java#L141-L187)、[PppArOpts.java#L16-L47](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/config/PppArOpts.java#L16-L47) |
-| 8 | 「D 是唯一结构性缺失，错误代价跨历元持续，收益-风险比最高」 | 不成立：`fix[]` 每历元入口清零，UC 不回写滤波器；FIX-ALG-054 后 `stat` 已逐历元真实，故「结果不进输出」应精确表述为「**坐标不进输出**」 | [PppRtkCore.java#L115-L119](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkCore.java#L115-L119)、[PppRtkAmbFix.java#L160-L188](file:///D:/code/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkAmbFix.java#L160-L188) |
+| 6 | 「B 改权重可带来 5–15% 精度改善」 | 单边钳位只能膨胀不能收缩，B 无精度收益；5–15% 归属接口三 | [RtkCore.java#L1767-L1769](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/rtkpos/RtkCore.java#L1767-L1769) |
+| 7 | 「PPP-RTK 比 PPP-AR 的两级门控更弱」 | 表述不足：PPP-RTK 是结构性缺失三点，PPP-AR 实为 6 个门控参数 + δ 门 | [PppRtkAmbFix.java#L141-L187](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkAmbFix.java#L141-L187)、[PppArOpts.java#L16-L47](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/config/PppArOpts.java#L16-L47) |
+| 8 | 「D 是唯一结构性缺失，错误代价跨历元持续，收益-风险比最高」 | 不成立：`fix[]` 每历元入口清零，UC 不回写滤波器；FIX-ALG-054 后 `stat` 已逐历元真实，故「结果不进输出」应精确表述为「**坐标不进输出**」 | [PppRtkCore.java#L115-L119](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkCore.java#L115-L119)、[PppRtkAmbFix.java#L160-L188](file:///D:/rtklib/rtklib_java/rtklib-core/src/main/java/org/rtklib/java/ppprtk/PppRtkAmbFix.java#L160-L188) |
 | 9 | 「D 的错误代价大、拦截收益高」 | 双重阻塞：坐标不重解（`stat` 已真实）+ NL 固定不稳定（05 时起归零） | §3.3、[SSR_ACCESS_PLAYBOOK.md](SSR_ACCESS_PLAYBOOK.md) §六、§七 |
 | 10 | 「排序 D → A → B，能开 SSR 就选 D」 | 重排为 A → D → B；且 A 也需先做确定性对照，故本阶段整体不接入 | §5 |
 
